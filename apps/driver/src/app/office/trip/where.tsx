@@ -2,7 +2,9 @@
 // opens the search, with My location), "Passengers get in here", the stops (each with its type, the place through the
 // office's search, what is carried, remove, move up / down), Add another stop. The draft (office/trip/draft.ts) holds
 // everything; Next: When. `?mode=request|task` starts a new flow (a draft worth keeping is offered first);
-// `?mode=edit&id=` loads a request of mine.
+// `?mode=edit&id=` loads a request of mine. Round 3 (A6): `?mode=request&again=<id>` is "Request again" on an expired
+// request: the copied draft (office/trip/draftLogic.ts requestAgainDraft: everything but the day, which is tomorrow) is put
+// in place by the button; a link straight here reads the request first. No "Resume draft?" for it.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -17,7 +19,7 @@ import { Field, Mono, Txt } from '@/components/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
-import { draftWorthKeeping, getDraft, newDraft, setDraft, type TripMode, updateDraft, useTripDraft, withDriver } from '@/office/trip/draft';
+import { draftWorthKeeping, getDraft, newDraft, requestAgainDraft, setDraft, type TripMode, updateDraft, useTripDraft, withDriver } from '@/office/trip/draft';
 import { pinText, placeBoxState, typedPatch } from '@/office/trip/locationLogic';
 import { editFields } from '@/office/trip/requestLogic';
 import { moveStop, newStop, pickupAtStart, type StopDraft, stopsInput, type StopType, tickStart, type What } from '@/office/trip/stopsLogic';
@@ -34,7 +36,7 @@ const WHATS: Exclude<What, ''>[] = ['people', 'goods', 'documents', 'other'];
 
 export default function TripWhere() {
   // O3 row 7: Assign a task for a driver (from their page): ?driver=<username>&name=<name> picks them on a fresh draft.
-  const { mode, id, driver: forDriver, name: forName } = useLocalSearchParams<{ mode?: TripMode; id?: string; driver?: string; name?: string }>();
+  const { mode, id, driver: forDriver, name: forName, again } = useLocalSearchParams<{ mode?: TripMode; id?: string; driver?: string; name?: string; again?: string }>();
   const fresh = (m: TripMode) => withDriver(newDraft(m), m === 'task' ? forDriver : undefined, forName);
   const { t } = useApp();
   const { me, signOut } = useOffice();
@@ -48,6 +50,8 @@ export default function TripWhere() {
   const req = useTool<RequestsList>('list_requests', { status: 'all', id: id ?? '', limit: 1 }, { enabled: mode === 'edit' && !!id });
   // stops: the task as task_detail answers it now (the pending stops become the rows; the reached ones keep their numbers).
   const taskQ = useTool<TaskDetail>('task_detail', { task_id: id ?? '' }, { enabled: mode === 'stops' && !!id });
+  // Request again (Round 3, A6): the expired request, read only when its copy is not in place yet (a link straight here).
+  const againQ = useTool<RequestsList>('list_requests', { status: 'all', id: again ?? '', limit: 1 }, { enabled: mode === 'request' && !!again && getDraft()?.againOf !== again });
 
   // Starting a flow: a draft of the same kind worth keeping is offered; else a fresh one.
   useEffect(() => {
@@ -55,6 +59,7 @@ export default function TripWhere() {
     setAsked(true);
     const current = getDraft();
     if (mode === 'edit' || mode === 'stops') return; // loaded below from the request or the task
+    if (mode === 'request' && again) return; // Request again: the copy is in place, or read below
     if (current && current.mode === mode && draftWorthKeeping(current)) {
       Alert.alert(t('office.trip.resumeTitle'), t('office.trip.resumeBody', { time: colomboTime(current.at) }), [
         { text: t('office.trip.discard'), style: 'destructive', onPress: () => setDraft(fresh(mode)) },
@@ -78,6 +83,12 @@ export default function TripWhere() {
       req: { behalf, project, need, tools, note, driverRequired: driver, requesterPhone: requesterPhone ?? '', who },
     });
   }, [mode, id, req.data]);
+
+  useEffect(() => {
+    if (mode !== 'request' || !again || getDraft()?.againOf === again) return;
+    const card = againQ.data?.requests[0];
+    if (card) setDraft(requestAgainDraft(card, colomboDate()));
+  }, [mode, again, againQ.data]);
 
   useEffect(() => {
     if (mode !== 'stops' || !id) return;
@@ -117,6 +128,14 @@ export default function TripWhere() {
       <View style={{ flex: 1, backgroundColor: colors.page }}>
         <TripHeader step="where" above={t('office.trip.editAbove')} onBack={() => router.back()} />
         <Screen>{req.loading ? <SkeletonRows rows={3} lines={2} /> : req.error ? <ErrorNotice error={req.error} onRetry={() => void req.reload()} onSignIn={() => void signOut()} /> : <ListEmpty text={t('office.request.notFound')} />}</Screen>
+      </View>
+    );
+  }
+  if (mode === 'request' && again && d?.againOf !== again) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.page }}>
+        <TripHeader step="where" above={t('office.trip.newAbove', { n: 1 })} onBack={() => router.back()} />
+        <Screen>{againQ.error ? <ErrorNotice error={againQ.error} onRetry={() => void againQ.reload()} onSignIn={() => void signOut()} /> : againQ.data && !againQ.data.requests[0] ? <ListEmpty text={t('office.request.notFound')} /> : <SkeletonRows rows={3} lines={2} />}</Screen>
       </View>
     );
   }

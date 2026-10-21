@@ -18,9 +18,10 @@ import { ListWithDetail } from "../ui/Page";
 import { ListFooter, ListStale, ListWaiting, SearchBox, useSearchBox } from "./listLocal";
 import { filterFromWord, VEHICLE_FILTER_WORDS, VEHICLE_FILTERS as FILTERS, type VehicleFilter as Filter, withParam } from "./overviewLinks";
 import { docTone } from "./vehicleLogic";
+import { dayWords } from "../lib/when";
 
 export function DocChip({ name, d }: { name: string; d?: { chip?: string; expiry?: string } }) {
-  const title = d?.expiry ? `${name} expires ${d.expiry}` : `${name}: ${d?.chip ?? "not set"}`;
+  const title = d?.expiry ? `${name} expires ${dayWords(d.expiry, { inline: true })}` : `${name}: ${d?.chip ?? "not set"}`;
   return <span className={`doc ${docTone(d?.chip)}`} title={title}>{name}</span>;
 }
 
@@ -126,7 +127,7 @@ export function Vehicles() {
                         return (
                           <tr key={v.reg_no} className="click" data-testid="vehicle-row" onClick={() => navigate({ pathname: vehiclePath(v.reg_no), search: params.toString() ? `?${params}` : "" })}>
                             <td data-label="Vehicle"><span><span className="with-photo"><VehicleThumb src={v.thumb_url} /><span className="plate">{v.reg_no}</span></span><div className="sub" style={{ marginTop: 6 }}>{joinDots([v.make_model, v.seats ? `${v.seats} seats` : "", v.type && !v.make_model ? v.type : ""])}</div></span></td>
-                            <td data-label="Rented from"><span>{v.rented_from || "—"}{v.rent_until && <div className="sub">Until {v.rent_until}</div>}</span></td>
+                            <td data-label="Rented from"><span>{v.rented_from || "—"}{v.rent_until && <div className="sub">Until {dayWords(v.rent_until, { inline: true })}</div>}</span></td>
                             <td data-label="Regular driver">{v.regular_driver || "—"}</td>
                             <td data-label="Assigned to">
                               {v.assigned_to

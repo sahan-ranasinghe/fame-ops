@@ -14,6 +14,7 @@ import { colomboDay, monthOf } from "../ui/dateRange";
 import { ToastProvider } from "../ui/Toast";
 import IssuePage from "./IssuePage";
 import Issues from "./Issues";
+import { datesInWords } from "../lib/when";
 
 const month = monthOf(colomboDay());
 
@@ -118,7 +119,7 @@ describe("the issues list (§9)", () => {
     const t = await mount("/issues");
     expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", from: month.from, to: month.to, sort: "urgent", snoozed: false, limit: 25 });
     await screen.findByText("Vehicle problem: breakdown");
-    expect(rowOf("Vehicle problem: breakdown").textContent).toContain(`Opened ${month.from} 08:00 · System · Vehicle problem`);
+    expect(rowOf("Vehicle problem: breakdown").textContent).toContain(datesInWords(`Opened ${month.from} 08:00 · System · Vehicle problem`));
     // Active is the default: no chip, the Filter button counts nothing; the header says it.
     expect(screen.queryByTestId("filter-chips")).toBeNull();
     expect(within(screen.getByTestId("issues-list")).getByRole("heading").textContent).toContain("Active");
@@ -140,7 +141,7 @@ describe("the issues list (§9)", () => {
     expect(screen.getByTestId("issues-list")).toBeTruthy();
     expect(within(panel).getByRole("heading", { name: "Vehicle problem: breakdown" })).toBeTruthy();
     const facts = within(panel).getByTestId("issue-facts").textContent;
-    expect(facts).toContain(`Opened${month.from} 08:00`);
+    expect(facts).toContain(`Opened${datesInWords(`${month.from} 08:00`)}`);
     expect(facts).toContain("Opened bySystem · Vehicle problem");
     expect(facts).toContain("Taken byNobody yet");
     expect(within(panel).getByTestId("issue-report").textContent).toContain("Engine stalls at idle");
@@ -205,7 +206,7 @@ describe("the issues list (§9)", () => {
     applyFilter("Status", "Resolved");
     fireEvent.click(await screen.findByRole("link", { name: /Vehicle problem: breakdown/ }));
     const panel = await screen.findByTestId("issue-page");
-    expect((await within(panel).findByTestId("issue-facts")).textContent).toContain(`Resolved${month.from} 11:00 by Sahan`);
+    expect((await within(panel).findByTestId("issue-facts")).textContent).toContain(`Resolved${datesInWords(`${month.from} 11:00 by Sahan`)}`);
     expect(within(panel).getByText(/Resolved by Sahan/)).toBeTruthy();
   });
 
@@ -279,7 +280,8 @@ describe("the issues list a page at a time (Hotfix 3, L3)", () => {
     await flush();
     expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "active", snoozed: true });
     expect(screen.getByTestId("where").textContent).toBe("/issues?status=snoozed");
-    expect((await screen.findByTestId("snoozed-until")).textContent).toBe("Snoozed until 2026-10-19 07:00 · by Sahan");
+    expect((await screen.findByTestId("snoozed-until")).textContent).toBe(datesInWords("Snoozed until 2026-10-19 07:00 · by Sahan"));
+    expect(screen.getByTestId("snoozed-until").textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(within(screen.getByTestId("issues-list")).queryByText("Vehicle problem: breakdown")).toBeNull();
   });
 

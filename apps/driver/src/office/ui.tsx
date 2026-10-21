@@ -8,7 +8,7 @@ import { type ReactNode, type Ref, useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Bell, ChevronLeft, Plus } from '@/components/icons';
+import { Bell, ChevronLeft, type LucideIcon, Plus } from '@/components/icons';
 import { ChoiceChip } from '@/components/patterns/Select';
 import { Sheet } from '@/components/patterns/Sheet';
 import { setSnackbarLift } from '@/components/patterns/Snackbar';
@@ -31,11 +31,12 @@ const TONES: Record<Tone, { bg: string; ink: string }> = {
   muted: { bg: '#ebe9e3', ink: colors.muted },
 };
 
-/** A small rounded status word ("on the way", "waiting", "free"). */
-export function Pill({ text, tone = 'muted', size = 14 }: { text: string; tone?: Tone; size?: number }) {
+/** A small rounded status word ("on the way", "waiting", "free"); `icon` before it for a state of its own (Expired, Round 3). */
+export function Pill({ text, tone = 'muted', size = 14, icon: Icon }: { text: string; tone?: Tone; size?: number; icon?: LucideIcon }) {
   const c = TONES[tone];
   return (
-    <View style={[styles.pill, { backgroundColor: c.bg }]}>
+    <View style={[styles.pill, { backgroundColor: c.bg }, Icon && styles.withIcon]}>
+      {Icon && <Icon size={size} color={c.ink} strokeWidth={2.4} />}
       <Txt variant="strong" size={size} color={c.ink} numberOfLines={1}>{text}</Txt>
     </View>
   );
@@ -237,11 +238,15 @@ export function Avatar({ name, size = 40, photo }: { name: string; size?: number
   );
 }
 
-/** A list row's short status at the right (Gmail's label): one short word, never a sentence; it never squeezes the title. */
-export function StatusChip({ text, tone = 'muted' }: { text: string; tone?: Tone }) {
+/**
+ * A list row's short status at the right (Gmail's label): one short word, never a sentence; it never squeezes the title.
+ * `icon` before the word marks a state of its own (Round 3 A6: Expired, a calendar with a cross; Material 3's assist chip).
+ */
+export function StatusChip({ text, tone = 'muted', icon: Icon, testID }: { text: string; tone?: Tone; icon?: LucideIcon; testID?: string }) {
   const c = TONES[tone];
   return (
-    <View style={[styles.statusChip, { backgroundColor: c.bg }]}>
+    <View style={[styles.statusChip, { backgroundColor: c.bg }, Icon && styles.withIcon]} testID={testID}>
+      {Icon && <Icon size={13} color={c.ink} strokeWidth={2.4} />}
       <Txt variant="strong" size={13} color={c.ink} numberOfLines={1}>{text}</Txt>
     </View>
   );
@@ -252,13 +257,15 @@ export function StatusChip({ text, tone = 'muted' }: { text: string; tone?: Tone
  * second line (who · the status in words); at the right only a short StatusChip, or a button. Used by every list in
  * Office mode, on the phone and on /m/.
  */
-export function Row({ left, time, title, line, line2, chip, right, onPress, testID, quiet = false }: {
+export function Row({ left, time, title, line, line2, line2Warn = false, chip, right, onPress, testID, quiet = false }: {
   left?: ReactNode;
   /** "09:30": a mono time column on the left. */
   time?: string;
   title: string;
   line?: string;
   line2?: string;
+  /** The second line warns (amber text): "Self-drive · no licence on file" (Round 3). */
+  line2Warn?: boolean;
   /** The short status ("Sent", "Seen", "Late 12 min"). */
   chip?: { text: string; tone?: Tone } | null;
   right?: ReactNode;
@@ -274,7 +281,7 @@ export function Row({ left, time, title, line, line2, chip, right, onPress, test
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <Txt variant={quiet ? 'muted' : 'strong'} size={17} numberOfLines={1}>{title}</Txt>
         {line ? <Txt variant="muted" size={15} numberOfLines={1}>{line}</Txt> : null}
-        {line2 ? <Txt variant="small" numberOfLines={1}>{line2}</Txt> : null}
+        {line2 ? <Txt variant="small" numberOfLines={1} color={line2Warn ? colors.amberText : undefined}>{line2}</Txt> : null}
       </View>
       {chip ? <StatusChip text={chip.text} tone={chip.tone} /> : null}
       {right}
@@ -390,6 +397,7 @@ const styles = StyleSheet.create({
   bellLight: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
   fab: { position: 'absolute', right: 16, bottom: 16, minHeight: 56, paddingHorizontal: 18, borderRadius: 28, backgroundColor: colors.amber, flexDirection: 'row', alignItems: 'center', gap: 8, elevation: 4, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
   statusChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, maxWidth: 112, flexShrink: 0 },
+  withIcon: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   timeCol: { width: 52 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   dark: { backgroundColor: colors.ink, paddingHorizontal: 20, paddingBottom: 16 },

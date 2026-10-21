@@ -10,6 +10,7 @@ import { PlanWithMap } from "./PlanMap";
 import { linksOf } from "../ui/ContactButtons";
 import { stopTitle, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
+import { whenText } from "../lib/when";
 
 /** "leaves in 42 min" / "leave-by passed 10 min ago" / null, from the task's day and leave-by (Colombo). Pure. */
 export function leaveIn(date: string | undefined, leaveBy: string | undefined, now: number): string | null {
@@ -54,7 +55,7 @@ export function TaskSummary({ p }: { p: TaskDetailData }) {
       </div>
       {(p.from_request || t.approved_by) && (
         <div className="sub" data-testid="summary-asker" style={{ display: "grid", gap: 4 }}>
-          {p.from_request && <span>Asked by <b>{p.from_request.requested_by}</b>{p.from_request.asked ? ` · ${p.from_request.asked}` : ""}</span>}
+          {p.from_request && <span>Asked by <b>{p.from_request.requested_by}</b>{p.from_request.asked ? ` · ${whenText(p.from_request.asked)}` : ""}</span>}
           {t.approved_by && <DecisionRow kind="approved" who={t.approved_by} office={office} />}
         </div>
       )}

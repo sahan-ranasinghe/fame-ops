@@ -28,6 +28,7 @@ import type { DriversList, DutyLog, FleetError, FuelList, MileageSummary, Row, V
 import { BackHeader, Divider, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords, datesInWords, monthWords } from '@/lib/dateWords';
 
 export default function ReportsScreen() {
   const { t } = useApp();
@@ -101,7 +102,8 @@ function Rows({ rows, hide, empty }: { rows: Row[]; hide?: readonly string[]; em
               {cells.filter((c) => c !== head).map((c) => (
                 <View key={c.key} style={{ flexDirection: 'row', gap: 4, alignItems: 'baseline' }}>
                   <Txt variant="small">{word(c.key)}</Txt>
-                  <Mono size={15} bold>{c.value}</Mono>
+                  {/* A date in a cell (an unlogged reading's time, a check's day) in words (Round 3 A4). */}
+                  <Mono size={15} bold>{datesInWords(t, c.value)}</Mono>
                 </View>
               ))}
             </View>
@@ -137,7 +139,7 @@ function Mileage({ from, to, by }: { from: string; to: string; by: Record<string
             <Rows rows={v.vehicles} hide={v.month ? ['km_allowance', 'over_allowance'] : []} empty={t('office.reports.noneLogged')} />
           </Section>
           {v.month && (
-            <Section title={t('office.reports.monthAllowance', { month: v.month.month })} count={v.month.rows.length}>
+            <Section title={t('office.reports.monthAllowance', { month: monthWords(t, v.month.month) })} count={v.month.rows.length}>
               <Txt variant="small">{t('office.reports.monthAllowanceNote')}</Txt>
               <Rows rows={v.month.rows} empty={t('office.reports.noneLogged')} />
             </Section>
@@ -221,7 +223,7 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
             <Tile label={t('office.reports.litres')} value={n(d.totals.litres)} sub={`LKR ${n(d.totals.lkr)}`} />
             <Tile label={t('office.reports.videos')} value={n(d.totals.videos)} sub={[d.totals.videos_waiting ? t('office.reports.videosWaiting', { n: d.totals.videos_waiting }) : '', d.totals.videos_missing ? t('office.reports.videosMissing', { n: d.totals.videos_missing }) : ''].filter(Boolean).join(' · ') || undefined} tone={d.totals.videos_missing ? 'amber' : undefined} />
           </View>
-          {d.month_totals && <Txt variant="muted" size={15}>{t('office.reports.fuelMonthLine', { month: d.month, n: n(d.month_totals.entries), litres: n(d.month_totals.litres), lkr: n(d.month_totals.lkr) })}</Txt>}
+          {d.month_totals && <Txt variant="muted" size={15}>{t('office.reports.fuelMonthLine', { month: monthWords(t, d.month), n: n(d.month_totals.entries), litres: n(d.month_totals.litres), lkr: n(d.month_totals.lkr) })}</Txt>}
           <Section title={t('office.reports.fuel')} count={d.total ?? d.entries.length}>
             {d.entries.length === 0 && <ListEmpty text={t('office.reports.noFills')} />}
             {d.entries.map((e, i) => {
@@ -230,7 +232,7 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
                 <View key={e.id} style={{ paddingVertical: 10, gap: 4 }}>
                   {i > 0 && <Divider />}
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <Mono size={15} bold>{e.at}</Mono>
+                    <Mono size={15} bold>{dateWords(t, e.at)}</Mono>
                     {e.vehicle ? <Plate regNo={e.vehicle.split(' · ')[0]} /> : null}
                     <View style={{ flex: 1 }} />
                     <Pill text={t(`office.reports.video_${chip.key}`)} tone={chip.tone} size={12} />
@@ -305,7 +307,7 @@ function Duty({ from, to, by }: { from: string; to: string; by: Record<string, s
                   {i > 0 && <Divider />}
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <Txt variant="strong" style={{ flex: 1 }}>{p.driver ?? ''}</Txt>
-                    <Mono size={14} color={colors.muted}>{p.day}</Mono>
+                    <Mono size={14} color={colors.muted}>{dateWords(t, p.day)}</Mono>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <Mono size={16} bold>{p.clock_in}</Mono>

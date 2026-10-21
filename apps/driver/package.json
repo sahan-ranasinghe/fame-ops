@@ -124,7 +124,8 @@
     "test:status-words": "tsx scripts/test-status-words.ts",
     "test:stop-timeline": "tsx scripts/test-stop-timeline.ts",
     "test:stop-slides": "tsx scripts/test-stop-slides.ts",
-    "test:who-drives": "tsx scripts/test-who-drives.ts"
+    "test:who-drives": "tsx scripts/test-who-drives.ts",
+    "test:part-a": "tsx scripts/test-part-a.ts"
   },
   "private": true,
   "expo": {

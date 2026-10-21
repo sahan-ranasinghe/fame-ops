@@ -104,6 +104,8 @@ export function resetGoogleMapForTests() {
   once = null;
   failedNote = null;
   authListeners.clear();
+  holder = null;
+  shared = null;
 }
 
 // ---- The tab's one map ------------------------------------------------------------------------------
@@ -113,26 +115,33 @@ let shared: google.maps.Map | null = null;
 let parking: HTMLDivElement | null = null;
 const SRI_LANKA = { lat: 7.8, lng: 80.7 };
 
+/** The options the tab's map is made with. */
+export const MAP_OPTIONS: google.maps.MapOptions = {
+  center: SRI_LANKA,
+  zoom: 7,
+  mapTypeControl: false,
+  streetViewControl: false,
+  fullscreenControl: false,
+  // Phase 7 (§24, §25): our one control cluster (zoom, the compass, fit) replaces Google's own buttons.
+  zoomControl: false,
+  cameraControl: false,
+  rotateControl: false,
+  clickableIcons: false,
+  // Phase 7 (§23): one finger moves the map and the wheel zooms; never "Use ctrl + scroll to zoom".
+  gestureHandling: "greedy",
+  // Round 3 A3: always the light map (Google Maps' own default on the web), never FOLLOW_SYSTEM: a dark browser or the
+  // site's dark theme does not darken it. It can only be set when the map is made. No `styles` and no map id: nothing
+  // else picks a scheme.
+  colorScheme: "LIGHT",
+};
+
 /** The tab's map, moved into this page's box (made on first use). */
 export function attachMap(box: HTMLElement, maps: GoogleMapsApi): google.maps.Map {
   if (!holder || !shared) {
     holder = document.createElement("div");
     holder.style.position = "absolute";
     holder.style.inset = "0";
-    shared = new maps.Map(holder, {
-      center: SRI_LANKA,
-      zoom: 7,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: false,
-      // Phase 7 (§24, §25): our one control cluster (zoom, the compass, fit) replaces Google's own buttons.
-      zoomControl: false,
-      cameraControl: false,
-      rotateControl: false,
-      clickableIcons: false,
-      // Phase 7 (§23): one finger moves the map and the wheel zooms; never "Use ctrl + scroll to zoom".
-      gestureHandling: "greedy",
-    });
+    shared = new maps.Map(holder, { ...MAP_OPTIONS });
   }
   box.appendChild(holder);
   return shared;

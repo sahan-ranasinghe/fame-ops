@@ -68,7 +68,7 @@ console.log('\nRequests (O3 row 2)');
 {
   const tr = (k: string, v?: Record<string, string | number>) => (v ? `${k}:${JSON.stringify(v)}` : k);
   const defs = requestsFilterDefs(tr);
-  check(defs.length === 1 && defs[0].default === 'waiting' && defs[0].options.map((o) => o.value).join() === 'waiting,approved,declined,cancelled,all', 'one Filter: the status, Waiting by default');
+  check(defs.length === 1 && defs[0].default === 'waiting' && defs[0].options.map((o) => o.value).join() === 'waiting,approved,declined,cancelled,expired,all', 'one Filter: the status, Waiting by default (Expired too, Round 3 A6)');
   check(requestsChoice({ status: 'approved' }) === 'approved' && requestsChoice({ status: 'nonsense' }) === 'waiting' && requestsChoice({}) === 'waiting', 'a broken value reads Waiting');
   check(same(requestsArgs('all', '  Kurunegala '), { status: 'all', limit: 25, search: 'Kurunegala' }) && same(requestsArgs('waiting', '', 'c2'), { status: 'waiting', limit: 25, cursor: 'c2' }), 'list_requests: the status, the search when typed, 25 a page');
   const list = { status: 'all', count: 2, requests: [{ id: 'a' }, { id: 'b' }], next: 'n1', total: 3 } as unknown as RequestsList;

@@ -290,6 +290,9 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(dp).toContainText(/Live · (now|\d+ min ago)/);
   const timeline = page.getByTestId("timeline");
   await expect(timeline).toContainText("Driving", { timeout: 10000 });
+  // Round 3 (A1): one small icon per row (a car beside Driving), no coloured bar.
+  await expect(timeline.locator('[data-testid="tl-icon"][data-icon="car"]').first()).toBeVisible();
+  await expect(timeline.locator(".tl-row .bar")).toHaveCount(0);
   await expect(page.getByTestId("playback")).toBeVisible();
   await timeline.getByRole("button").first().click();
   await page.getByRole("button", { name: "Play" }).click();

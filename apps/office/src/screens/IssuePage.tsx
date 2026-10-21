@@ -21,6 +21,7 @@ import { Icon } from "../ui/icons";
 import { useIsPhone } from "../ui/phone";
 import { useToast } from "../ui/Toast";
 import { BELL_KEY, eventText, isActive, issueFacts, ISSUES_KEY, kindText, patchIssues, severityTone, statusTone } from "./issuesLogic";
+import { datesInWords, whenText } from "../lib/when";
 
 /** update_issue's answer (not in data/types.ts yet). */
 interface UpdateIssueAnswer {
@@ -152,11 +153,11 @@ export default function IssuePage() {
             <div key={label}>
               <dt>{label}</dt>
               {/* Round 3: the person who took it with their photo (the initials until there is one). */}
-              <dd>{label === "Taken by" && i.assigned_to ? <span className="person"><Avatar name={i.assigned_to.name} src={i.assigned_to.photo_url} small />{value}</span> : value}</dd>
+              <dd>{label === "Taken by" && i.assigned_to ? <span className="person"><Avatar name={i.assigned_to.name} src={i.assigned_to.photo_url} small />{datesInWords(value)}</span> : datesInWords(value)}</dd>
             </div>
           ))}
         </dl>
-        {i.resolution_note && <Notice tone="ok">{i.status === "dismissed" ? "Dismissed" : "Resolved"} by {i.resolved_by ?? "?"} {i.resolved ? `at ${i.resolved}` : ""}: {i.resolution_note}</Notice>}
+        {i.resolution_note && <Notice tone="ok">{i.status === "dismissed" ? "Dismissed" : "Resolved"} by {i.resolved_by ?? "?"} {i.resolved ? whenText(i.resolved, { inline: true }) : ""}: {i.resolution_note}</Notice>}
         <div className="chips">
           {h.task && canOpenTask(me) && <Link className="btn small" to={`/tasks/${h.task.id}`}>Task · {h.task.title} →</Link>}
           {driverLink && <Link className="btn small" to={driverLink}>Driver · {i.driver}</Link>}
@@ -169,7 +170,7 @@ export default function IssuePage() {
       {h.report && (
         <div className="card card-b" data-testid="issue-report">
           <h2>The driver's report</h2>
-          <p style={{ margin: 0 }}>{cap(h.report.category)} · {h.report.driver ?? "?"} · reported {h.report.reported} · <b>{h.report.status.replace("_", " ")}</b></p>
+          <p style={{ margin: 0 }}>{cap(h.report.category)} · {h.report.driver ?? "?"} · reported {whenText(h.report.reported, { inline: true })} · <b>{h.report.status.replace("_", " ")}</b></p>
           {h.report.note && <p style={{ margin: 0 }}>{h.report.note}</p>}
           {h.report.office_note && <p className="muted" style={{ margin: 0 }}>Office: {h.report.office_note}</p>}
           <div className="photos">{h.report.photos.map((u, n) => <a key={n} className="btn small" href={u} target="_blank" rel="noopener">Photo {n + 1}</a>)}</div>
@@ -199,7 +200,7 @@ export default function IssuePage() {
         <dl className="kv">
           {h.events.map((e, n) => (
             <div key={n} style={{ gridColumn: "1/-1" }}>
-              <dt>{e.at}</dt>
+              <dt>{whenText(e.at)}</dt>
               <dd>{eventText(e)}</dd>
             </div>
           ))}

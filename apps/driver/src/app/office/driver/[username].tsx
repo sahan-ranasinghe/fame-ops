@@ -26,6 +26,7 @@ import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords } from '@/lib/dateWords';
 
 const LICENCE_TONE: Record<string, Tone> = { ok: 'green', orange: 'amber', red: 'red', 'not set': 'muted' };
 
@@ -122,7 +123,7 @@ export default function DriverPage() {
             </Line>
             <Line label={t('office.drivers.profile.licence')}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {licence && <Pill text={licence.expiry ? t('office.drivers.profile.licenceExpiry', { date: licence.expiry }) : t('office.drivers.profile.licenceNotSet')} tone={LICENCE_TONE[licence.chip] ?? 'muted'} size={13} />}
+                {licence && <Pill text={licence.expiry ? t('office.drivers.profile.licenceExpiry', { date: dateWords(t, licence.expiry) }) : t('office.drivers.profile.licenceNotSet')} tone={LICENCE_TONE[licence.chip] ?? 'muted'} size={13} />}
                 {p?.licence?.number ? <Mono size={14} color={colors.muted}>{t('office.drivers.profile.licenceNumber', { number: p.licence.number })}</Mono> : null}
               </View>
             </Line>
@@ -180,7 +181,7 @@ export default function DriverPage() {
                   <View style={[styles.dot, { backgroundColor: e.part === 'full_day' ? colors.red : colors.amber }]} />
                   <View style={{ flex: 1 }}>
                     <Txt variant="strong" size={15}>{entryParts(e, dayLabel, t).join(' · ')}</Txt>
-                    <Txt variant="small">{t('office.drivers.addedBy', { name: e.added_by, at: e.added })}</Txt>
+                    <Txt variant="small">{t('office.drivers.addedBy', { name: e.added_by, at: dateWords(t, e.added) })}</Txt>
                   </View>
                   {mayRemove && (
                     <Pressable accessibilityRole="button" onPress={() => confirmRemove(e)} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 }}>

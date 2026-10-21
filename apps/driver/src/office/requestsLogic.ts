@@ -9,8 +9,9 @@ import type { FilterDef, FilterValues } from '@/lib/patterns/filterLogic';
 import { has } from './nav';
 import type { RequestCard, RequestEvent, RequestsList } from './types';
 
-export type RequestStatusFilter = 'waiting' | 'approved' | 'declined' | 'cancelled' | 'all';
-export const REQUEST_STATUSES: readonly RequestStatusFilter[] = ['waiting', 'approved', 'declined', 'cancelled', 'all'];
+// Round 3 (A6): Expired, its own choice (list_requests status expired): a request nobody decided before its day was over.
+export type RequestStatusFilter = 'waiting' | 'approved' | 'declined' | 'cancelled' | 'expired' | 'all';
+export const REQUEST_STATUSES: readonly RequestStatusFilter[] = ['waiting', 'approved', 'declined', 'cancelled', 'expired', 'all'];
 export const REQUESTS_PAGE = 25;
 
 type Words = (key: string, vars?: Record<string, string | number>) => string;
@@ -46,9 +47,28 @@ export function appendRequests(list: RequestsList, page: RequestsList): Requests
   return out;
 }
 
-/** The status pill's tone. */
+/** The status pill's tone (expired: grey, with its own icon, office/ui.tsx StatusChip). */
 export function statusTone(status: string): 'amber' | 'green' | 'red' | 'muted' {
   return status === 'waiting' || status === 'changed' ? 'amber' : status === 'approved' ? 'green' : status === 'declined' || status === 'cancelled' ? 'red' : 'muted';
+}
+
+/** Round 3 (A6): the state that has its own badge with an icon (the calendar with a cross): an expired request. */
+export const isExpired = (q: { status?: string; live?: { state?: string } } | null | undefined): boolean =>
+  q?.status === 'expired' || q?.live?.state === 'expired';
+
+/** Round 3 (A6): "Nobody decided it in time · expired Today 00:15", the time in words by `when` (lib/dateWords.ts). */
+export function expiredText(q: Pick<RequestCard, 'expired' | 'timeline'>, tr: Words, when: (at: string) => string): string {
+  const at = q.expired ?? q.timeline?.expired;
+  return at ? tr('office.requests.expiredLine', { at: when(at) }) : tr('office.requests.expiredLineNoTime');
+}
+
+/**
+ * Round 3 (A6): "Request again" on an expired request (its page, its My trips row): a new request with everything copied
+ * but the day (office/trip/draftLogic.ts requestAgainDraft). The person who asked, with create_request; a proposed task
+ * is not a vehicle request (it is assigned again instead).
+ */
+export function canRequestAgain(q: Pick<RequestCard, 'status' | 'kind'>, tools: readonly string[], own: boolean): boolean {
+  return own && q.status === 'expired' && q.kind !== 'task' && tools.includes('create_request');
 }
 
 const KNOWN_ACTIONS = ['created', 'seen', 'edited', 'approved', 'declined', 'changed', 'redecided', 'postponed', 'cancelled'];

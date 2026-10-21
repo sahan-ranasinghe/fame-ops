@@ -12,7 +12,6 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { can, type FleetError } from "../transport/types";
 import type { Paged } from "../data/types";
-import { today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { Notice, Pill } from "../ui/basics";
 import { FilterBar } from "../ui/FilterBar";
@@ -78,7 +77,6 @@ export function Places() {
     return next;
   }, { replace: true });
   const search = params.toString() ? `?${params.toString()}` : "";
-  const year = today().slice(0, 4);
   const title = whoOptions(me.tools).find(([k]) => k === who)?.[1] ?? "Places";
 
   async function restore(p: RemovedPlace) {
@@ -136,7 +134,7 @@ export function Places() {
                         <td data-label="Site id" className="mono">{p.site_id ?? "—"}</td>
                         {removedView ? (
                           <>
-                            <td data-label="Removed">{removedLine(p.removed, year)}</td>
+                            <td data-label="Removed">{removedLine(p.removed)}</td>
                             <td className="r">
                               <button type="button" className="btn small" disabled={restoring !== null} onClick={(e) => { e.stopPropagation(); void restore(p); }}>
                                 {restoring === p.id ? "Restoring…" : "Restore"}

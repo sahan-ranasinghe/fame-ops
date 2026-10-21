@@ -5,13 +5,15 @@
 // office changed an approved trip, "Approved by Palitha · Sun 16:40" with Call, and Withdraw on the person's own waiting
 // request (the reasons sheet → cancel_request, then the list is read again). Edit is round O2 and is not shown. A row
 // opens the request's page only for an approver (a requester's own request page comes later).
+// Round 3 (A6): an expired request (nobody decided it before its day was over) has its own section and filter choice,
+// its own badge (the calendar with a cross) and Request again (the trip editor with everything copied but the day).
 
 import { tripChip } from '@/office/statusWords';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { Phone } from '@/components/icons';
+import { CalendarX, Phone, RotateCcw } from '@/components/icons';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
@@ -19,7 +21,10 @@ import { Button, Notice, Txt } from '@/components/ui';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
-import { statusTone, tripLive, tripTitle } from '@/office/homeLogic';
+import { dateWords, whenWords } from '@/lib/dateWords';
+import { isCreatedTask, tripLive, tripTitle } from '@/office/homeLogic';
+import { canRequestAgain, expiredText } from '@/office/requestsLogic';
+import { requestAgainDraft, setDraft } from '@/office/trip/draft';
 import { useOffice, useTool } from '@/office/state';
 import {
   canEdit, canWithdraw, changedText, type Trip, tripBuckets, tripKey, tripLine, tripRoute, tripsArgs, tripsChoice, tripsFilterDefs,
@@ -61,6 +66,12 @@ export default function TripsTab() {
   const trips = q.data?.trips ?? [];
   const groups = tripBuckets(trips, filter);
 
+  // Request again (Round 3, A6; Airbnb's and Uber's "Book again"): the copy in place, then the trip editor at Where.
+  function requestAgain(trip: RequestCard) {
+    setDraft(requestAgainDraft(trip, today));
+    router.push({ pathname: '/office/trip/where', params: { mode: 'request', again: trip.id } });
+  }
+
   async function withdraw(id: string, reason: string) {
     setWithdrawn(false);
     setWithdrawing({ id, reason, busy: true });
@@ -84,9 +95,9 @@ export default function TripsTab() {
       <View style={styles.card}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
           <Txt variant="strong" size={17} style={{ flex: 1 }}>{tripTitle(trip)}</Txt>
-          {(() => { const k = tripChip(live.state); return <StatusChip text={t(`office.chip.${k.key}`)} tone={k.tone} />; })()}
+          {(() => { const k = tripChip(live.state); return <StatusChip text={t(`office.chip.${k.key}`)} tone={k.tone} icon={live.state === 'expired' ? CalendarX : undefined} testID={live.state === 'expired' ? 'trip-expired' : undefined} />; })()}
         </View>
-        <Txt variant="muted" size={15}>{tripLine(trip, t('office.trips.backBy'), { self: t('office.who.drivesThemselves'), other: t('office.who.someoneElse') })}</Txt>
+        <Txt variant="muted" size={15}>{tripLine(trip, t('office.trips.backBy'), { self: t('office.who.drivesThemselves'), other: t('office.who.someoneElse') }, (s) => whenWords(t, s))}</Txt>
         {changed ? <Txt variant="strong" size={14} color={colors.amberText}>{changed}</Txt> : null}
         {approved && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -100,6 +111,11 @@ export default function TripsTab() {
         )}
         {canEdit(trip) && me.tools.includes('update_request') && (
           <Button kind="outline" label={t('office.trip.edit')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'edit', id: trip.id } })} style={{ minHeight: 48, marginTop: 8 }} />
+        )}
+        {/* Round 3 (A6): nobody decided it in time; Request again copies everything but the day (tomorrow). */}
+        {live.state === 'expired' && <Txt variant="small" testID="trip-expired-line">{expiredText(trip as RequestCard, t, (at) => dateWords(t, at))}</Txt>}
+        {!isCreatedTask(trip) && canRequestAgain(trip, me.tools, true) && (
+          <Button kind="outline" icon={RotateCcw} label={t('office.requests.requestAgain')} onPress={() => requestAgain(trip)} style={{ minHeight: 48, marginTop: 8 }} testID="trip-request-again" />
         )}
         {canWithdraw(trip) && (
           <>

@@ -9,6 +9,7 @@
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
 import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
 import { addDays } from '../lib/time';
+import { whenWords } from '../lib/dateWords';
 import { sentenceText } from './statusWords';
 import type { BoardDriver, BoardFilter, DriverRoute, RouteSegment, UnavailableEntry, UnavailablePart, UnavailableReason } from './types';
 
@@ -94,7 +95,7 @@ export function rowLines(d: Pick<BoardDriver, 'status' | 'next_task' | 'last_see
   const first = [sentenceText(t, d.status.text)];
   if (d.status.kind === 'off_duty' && d.usual_start) first.push(t('office.drivers.usuallyStarts', { time: d.usual_start }));
   const second: string[] = [];
-  if (d.next_task) second.push(t('office.drivers.next', { time: d.next_task.when, title: d.next_task.title }));
+  if (d.next_task) second.push(t('office.drivers.next', { time: whenWords(t, d.next_task.when), title: d.next_task.title }));
   if (d.last_seen) second.push(sentenceText(t, d.last_seen));
   if (d.status.kind === 'on_duty' && d.usual_start) second.push(t('office.drivers.starts', { time: d.usual_start }));
   return [first.filter(Boolean).join(' · '), second.filter(Boolean).join(' · ')];
@@ -374,9 +375,13 @@ export function dayNumbers(route: Pick<DriverRoute, 'km' | 'driving_minutes' | '
   };
 }
 
-/** A timeline row's mark colour: driving blue, stopped grey, no GPS amber, no data red. */
-export function segmentTone(kind: RouteSegment['kind']): BoardTone | 'amber' {
-  return kind === 'driving' ? 'blue' : kind === 'stopped' ? 'muted' : kind === 'no_gps' ? 'amber' : 'red';
+/**
+ * A timeline row's icon (Round 3 Part A1, Google Maps Timeline: one small icon per row, no coloured bar): a car while
+ * driving, a pin while stopped, a warning when the app was not running or had no GPS.
+ */
+export type SegmentIcon = 'car' | 'pin' | 'warning';
+export function segmentIcon(kind: RouteSegment['kind']): SegmentIcon {
+  return kind === 'driving' ? 'car' : kind === 'stopped' ? 'pin' : 'warning';
 }
 
 /** "10:12–10:40 · 28 min · 14 km" before the server's sentence; the km only on a driving leg with km. */

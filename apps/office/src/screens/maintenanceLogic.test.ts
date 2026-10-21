@@ -16,7 +16,7 @@ describe("Maintenance reminders from the vehicles list", () => {
       ["Revenue licence expires", "in 3 days", "red"],
       ["Rental agreement ends", "in 7 days", "red"],
       ["Service due", "soon", "amber"],
-      ["Emission test expires", "2026-10-25", "amber"],
+      ["Emission test expires", "Sun 25 Oct", "amber"],
     ]);
     expect(rows[1].subject).toBe("WP CAB-4521 · Toyota HiAce");
     expect(rows[2].subject).toBe("WP CAB-4521 · City Wheels");

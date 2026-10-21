@@ -22,6 +22,7 @@ import type { ActivityEntry, ActivityLog, FleetError } from '@/office/types';
 import { BackHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords } from '@/lib/dateWords';
 
 const SEARCH_DEBOUNCE_MS = 500;
 /** The server answers up to 92 days at a time. */
@@ -64,7 +65,8 @@ export default function ActivityLogScreen() {
     <Row
       time={e.at.slice(-5)}
       title={[e.action, e.about].filter(Boolean).join(' · ')}
-      line={[e.at.slice(0, 10), e.person, e.channel].filter(Boolean).join(' · ')}
+      // The day in words beside the time column (Round 3 A4): "Today", "Yesterday", "Mon 19 Oct".
+      line={[dateWords(t, e.at.slice(0, 10)), e.person, e.channel].filter(Boolean).join(' · ')}
       line2={e.reason}
       chip={{ text: t(`office.activity.${e.outcome}`), tone: TONE[e.outcome] }}
       quiet={quietRow(e)}

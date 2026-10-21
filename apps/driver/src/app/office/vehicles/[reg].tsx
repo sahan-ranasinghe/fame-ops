@@ -24,6 +24,7 @@ import { BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section } f
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords, datesInWords } from '@/lib/dateWords';
 
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
@@ -116,7 +117,7 @@ export default function VehicleScreen() {
             </View>
             <View style={{ backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 14 }}>
               {fact(t('office.vehicles.typeSeats'), [v.type ? t(`office.vehicles.type_${v.type}`) : '', v.seats ? t('office.vehicles.seats', { n: v.seats }) : ''].filter(Boolean).join(' · ') || null)}
-              {fact(t('office.vehicles.rentedFrom'), v.rented_from, v.rent_until ? t('office.vehicles.until', { date: v.rent_until }) : null)}
+              {fact(t('office.vehicles.rentedFrom'), v.rented_from, v.rent_until ? t('office.vehicles.until', { date: dateWords(t, v.rent_until) }) : null)}
               {fact(t('office.vehicles.monthlyRent'), v.monthly_rent_lkr != null ? `LKR ${Number(v.monthly_rent_lkr).toLocaleString('en-US')}` : null)}
               {fact(t('office.vehicles.regularDriver'), v.regular_driver)}
               {fact(t('office.vehicles.assigned'), v.assigned_to ?? t('office.vehicles.pool'), v.custodian_note)}
@@ -128,13 +129,13 @@ export default function VehicleScreen() {
               </View>
               {fact(t('office.vehicles.odometer'), v.odometer_km != null ? `${Number(v.odometer_km).toLocaleString('en-US')} km` : null)}
               {fact(t('office.vehicles.nextService'), v.next_service, v.service_state)}
-              {fact(t('office.vehicles.garageBooked'), v.garage_booked)}
+              {fact(t('office.vehicles.garageBooked'), v.garage_booked ? dateWords(t, v.garage_booked) : v.garage_booked)}
               <View style={{ gap: 6 }}>
                 <Txt variant="label" color={colors.muted}>{t('office.vehicles.documents').toUpperCase()}</Txt>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                   {(['lic', 'ins', 'emi'] as const).map((k) => {
                     const dc = docs[k];
-                    return <Pill key={k} text={`${t(`office.vehicles.doc_${k}`)}${dc?.expiry ? ` · ${dc.expiry}` : ''}`} tone={docTone(dc?.chip)} />;
+                    return <Pill key={k} text={`${t(`office.vehicles.doc_${k}`)}${dc?.expiry ? ` · ${dateWords(t, dc.expiry)}` : ''}`} tone={docTone(dc?.chip)} />;
                   })}
                 </View>
                 {v.documents_missing_text ? <Txt variant="small" color={colors.amberText}>{v.documents_missing_text}</Txt> : null}
@@ -156,7 +157,7 @@ export default function VehicleScreen() {
                     >
                       <Txt variant="strong">{r.adding ? t('office.media.anotherDoc') : r.doc ? `${r.doc.kind_name}${r.doc.name && r.doc.name !== r.doc.kind_name ? ` · ${r.doc.name}` : ''}` : t(`office.media.kind_${r.kind}`)}</Txt>
                       {r.doc ? (
-                        <Txt variant="small">{[r.doc.expiry ? t('office.vehicles.expires', { date: r.doc.expiry }) : '', r.doc.uploaded].filter(Boolean).join(' · ')}</Txt>
+                        <Txt variant="small">{[r.doc.expiry ? t('office.vehicles.expires', { date: dateWords(t, r.doc.expiry) }) : '', datesInWords(t, r.doc.uploaded)].filter(Boolean).join(' · ')}</Txt>
                       ) : !r.adding ? (
                         <Txt variant="small" color={r.missing ? colors.amberText : colors.muted}>{t('office.media.noFile')}</Txt>
                       ) : null}

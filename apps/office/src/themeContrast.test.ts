@@ -54,6 +54,14 @@ describe("the theme's colours", () => {
     });
   }
 
+  it("every map stays light: the map block repeats the light colours (Round 3 A3)", () => {
+    const mapBlock = css.match(/^\.mapbox, \.pinmap \{([\s\S]*?)\n\}/m);
+    expect(mapBlock).not.toBeNull();
+    const lightColours = Object.fromEntries(Object.entries(light).filter(([k]) => !k.startsWith("font-")));
+    expect(tokens(mapBlock![1])).toEqual(lightColours);
+    expect(mapBlock![1]).toMatch(/color-scheme: light/);
+  });
+
   it("the system's dark theme and data-theme=\"dark\" are the same colours", () => {
     expect(tokens(systemDark)).toEqual(tokens(forcedDark));
   });

@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 /** Where my profile photo goes in driver-photos (the driver's rule, lib/photoRules.ts profilePhotoPath). */
 const profilePhotoPath = (employeeId: string, id: string) => `${employeeId}/profile/${id}.jpg`;
+import { licencePhotoPath, type LicenceSide } from '../lib/profile';
 import { supabase } from '../lib/supabase';
 import { pickPhoto, uploadToTicket } from './media';
 
@@ -69,6 +70,31 @@ export async function saveMyOfficePhoto(photo: MyPhoto): Promise<SaveOutcome> {
     return set.error ? 'network' : set.data === 'ok' ? 'ok' : 'failed';
   } catch {
     // uploadToTicket throws with its own sentence on a dropped connection.
+    return 'network';
+  }
+}
+
+/**
+ * Round 3 Part A5: a side of my driving licence, as the driver's own (Me → Edit, lib/api.ts saveLicencePhoto): the file
+ * into my <employee id>/licence/ folder through a signed upload, its photos row of kind licence, then set_my_licence_photo
+ * (which checks the folder and the kind). The picture comes made at the licence's size (office/media.ts, driver_licence).
+ */
+export async function saveMyLicencePhoto(side: LicenceSide, uri: string): Promise<SaveOutcome> {
+  try {
+    const id = await myEmployeeId();
+    if (!id) return 'failed';
+    const photoId = Crypto.randomUUID();
+    const path = licencePhotoPath(id, photoId);
+    const signed = await supabase.storage.from('driver-photos').createSignedUploadUrl(path);
+    if (signed.error || !signed.data) return 'network';
+    await uploadToTicket({ bucket: 'driver-photos', path, token: signed.data.token }, uri, 'image/jpeg');
+    const row = await supabase.from('photos').insert({
+      id: photoId, employee_id: id, kind: 'licence', storage_path: path, taken_at: new Date().toISOString(),
+    });
+    if (row.error) return 'failed';
+    const set = await supabase.rpc('set_my_licence_photo', { p_side: side, p_photo_id: photoId });
+    return set.error ? 'network' : set.data === 'ok' ? 'ok' : 'failed';
+  } catch {
     return 'network';
   }
 }

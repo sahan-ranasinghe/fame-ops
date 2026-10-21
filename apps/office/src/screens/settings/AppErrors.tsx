@@ -6,6 +6,7 @@ import { errText } from "../../transport/errors";
 import { Loading, Notice, Pill } from "../../ui/basics";
 import { EmptyLine } from "../../ui/ListKit";
 import { PageTop } from "../../ui/Page";
+import { whenText } from "../../lib/when";
 
 export interface AppErrorRow {
   id: number;
@@ -45,7 +46,7 @@ export default function AppErrorsPage() {
                   {e.message} {e.fatal ? <Pill tone="bad">Crash screen</Pill> : <Pill>Survived</Pill>}
                 </div>
                 <div className="sub">
-                  {[e.at, e.side === "office" ? "Office mode" : "Driver side", e.who, e.app_version, e.runtime, e.screen].filter(Boolean).join(" · ")}
+                  {[whenText(e.at), e.side === "office" ? "Office mode" : "Driver side", e.who, e.app_version, e.runtime, e.screen].filter(Boolean).join(" · ")}
                 </div>
                 {e.stack && (
                   <details>

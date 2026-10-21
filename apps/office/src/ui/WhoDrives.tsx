@@ -3,10 +3,13 @@
 // shared ChoiceChip (ui/Select.tsx: the check before the words when picked), and under Someone else their name and phone.
 // Hidden when the fleet setting self_drive_allowed is off (every trip then needs a driver: the parent sends nothing).
 // The rules and the words: ui/whoDrivesLogic.ts.
+import type { ReactNode } from "react";
+import { Link } from "react-router";
+import { useFleet } from "../app/FleetContext";
 import { ChoiceChip } from "./Select";
 import { type DrivenBy, SELF_WORDS, whoChoices, type WhoDrivesValue, whoHint } from "./whoDrivesLogic";
 
-export function WhoDrives({ id, value, onChange, selfWords = SELF_WORDS, picksVehicle, hidden }: {
+export function WhoDrives({ id, value, onChange, selfWords = SELF_WORDS, picksVehicle, hidden, selfNote }: {
   /** The prefix of the fields' ids ("nr", "af"). */
   id: string;
   value: WhoDrivesValue;
@@ -17,6 +20,8 @@ export function WhoDrives({ id, value, onChange, selfWords = SELF_WORDS, picksVe
   picksVehicle?: boolean;
   /** self_drive_allowed is off: nothing is shown. */
   hidden?: boolean;
+  /** Round 3 (A5): under "I'll drive myself": the person's own licence on file or not (with the link to add it). */
+  selfNote?: ReactNode;
 }) {
   if (hidden) return null;
   const pick = (by: DrivenBy) => onChange({ ...value, by });
@@ -43,6 +48,25 @@ export function WhoDrives({ id, value, onChange, selfWords = SELF_WORDS, picksVe
         </div>
       )}
       {hint && <span className="hint" data-testid="who-hint">{hint}</span>}
+      {value.by === "self" && selfNote}
     </div>
+  );
+}
+
+/**
+ * Round 3 (A5; Zipcar for Business: the member's licence on file): under "I'll drive myself" on the person's own form,
+ * their driving licence as /me knows it: on file, none or expired, with the link to My profile. Nothing in the artifact
+ * (its /me has no licence).
+ */
+export function MyLicenceNote() {
+  const { me } = useFleet();
+  const l = me.licence;
+  if (!l) return null;
+  if (l.state === "on_file") return <span className="hint" data-testid="my-licence-note">Your driving licence is on file.</span>;
+  return (
+    <span className="hint warn" data-testid="my-licence-note">
+      {l.state === "expired" ? "Your driving licence on file has expired." : "No driving licence on file yet."} The fleet admin sees this when deciding.{" "}
+      <Link to="/settings/profile">Add it on My profile</Link>
+    </span>
   );
 }

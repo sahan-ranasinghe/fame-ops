@@ -1040,7 +1040,8 @@
       "search": "මාතෘකාව, ස්ථානය, රියදුරු හෝ අංක තහඩුව",
       "filterShow": "පෙන්වන්න",
       "noneMatch": "“{search}” සඳහා කිසිවක් නැත.",
-      "noneInFilter": "මෙම පෙරහනට ගමන් නැත."
+      "noneInFilter": "මෙම පෙරහනට ගමන් නැත.",
+      "expired": "කල් ඉකුත් වූ"
     },
     "request": {
       "title": "ඉල්ලීමක් අනුමත කරන්න",
@@ -1318,7 +1319,16 @@
       "language": "භාෂාව",
       "officePhone": "කාර්යාල දුරකථනය",
       "officePhoneNone": "සකසා නැත · කාර්යාල වෙබ් අඩවියේ Settings → Fleet",
-      "privacyHint": "යෙදුම එකතු කරන දේ"
+      "privacyHint": "යෙදුම එකතු කරන දේ",
+      "licence": "රියදුරු බලපත්‍රය",
+      "licenceNo": "බලපත්‍ර අංකය",
+      "licenceExpires": "{date} කල් ඉකුත් වේ",
+      "licenceNoExpiry": "කල් ඉකුත් වන දිනයක් නැත",
+      "licenceExpiryLabel": "බලපත්‍රය කල් ඉකුත් වන දිනය",
+      "licenceOnFile": "ගොනුවේ ඇත",
+      "licenceNone": "බලපත්‍රයක් ගොනුවේ නැත",
+      "licenceExpired": "කල් ඉකුත් විය",
+      "licenceDateBad": "කල් ඉකුත් වන දිනය දිනයකි: දින දර්ශනයෙන් තෝරන්න."
     },
     "live": {
       "title": "සජීවී",
@@ -2472,7 +2482,11 @@
       "reasonVehicle": "වාහනයේ ගැටලුවක්",
       "reasonOther": "වෙනත්",
       "cancelledTitle": "වෙන්කිරීම අවලංගු කළා",
-      "withdrawnTitle": "ඉල්ලීම ඉල්ලා අස්කර ගත්තා"
+      "withdrawnTitle": "ඉල්ලීම ඉල්ලා අස්කර ගත්තා",
+      "status_expired": "කල් ඉකුත් විය",
+      "expiredLine": "කිසිවෙකු නියමිත වේලාවට තීරණය නොකළා · {at} කල් ඉකුත් විය",
+      "expiredLineNoTime": "කිසිවෙකු නියමිත වේලාවට තීරණය නොකළා",
+      "requestAgain": "නැවත ඉල්ලන්න"
     },
     "reminders": {
       "title": "සිහිකැඳවීම්",
@@ -2804,7 +2818,8 @@
       "notAvailable": "නොමැත · {detail}",
       "runningLate": "මිනිත්තු {min} ප්‍රමාදයි · {said} කිව්වා",
       "lastSeen": "අවසන් වරට {when}",
-      "lastSeenNear": "අවසන් වරට {when}, {town} අසල"
+      "lastSeenNear": "අවසන් වරට {when}, {town} අසල",
+      "expired": "කල් ඉකුත් විය · කිසිවෙකු නියමිත වේලාවට තීරණය නොකළා"
     },
     "chip": {
       "sent": "යැව්වා",
@@ -2831,7 +2846,8 @@
       "busy": "කාර්යබහුල",
       "off": "සේවයෙන් පිට",
       "onDuty": "සේවයේ",
-      "someoneElse": "වෙනත් අයෙක්"
+      "someoneElse": "වෙනත් අයෙක්",
+      "expired": "කල් ඉකුත්"
     },
     "timeline": {
       "planned": "සැලසුම {time}",
@@ -2916,7 +2932,13 @@
       "saveTrip": "ගමන සුරකින්න",
       "reviewSelf": "ඔබ ම පදවයි",
       "reviewOther": "{name} · වෙනත් අයෙක් · {phone}",
-      "selfDriveOff": "Fame Fleet රියදුරෙකු නැති ගමන් අක්‍රිය කර ඇත: රියදුරෙක් දෙන්න."
+      "selfDriveOff": "Fame Fleet රියදුරෙකු නැති ගමන් අක්‍රිය කර ඇත: රියදුරෙක් දෙන්න.",
+      "licenceOnFile": "තමන් ම පදවයි · බලපත්‍රය ගොනුවේ ඇත ✓",
+      "licenceNone": "තමන් ම පදවයි · බලපත්‍රයක් ගොනුවේ නැත",
+      "licenceExpired": "තමන් ම පදවයි · බලපත්‍රය කල් ඉකුත් වී ඇත",
+      "myLicenceNone": "ඔබේ රියදුරු බලපත්‍රයක් ගොනුවේ නැත: අනුමත කරන්නාට මෙය පෙනේ.",
+      "myLicenceExpired": "ගොනුවේ ඇති ඔබේ රියදුරු බලපත්‍රය කල් ඉකුත් වී ඇත: අනුමත කරන්නාට මෙය පෙනේ.",
+      "addLicence": "මගේ පැතිකඩෙහි එක් කරන්න"
     },
     "when": {
       "day": "{day} {date} {month}",
@@ -2968,7 +2990,8 @@
       "onTaskFor": "{who} කාර්යයක: {title} {window}, {name} සඳහා",
       "onTaskDriver": "{who} කාර්යයක: {title} {window} (රියදුරු {driver})",
       "onTaskForDriver": "{who} කාර්යයක: {title} {window}, {name} සඳහා (රියදුරු {driver})",
-      "savedBy": "{text} ({name} සුරැකුවා)"
+      "savedBy": "{text} ({name} සුරැකුවා)",
+      "noLicence": "{name} ගේ රියදුරු බලපත්‍රයක් ගොනුවේ නැත (තමන් ම පදවයි)."
     },
     "why": {
       "onDuty": "රාජකාරියේ",
@@ -3096,5 +3119,10 @@
     "passedTitle": "ඔබ {stop} හි නැවතුණාද?",
     "passedYes": "ඔව්, මම එහි ගියා",
     "passedSkip": "මඟ හරින්න"
+  },
+  "date": {
+    "today": "අද",
+    "yesterday": "ඊයේ",
+    "tomorrow": "හෙට"
   }
 }

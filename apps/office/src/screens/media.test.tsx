@@ -99,7 +99,8 @@ describe("the Documents section", () => {
     expect(within(screen.getByTestId("doc-revenue_licence")).getByText("No document")).toBeTruthy();
     expect(within(screen.getByTestId("doc-revenue_licence")).getByLabelText("Expires").getAttribute("data-value")).toBe("2027-01-01");
     expect(within(ins).getByText("PDF · 512 KB")).toBeTruthy();
-    expect(within(ins).getByText("Uploaded by Palitha 14 Oct 10:05")).toBeTruthy();
+    // Dates in words (Round 3 A4): the weekday, the day and the month; the year only when it is not this year's.
+    expect(within(ins).getByText(/^Uploaded by Palitha Wed 14 Oct( 2026)? 10:05$/)).toBeTruthy();
     expect(within(ins).getByRole("link", { name: "View" }).getAttribute("href")).toBe("https://files/ins.pdf");
     expect(within(ins).getByRole("link", { name: "View" }).getAttribute("target")).toBe("_blank");
     expect(within(ins).getByRole("button", { name: "Replace" })).toBeTruthy();
@@ -110,7 +111,7 @@ describe("the Documents section", () => {
     expect(screen.getByTestId("doc-other:new")).toBeTruthy();
     const removed = screen.getByTestId("removed-documents");
     expect(within(removed).getByText("Replaced")).toBeTruthy();
-    expect(within(removed).getByText(/Uploaded by Nimal 1 Oct 2025 08:00 · replaced by Palitha 14 Oct 10:05/)).toBeTruthy();
+    expect(within(removed).getByText(/Uploaded by Nimal Wed 1 Oct 2025 08:00 · replaced by Palitha Wed 14 Oct( 2026)? 10:05/)).toBeTruthy();
   });
 
   it("uploads a photo with the expiry typed, then saves it as the vehicle's document", async () => {

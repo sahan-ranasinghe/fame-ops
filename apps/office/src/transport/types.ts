@@ -31,6 +31,21 @@ export interface Me {
   phone_required?: boolean;
   /** Round 3: the person's own photo (a link that works for at least an hour); web only (GET /me). */
   photo_url?: string;
+  /**
+   * Round 3 (A5): the person's own driving licence, for the trips they drive themselves (Zipcar for Business: the
+   * member's licence on file); web only (GET /me). state: on_file (a number or a photo, not expired), none, expired.
+   */
+  licence?: MyLicence;
+}
+
+export interface MyLicence {
+  number?: string;
+  /** YYYY-MM-DD. */
+  expiry?: string;
+  state?: "on_file" | "none" | "expired";
+  /** 1-hour links to the photos of the front and the back. */
+  front_url?: string;
+  back_url?: string;
 }
 
 /** True when the person holds any one of the permissions (none asked = everyone). */

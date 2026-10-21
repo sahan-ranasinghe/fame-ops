@@ -28,6 +28,7 @@ import type { FleetError, Issue, IssuesList, VehiclesList } from '@/office/types
 import { Avatar, Chip, DarkHeader, Divider, ListFailed, Screen, Section, StatusChip, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords } from '@/lib/dateWords';
 
 const TILE: Record<Tone, { bg: string; ink: string }> = {
   red: { bg: colors.redChip, ink: colors.red },
@@ -73,10 +74,11 @@ export default function IssuesScreen() {
     setValues(next);
   };
   const words: WhoWords = {
-    opened: (at) => t('office.issues.opened', { at }),
+    // The server's "2026-10-18 09:12" in words (Round 3 A4, lib/dateWords.ts): "Today 09:12".
+    opened: (at) => t('office.issues.opened', { at: dateWords(t, at) }),
     takenBy: (name, at) => (at ? t('office.issues.takenByAt', { name, at }) : t('office.issues.takenBy', { name })),
-    closed: (at) => t('office.issues.closedAt', { at }),
-    dismissed: (at) => t('office.issues.dismissedAt', { at }),
+    closed: (at) => t('office.issues.closedAt', { at: dateWords(t, at) }),
+    dismissed: (at) => t('office.issues.dismissedAt', { at: dateWords(t, at) }),
   };
 
   async function loadMore() {
@@ -122,7 +124,7 @@ export default function IssuesScreen() {
           </View>
           {snooze && (
             <Txt variant="small" color={colors.amberText}>
-              {snooze.by ? t('office.issues.snoozedUntilBy', { at: snooze.until, name: snooze.by }) : t('office.issues.snoozedUntil', { at: snooze.until })}
+              {snooze.by ? t('office.issues.snoozedUntilBy', { at: dateWords(t, snooze.until), name: snooze.by }) : t('office.issues.snoozedUntil', { at: dateWords(t, snooze.until) })}
             </Txt>
           )}
         </View>

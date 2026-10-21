@@ -29,6 +29,7 @@ import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords } from '@/lib/dateWords';
 
 type CancelReasonKey = 'not_needed' | 'plans_changed' | 'no_vehicle' | 'other';
 const CANCEL_REASONS: { value: CancelReasonKey; label: string }[] = [
@@ -125,7 +126,7 @@ export default function GiveDriverScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             {task.needs_driver && (
               <Pill
-                text={task.needs_driver.reason === 'declined' ? t('office.give.declinedLine', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '', at: task.needs_driver.since }) : t('office.give.notAcceptedLine', { name: task.driver ?? '' })}
+                text={task.needs_driver.reason === 'declined' ? t('office.give.declinedLine', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '', at: dateWords(t, task.needs_driver.since) }) : t('office.give.notAcceptedLine', { name: task.driver ?? '' })}
                 tone="red"
                 size={15}
               />

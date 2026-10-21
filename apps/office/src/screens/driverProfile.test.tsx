@@ -123,7 +123,7 @@ describe("the driver's profile (G)", () => {
     expect(screen.getByTestId("pf-app").textContent).toBe("1.2.0+abc123");
     expect(screen.getByTestId("pf-unavailable").textContent).toContain("Thu 22 Oct · Not available · half day, back 13:00");
     const changes = screen.getAllByTestId("pf-change");
-    expect(changes[0].textContent).toBe("Phone: 077 000 0000 → 077 111 2222 · changed by the driver · 2026-10-18 09:12");
+    expect(changes[0].textContent).toBe("Phone: 077 000 0000 → 077 111 2222 · changed by the driver · Sun 18 Oct 09:12");
     expect(changes[0].querySelector("b.pf-by-driver")?.textContent).toBe("changed by the driver");
     expect(changes[1].querySelector("b")).toBeNull();
   });
@@ -204,7 +204,7 @@ describe("the driver's profile (G)", () => {
     expect(screen.queryByTestId("pf-licence-no")).toBeNull();
     expect(screen.queryByTestId("pf-licence-photos")).toBeNull();
     expect(screen.queryByTestId("pf-changes")).toBeNull();
-    expect(screen.getByTestId("pf-licence-expiry").textContent).toBe("2026-11-10");
+    expect(screen.getByTestId("pf-licence-expiry").textContent).toBe("Tue 10 Nov");
     expect(screen.getByTestId("pf-unavailable").textContent).toContain("Available every day in the next 30 days.");
   });
 

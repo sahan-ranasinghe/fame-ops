@@ -8,6 +8,7 @@ import { PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from '@/components/icons';
 import { Button, Mono, Txt } from '@/components/ui';
 import { ChoiceChip, pickedStyle } from '@/components/patterns/Select';
+import { dateWords } from '@/lib/dateWords';
 import { colomboDate } from '@/lib/time';
 import {
   addMonths, dayAllowed, dayState, monthGrid, PRESETS, type PresetKey, presetOf, presetRange, type RangeDraft, rangeWords, tapDay, weekDays,
@@ -57,7 +58,7 @@ export function MonthCalendar({ month, onMonth, onTap, range, picked, allowed }:
             const st = range ? dayState(range, d) : picked === d ? 'single' : 'none';
             const filled = st === 'start' || st === 'end' || st === 'single';
             return (
-              <Pressable key={j} accessibilityRole="radio" accessibilityState={{ checked: filled, selected: filled, disabled: !ok }} accessibilityLabel={d} disabled={!ok} onPress={() => onTap(d)} style={[styles.cell, st === 'inside' && { backgroundColor: colors.blueChip }, (st === 'start') && styles.startBand, (st === 'end') && styles.endBand]}>
+              <Pressable key={j} accessibilityRole="radio" accessibilityState={{ checked: filled, selected: filled, disabled: !ok }} accessibilityLabel={dateWords(t, d)} disabled={!ok} onPress={() => onTap(d)} style={[styles.cell, st === 'inside' && { backgroundColor: colors.blueChip }, (st === 'start') && styles.startBand, (st === 'end') && styles.endBand]}>
                 <View style={[styles.dayDot, filled && { backgroundColor: colors.blue }, d === today && !filled && { borderWidth: 1.5, borderColor: colors.blue }]}>
                   <Mono size={15} bold={filled} color={filled ? '#ffffff' : ok ? colors.ink : '#b9bcc0'}>{dayNum(d)}</Mono>
                 </View>

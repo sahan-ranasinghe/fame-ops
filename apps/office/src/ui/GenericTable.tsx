@@ -3,6 +3,7 @@
 import type { Row } from "../data/types";
 import { cap, num } from "../lib/format";
 import { Plate } from "./basics";
+import { datesInWords } from "../lib/when";
 
 const LABELS: Record<string, string> = {
   task_km: "Task km", fuel_lkr: "Fuel (LKR)", fuel_litres: "Fuel (litres)", fuel_entries: "Fuel entries", km_allowance: "Allowance (km)",
@@ -26,7 +27,8 @@ export function GenericTable({ rows, hide = [] }: { rows: Row[]; hide?: string[]
     if (k === "reg_no" || k === "vehicle") return <Plate v={String(v ?? "")} />;
     if (typeof v === "string" && /^https?:\/\//.test(v)) return <a className="btn small" href={v} target="_blank" rel="noopener">Open</a>;
     if (typeof v === "boolean") return v ? "Yes" : "No";
-    return v == null || v === "" ? "—" : String(v);
+    // Round 3 (A4): a date the server sends ("2026-10-12 08:00") in words ("Mon 12 Oct 08:00").
+    return v == null || v === "" ? "—" : datesInWords(String(v));
   };
   return (
     <div className="tbl-wrap">

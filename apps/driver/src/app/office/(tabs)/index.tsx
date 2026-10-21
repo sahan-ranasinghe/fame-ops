@@ -16,6 +16,7 @@ import { Pressable, View } from 'react-native';
 
 import { Mono, Txt } from '@/components/ui';
 import { addDays, colomboDate } from '@/lib/time';
+import { whenWords } from '@/lib/dateWords';
 import { shortDate } from '@/lib/durations';
 import { greeting, isCreatedTask, requestLine, requestTitle, tripLive, tripTitle } from '@/office/homeLogic';
 import { chipText, sentenceText, taskChip, taskRowLine, tripChip } from '@/office/statusWords';
@@ -144,10 +145,10 @@ export default function OfficeHome() {
                 {i > 0 && <Divider />}
                 <Row
                   title={x.title}
-                  line={`${x.start} · ${x.line}`}
+                  line={`${whenWords(t, x.start)} · ${x.line}`}
                   right={has(me.permissions, 'assign_tasks')
                     ? <Button kind="dark" label={t('office.home.giveDriver')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: x.task_id } })} style={{ minHeight: 48, backgroundColor: colors.red, paddingHorizontal: 14 }} />
-                    : <Pill text={x.when} tone="red" />}
+                    : <Pill text={whenWords(t, x.when)} tone="red" />}
                 />
               </View>
             ))}
@@ -267,7 +268,7 @@ export default function OfficeHome() {
                   {i > 0 && <Divider />}
                   <Row
                     title={tripTitle(x)}
-                    line={[x.when, x.back_by ? `${t('office.trips.backBy')} ${x.back_by}` : ''].filter(Boolean).join(' · ')}
+                    line={[whenWords(t, x.when), x.back_by ? `${t('office.trips.backBy')} ${x.back_by}` : ''].filter(Boolean).join(' · ')}
                     chip={(() => { const k = tripChip(live.state); return { text: t(`office.chip.${k.key}`), tone: k.tone }; })()}
                     onPress={() => router.push('/office/(tabs)/trips')}
                   />

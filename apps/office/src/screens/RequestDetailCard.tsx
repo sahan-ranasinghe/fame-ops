@@ -6,7 +6,8 @@ import { useFleet } from "../app/FleetContext";
 import type { RequestCard } from "../data/types";
 import { joinDots } from "../lib/format";
 import { requestView } from "./approvalLogic";
-import { AskedWho, ChangesList, LateNotice, RequestHead, Timeline } from "./requestParts";
+import { whenText } from "../lib/when";
+import { AskedWho, ChangesList, LateNotice, RequestHead, SelfDriveLicence, Timeline } from "./requestParts";
 
 export function RequestDetailCard({ q, compact, hideLate }: { q: RequestCard; compact?: boolean; hideLate?: boolean }) {
   const { me } = useFleet();
@@ -18,7 +19,7 @@ export function RequestDetailCard({ q, compact, hideLate }: { q: RequestCard; co
       {q.late && !hideLate && <div style={{ marginTop: 12 }}><LateNotice approver={me.permissions.includes("approve")} /></div>}
       {q.status === "changed" && (
         <div className="notice" style={{ marginTop: 12 }}>
-          <p><b>Changed{q.changed?.by ? ` by ${q.changed.by}` : ""}{q.changed?.at ? ` · ${q.changed.at}` : ""} · needs re-approval.</b> The booking keeps its old plan until it is decided again.</p>
+          <p><b>Changed{q.changed?.by ? ` by ${q.changed.by}` : ""}{q.changed?.at ? ` · ${whenText(q.changed.at)}` : ""} · needs re-approval.</b> The booking keeps its old plan until it is decided again.</p>
           <ChangesList changes={q.changes} />
         </div>
       )}
@@ -35,6 +36,8 @@ export function RequestDetailCard({ q, compact, hideLate }: { q: RequestCard; co
         {p?.notes && <div style={{ gridColumn: "1/-1" }}><dt>Notes for the driver</dt><dd style={{ fontWeight: 400 }}>{p.notes}</dd></div>}
         {q.note && <div style={{ gridColumn: "1/-1" }}><dt>Note</dt><dd style={{ fontWeight: 400 }}>{q.note}</dd></div>}
       </dl>
+      {/* Round 3 (A5): the asker drives it themselves: their licence on file or not (amber; never a block). */}
+      <SelfDriveLicence q={q} />
       {!compact && <Timeline q={q} />}
     </div>
   );

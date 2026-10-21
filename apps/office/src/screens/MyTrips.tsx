@@ -45,6 +45,7 @@ import {
   vehicleOf,
 } from "./myTripsLogic";
 import { TripCardsContext, TRIPS_KEY, TRIPS_PATH, useMyTripsArgs } from "./myTripsQuery";
+import { ExpiredBadge, RequestAgain } from "./requestParts";
 
 type Trip = RequestCard | CreatedTaskCard;
 
@@ -72,10 +73,12 @@ function StatusCell({ q }: { q: RequestCard }) {
   const approver = q.approved_by && !q.cancelled_by && !q.declined_by ? personPhone(q.approved_by) : null;
   return (
     <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
-      <Pill tone={liveTone(live.state)}>{liveWord(live.state)}</Pill>
-          <span className="sub" data-testid="trip-live">{live.text}</span>
+      {live.state === "expired" ? <ExpiredBadge /> : <Pill tone={liveTone(live.state)}>{liveWord(live.state)}</Pill>}
+      <span className="sub" data-testid="trip-live">{live.text}</span>
       {lines.map((l) => <div key={l} className="sub" data-testid="trip-decision">{l}</div>)}
       {approver && <Inside><ContactButtons phone={approver} label="Call fleet admin" testId="call-approver" /></Inside>}
+      {/* Round 3 (A6): an expired request is asked again from its row (everything copied but the day). */}
+      <Inside><RequestAgain q={q} className="btn small" /></Inside>
     </div>
   );
 }

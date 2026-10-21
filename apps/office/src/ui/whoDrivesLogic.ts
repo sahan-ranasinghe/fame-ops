@@ -101,3 +101,24 @@ export function askedWords(q: { driven_by?: AskedDriver; driver_required?: boole
       return "A driver";
   }
 }
+
+/** Round 3 (A5): whether the person who drives it themselves has a driving licence on file on the trip's day. */
+export type SelfDriveLicence = "on_file" | "none" | "expired";
+
+/**
+ * The approver's line for a self-driven request (Zipcar for Business / Enterprise CarShare: the member's licence on
+ * file): "Self-drive · licence on file ✓", or amber "Self-drive · no licence on file" / "Self-drive · licence expired".
+ * A warning, never a block. Null when the request is not self-driven (the server sends no state).
+ */
+export function selfDriveLicenceLine(state: SelfDriveLicence | undefined): { text: string; tone: "ok" | "warn" } | null {
+  switch (state) {
+    case "on_file":
+      return { text: "Self-drive · licence on file ✓", tone: "ok" };
+    case "none":
+      return { text: "Self-drive · no licence on file", tone: "warn" };
+    case "expired":
+      return { text: "Self-drive · licence expired", tone: "warn" };
+    default:
+      return null;
+  }
+}

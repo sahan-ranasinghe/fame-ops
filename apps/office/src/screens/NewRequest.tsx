@@ -13,7 +13,7 @@
 // I'll drive myself, or someone else (a name and a phone); Book now then needs a plate (the reason under the button), and
 // the driver is picked from the driver cards (ui/DriverPicker).
 import { type FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { flashWarnings } from "../data/flash";
@@ -27,7 +27,7 @@ import { Empty, Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { DriverPicker } from "../ui/DriverPicker";
 import { driverOptions } from "../ui/driverPickerLogic";
-import { WhoDrives } from "../ui/WhoDrives";
+import { MyLicenceNote, WhoDrives } from "../ui/WhoDrives";
 import { emptyWho, plateReason } from "../ui/whoDrivesLogic";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
@@ -35,7 +35,7 @@ import { availabilityArgs, floorTo5 } from "./availabilityLogic";
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { basePlace, useFleetSettings, VehicleChoiceRadios, vehicleOnTheDay } from "./dispatchParts";
 import { bookInput, emptyRequest, type RequestFields, suggestInput, validateNewRequest, whoOf } from "./requestLogic";
-import { VehicleGroups } from "./requestParts";
+import { type AgainState, VehicleGroups } from "./requestParts";
 import { firstStopOf } from "./stopsLogic";
 import { TripEditor, useTrip } from "./TripEditor";
 import { tripPlanInput } from "./tripLogic";
@@ -55,13 +55,15 @@ export function NewRequest() {
   const { me, store, transport } = useFleet();
   const navigate = useNavigate();
   const toast = useToast();
+  // Round 3 (A6): "Request again" on an expired request opens this form with everything copied but the day (tomorrow).
+  const { again, from: againFrom } = (useLocation().state as Partial<AgainState> | null) ?? {};
   // Someone who can neither approve nor assign asks in their own name (the server does the same).
   const staff = !can(me, "approve", "assign_tasks");
   const books = me.tools.includes("book_vehicle");
   // Phase 7 (§4): an approver may give the phone of a requester without an account (Tell requester).
   const approver = can(me, "approve");
   // The draft's key changed with the trip (§34): an older draft (From and To) is not offered.
-  const [f, setF, draft] = useFormDraft<Form>("request-trip-new", null, () => ({ ...emptyRequest(today()), vehicle: "", pickedDriver: "" }));
+  const [f, setF, draft] = useFormDraft<Form>("request-trip-new", null, () => ({ ...(again ?? emptyRequest(today())), vehicle: "", pickedDriver: "" }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [booked, setBooked] = useState<Booked | null>(null);
@@ -184,6 +186,11 @@ export function NewRequest() {
     <section className="view" data-testid="new-request">
       <PageTop title="New vehicle request" sub={staff ? "Ask the fleet office for a vehicle" : books ? "Someone needs a vehicle · book it now or leave it waiting" : "Someone needs a vehicle"} backTo="/requests" />
       <DraftBanner draft={draft} />
+      {again && (
+        <Notice tone="info">
+          <span data-testid="again-note">Asked again{againFrom ? `: ${againFrom}` : ""}. Everything is copied from the expired request; the day is tomorrow. Change anything before you send it.</span>
+        </Notice>
+      )}
       <form className="page-form" onSubmit={submit} noValidate>
         <div className="card card-b form">
           <div className="field"><label htmlFor="nr-behalf">On behalf of</label><input id="nr-behalf" maxLength={120} value={f.behalf} onChange={(e) => set("behalf", e.target.value)} placeholder="Only when the vehicle is for someone else" /></div>
@@ -211,7 +218,7 @@ export function NewRequest() {
           <div className="field" style={{ gap: 8 }}>
             <span className="check"><input type="checkbox" id="nr-tools" checked={f.tools} onChange={(e) => set("tools", e.target.checked)} /> <label htmlFor="nr-tools">Tools or equipment go too</label></span>
           </div>
-          <WhoDrives id="nr" value={who} onChange={(w) => set("who", w)} hidden={!selfDrive} picksVehicle={books} />
+          <WhoDrives id="nr" value={who} onChange={(w) => set("who", w)} hidden={!selfDrive} picksVehicle={books} selfNote={<MyLicenceNote />} />
           <div className="field"><label htmlFor="nr-note">Note</label><textarea id="nr-note" maxLength={1000} value={f.note} onChange={(e) => set("note", e.target.value)} /></div>
         </div>
 

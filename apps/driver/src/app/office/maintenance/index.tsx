@@ -17,6 +17,7 @@ import type { FleetError, VehicleReports } from '@/office/types';
 import { BackHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords } from '@/lib/dateWords';
 
 const SEARCH_DEBOUNCE_MS = 500;
 
@@ -67,7 +68,7 @@ export default function MaintenanceScreen() {
                 <Row
                   left={r.vehicle ? <Plate regNo={r.vehicle} /> : undefined}
                   title={t(categoryKey(r.category))}
-                  line={[r.driver, r.reported, r.photos.length ? t('office.maint.photosN', { n: r.photos.length }) : ''].filter(Boolean).join(' · ')}
+                  line={[r.driver, dateWords(t, r.reported), r.photos.length ? t('office.maint.photosN', { n: r.photos.length }) : ''].filter(Boolean).join(' · ')}
                   line2={r.note ?? undefined}
                   chip={{ text: t(`office.maint.status_${r.status}`), tone: reportTone(r.status) }}
                   onPress={() => { handReport(r); router.push({ pathname: '/office/maintenance/[id]', params: { id: r.id } }); }}

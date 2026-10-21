@@ -19,6 +19,7 @@ import type { FleetError, VehicleReport, VehicleReports } from '@/office/types';
 import { BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords } from '@/lib/dateWords';
 
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
@@ -61,7 +62,7 @@ export default function ReportScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <BackHeader title={r ? t(categoryKey(r.category)) : t('office.maint.report')} subtitle={r ? [r.vehicle, r.reported].filter(Boolean).join(' · ') : undefined} />
+      <BackHeader title={r ? t(categoryKey(r.category)) : t('office.maint.report')} subtitle={r ? [r.vehicle, dateWords(t, r.reported)].filter(Boolean).join(' · ') : undefined} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} bottom={canEdit ? 140 : 24}>
         {!q.data && !q.error && !r && <SkeletonRows rows={3} lines={2} />}
         {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
@@ -74,7 +75,7 @@ export default function ReportScreen() {
                 <Pill text={t(`office.maint.status_${r.status}`)} tone={reportTone(r.status)} />
                 {r.vehicle_in_garage ? <Pill text={t('office.maint.inGarageNow')} tone="amber" /> : null}
               </View>
-              <Txt variant="muted" size={15}>{[r.driver, t('office.maint.reportedAt', { at: r.reported })].filter(Boolean).join(' · ')}</Txt>
+              <Txt variant="muted" size={15}>{[r.driver, t('office.maint.reportedAt', { at: dateWords(t, r.reported) })].filter(Boolean).join(' · ')}</Txt>
               {r.note ? <Txt variant="body" size={16}>{r.note}</Txt> : null}
               {r.office_note ? <Txt variant="muted" size={15}>{t('office.maint.officeNote', { note: r.office_note })}</Txt> : null}
               {r.photos.length > 0 && (

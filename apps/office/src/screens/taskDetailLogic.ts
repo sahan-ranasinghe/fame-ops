@@ -6,6 +6,7 @@ import { cap, joinDots, num, plateOf, type Tone } from "../lib/format";
 import { TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
 import { STATUS_TONE } from "./taskHistoryLogic";
 import { duration } from "@fleet/durations";
+import { whenText } from "../lib/when";
 
 /**
  * The status pill's tone on the task page, the same as Tasks → History: assigned amber, in progress blue, completed green,
@@ -110,5 +111,5 @@ export function needsDriverText(t: Pick<TaskDetail["task"], "needs_driver" | "dr
     : nd.reason === "not_accepted"
     ? `${first} hasn't accepted in time`
     : nd.reason_text ?? "";
-  return joinDots([`Needs a driver since ${nd.since}`, why]);
+  return joinDots([`Needs a driver since ${whenText(nd.since, { inline: true })}`, why]);
 }

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { activityArgs, quietRow } from '../src/office/activityLogic';
 import { approveProblem, decideCall, driverParts, firstPick, presenceLine, vehicleChip, vehicleChipText } from '../src/office/approveLogic';
 import { rowLines } from '../src/office/driversLogic';
+import { datesInWords } from '../src/lib/dateWords';
 import { sentenceText, sentenceWords, taskChip, taskRowLine } from '../src/office/statusWords';
 import { tripLine } from '../src/office/tripsLogic';
 import { validateAssign } from '../src/office/trip/assignLogic';
@@ -170,10 +171,13 @@ console.log('\nThe server\'s sentences on a Sinhala screen');
     ['Kamal Perera has another task from 15:00 the same day (Bank).', ['Kamal Perera', '15:00', 'Bank']],
     ['WP CAB-4521 is marked as in the garage.', ['WP CAB-4521']],
     ['WP CAB-4521 is over its monthly km allowance (3,120 of 3,000 km).', ['WP CAB-4521', '3,120', '3,000']],
-    ['WP CAB-4521: revenue licence expired on 2026-10-01.', ['WP CAB-4521', '2026-10-01']],
-    ['WP CAB-4521: insurance expired on 2026-10-01.', ['WP CAB-4521', '2026-10-01']],
-    ['WP CAB-4521: emission test expired on 2026-10-01.', ['WP CAB-4521', '2026-10-01']],
-    ["Kamal Perera's driving licence expired on 2026-09-30.", ['Kamal Perera', '2026-09-30']],
+    // Round 3 A4: the date in words ("Thu 1 Oct"), never "2026-10-01", in both languages.
+    ['WP CAB-4521: revenue licence expired on 2026-10-01.', ['WP CAB-4521', '1']],
+    ['WP CAB-4521: insurance expired on 2026-10-01.', ['WP CAB-4521', '1']],
+    ['WP CAB-4521: emission test expired on 2026-10-01.', ['WP CAB-4521', '1']],
+    ["Kamal Perera's driving licence expired on 2026-09-30.", ['Kamal Perera', '30']],
+    ['Nimali Fernando has no driving licence on file (self-drive).', ['Nimali Fernando']],
+    ['Expired · nobody decided it in time', []],
     ['Kamal is not available then · half day, back 13:00', ['Kamal', '13:00']],
     ['Kamal is not available that day · leave until Thu 22 Oct', ['Kamal', '22']],
     ['Kamal is not available then · personal, from 13:00', ['Kamal', '13:00']],
@@ -211,7 +215,8 @@ console.log('\nThe server\'s sentences on a Sinhala screen');
     const e = sentenceText(en, server);
     const s = sentenceText(si, server);
     check(words !== null, `known: "${server}"`);
-    check(e === server, `English as the server says it: "${server}"`, e);
+    check(e === datesInWords(en, server), `English as the server says it (a date in words): "${server}"`, e);
+    check(!/\d{4}-\d{2}-\d{2}/.test(e) && !/\d{4}-\d{2}-\d{2}/.test(s), `no raw date on screen: "${server}"`);
     check(s !== server && !/[A-Za-z]{2,}/.test(strip(s, keep)) && keep.every((k) => s.includes(k)), `Sinhala, the values as they are: "${server}"`, s);
     check(!/[෦-෯]/.test(s), `Latin digits: "${server}"`);
   }

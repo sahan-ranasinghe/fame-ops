@@ -15,6 +15,7 @@ import type { DriverRoute, TaskDetail } from '@/office/types';
 import { BackHeader, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { spanWords } from '@/lib/dateWords';
 
 export default function TaskRouteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -31,7 +32,7 @@ export default function TaskRouteScreen() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={t('office.history.drivenRoute')} subtitle={task?.title ?? route.data?.task?.title} />
       <Screen refreshing={route.refreshing} onRefresh={refresh} bottom={24}>
-        <Section title={[task?.driver, route.data?.task?.started && route.data?.task?.completed ? `${route.data.task.started}–${route.data.task.completed}` : route.data?.task?.started].filter(Boolean).join(' · ') || t('office.history.drivenRoute')}>
+        <Section title={[task?.driver, spanWords(t, route.data?.task?.started, route.data?.task?.completed)].filter(Boolean).join(' · ') || t('office.history.drivenRoute')}>
           <DayRoute
             data={route.data}
             error={route.error}

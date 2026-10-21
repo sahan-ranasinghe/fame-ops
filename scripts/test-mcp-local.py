@@ -774,6 +774,31 @@ quiet = tool("activity_log", {"limit": 100})["entries"]
 loud = tool("activity_log", {"limit": 100, "include_routine": True})["entries"]
 check(not any(e.get("routine") for e in quiet) and any(e.get("routine") for e in loud) and len(loud) > len(quiet),
       "the Activity log: routine actions (watching drivers) only with include_routine", f"{len(quiet)} {len(loud)}")
+# Round 3, Part A 6: a request still waiting after its day expires (the job); it is out of waiting and cannot be decided.
+re10 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "18:00", "route_to": "Jaffna"})
+psql(f"update vehicle_requests set needed_at = now() - interval '2 days' where id = '{re10['request']['id']}'")
+check(psql("select public.expire_requests()") != "0", "expire_requests expires a request whose day is over")
+ex = [c for c in tool("list_requests", {"status": "expired"})["requests"] if c["id"] == re10["request"]["id"]]
+check(ex and ex[0]["status"] == "expired" and ex[0].get("expired") and ex[0]["timeline"].get("expired")
+      and not any(c["id"] == re10["request"]["id"] for c in tool("list_requests", {})["requests"]),
+      "an expired request: its own status and time, out of the waiting list", json.dumps(ex)[:300])
+r = tool("decide_request", {"request_id": re10["request"]["id"], "decision": "approve", "driver": "kasun.s"}, expect_error=True)
+check("expired" in r, "an expired request cannot be approved", r)
+# Round 3, Part A 5: a self-driven request carries the asker's licence state for the approver.
+re11 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(6), "time": "08:00", "route_to": "Galle", "driven_by": "self"})
+check(re11["request"].get("self_drive_licence") == "none", "self-drive: no licence on file", json.dumps(re11["request"])[:300])
+psql(f"update employees set licence_no = 'B7654321', licence_expiry = '2030-01-01' where id = '{CUST}'")
+c11 = [c for c in tool("list_requests", {})["requests"] if c["id"] == re11["request"]["id"]]
+check(c11 and c11[0].get("self_drive_licence") == "on_file", "self-drive: licence on file once it is set", json.dumps(c11)[:200])
+psql(f"update employees set licence_no = null, licence_expiry = null where id = '{CUST}'")
+ap11 = tool("decide_request", {"request_id": re11["request"]["id"], "decision": "approve", "vehicle": "ph2087"})
+check(any("no driving licence on file" in w for w in ap11.get("warnings", [])), "approving a self-drive with no licence: a warning, not a block", json.dumps(ap11.get("warnings"))[:300])
+if CHANNEL == "api":
+    up = tool("update_my_profile", {"licence_no": "B1112223", "licence_expiry": "2029-06-30"})
+    code, me_l = http("GET", f"{API}/functions/v1/office-api/me", api_headers(API_TOKEN))
+    check(up.get("licence_no") == "B1112223" and me_l.get("licence", {}).get("state") == "on_file" and me_l["licence"].get("expiry") == "2029-06-30"
+          and psql(f"select count(*) from employee_changes where field = 'licence_no' and new_value = 'B1112223'") == "1",
+          "My profile: an office person's own licence, on /me, every change logged", json.dumps(me_l.get("licence")))
 tool("update_vehicle", {"reg_no": "WP CAR-1182", "in_garage": True})  # back in the garage: the later sections count on it
 
 # ---------------------------------------------------------------------------

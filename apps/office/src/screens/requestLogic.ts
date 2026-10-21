@@ -173,6 +173,8 @@ const EVENT_LABEL: Record<string, string> = {
   redecided: "Decided again",
   postponed: "Postponed",
   cancelled: "Cancelled",
+  // Round 3 (A6): nobody decided it before its day was over.
+  expired: "Expired · nobody decided it in time",
 };
 
 /** "time 09:00 → 09:30" per changed field. */
@@ -190,7 +192,8 @@ export function timelineSteps(q: { status: string; decided?: string; decline_rea
   if (q.events?.length) {
     const steps: TimelineStep[] = q.events.map((e) => ({
       label: e.action === "redecided" && e.note?.startsWith("kept") ? "Kept as asked" : EVENT_LABEL[e.action] ?? e.action,
-      at: [e.at, e.actor ? `by ${e.actor}` : ""].filter(Boolean).join(" "),
+      // An expired request was nobody's doing: no "by" (the server writes Fame Fleet).
+      at: [e.at, e.actor && e.action !== "expired" ? `by ${e.actor}` : ""].filter(Boolean).join(" "),
       done: true,
       lines: e.action === "edited" || e.action === "changed" || e.action === "redecided" || e.action === "postponed" ? diffLines(e.changes) : undefined,
     }));
@@ -213,6 +216,7 @@ export function timelineSteps(q: { status: string; decided?: string; decline_rea
     steps.push({ label: "Changed · needs re-approval", at: t.changed, done: true }, { label: "Decision on the change", done: false });
   }
   if (q.status === "cancelled") steps.push({ label: "Cancelled", at: t.cancelled, done: true });
+  if (q.status === "expired") steps.push({ label: EVENT_LABEL.expired, at: t.expired, done: true });
   return steps;
 }
 
@@ -233,6 +237,21 @@ export function editFields(q: { fields?: RequestEditFields; note?: string; reque
     note: f?.note ?? q.note ?? "",
     who: whoFromRequest(f ?? {}),
   };
+}
+
+/**
+ * Round 3 (A6): "Request again" on an expired request (Uber's and Airbnb's "Book again"): a new request with everything
+ * copied from the request's edit fields (the route or the stops, the times of day, passengers, the vehicle type, tools,
+ * the note, who drives, the project, on behalf of), except the day: it starts as tomorrow (editable). The office asking
+ * again for someone else's request asks on behalf of the person who asked.
+ */
+export function againFields(
+  q: Parameters<typeof editFields>[0] & { project?: string; requested_by?: string },
+  o: { tomorrow: string; me?: string },
+): RequestFields {
+  const f = editFields(q);
+  const someoneElse = !!o.me && !!q.requested_by && q.requested_by.trim() !== o.me.trim();
+  return { ...f, date: o.tomorrow, project: q.project ?? "", behalf: f.behalf || (someoneElse ? q.requested_by! : "") };
 }
 
 /**

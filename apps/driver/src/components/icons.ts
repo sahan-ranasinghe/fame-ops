@@ -58,3 +58,6 @@ export { default as UserCog } from 'lucide-react-native/icons/user-cog';
 export { default as Minus } from 'lucide-react-native/icons/minus';
 export { default as Keyboard } from 'lucide-react-native/icons/keyboard';
 export { default as Building } from 'lucide-react-native/icons/building';
+// Round 3 Part A: the day timeline's driving icon (A1), Request again on an expired request (A6).
+export { default as Car } from 'lucide-react-native/icons/car';
+export { default as RotateCcw } from 'lucide-react-native/icons/rotate-ccw';

@@ -16,6 +16,7 @@ import type { FleetError } from '@/office/types';
 import { BackHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { datesInWords } from '@/lib/dateWords';
 
 const SEARCH_DEBOUNCE_MS = 500;
 
@@ -67,7 +68,7 @@ export default function PlacesScreen() {
                 <Row
                   title={p.name}
                   line={placeLine(p) || undefined}
-                  line2={p.removed ? t('office.places.removedAt', { at: p.removed }) : undefined}
+                  line2={p.removed ? t('office.places.removedAt', { at: datesInWords(t, p.removed) }) : undefined}
                   right={p.pinned === false ? <Pill text={t('office.places.noPin')} tone="amber" /> : p.operator ? <Pill text={p.operator === 'dialog' ? 'Dialog' : 'Mobitel'} tone="muted" /> : undefined}
                   onPress={p.id ? () => router.push({ pathname: '/office/places/[id]', params: { id: p.id! } }) : undefined}
                   testID="place-row"

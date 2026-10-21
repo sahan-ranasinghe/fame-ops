@@ -28,7 +28,7 @@ const card = (extra: Partial<RequestCard> = {}): RequestCard => ({ id: "r1", req
 
 describe("the status filter", () => {
   it("in the plan's order, All last; anything unknown is All; All leaves no trace in the URL", () => {
-    expect(TRIP_STATUS_OPTIONS.map(([, l]) => l)).toEqual(["Waiting", "Approved", "Under way", "Completed", "Declined", "Cancelled", "All"]);
+    expect(TRIP_STATUS_OPTIONS.map(([, l]) => l)).toEqual(["Waiting", "Approved", "Under way", "Completed", "Declined", "Cancelled", "Expired", "All"]);
     expect(readStatus(new URLSearchParams("status=under_way"))).toBe("under_way");
     expect(readStatus(new URLSearchParams("status=lost"))).toBe("all");
     expect(readStatus(new URLSearchParams(""))).toBe("all");

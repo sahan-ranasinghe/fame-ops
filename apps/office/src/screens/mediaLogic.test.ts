@@ -93,14 +93,20 @@ describe("save_vehicle_document's arguments", () => {
 
 describe("the words", () => {
   it("says who uploaded and when, with the year only when it is not this year's", () => {
-    expect(byWhenText("Uploaded", "2026-10-14 10:05 by Palitha", "2026")).toBe("Uploaded by Palitha 14 Oct 10:05");
-    expect(byWhenText("Uploaded", "2025-03-02 09:00", "2026")).toBe("Uploaded 2 Mar 2025 09:00");
-    expect(byWhenText("replaced", "yesterday", "2026")).toBe("replaced yesterday");
-    expect(byWhenText("Removed", undefined, "2026")).toBe("Removed");
+    // Dates in words (Round 3 A4, lib/when.ts), on 21 October 2026 in Colombo.
+    const now = new Date("2026-10-21T04:30:00Z");
+    expect(byWhenText("Uploaded", "2026-10-14 10:05 by Palitha", { now })).toBe("Uploaded by Palitha Wed 14 Oct 10:05");
+    expect(byWhenText("Uploaded", "2026-10-21 10:05 by Palitha", { now })).toBe("Uploaded by Palitha today 10:05");
+    expect(byWhenText("Uploaded", "2025-03-02 09:00", { now })).toBe("Uploaded Sun 2 Mar 2025 09:00");
+    expect(byWhenText("replaced", "yesterday", { now })).toBe("replaced yesterday");
+    expect(byWhenText("Removed", undefined, { now })).toBe("Removed");
   });
 
   it("says the expiry", () => {
-    expect(expiryText("2027-03-12")).toBe("Expires 12 Mar 2027");
+    const now = new Date("2026-10-21T04:30:00Z");
+    expect(expiryText("2027-03-12", { now })).toBe("Expires Fri 12 Mar 2027");
+    expect(expiryText("2026-11-02", { now })).toBe("Expires Mon 2 Nov");
+    expect(expiryText("2026-10-01", { now })).toBe("Expired Thu 1 Oct");
     expect(expiryText(undefined)).toBe("No expiry date");
   });
 });

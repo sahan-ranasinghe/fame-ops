@@ -50,3 +50,34 @@ export function officePhoneValue(text: string): { error: string } | { value: str
   const v = phoneE164(text);
   return v === "bad" ? { error: PHONE_BAD } : { value: v };
 }
+
+// ---- Round 3 (A5): my driving licence (Zipcar for Business / Enterprise CarShare: the member's licence on file) ----
+
+/** The licence card's fields as typed: the number and the expiry (YYYY-MM-DD, "" for none). */
+export interface LicenceForm {
+  number: string;
+  expiry: string;
+}
+
+/**
+ * update_my_profile's input for the licence: only what changed (an emptied field sends null and clears it); nothing when
+ * nothing changed; the error in words for a number too long or an expiry that is not a date.
+ */
+export function licenceInput(f: LicenceForm, saved: { number?: string; expiry?: string } | undefined):
+  { nothing: true } | { error: string } | { input: { licence_no?: string | null; licence_expiry?: string | null } } {
+  const number = f.number.trim().replace(/\s+/g, " ");
+  const expiry = f.expiry.trim();
+  if (number.length > 40) return { error: "The licence number is at most 40 characters." };
+  if (expiry && !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) return { error: "Pick the expiry date on the calendar." };
+  const input: { licence_no?: string | null; licence_expiry?: string | null } = {};
+  if (number !== (saved?.number ?? "")) input.licence_no = number || null;
+  if (expiry !== (saved?.expiry ?? "")) input.licence_expiry = expiry || null;
+  return Object.keys(input).length ? { input } : { nothing: true };
+}
+
+/** The card's state in words and its tone: on file (green, with the check), none or expired (amber). */
+export function licenceStateText(state: "on_file" | "none" | "expired" | undefined): { text: string; tone: "ok" | "warn" } {
+  if (state === "on_file") return { text: "On file ✓", tone: "ok" };
+  if (state === "expired") return { text: "Expired", tone: "warn" };
+  return { text: "Not on file", tone: "warn" };
+}

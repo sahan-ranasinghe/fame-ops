@@ -17,6 +17,7 @@ import { PageTop, useAfterSave } from "../../ui/Page";
 import { useToast } from "../../ui/Toast";
 import { PermissionChips, PermissionPicker, Secret } from "./userParts";
 import { updateInput, type UserFields } from "./usersLogic";
+import { whenText } from "../../lib/when";
 
 export function UserManage() {
   const { email: raw = "" } = useParams();
@@ -206,7 +207,7 @@ export function UserManage() {
               <div className="rows" style={{ border: "1px solid var(--line)", borderRadius: 12 }}>
                 {(u.connector_keys ?? []).map((k) => (
                   <div className="row" key={k.id}>
-                    <div className="grow"><div className="name">{k.label || "Key"}</div><div className="sub">made {k.created} · last used {k.last_used}</div></div>
+                    <div className="grow"><div className="name">{k.label || "Key"}</div><div className="sub">made {whenText(k.created, { inline: true })} · last used {whenText(k.last_used, { inline: true })}</div></div>
                     <button type="button" className="btn small danger" disabled={busy} onClick={() => void revoke(k.id)}>Revoke</button>
                   </div>
                 ))}

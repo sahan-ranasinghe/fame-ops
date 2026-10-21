@@ -4,6 +4,12 @@
 // own screen: Hotfix O2-H2 Part 2, Instagram's and WhatsApp's settings; the language, the office phone from get_settings
 // with Call, the privacy policy, the version) and Sign out. The banner "Add your phone number…" shows while /me says
 // phone_required.
+// Round 3 Part A5 (Zipcar for Business / Enterprise CarShare: the member's licence on file before they drive): the Driving
+// licence section, for the trips this person drives themselves. The number and the expiry edited in place
+// (update_my_profile licence_no / licence_expiry, only what changed; cleared = null), the front and the back by camera or
+// the photos (the browser's picker on /m/), saved as the driver's own (office/myPhoto.ts saveMyLicencePhoto:
+// <employee_id>/licence/, a photos row of kind licence, set_my_licence_photo), all shown from GET /me's licence. The state
+// in a word: On file (green), No licence on file (amber), Expired (red). The language switch is here only (Part A2).
 
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -11,6 +17,8 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Camera, ChevronRight, FileText, Phone } from '@/components/icons';
+import { PhotoPick } from '@/components/office/PhotoPick';
+import { DateField } from '@/components/patterns/Calendar';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { LinkRow } from '@/components/office/NotifParts';
 import { Sheet } from '@/components/patterns/Sheet';
@@ -21,10 +29,13 @@ import { telLink } from '@/lib/format';
 import { notifState } from '@/office/notificationGroups';
 import { STATE_KEY } from '@/office/notifLogic';
 import { useOffice, useTool } from '@/office/state';
-import { pickMyPhoto, saveMyOfficePhoto, useMyOfficePhoto } from '@/office/myPhoto';
+import { pickMyPhoto, saveMyLicencePhoto, saveMyOfficePhoto, useMyOfficePhoto } from '@/office/myPhoto';
+import { licenceForm, licenceInput, type LicenceForm, licenceStateWords } from '@/office/licenceLogic';
+import { dateWords } from '@/lib/dateWords';
+import type { LicenceSide } from '@/lib/profile';
 import { initials } from '@/office/text';
 import type { FleetError, NotificationSettings, SettingsResult } from '@/office/types';
-import { BackHeader, Divider, ErrorNotice, Screen, Section } from '@/office/ui';
+import { BackHeader, Divider, ErrorNotice, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { switchToDesktop } from '@/lib/viewChoice';
@@ -80,6 +91,56 @@ export default function OfficeProfile() {
   const shownPhone = saved ? (saved.phone_display ?? (saved.phone ? phoneDisplay(saved.phone) : undefined)) : me.phone_display;
 
   const [signingOut, setSigningOut] = useState(false);
+
+  // The driving licence (Round 3, A5): edited in place like the phone; /me answers it again after each save.
+  const lic = me.licence;
+  const [licEditing, setLicEditing] = useState(false);
+  const [licForm, setLicForm] = useState<LicenceForm>(licenceForm(lic));
+  const [licSaving, setLicSaving] = useState(false);
+  const [licProblem, setLicProblem] = useState<string | null>(null);
+  const [licError, setLicError] = useState<FleetError | null>(null);
+  const [licSaved, setLicSaved] = useState(false);
+  function startLicence() {
+    setLicForm(licenceForm(lic));
+    setLicProblem(null);
+    setLicError(null);
+    setLicSaved(false);
+    setLicEditing(true);
+  }
+  async function saveLicence() {
+    const { input, problem } = licenceInput(licForm, lic);
+    if (problem) {
+      setLicProblem(problem);
+      return;
+    }
+    if (Object.keys(input).length === 0) {
+      setLicEditing(false);
+      return;
+    }
+    setLicSaving(true);
+    setLicError(null);
+    try {
+      await api.call('update_my_profile', input);
+      setLicEditing(false);
+      setLicSaved(true);
+      await refreshMe();
+    } catch (e) {
+      setLicError(e as FleetError);
+    } finally {
+      setLicSaving(false);
+    }
+  }
+  // A side's photo: one at a time; Try again sends the same picture again.
+  const [licPhoto, setLicPhoto] = useState<{ busy: LicenceSide | null; done: LicenceSide | null; failed: { side: LicenceSide; uri: string; network: boolean } | null }>({ busy: null, done: null, failed: null });
+  async function sendLicencePhoto(side: LicenceSide, uri: string) {
+    setLicPhoto({ busy: side, done: null, failed: null });
+    const outcome = await saveMyLicencePhoto(side, uri);
+    if (outcome === 'ok') {
+      setLicPhoto({ busy: null, done: side, failed: null });
+      await refreshMe();
+    } else setLicPhoto({ busy: null, done: null, failed: { side, uri, network: outcome === 'network' } });
+  }
+  const licState = licenceStateWords(lic?.state);
 
   function startEdit() {
     setPhone(shownPhone ?? '');
@@ -204,6 +265,72 @@ export default function OfficeProfile() {
           {saved && !editing && <Txt variant="small" color={colors.green} style={{ paddingBottom: 6 }}>{t('office.profile.saved')}</Txt>}
         </Section>
 
+        <Section title={t('office.profile.licence')}>
+          <View style={styles.row} testID="profile-licence">
+            <View style={{ flex: 1, gap: 2 }}>
+              <Txt variant="muted" size={15}>{t('office.profile.licenceNo')}</Txt>
+              {!licEditing && (lic?.number ? <Mono size={19} bold>{lic.number}</Mono> : <Txt variant="strong" color={colors.muted}>—</Txt>)}
+              {!licEditing && <Txt variant="small">{lic?.expiry ? t('office.profile.licenceExpires', { date: dateWords(t, lic.expiry) }) : t('office.profile.licenceNoExpiry')}</Txt>}
+            </View>
+            {!licEditing && lic && <Pill text={t(licState.key)} tone={licState.tone} size={13} />}
+            {!licEditing && (
+              <Pressable accessibilityRole="button" onPress={startLicence} style={styles.textBtn} testID="profile-licence-edit">
+                <Txt variant="strong" size={16} color={colors.blue}>{t('office.profile.edit')}</Txt>
+              </Pressable>
+            )}
+          </View>
+          {licEditing && (
+            <View style={{ gap: 12, paddingBottom: 12 }}>
+              <Field
+                label={t('office.profile.licenceNo')}
+                mono
+                autoCapitalize="characters"
+                value={licForm.number}
+                onChangeText={(number) => { setLicForm((x) => ({ ...x, number })); setLicProblem(null); }}
+                editable={!licSaving}
+                maxLength={40}
+                testID="profile-licence-no"
+              />
+              <DateField label={t('office.profile.licenceExpiryLabel')} value={licForm.expiry} onChange={(expiry) => { setLicForm((x) => ({ ...x, expiry })); setLicProblem(null); }} testID="profile-licence-expiry" />
+              {licProblem && <Notice tone="danger" text={t(licProblem)} />}
+              {licError && <ErrorNotice error={licError} onRetry={() => void saveLicence()} onSignIn={() => void signOut()} />}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Button kind="outline" label={t('office.common.cancel')} disabled={licSaving} onPress={() => setLicEditing(false)} style={{ flex: 1, minHeight: 52 }} />
+                <Button kind="primary" label={t('office.common.save')} busy={licSaving} onPress={() => void saveLicence()} style={{ flex: 1, minHeight: 52 }} testID="profile-licence-save" />
+              </View>
+            </View>
+          )}
+          {licSaved && !licEditing && <Txt variant="small" color={colors.green} style={{ paddingBottom: 6 }}>{t('office.profile.saved')}</Txt>}
+          {(['front', 'back'] as const).map((side) => {
+            const url = side === 'front' ? lic?.front_url : lic?.back_url;
+            return (
+              <View key={side} style={{ gap: 8, paddingVertical: 6 }} testID={`profile-licence-${side}`}>
+                <Divider />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 }}>
+                  {url ? (
+                    <Pressable accessibilityRole="link" accessibilityLabel={t(`office.media.licence_${side}`)} onPress={() => void Linking.openURL(url)}>
+                      <Image source={{ uri: url }} style={styles.licThumb} accessibilityIgnoresInvertColors />
+                    </Pressable>
+                  ) : null}
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Txt variant="strong" size={16}>{t(`office.media.licence_${side}`)}</Txt>
+                    {!url && <Txt variant="small">{t('office.media.noFile')}</Txt>}
+                  </View>
+                </View>
+                <PhotoPick use="driver_licence" label={url ? t('office.media.replacePhoto') : t('office.media.takePhoto')} onShot={(shot) => void sendLicencePhoto(side, shot.photo.uri)} disabled={licPhoto.busy !== null} testID={`profile-licence-${side}-pick`} />
+                {licPhoto.busy === side && <Txt variant="small">{t('office.media.sending')}</Txt>}
+                {licPhoto.done === side && <Txt variant="small" color={colors.green}>{t('office.media.photoKept')}</Txt>}
+                {licPhoto.failed?.side === side && (
+                  <View style={{ gap: 8 }}>
+                    <Notice tone="danger" text={t(licPhoto.failed.network ? 'profilePhoto.noConnection' : 'profilePhoto.failed')} />
+                    <Button kind="outline" label={t('office.common.tryAgain')} onPress={() => { const f = licPhoto.failed; if (f) void sendLicencePhoto(f.side, f.uri); }} style={{ minHeight: 48 }} />
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </Section>
+
         <Section title={t('office.profile.app')}>
           <LinkRow title={t('office.notif.title')} line={notifLine} onPress={() => router.push('/office/notifications')} testID="profile-notifications" />
           <Divider />
@@ -260,4 +387,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 56 },
   textBtn: { minHeight: 48, minWidth: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
   iconBtn: { width: 48, height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
+  licThumb: { width: 72, height: 48, borderRadius: 8, backgroundColor: colors.mapLand },
 });

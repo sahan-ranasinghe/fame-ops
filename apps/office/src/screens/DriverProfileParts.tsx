@@ -22,6 +22,7 @@ import { UnavailabilityEditor } from "./UnavailabilityEditor";
 import { entryDays } from "./unavailabilityLogic";
 import { docTone } from "./vehicleLogic";
 import { DateField } from "../ui/DayPicker";
+import { datesInWords, dayWords, whenText } from "../lib/when";
 
 /** The editing state the page keeps as its draft: the section open and its fields. */
 export interface ProfileDraft {
@@ -191,7 +192,7 @@ export function ProfileSections({ username, name, p, row, draft, setDraft, contr
           <dl className="facts pf-facts">
             {priv && fact("Number", p?.licence?.number ? <span className="mono">{p.licence.number}</span> : null, "pf-licence-no")}
             {fact("Expires", shown.licence_expiry
-              ? <span className={`doc ${docTone(p?.licence?.chip ?? p?.driver.licence_chip?.chip ?? row.licence?.chip)}`}>{shown.licence_expiry}</span>
+              ? <span className={`doc ${docTone(p?.licence?.chip ?? p?.driver.licence_chip?.chip ?? row.licence?.chip)}`}>{dayWords(shown.licence_expiry)}</span>
               : null, "pf-licence-expiry")}
           </dl>
         )}
@@ -220,8 +221,8 @@ export function ProfileSections({ username, name, p, row, draft, setDraft, contr
             <ul className="pf-changes">
               {p.changes.map((c, i) => (
                 <li key={`${c.at}-${c.field}-${i}`} data-testid="pf-change">
-                  <span>{changeText(c)}</span>
-                  <span className="sub"> · {c.by_driver ? <b className="pf-by-driver">{c.by}</b> : c.by} · {c.at}</span>
+                  <span>{datesInWords(changeText(c))}</span>
+                  <span className="sub"> · {c.by_driver ? <b className="pf-by-driver">{c.by}</b> : c.by} · {whenText(c.at)}</span>
                 </li>
               ))}
             </ul>
@@ -262,21 +263,37 @@ function LicencePhotos({ username, front, back }: { username: string; front?: st
 
   return (
     <>
-      <div className="pf-photos" data-testid="pf-licence-photos">
-        {(["front", "back"] as const).map((side) => (
-          <figure key={side} className="pf-photo">
-            {src[side]
-              ? <a href={src[side]} target="_blank" rel="noopener"><img src={src[side]} alt={`Driving licence, ${side}`} loading="lazy" decoding="async" /></a>
-              : <div className="pf-photo-none muted small">No photo of the {side} yet</div>}
-            <figcaption>
-              <span className="small">{side === "front" ? "Front" : "Back"}</span>
-              {can && <FilePick label={`${src[side] ? "Replace" : "Add"} ${side}`} busy={busy === side} accept="image/*" className="btn small" onFile={(f) => void pick(side, f)} />}
-            </figcaption>
-          </figure>
-        ))}
-      </div>
+      <LicenceSides src={src} can={can} busy={busy} onPick={(side, f) => void pick(side, f)} />
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
     </>
+  );
+}
+
+/**
+ * A driving licence's front and back side by side (one shared component: a driver's page and My profile): each photo
+ * opens large in a new tab, else "No photo of the front yet"; with `can`, Add / Replace takes a photo or chooses one.
+ */
+export function LicenceSides({ src, can, busy, onPick, testId = "pf-licence-photos" }: {
+  src: { front?: string; back?: string };
+  can: boolean;
+  busy: "front" | "back" | null;
+  onPick: (side: "front" | "back", file: File) => void;
+  testId?: string;
+}) {
+  return (
+    <div className="pf-photos" data-testid={testId}>
+      {(["front", "back"] as const).map((side) => (
+        <figure key={side} className="pf-photo">
+          {src[side]
+            ? <a href={src[side]} target="_blank" rel="noopener"><img src={src[side]} alt={`Driving licence, ${side}`} loading="lazy" decoding="async" /></a>
+            : <div className="pf-photo-none muted small">No photo of the {side} yet</div>}
+          <figcaption>
+            <span className="small">{side === "front" ? "Front" : "Back"}</span>
+            {can && <FilePick label={`${src[side] ? "Replace" : "Add"} ${side}`} busy={busy === side} accept="image/*" className="btn small" onFile={(f) => onPick(side, f)} />}
+          </figcaption>
+        </figure>
+      ))}
+    </div>
   );
 }
 
@@ -304,7 +321,7 @@ function NotAvailableSection({ username, name, entries }: { username: string; na
                     <span className="grow">
                       <b>{entryDays(e)}</b> · {e.text}
                       {e.note && <span className="sub" style={{ display: "block" }}>{e.note}</span>}
-                      <span className="sub" style={{ display: "block" }}>Added by {e.added_by} · {e.added}</span>
+                      <span className="sub" style={{ display: "block" }}>Added by {e.added_by} · {whenText(e.added)}</span>
                     </span>
                     {canSet && <button type="button" className="btn small" onClick={() => setOpen(e.id)}>Change</button>}
                   </div>

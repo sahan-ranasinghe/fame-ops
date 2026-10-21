@@ -1,5 +1,6 @@
 // The Gaps list beside a route's map (Phase 7, §21): one row per gap marker,
-// with its time, what it was, how long and the estimated km by road. A row
+// with its icon (Round 3 A1, TimelineIcon: no coloured bar), its time, what it
+// was, how long and the estimated km by road. A row
 // zooms the map to the gap and opens its marker's card; the open one is
 // highlighted (the map's own open/close comes back the same way).
 import { useMemo, useState } from "react";
@@ -7,6 +8,7 @@ import type { Route } from "../data/route";
 import { joinDots, num } from "../lib/format";
 import type { GapMarker, RoutePoint } from "../map/types";
 import { gapDuration, gapMarkers, gapsOf, type GapRow } from "./gapsLogic";
+import { TimelineIcon } from "./TimelineIcon";
 
 export function GapsList({ rows, open, onOpen, bare }: {
   rows: GapRow[];
@@ -23,7 +25,7 @@ export function GapsList({ rows, open, onOpen, bare }: {
       {rows.map((g) => (
         <button type="button" key={g.id} data-testid="gap-row" aria-pressed={open === g.id}
           className={`tl-row ${g.kind === "late" ? "offline" : g.kind}${open === g.id ? " sel" : ""}`} onClick={() => onOpen(g)}>
-          <span className="bar" />
+          <TimelineIcon kind={g.kind} />
           <span className="when">{g.when}</span>
           <span className="grow">
             <span className="what">{g.what}</span>

@@ -49,6 +49,7 @@ import {
   statusTone,
   whoLine,
 } from "./issuesLogic";
+import { datesInWords } from "../lib/when";
 
 /** list_issues takes at most 366 days. */
 const MAX_DAYS = 366;
@@ -60,9 +61,9 @@ function IssueRow({ i, current, search, replace }: { i: Issue; current: boolean;
       <span className={`att-ic ${severityTone(i.severity)}`}><Icon name={attIcon(i.title)} /></span>
       <div className="grow">
         <div className="name">{i.title}</div>
-        <div className="sub">{[kindText(i), i.detail, i.due].filter(Boolean).join(" · ")}</div>
-        <div className="sub">{whoLine(i)}</div>
-        {snooze && <div className="sub" data-testid="snoozed-until">{snooze}</div>}
+        <div className="sub">{datesInWords([kindText(i), i.detail, i.due].filter(Boolean).join(" · "))}</div>
+        <div className="sub">{datesInWords(whoLine(i))}</div>
+        {snooze && <div className="sub" data-testid="snoozed-until">{datesInWords(snooze)}</div>}
       </div>
       {i.vehicle && <Plate v={i.vehicle} />}
       {/* Round 3: who took it, by their photo (the initials until there is one); the name is in the line above. */}

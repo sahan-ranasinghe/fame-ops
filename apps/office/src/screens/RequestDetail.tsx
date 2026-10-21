@@ -13,16 +13,17 @@ import { Link, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { RequestCard, RequestsList } from "../data/types";
-import { cap, joinDots, requestTone } from "../lib/format";
+import { joinDots } from "../lib/format";
+import { datesInWords, whenText } from "../lib/when";
 import { errText } from "../transport/errors";
 import { canOpenTask, type FleetError } from "../transport/types";
-import { Loading, Notice, Pill } from "../ui/basics";
+import { Loading, Notice } from "../ui/basics";
 import { PageTop, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { ContactButtons } from "../ui/ContactButtons";
 import { isProposal, requestView, withdrawInput } from "./approvalLogic";
 import { DecidedBy, ReviewingLine } from "./approvers";
-import { AskedWho, ChangesList, LateNotice, RequestHead, Timeline } from "./requestParts";
+import { AskedWho, ChangesList, LateNotice, RequestAgain, RequestHead, RequestStatusPill, SelfDriveLicence, Timeline } from "./requestParts";
 import { AssignedBlock, TellRequester } from "./RequestOutcome";
 import { TripSection, useTripLine } from "./RequestTrip";
 import { useRequestsHome, useTripCard } from "./myTripsQuery";
@@ -125,7 +126,7 @@ export function RequestDetail() {
     <div data-testid="request-detail">
       <PageTop
         title={task ? "Proposed task" : "Vehicle request"}
-        sub={<Pill tone={requestTone(q.status)}>{cap(q.status || "waiting")}</Pill>}
+        sub={<RequestStatusPill status={q.status} />}
         backTo={home}
         actions={(q.status === "waiting" || q.status === "changed") && decides ? <Link className="btn small dark" to={`/requests/${id}/decide`}>Review</Link> : undefined}
       />
@@ -134,7 +135,7 @@ export function RequestDetail() {
         {q.late && <div style={{ marginTop: 12 }}><LateNotice approver={approver} /></div>}
         {q.status === "changed" && (
           <div className="notice" style={{ marginTop: 12 }} data-testid="changed-notice">
-            <p><b>Changed{q.changed?.by ? ` by ${q.changed.by}` : ""}{q.changed?.at ? ` · ${q.changed.at}` : ""} · needs re-approval.</b> The booking keeps its old plan until the office decides again.</p>
+            <p><b>Changed{q.changed?.by ? ` by ${q.changed.by}` : ""}{q.changed?.at ? ` · ${whenText(q.changed.at)}` : ""} · needs re-approval.</b> The booking keeps its old plan until the office decides again.</p>
             <ChangesList changes={q.changes} />
           </div>
         )}
@@ -146,12 +147,14 @@ export function RequestDetail() {
             ? <div><dt>Passengers</dt><dd>{p?.passengers ?? "—"}</dd></div>
             : <div><dt>Need</dt><dd>{q.need || "—"}</dd></div>}
           {/* Round 3: who drives, when it is not a driver of ours (the asker, someone else, the custodian). */}
-          {(q.driven_by || q.driver_required === false) && !q.assigned && <div style={{ gridColumn: "1/-1" }}><dt>Who drives</dt><dd style={{ fontWeight: 400 }}><AskedWho q={q} /></dd></div>}
+          {(q.driven_by || q.driver_required === false) && !q.assigned && <div style={{ gridColumn: "1/-1" }}><dt>Who drives</dt><dd style={{ fontWeight: 400 }}><AskedWho q={q} /><SelfDriveLicence q={q} mine={q.requested_by === me.name && !!me.licence} /></dd></div>}
+          {q.assigned && q.self_drive_licence && <div style={{ gridColumn: "1/-1" }}><dt>Driving licence</dt><dd style={{ fontWeight: 400 }}><SelfDriveLicence q={q} mine={q.requested_by === me.name && !!me.licence} /></dd></div>}
           {(p?.contact_name || p?.contact_phone) && <div><dt>Contact</dt><dd>{joinDots([p.contact_name, p.contact_phone])}</dd></div>}
           {p?.notes && <div style={{ gridColumn: "1/-1" }}><dt>Notes for the driver</dt><dd style={{ fontWeight: 400 }}>{p.notes}</dd></div>}
           {q.note && <div style={{ gridColumn: "1/-1" }}><dt>Note</dt><dd style={{ fontWeight: 400 }}>{q.note}</dd></div>}
           {q.decline_reason && <div style={{ gridColumn: "1/-1" }}><dt>Declined because</dt><dd>{q.decline_reason}</dd></div>}
           {q.cancel_reason && <div style={{ gridColumn: "1/-1" }}><dt>Cancelled because</dt><dd>{q.cancel_reason}</dd></div>}
+          {q.status === "expired" && <div style={{ gridColumn: "1/-1" }}><dt>Expired</dt><dd style={{ fontWeight: 400 }} data-testid="expired-line">Nobody decided it before its day was over{q.expired ? ` · ${whenText(q.expired)}` : ""}.</dd></div>}
         </dl>
         <Timeline q={q} />
         {/* Hotfix 2 (K): who decided it, with Call / WhatsApp (Call office when they have no number); who is reviewing it. */}
@@ -171,7 +174,7 @@ export function RequestDetail() {
         <div className="notice" style={{ marginTop: 18 }} data-testid="proposal-checks">
           <p>
             <b>When it was proposed:</b>{" "}
-            {[...(p?.warnings ?? []), ...(p?.conflicts ?? []).map((c) => c.text)].map((w, i) => <span key={i}>{i > 0 && <br />}{w}</span>)}
+            {[...(p?.warnings ?? []), ...(p?.conflicts ?? []).map((c) => c.text)].map((w, i) => <span key={i}>{i > 0 && <br />}{datesInWords(w)}</span>)}
           </p>
         </div>
       )}
@@ -180,6 +183,7 @@ export function RequestDetail() {
         {(q.status === "waiting" || q.status === "approved" || q.status === "changed") && me.tools.includes("update_request") && (approver || q.requested_by === me.name) && (
           <Link className="btn" to={`/requests/${id}/edit`}>Edit request</Link>
         )}
+        <RequestAgain q={q} className="btn primary" />
         {view.withdraw && !withdrawing && (
           <button type="button" className="btn" onClick={() => { setWithdrawing(true); setMsg(null); }}>Withdraw</button>
         )}

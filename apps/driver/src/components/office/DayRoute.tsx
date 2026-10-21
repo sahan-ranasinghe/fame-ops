@@ -3,19 +3,21 @@
 // (RouteMap: the line by speed band, holes dashed, the estimated roads, the stops over 10 minutes with their times), the
 // legend, the one playback bar (PlaybackBar.tsx, as on Live: Play / Pause, 1× 5× 20× 60×, the time and speed, a slider;
 // the marker on the map), the numbers (GPS km, driving, stopped, stops), and the timeline; a row tapped moves the map to
-// its span. The rules: office/driversLogic.ts (the line) and office/liveRouteLogic.ts (the playback).
+// its span; each row has one small icon (Round 3 Part A1, Google Maps Timeline: a car, a pin, a warning). The rules:
+// office/driversLogic.ts (the line, segmentIcon) and office/liveRouteLogic.ts (the playback).
 
 import { useIsFocused } from 'expo-router';
 import { type ReactNode, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Car, MapPin, TriangleAlert } from '@/components/icons';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { RouteMap } from '@/components/RouteMap';
 import { Mono, Txt } from '@/components/ui';
 import { pickedStyle } from '@/components/patterns/Select';
 import { durationText } from '@/lib/durations';
 import type { MapPackage } from '@/lib/mapEngine';
-import { BAND_COLORS, dayNumbers, routeFrame, routeLines, routePoints, rowFrame, segmentLine, segmentTone, SPEED_BANDS, stopMarks } from '@/office/driversLogic';
+import { BAND_COLORS, dayNumbers, routeFrame, routeLines, routePoints, rowFrame, segmentIcon, segmentLine, type SegmentIcon, SPEED_BANDS, stopMarks } from '@/office/driversLogic';
 import { canPlay, cursorAt, gapWindowsOf, playbackPath, routeOf } from '@/office/liveRouteLogic';
 import type { DriverRoute, FleetError } from '@/office/types';
 import { Divider, ListFailed } from '@/office/ui';
@@ -89,7 +91,7 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
               style={({ pressed }) => [styles.segRow, on && pickedStyle, pressed && { opacity: 0.8 }]}
               testID="route-row"
             >
-              <View style={[styles.segDot, { backgroundColor: toneColor(segmentTone(seg.kind)) }]} />
+              <SegIcon kind={segmentIcon(seg.kind)} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Txt variant="strong" size={15} numberOfLines={2}>{seg.text}</Txt>
                 <Txt variant="small">{segmentLine(seg, t)}</Txt>
@@ -107,8 +109,14 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
   );
 }
 
-function toneColor(tone: ReturnType<typeof segmentTone>): string {
-  return tone === 'blue' ? colors.blue : tone === 'amber' ? colors.amber : tone === 'red' ? colors.red : '#8d9096';
+/** One small icon per row (Google Maps Timeline; Round 3 Part A1): a car, a pin, a warning (amber text); no coloured bar. */
+function SegIcon({ kind }: { kind: SegmentIcon }) {
+  const Icon = kind === 'car' ? Car : kind === 'pin' ? MapPin : TriangleAlert;
+  return (
+    <View style={styles.segIcon} testID={`route-row-icon-${kind}`}>
+      <Icon size={18} color={kind === 'warning' ? colors.amberText : colors.muted} strokeWidth={2.2} />
+    </View>
+  );
 }
 
 function LegendItem({ color, text, dashed = false }: { color: string; text: string; dashed?: boolean }) {
@@ -136,5 +144,5 @@ const styles = StyleSheet.create({
   numbers: { flexDirection: 'row', gap: 6, paddingVertical: 8, marginTop: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.line },
   // The row shown on the map: the tint and the 2 px border (docs/ui-patterns.md §11; no mark: nothing is being chosen).
   segRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 6, marginHorizontal: -6, borderRadius: 10, minHeight: 56, borderWidth: 2, borderColor: 'transparent' },
-  segDot: { width: 12, height: 12, borderRadius: 6 },
+  segIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.page },
 });

@@ -20,6 +20,7 @@ import { EmptyLine, ListHeader, SearchBox, SkeletonRows, usePagedList, useUrlFil
 import { useToast } from "../ui/Toast";
 import { ListFooter, ListStale, ListWaiting, useLocalPages } from "./listLocal";
 import { dueFromVehicles } from "./maintenanceLogic";
+import { whenText } from "../lib/when";
 
 type Filter = "not_closed" | "open" | "in_garage" | "closed" | "all";
 const FILTERS: [Filter, string][] = [["not_closed", "Not closed"], ["open", "Open"], ["in_garage", "In garage"], ["closed", "Closed"], ["all", "All"]];
@@ -56,7 +57,7 @@ function ReportCard({ r }: { r: VehicleReport }) {
     <div className="card rep">
       <div className="row" style={{ padding: 0 }}>
         <span className={`att-ic ${r.status === "closed" ? "" : r.status === "in_garage" ? "warn" : "bad"}`}><Icon name="alert" /></span>
-        <div className="grow"><div className="name">{cap(r.category)} <Plate v={r.vehicle} /></div><div className="sub">{r.driver || ""} · reported {r.reported}</div></div>
+        <div className="grow"><div className="name">{cap(r.category)} <Plate v={r.vehicle} /></div><div className="sub">{r.driver || ""} · reported {whenText(r.reported, { inline: true })}</div></div>
         <Pill tone={r.status === "open" ? "bad" : r.status === "in_garage" ? "warn" : "ok"}>{cap(r.status)}</Pill>
       </div>
       {r.note && <p style={{ margin: 0 }}>{r.note}</p>}

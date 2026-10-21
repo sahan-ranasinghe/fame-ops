@@ -20,6 +20,7 @@ import { SavedNotice } from '@/components/office/SavedNotice';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords, datesInWords, whenWords } from '@/lib/dateWords';
 
 export default function PlaceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -96,7 +97,7 @@ export default function PlaceScreen() {
         {q.data && !p && <ListEmpty text={t('office.places.notFound')} />}
         {p && (
           <>
-            {removed && <Notice tone="warn" text={t('office.places.removedAt', { at: p.removed! })} />}
+            {removed && <Notice tone="warn" text={t('office.places.removedAt', { at: datesInWords(t, p.removed) })} />}
             {p.active === false && !removed && <Notice tone="warn" text={t('office.places.switchedOff')} />}
             <SavedNotice noticeKey={`place:${p.id}`} />
             <View style={styles.card}>
@@ -125,7 +126,7 @@ export default function PlaceScreen() {
                 ) : null}
               </View>
               {p.attribution ? <Txt variant="small">{p.attribution}</Txt> : null}
-              <Txt variant="small">{t('office.places.updated', { at: p.updated_at })}</Txt>
+              <Txt variant="small">{t('office.places.updated', { at: dateWords(t, p.updated_at) })}</Txt>
             </View>
 
             {mayEdit && !editing && <Button kind="outline" label={t('office.places.edit')} onPress={() => { setF(placeFields(p)); setProblem(null); setEditing(true); }} style={{ minHeight: 52 }} />}
@@ -149,7 +150,7 @@ export default function PlaceScreen() {
                 {reasons.length > 0 && (
                   <View style={{ gap: 4 }} testID="place-in-use">
                     {reasons.map((r) => <Txt key={r} variant="strong" size={15} color={colors.amberText}>{r}</Txt>)}
-                    {(q.data?.in_use?.tasks ?? []).map((x) => <Txt key={x.task_id} variant="small">{`${x.when} · ${x.title}`}</Txt>)}
+                    {(q.data?.in_use?.tasks ?? []).map((x) => <Txt key={x.task_id} variant="small">{`${whenWords(t, x.when)} · ${x.title}`}</Txt>)}
                   </View>
                 )}
                 <Txt variant="small">{t('office.places.removeNote')}</Txt>

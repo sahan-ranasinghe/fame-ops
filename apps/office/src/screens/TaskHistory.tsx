@@ -21,6 +21,7 @@ import { type FilterValues, listDef, pairsDef } from "../ui/filterLogic";
 import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, SkeletonRows, usePagedList, useUrlSearch } from "../ui/ListKit";
 import { PageTop } from "../ui/Page";
 import { emptyText, historyArgs, type HistoryFilters, KIND_OPTIONS, readFilters, routeText, STATUS_OPTIONS, statusOf, tagsOf, taskLink, totalsLine } from "./taskHistoryLogic";
+import { dayWords } from "../lib/when";
 
 /** list_tasks answers up to 366 days at a time. */
 const MAX_DAYS = 366;
@@ -109,7 +110,7 @@ export function TaskHistory() {
                         const link = taskLink(t, today);
                         return (
                           <tr key={t.id} className="click" onClick={() => navigate(link)} data-testid="history-row">
-                            <td data-label="When"><div><span className="mono">{t.date}</span> <span className="mono">{t.time}</span></div></td>
+                            <td data-label="When"><div>{dayWords(t.date)} <span className="mono">{t.time}</span></div></td>
                             <td data-label="Task">
                               <div>
                                 <div className="name"><Link to={link} onClick={(e) => e.stopPropagation()}>{t.title}</Link></div>

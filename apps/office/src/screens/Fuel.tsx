@@ -22,6 +22,7 @@ import { megabytes, videoChip, videoTone, videoWords } from "./fuelLogic";
 import { ListFooter, ListStale, ListWaiting } from "./listLocal";
 import { useVehicleDriver, VehicleDriverFilter } from "./Mileage";
 import { fuelLabel, fuelMonthLine, rangeArgs } from "./mileageLogic";
+import { whenText } from "../lib/when";
 
 /** list_fuel takes up to 366 days. */
 const MAX_DAYS = 366;
@@ -95,7 +96,7 @@ export function Fuel() {
                       <tbody>
                         {list.items.map((e) => (
                           <tr key={e.id} className={`click${e.id === id ? " selected" : ""}`} onClick={() => navigate(`/fuel/${e.id}${search}`)} aria-current={e.id === id ? "true" : undefined} data-testid="fuel-row">
-                            <td data-label="When" className="mono">{e.at}</td>
+                            <td data-label="When">{whenText(e.at)}</td>
                             <td data-label="Vehicle">{e.vehicle ? <span className="plate">{e.vehicle}</span> : "—"}</td>
                             <td data-label="Driver">{e.driver ?? "—"}</td>
                             <td data-label="Litres" className="num">{e.litres != null ? num(e.litres) : "—"}</td>

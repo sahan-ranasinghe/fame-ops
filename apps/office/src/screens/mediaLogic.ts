@@ -5,6 +5,8 @@
 // vehicle's documents as one row per kind, save_vehicle_document's arguments,
 // "Uploaded by Palitha 14 Oct 10:05" and which buttons a person sees.
 import type { DocKind, VehicleDocument, VehicleDocuments } from "../data/types";
+import { dayWords, whenText, type WhenOptions } from "../lib/when";
+import { colomboDay } from "../ui/dateRange";
 
 export const JPEG_QUALITY = 0.85;
 /** A driver's profile photo: a centred square, this many pixels a side. */
@@ -122,25 +124,26 @@ export function saveDocInput(a: { vehicle: string; kind: DocKind; path: string; 
   return input;
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
- * The server's "2026-10-14 10:05 by Palitha" as "Uploaded by Palitha 14 Oct 10:05" (the year only when it is not this
- * year's); anything else as it came, after the verb.
+ * The server's "2026-10-14 10:05 by Palitha" as "Uploaded by Palitha Wed 14 Oct 10:05" ("today 10:05"; the year only
+ * when it is not this year's): the site's one formatter, lib/when.ts. Anything else is shown as it came.
  */
-export function byWhenText(verb: string, at: string | undefined, thisYear: string): string {
+export function byWhenText(verb: string, at: string | undefined, opts: WhenOptions = {}): string {
   if (!at) return verb;
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})(?: by (.+))?$/.exec(at.trim());
+  const m = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})(?: by (.+))?$/.exec(at.trim());
   if (!m) return `${verb} ${at}`;
-  const [, y, mo, d, time, who] = m;
-  const day = `${Number(d)} ${MONTHS[Number(mo) - 1] ?? mo}${y === thisYear ? "" : ` ${y}`}`;
-  return `${verb}${who ? ` by ${who}` : ""} ${day} ${time}`;
+  const [, when, who] = m;
+  // Round 3 (A4): the site's one formatter (lib/when.ts): "today 10:05", "Wed 14 Oct 10:05", "Sun 2 Mar 2025 09:00".
+  return `${verb}${who ? ` by ${who}` : ""} ${whenText(when, { ...opts, inline: true })}`;
 }
 
-/** "Expires 12 Mar 2027" from YYYY-MM-DD. */
-export function expiryText(expiry?: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiry ?? "");
-  return m ? `Expires ${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : "No expiry date";
+/** "Expires Fri 12 Mar 2027" (or "Expired …" once the day is past) from YYYY-MM-DD; dates in words (lib/when.ts). */
+export function expiryText(expiry?: string, opts: WhenOptions = {}): string {
+  const e = expiry ?? "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) return "No expiry date";
+  const past = e < colomboDay(opts.now);
+  return `${past ? "Expired" : "Expires"} ${dayWords(e, { ...opts, inline: true })}`;
 }
 
 /** Which buttons the Documents section shows: the section needs vehicle_documents; files go up only from the web app. */

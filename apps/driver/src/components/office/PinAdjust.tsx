@@ -66,6 +66,9 @@ export function PinAdjust({ visible, pin, name, mapPackage, onUse, onClose }: {
         ) : engine === 'google' ? (
           <GoogleMapView
             provider={PROVIDER_GOOGLE}
+            // Always the light map, whatever the phone's dark mode (Round 3 Part A3; read once when the map is made: Android's
+            // MapColorScheme.LIGHT through react-native-maps 1.27.2's initial props, no native change).
+            userInterfaceStyle="light"
             style={StyleSheet.absoluteFill}
             initialRegion={{ latitude: pin.lat, longitude: pin.lng, latitudeDelta: 0.004, longitudeDelta: 0.004 }}
             toolbarEnabled={false}

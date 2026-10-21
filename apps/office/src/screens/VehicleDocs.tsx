@@ -13,7 +13,6 @@ import { useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import type { DocKind, UploadTicket, VehicleDocument, VehicleDocuments } from "../data/types";
 import { useQuery } from "../data/useQuery";
-import { today } from "../lib/format";
 import { asFleetError, errText } from "../transport/errors";
 import { Notice, Pill } from "../ui/basics";
 import { documentPhoto } from "./imageCanvas";
@@ -45,7 +44,6 @@ export function VehicleDocumentsSection({ reg, rented, dates = {} }: {
   const acts = docActions(me.tools, !!files);
   const rows = documentRows(q.data, { rented });
   const removed = q.data?.removed ?? [];
-  const year = today().slice(0, 4);
   return (
     <div className="card card-b form" data-testid="vehicle-documents">
       <div className="docs-h">
@@ -58,7 +56,7 @@ export function VehicleDocumentsSection({ reg, rented, dates = {} }: {
       {q.data && (
         <div className="doc-rows">
           {rows.filter((r) => r.doc || r.kind !== "other" || acts.upload).map((r) => (
-            <DocRowView key={r.key} row={r} reg={reg} acts={acts} year={year} date={r.doc?.expiry ?? dates[r.kind] ?? ""} />
+            <DocRowView key={r.key} row={r} reg={reg} acts={acts} date={r.doc?.expiry ?? dates[r.kind] ?? ""} />
           ))}
         </div>
       )}
@@ -66,7 +64,7 @@ export function VehicleDocumentsSection({ reg, rented, dates = {} }: {
         <div className="form" data-testid="removed-documents">
           <div className="section-t">Removed documents</div>
           <div className="doc-rows">
-            {removed.map((d) => <RemovedRow key={d.id} d={d} acts={acts} year={year} />)}
+            {removed.map((d) => <RemovedRow key={d.id} d={d} acts={acts} />)}
           </div>
         </div>
       )}
@@ -74,7 +72,7 @@ export function VehicleDocumentsSection({ reg, rented, dates = {} }: {
   );
 }
 
-function DocRowView({ row, reg, acts, year, date: startDate }: { row: DocRow; reg: string; acts: DocActions; year: string; date: string }) {
+function DocRowView({ row, reg, acts, date: startDate }: { row: DocRow; reg: string; acts: DocActions; date: string }) {
   const { transport, store, files } = useFleet();
   const doc = row.doc;
   const adding = row.key === "other:new";
@@ -155,7 +153,7 @@ function DocRowView({ row, reg, acts, year, date: startDate }: { row: DocRow; re
         {doc ? <span className="doc">{fileTypeText(doc.content_type)}{doc.bytes ? ` · ${megabytes(doc.bytes)}` : ""}</span>
           : !adding && <span className={`doc${row.missing ? " nofile" : ""}`}>No document</span>}
       </div>
-      {doc && <div className="sub">{byWhenText("Uploaded", doc.uploaded, year)}</div>}
+      {doc && <div className="sub">{byWhenText("Uploaded", doc.uploaded)}</div>}
       {adding && acts.upload && (
         <div className="field"><label htmlFor="doc-name-new">What it is</label><input id="doc-name-new" maxLength={80} placeholder="e.g. Fitness certificate" value={name} onChange={(e) => setName(e.target.value)} /></div>
       )}
@@ -192,7 +190,7 @@ function DocRowView({ row, reg, acts, year, date: startDate }: { row: DocRow; re
   );
 }
 
-function RemovedRow({ d, acts, year }: { d: VehicleDocument; acts: DocActions; year: string }) {
+function RemovedRow({ d, acts }: { d: VehicleDocument; acts: DocActions }) {
   const { transport, store } = useFleet();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -217,8 +215,8 @@ function RemovedRow({ d, acts, year }: { d: VehicleDocument; acts: DocActions; y
         <span className="doc">{fileTypeText(d.content_type)}</span>
       </div>
       <div className="sub">
-        {byWhenText("Uploaded", d.uploaded, year)} · {byWhenText(d.removed_reason === "replaced" ? "replaced" : "removed", d.removed, year)}
-        {d.expiry ? ` · expiry ${d.expiry}` : ""}
+        {byWhenText("Uploaded", d.uploaded)} · {byWhenText(d.removed_reason === "replaced" ? "replaced" : "removed", d.removed)}
+        {d.expiry ? ` · ${expiryText(d.expiry)}` : ""}
       </div>
       <div className="acts">
         {d.url && <a className="btn small" href={d.url} target="_blank" rel="noopener">View</a>}

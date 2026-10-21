@@ -11,6 +11,7 @@ import { Notice, Pill, SwitchLine } from "../../ui/basics";
 import { DateRangePicker, useDateRange } from "../../ui/DateRangePicker";
 import { EmptyLine, ListHeader, LoadMore, SearchBox, SkeletonRows, usePagedList, useUrlFilter, useUrlSearch } from "../../ui/ListKit";
 import { PageTop } from "../../ui/Page";
+import { whenText } from "../../lib/when";
 
 /** The outcome's words and tone. */
 export function outcomePill(e: Pick<ActivityEntry, "outcome">): { text: string; tone: "ok" | "bad" | "warn" | "" } {
@@ -59,7 +60,7 @@ export default function ActivityLogPage() {
               const o = outcomePill(e);
               return (
                 <div className={`row${e.routine ? " routine" : ""}`} key={e.id} data-testid="activity-row" data-routine={e.routine ? "" : undefined} style={{ alignItems: "flex-start" }}>
-                  <span className="mono small" style={{ minWidth: 112 }}>{e.at}</span>
+                  <span className="small" style={{ minWidth: 112 }}>{whenText(e.at)}</span>
                   <div className="grow">
                     <div className="name">{e.action}{e.about ? <span className="muted"> · {e.about}</span> : null}</div>
                     <div className="sub">{[e.person, e.channel].filter(Boolean).join(" · ")}</div>

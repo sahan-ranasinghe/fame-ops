@@ -1036,6 +1036,28 @@ the words, translated by key on the app (the English stays as the fallback): the
 and the best match's reason, "Not available" / "Running late", the missed line; the app's "Last seen Last seen" doubling
 fixed.
 
+**Part A (Sahan, 21 October 2026, evening), into Round 3**, all four surfaces:
+- A1. A driver's day timeline (and its Gaps list): no coloured bars beside the rows; one small icon per row (Google Maps
+  Timeline): a car = driving, a pin = stopped, a warning = app not running / no GPS.
+- A2. No language switch on any office screen's header (Live, Approve, Drivers, More, any other); only My profile has
+  it (Office mode and /m/). The driver app's Today keeps its සිංහල switch (the boss's design).
+- A3. Every map light: Google's map never follows the phone's dark mode; the light colour scheme on every Google and free
+  map (the app, /m/, the site's light theme).
+- A4. Dates in words everywhere: never "2026-10-20 20:47" on a screen; "Today 20:47", "Yesterday 20:47", "Mon 19 Oct 20:47"
+  (a year only when it is not this year). One formatter per codebase, applied to every date the server sends.
+- A5. Self-drive for anyone with the request permission (Zipcar for Business / Enterprise CarShare): office people add
+  their driving licence (number, expiry, front and back photos) on My profile: `update_my_profile(licence_no?,
+  licence_expiry?)`, the photos through `set_my_licence_photo` (the driver's own path), GET /me answers `licence {number,
+  expiry, state on_file | none | expired, front_url, back_url}`. Request cards with `driven_by` self carry
+  `self_drive_licence` on_file | none | expired: the approver sees "Self-drive · licence on file ✓" / "no licence on file"
+  / "licence expired" (a warning, never a block); approving, booking or assigning a self-driven trip with no licence
+  adds the warning "X has no driving licence on file (self-drive)." Server: in this round's go.
+- A6. Expired requests (migration `20261022110000_round3_expired_requests`): a request still waiting when its trip day is
+  over becomes `expired` (every 15 minutes; `expired_at`, the card's `expired` and `timeline.expired`, live state
+  "Expired · nobody decided it in time"); out of the waiting lists and counts; the person who asked is told once (their
+  request.decided notice); list_requests and my_trips take status `expired`. Its page has "Request again": a new request
+  with everything copied but the day. Requests already past when it is deployed expire quietly.
+
 ## 29. Round 2b as built (21 October 2026, branch `phase9-r2b`)
 
 Home, dark mode and contrast, no duplicate navigation, the Coordinator (`office_users`; `docs/coordinator-guide.md`),

@@ -21,10 +21,10 @@ import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
 import type { DecideResult, RedecideResult, RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
 import { useQuery } from "../data/useQuery";
-import { cap, joinDots, requestTone, today, warnList } from "../lib/format";
+import { joinDots, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
-import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
+import { Empty, Loading, Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { phoneDisplay } from "../ui/ContactButtons";
 import { DriverPicker } from "../ui/DriverPicker";
@@ -48,12 +48,13 @@ import { PlanWithMap } from "./PlanMap";
 import { RequestDetailCard } from "./RequestDetailCard";
 import { useRequest } from "./RequestDetail";
 import { decisionInput, dwellChanges, redecideInput } from "./requestLogic";
-import { VehicleGroups, VehicleOption } from "./requestParts";
+import { RequestStatusPill, VehicleGroups, VehicleOption } from "./requestParts";
 import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
 import { TripDecide } from "./TripDecide";
 import { isChoice, knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 import { TripDayPicker } from "../ui/DayPicker";
 import { SkeletonRows } from "../ui/ListKit";
+import { datesInWords } from "../lib/when";
 
 interface Decision {
   /** The vehicle picked; "" = the one the driver brings (or, deciding again, keep the vehicle). */
@@ -266,7 +267,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
           warnings: warnList(p),
           text: (
             <>
-              <b>{p.decision === "kept" ? "Kept as asked." : p.decision === "postponed" ? "Postponed." : "Changed."}</b> {p.sent}{" "}
+              <b>{p.decision === "kept" ? "Kept as asked." : p.decision === "postponed" ? "Postponed." : "Changed."}</b> {datesInWords(p.sent)}{" "}
               {p.task?.vehicle && <span data-testid="vehicle-used">Vehicle: {p.task.vehicle}{p.task.driver ? ` · ${p.task.driver}` : ""}. </span>}
               {p.task?.task_id && can(me, "assign_tasks") && <Link className="btn small" to={`/tasks/${p.task.task_id}`}>Open task →</Link>}{" "}
               <Link className="btn small" to={`/requests/${id}`}>The request →</Link>
@@ -286,7 +287,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
   if ((q.status !== "waiting" && !again) || (q.status === "waiting" && !decides) || (again && !redecides)) {
     return (
       <section className="view">
-        <PageTop title="Vehicle request" sub={<Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>} backTo={`/requests/${id}`} />
+        <PageTop title="Vehicle request" sub={<RequestStatusPill status={q.status} />} backTo={`/requests/${id}`} />
         {/* A decision just made here, or the server's refusal of a second one ("Already approved by Palitha at 10:42"). */}
         {msg && <div style={{ marginBottom: 12 }} data-testid="decide-message"><Notice tone={msg.tone}>{msg.text}</Notice>{msg.warnings && <WarningsNote warnings={msg.warnings} />}</div>}
         {msg?.tone !== "ok" && <Notice tone="info">This request is {q.status}; there is nothing to decide. <Link to={`/requests/${id}`}>Open the request →</Link>.</Notice>}

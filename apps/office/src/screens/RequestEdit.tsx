@@ -14,19 +14,20 @@ import { Link, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { type DraftControls, useFormDraft } from "../data/drafts";
 import type { RequestCard, UpdateRequestResult } from "../data/types";
-import { cap, joinDots, requestTone } from "../lib/format";
+import { joinDots } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
-import { Loading, Notice, Pill } from "../ui/basics";
+import { Loading, Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
-import { WhoDrives } from "../ui/WhoDrives";
+import { MyLicenceNote, WhoDrives } from "../ui/WhoDrives";
 import { selfLabel } from "../ui/whoDrivesLogic";
 import { basePlace, useFleetSettings } from "./dispatchParts";
 import { useRequest } from "./RequestDetail";
 import { editFields, type RequestFields, updateRequestInput, whoOf } from "./requestLogic";
 import { TripEditor, useTrip } from "./TripEditor";
+import { RequestStatusPill } from "./requestParts";
 import { tripPlanInput } from "./tripLogic";
 
 export function RequestEdit() {
@@ -49,7 +50,7 @@ export function RequestEdit() {
   if (!editable) {
     return (
       <section className="view">
-        <PageTop title="Vehicle request" sub={<Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>} backTo={`/requests/${id}`} />
+        <PageTop title="Vehicle request" sub={<RequestStatusPill status={q.status} />} backTo={`/requests/${id}`} />
         <Notice tone="info">This request is {q.status === "waiting" || q.status === "approved" || q.status === "changed" ? "not yours to change" : q.status}. <Link to={`/requests/${id}`}>Open the request</Link>.</Notice>
       </section>
     );
@@ -133,7 +134,8 @@ function EditForm({ id, q, f, setF, draft }: {
           <div className="field" style={{ gap: 8 }}>
             <span className="check"><input type="checkbox" id="re-tools" checked={f.tools} onChange={(e) => set("tools", e.target.checked)} /> <label htmlFor="re-tools">Tools or equipment go too</label></span>
           </div>
-          <WhoDrives id="re" value={whoOf(f)} onChange={(w) => set("who", w)} hidden={!selfDrive} selfWords={selfLabel(q.requested_by, me.name)} />
+          <WhoDrives id="re" value={whoOf(f)} onChange={(w) => set("who", w)} hidden={!selfDrive} selfWords={selfLabel(q.requested_by, me.name)}
+            selfNote={q.requested_by === me.name ? <MyLicenceNote /> : undefined} />
           <div className="field"><label htmlFor="re-note">Note</label><textarea id="re-note" maxLength={1000} value={f.note} onChange={(e) => set("note", e.target.value)} /></div>
         </div>
         {msg && <Notice tone="bad">{msg}</Notice>}

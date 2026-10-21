@@ -23,6 +23,7 @@ import { Icon } from "../ui/icons";
 import { useIsPhone } from "../ui/phone";
 import { useFleet } from "./FleetContext";
 import { filterInbox, groupByDay, type InboxFilter } from "./inboxGroups";
+import { datesInWords } from "../lib/when";
 
 export const INBOX_KEY = "inbox";
 export const INBOX_ARGS = { limit: 50 };
@@ -206,7 +207,7 @@ function InboxRow({ item, onOpen }: { item: InboxItem; onOpen: (i: InboxItem) =>
       <i className={`dot ${item.read ? "muted" : KIND_TONE[item.kind] || "live"}`} aria-hidden="true" />
       <span className="grow">
         <b>{headline(item)}</b>
-        {item.body && <small>{item.body}</small>}
+        {item.body && <small>{datesInWords(item.body)}</small>}
         <small className="when" title={item.at}>{item.ago}{item.read ? "" : " · unread"}</small>
       </span>
     </>
@@ -316,7 +317,7 @@ export function InboxBanners() {
             <i className={`dot ${KIND_TONE[b.kind] || "live"}`} aria-hidden="true" />
             <div className="grow">
               <b>{headline(b)}</b>
-              {b.body && <div className="sub">{b.body}</div>}
+              {b.body && <div className="sub">{datesInWords(b.body)}</div>}
             </div>
             <div className="acts">
               {link && "to" in link && <Link className="btn small dark" to={link.to} onClick={() => api.read([b.id])}>Open</Link>}

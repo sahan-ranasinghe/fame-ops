@@ -109,6 +109,9 @@ describe("DriverPage", () => {
     expect(rows[0].textContent).toContain("Driving · 31.1 km");
     expect(rows[1].textContent).toContain("near Peliyagoda");
     expect(rows[2].textContent).toContain("App not running");
+    // Round 3 (A1): one icon per row (Google Maps Timeline), no coloured bar.
+    expect([...rows].map((r) => r.querySelector("[data-testid=tl-icon]")?.getAttribute("data-icon"))).toEqual(["car", "pin", "alert"]);
+    expect(screen.getByTestId("timeline").querySelectorAll(".bar")).toHaveLength(0);
     expect(screen.getByTestId("map").textContent).toBe("3 points");
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
     fireEvent.click(rows[1]);

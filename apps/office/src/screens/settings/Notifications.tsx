@@ -19,6 +19,7 @@ import { DEVICE_NOTE, type PushState, stateText } from "./notificationsLogic";
 import { soundPrefs } from "../../data/sounds";
 import { groupSummaryText, NOTIF_GROUPS, NOTIF_TEXT, OTHER_GROUP } from "./notificationGroups";
 import { useNotifSettings } from "./useNotifSettings";
+import { whenText } from "../../lib/when";
 
 /** A group's title and second line on the site. */
 export function groupWords(key: string): { title: string; sub?: string } {
@@ -152,7 +153,7 @@ export default function Notifications() {
             <div key={d.id} className="row" style={{ padding: 0 }}>
               <span className="grow">
                 <span className="name">{d.device} {d.endpoint_hash === myHash && <Pill tone="ok">this one</Pill>}</span>
-                <span className="sub" style={{ display: "block" }}>since {d.since}{d.last_ok ? ` · last delivered ${d.last_ok}` : " · nothing delivered yet"}</span>
+                <span className="sub" style={{ display: "block" }}>since {whenText(d.since, { inline: true })}{d.last_ok ? ` · last delivered ${whenText(d.last_ok, { inline: true })}` : " · nothing delivered yet"}</span>
               </span>
               <button type="button" className="btn small" disabled={busy} onClick={() => void remove(d.id)}>Remove</button>
             </div>

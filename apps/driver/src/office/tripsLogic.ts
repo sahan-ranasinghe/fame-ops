@@ -11,20 +11,23 @@ import type { CreatedTaskCard, RequestCard } from './types';
 
 export type Trip = RequestCard | CreatedTaskCard;
 
-export type TripBucket = 'waiting' | 'coming' | 'done';
+export type TripBucket = 'waiting' | 'coming' | 'done' | 'expired';
 export type TripFilter = 'all' | TripBucket;
 
-/** The sections in their order on the screen (the i18n keys are office.trips.<key>). */
-export const TRIP_BUCKETS: readonly TripBucket[] = ['waiting', 'coming', 'done'];
+/** The sections in their order on the screen (the i18n keys are office.trips.<key>). Round 3 (A6): Expired, its own
+ *  section and filter choice (a request nobody decided before its day was over: never waiting, never still to come). */
+export const TRIP_BUCKETS: readonly TripBucket[] = ['waiting', 'coming', 'done', 'expired'];
 
 export const TRIPS_DAYS_BACK = 30;
 export const TRIPS_DAYS_AHEAD = 60;
 
-/** Waiting = waiting; done = completed, declined, cancelled, missed; everything else is still to come. */
+/** Waiting = waiting; done = completed, declined, cancelled, missed; expired = expired; everything else is still to come. */
 export function bucketOf(trip: Trip): TripBucket {
   switch (tripLive(trip).state) {
     case 'waiting':
       return 'waiting';
+    case 'expired':
+      return 'expired';
     case 'completed':
     case 'declined':
     case 'cancelled':
@@ -36,7 +39,7 @@ export function bucketOf(trip: Trip): TripBucket {
 }
 
 export function bucketCounts(trips: readonly Trip[]): Record<TripBucket, number> {
-  const counts: Record<TripBucket, number> = { waiting: 0, coming: 0, done: 0 };
+  const counts: Record<TripBucket, number> = { waiting: 0, coming: 0, done: 0, expired: 0 };
   for (const trip of trips) counts[bucketOf(trip)] += 1;
   return counts;
 }
@@ -79,11 +82,17 @@ export const tripKey = (trip: Trip): string => (isCreatedTask(trip) ? `t-${trip.
  * "Tue 20 Oct 11:00 · back by 17:00 · 1 pax · Sunil · WP CAB-4521" (design 17). Round 3: a trip with no app says who
  * drives after the name ("Nimali · Drives themselves", "Kamal Silva · Someone else"), with `who` the two words.
  */
-export function tripLine(trip: Trip, backByWord: string, who?: { self: string; other: string }): string {
+export function tripLine(
+  trip: Trip,
+  backByWord: string,
+  who?: { self: string; other: string },
+  /** Round 3 (A4): the when-field in words (whenWords); as sent when not given. */
+  when: (s: string) => string = (s) => s,
+): string {
   const a = trip.assigned;
   const word = a?.driven_by === 'self' ? who?.self : a?.driven_by === 'other' ? who?.other : undefined;
   return [
-    trip.when,
+    trip.when ? when(trip.when) : trip.when,
     trip.back_by ? `${backByWord} ${trip.back_by}` : '',
     isCreatedTask(trip) ? '' : (trip.need ?? ''),
     a?.driver ?? '',

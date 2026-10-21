@@ -163,9 +163,20 @@ function WhoStep({ d }: { d: TripDraft }) {
     <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => pick(x.username ?? '', x.name, x.phone?.whatsapp)} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined} noWindow={!args} onDay={onDay} />
   );
   // Who drives? (only while self-drive is allowed): its own card at the top of the step, both flows.
+  // Round 3 (A5, Zipcar for Business): I'll drive myself with no licence on file (or an expired one, /me's licence): a hint
+  // with the way to My profile; the approver sees it too. Never a block.
+  const myLicence = me.licence && me.licence.state !== 'on_file' ? me.licence.state : null;
   const whoCard = selfDrive && (
     <View style={styles.card}>
       <WhoDrivesChoice value={who} onChange={setWho} />
+      {who.choice === 'self' && myLicence && (
+        <View style={{ gap: 4, paddingTop: 8 }} testID="who-self-licence">
+          <Txt variant="small" color={colors.amberText}>{t(myLicence === 'expired' ? 'office.who.myLicenceExpired' : 'office.who.myLicenceNone')}</Txt>
+          <Pressable accessibilityRole="link" onPress={() => router.push('/office/profile')} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Txt variant="strong" size={15} color={colors.blue}>{t('office.who.addLicence')}</Txt>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 

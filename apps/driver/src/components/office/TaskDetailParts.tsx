@@ -31,6 +31,7 @@ import type { FleetError, Stop, TaskDetail } from '@/office/types';
 import { Divider, ErrorNotice, Pill, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
+import { dateWords, datesInWords } from '@/lib/dateWords';
 
 /** A small outlined link button (Photo, Receipt, Watch video, Map). */
 function LinkButton({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
@@ -47,7 +48,8 @@ function LinkButton({ label, onPress, testID }: { label: string; onPress: () => 
 
 export function TaskWarnings({ p }: { p: TaskDetail }) {
   const { t } = useApp();
-  const unlogged = unloggedText(p, t);
+  // The server's dates in words (Round 3 A4, lib/dateWords.ts): "last reading Yesterday 18:02".
+  const unlogged = datesInWords(t, unloggedText(p, t));
   const saved = p.task.warnings_saved?.filter(Boolean) ?? [];
   if (!unlogged && saved.length === 0) return null;
   return (
@@ -291,7 +293,7 @@ export function TaskMoreDetails({ p, openLink, linkNote, onPlan }: {
                 <View style={{ flex: 1 }} />
                 {x.photo ? <LinkButton label={t('office.task.photo')} onPress={() => openLink({ kind: 'odo', i })} /> : null}
               </View>
-              <Txt variant="muted" size={15}>{x.line}</Txt>
+              <Txt variant="muted" size={15}>{datesInWords(t, x.line)}</Txt>
             </View>
           );
         })}
@@ -307,7 +309,7 @@ export function TaskMoreDetails({ p, openLink, linkNote, onPlan }: {
                 <View style={{ flex: 1 }} />
                 {f.receipt_photo && /^https:\/\//.test(f.receipt_photo) ? <LinkButton label={t('office.task.receipt')} onPress={() => openLink({ kind: 'receipt', i })} /> : null}
               </View>
-              <Txt variant="muted" size={15}>{[t('office.task.fuelWord'), f.at, f.odometer_km != null ? `${n(f.odometer_km)} km` : '', f.video ? videoLine(f.video) : ''].filter(Boolean).join(' · ')}</Txt>
+              <Txt variant="muted" size={15}>{[t('office.task.fuelWord'), dateWords(t, f.at), f.odometer_km != null ? `${n(f.odometer_km)} km` : '', f.video ? videoLine(f.video) : ''].filter(Boolean).join(' · ')}</Txt>
               {f.video?.timeline ? <Txt variant="small">{f.video.timeline}</Txt> : null}
               {pieces.length > 0 && (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -331,7 +333,7 @@ export function TaskMoreDetails({ p, openLink, linkNote, onPlan }: {
               <View key={r.id} style={{ paddingVertical: 8, gap: 4 }} testID="report-row">
                 {i > 0 && <Divider />}
                 <Txt variant="strong" size={16}>{w.category}</Txt>
-                <Txt variant="muted" size={15}>{[r.at, w.status, r.note ?? ''].filter(Boolean).join(' · ')}</Txt>
+                <Txt variant="muted" size={15}>{[dateWords(t, r.at), w.status, r.note ?? ''].filter(Boolean).join(' · ')}</Txt>
                 {(r.photos ?? []).some((u) => /^https:\/\//.test(u)) && (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                     {(r.photos ?? []).map((u, k) => (/^https:\/\//.test(u) ? <LinkButton key={k} label={t('office.task.photoN', { n: k + 1 })} onPress={() => openLink({ kind: 'report', i, k })} /> : null))}
@@ -352,7 +354,7 @@ export function TaskMoreDetails({ p, openLink, linkNote, onPlan }: {
             return (
               <View key={i} style={{ paddingVertical: 8, gap: 2 }} testID="history-event">
                 {i > 0 && <Divider />}
-                <Mono size={14} color={colors.muted}>{h.at}</Mono>
+                <Mono size={14} color={colors.muted}>{dateWords(t, h.at)}</Mono>
                 <Txt variant="body" size={15}>{h.title}</Txt>
                 {h.changes.map((c, k) => <Txt key={k} variant="small">{`• ${c}`}</Txt>)}
               </View>

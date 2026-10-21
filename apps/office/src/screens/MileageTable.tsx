@@ -9,6 +9,7 @@ import { Plate } from "../ui/basics";
 import { human } from "../ui/GenericTable";
 import { EmptyLine, ListHeader } from "../ui/ListKit";
 import { ListFooter, useLocalPages } from "./listLocal";
+import { datesInWords } from "../lib/when";
 
 /** The columns of a set of rows: every plain key in the order first seen, less the hidden ones. */
 export function columnsOf(rows: readonly Row[], hide: readonly string[] = []): { keys: string[]; numeric: Set<string> } {
@@ -26,7 +27,8 @@ function cell(k: string, v: Row[string], numeric: boolean): ReactNode {
   if (k === "reg_no" || k === "vehicle") return <Plate v={String(v ?? "")} />;
   if (typeof v === "string" && /^https?:\/\//.test(v)) return <a className="btn small" href={v} target="_blank" rel="noopener">Open</a>;
   if (typeof v === "boolean") return v ? "Yes" : "No";
-  return v == null || v === "" ? "—" : String(v);
+  // Round 3 (A4): a date the server sends ("2026-10-12 08:00") in words ("Mon 12 Oct 08:00").
+  return v == null || v === "" ? "—" : datesInWords(String(v));
 }
 
 /** One of Mileage's tables in its card: the header with the count and a note, the page of rows, the paging controls. */

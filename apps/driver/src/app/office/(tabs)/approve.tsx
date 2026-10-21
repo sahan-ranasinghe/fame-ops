@@ -1,8 +1,10 @@
 // Office mode (Phase 8, O1; Stage 1, O3 rows 2 and 9): the Approve tab. The queue of requests waiting for a decision
 // (list_requests waiting, which includes changed = approved and edited since) by default; the search box and one Filter
-// (Waiting, Approved, Declined, Cancelled, All) reach every request, 25 at a time with Load more (docs/ui-patterns.md
+// (Waiting, Approved, Declined, Cancelled, Expired, All) reach every request, 25 at a time with Load more (docs/ui-patterns.md
 // §1, §5). A row opens the request's page (Approve a request, design 10, or the decided request with its timeline and
 // Tell requester), with "Palitha is reviewing" when another approver has it open. Rules: office/requestsLogic.ts.
+// Round 3: an expired request's chip has its icon (A6); a self-drive request says the asker's licence (A5,
+// office/licenceLogic.ts selfDriveLine) on its second line.
 
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -13,7 +15,9 @@ import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListSta
 import { Txt } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { requestLine, requestTitle } from '@/office/homeLogic';
-import { appendRequests, arrivals, requestsArgs, requestsChoice, requestsFilterDefs, statusTone, withArrivals } from '@/office/requestsLogic';
+import { CalendarX } from '@/components/icons';
+import { selfDriveLine } from '@/office/licenceLogic';
+import { appendRequests, arrivals, isExpired, requestsArgs, requestsChoice, requestsFilterDefs, statusTone, withArrivals } from '@/office/requestsLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, RequestCard, RequestsList } from '@/office/types';
 import { Avatar, DarkHeader, Divider, ListFailed, Row, Screen, Section, StatusChip } from '@/office/ui';
@@ -118,6 +122,8 @@ export default function ApproveTab() {
             {rows.length === 0 && <ListEmpty text={search ? t('office.requests.noneMatch') : status === 'waiting' ? t('office.approve.none') : t('office.requests.noneHere')} />}
             {rows.map((r, i) => {
               const reviewing = r.reviewing?.map((x) => x.name).join(', ');
+              // Round 3 (A5): the asker drives it themselves: their licence on the trip's day (a warning, never a block).
+              const licence = selfDriveLine(r);
               return (
                 <View key={r.id}>
                   {i > 0 && <Divider />}
@@ -125,10 +131,11 @@ export default function ApproveTab() {
                     left={<Avatar name={r.requested_by} photo={r.requested_by_photo_url} />}
                     title={requestTitle(r)}
                     line={requestLine(r)}
-                    line2={reviewing ? t('office.approve.reviewing', { name: reviewing }) : r.late ? t('office.approve.late') : undefined}
+                    line2={reviewing ? t('office.approve.reviewing', { name: reviewing }) : r.late ? t('office.approve.late') : licence ? t(licence.key) : undefined}
+                    line2Warn={!reviewing && !r.late && !!licence?.warn}
                     right={<View style={{ alignItems: 'flex-end', gap: 4 }}>
                       {marked.has(r.id) && <StatusChip text={t('office.approve.newPill')} tone="blue" />}
-                      <StatusChip text={t(`office.requests.status_${r.status}`)} tone={statusTone(r.status)} />
+                      <StatusChip text={t(`office.requests.status_${r.status}`)} tone={statusTone(r.status)} icon={isExpired(r) ? CalendarX : undefined} testID={isExpired(r) ? 'request-expired' : undefined} />
                       {r.asked ? <Txt variant="small" style={{ maxWidth: 100, textAlign: 'right' }} numberOfLines={1}>{r.asked}</Txt> : null}
                     </View>}
                     onPress={() => router.push({ pathname: '/office/request/[id]', params: { id: r.id } })}

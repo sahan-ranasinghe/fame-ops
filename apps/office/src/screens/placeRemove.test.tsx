@@ -105,7 +105,7 @@ describe("the place page's Remove", () => {
 
     expect(await screen.findByText(/Removed\. It is listed under Removed places\./)).toBeTruthy();
     expect(screen.getByRole("link", { name: /The base place is no longer set/ }).getAttribute("href")).toBe("/settings/fleet/office");
-    expect(screen.getByTestId("place-removed").textContent).toContain("Removed by Sahan 17 Oct");
+    expect(screen.getByTestId("place-removed").textContent).toMatch(/Removed by Sahan Sat 17 Oct/);
     expect(screen.queryByTestId("place-remove")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
 
@@ -160,7 +160,7 @@ describe("Places → Removed places", () => {
     await mount(t, "/places");
     await screen.findByText("Head office");
     applyFilter("Places", "Removed places");
-    expect(await screen.findByText("Removed by Palitha 16 Oct 15:20")).toBeTruthy();
+    expect(await screen.findByText(/^Removed by Palitha Fri 16 Oct( 2026)? 15:20$/)).toBeTruthy();
     expect(t.argsOf("list_places").at(-1)).toEqual({ limit: 25, removed: true });
 
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Restore" })); });

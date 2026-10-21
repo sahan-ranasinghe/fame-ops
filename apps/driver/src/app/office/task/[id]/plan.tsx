@@ -21,6 +21,7 @@ import type { TaskDetail } from '@/office/types';
 import { BackHeader, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords } from '@/lib/dateWords';
 
 export default function TaskPlanScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,7 +45,7 @@ export default function TaskPlanScreen() {
           {p && !plan && <ListEmpty text={t('office.task.planNone')} />}
           {p && plan && (
             <Txt variant="muted" size={15} testID="plan-line">
-              {t('office.task.planLine', { dur: durationText(t, plan.total_drive_min), n: plan.legs.length, at: plan.computed_at ?? '—' })}
+              {t('office.task.planLine', { dur: durationText(t, plan.total_drive_min), n: plan.legs.length, at: plan.computed_at ? dateWords(t, plan.computed_at) : '—' })}
             </Txt>
           )}
           {p && items.length > 0 && (

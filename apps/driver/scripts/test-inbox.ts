@@ -126,7 +126,8 @@ console.log('\n== My trips: the buckets ==');
     ({ source: 'task', id, task_id: id, title: `Task ${id}`, when: 'Thu 22 Oct 15:00', status: state, live: live(state), created: '2026-10-18 10:42', ...patch });
 
   check(TRIPS_DAYS_BACK === 30 && TRIPS_DAYS_AHEAD === 60, 'the range: the last 30 days to the next 60');
-  check(same(TRIP_BUCKETS, ['waiting', 'coming', 'done']), 'the sections: Waiting, Coming up, Done');
+  check(same(TRIP_BUCKETS, ['waiting', 'coming', 'done', 'expired']), 'the sections: Waiting, Coming up, Done, Expired (Round 3 A6)');
+  check(bucketOf(request('a', 'expired', { live: live('expired', 'Expired · nobody decided it in time') })) === 'expired' && bucketOf(request('a', 'expired')) === 'expired', 'an expired request: Expired, never Waiting or Coming up');
   check(bucketOf(request('a', 'waiting')) === 'waiting', 'a waiting request: Waiting');
   check(bucketOf(request('a', 'changed')) === 'waiting', 'a changed booking (waits for the office again): Waiting');
   check(bucketOf(request('a', 'approved')) === 'coming', 'an approved request with no live state: Coming up');
@@ -144,7 +145,7 @@ console.log('\n== My trips: the buckets ==');
     request('r4', 'cancelled'),
     task('t3', 'missed'),
   ];
-  check(same(bucketCounts(trips), { waiting: 1, coming: 2, done: 4 }), 'the chips count 1 waiting, 2 coming up, 4 done');
+  check(same(bucketCounts(trips), { waiting: 1, coming: 2, done: 4, expired: 0 }), 'the chips count 1 waiting, 2 coming up, 4 done');
   const all = tripBuckets(trips, 'all');
   check(same(all.map((g) => g.key), ['waiting', 'coming', 'done']), 'All: the three sections');
   check(same(all[1].trips.map(tripKey), ['t-t1', 'r-r2']), "Coming up keeps the server's order; keys tell a task from a request");
@@ -153,7 +154,7 @@ console.log('\n== My trips: the buckets ==');
   check(tripBuckets([], 'all').length === 0, 'no trips: no sections');
   const tdefs = tripsFilterDefs(trips, (k) => k);
   const tc = bucketCounts(trips);
-  check(tdefs.length === 1 && same(tdefs[0].options.map((o) => [o.value, o.count]), [['all', trips.length], ['waiting', tc.waiting], ['coming', tc.coming], ['done', tc.done]]) && tdefs[0].options[1].label === 'office.trips.waiting', 'the Filter sheet: All and the buckets with their counts');
+  check(tdefs.length === 1 && same(tdefs[0].options.map((o) => [o.value, o.count]), [['all', trips.length], ['waiting', tc.waiting], ['coming', tc.coming], ['done', tc.done], ['expired', tc.expired]]) && tdefs[0].options[1].label === 'office.trips.waiting', 'the Filter sheet: All and the buckets with their counts (Expired too)');
   check(tripsChoice({ show: 'done' }) === 'done' && tripsChoice({ show: 'x' }) === 'all' && tripsFilterDefs(undefined, (k) => k)[0].options.every((o) => o.count === undefined), 'the choice read back; no counts before the answer');
   check(same(tripsArgs('2026-10-20', 100), { from: '2026-09-20', to: '2026-12-19', include: 'all', limit: 100 }) && same(tripsArgs('2026-10-20', 100, ' galle '), { from: '2026-09-20', to: '2026-12-19', include: 'all', limit: 100, search: 'galle' }), 'my_trips: 30 days back to 60 ahead as before, the search only when typed');
 

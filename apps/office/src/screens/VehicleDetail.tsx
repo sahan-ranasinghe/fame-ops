@@ -14,6 +14,7 @@ import { PageTop } from "../ui/Page";
 import { VehiclePhotoCard } from "./PhotoUpload";
 import { VehicleDocumentsSection } from "./VehicleDocs";
 import { DocChip, MissingDocs, vehiclePath, VehiclesShown } from "./Vehicles";
+import { dayWords } from "../lib/when";
 
 /**
  * The vehicle from the board's rows on screen (followed as the board refreshes, so an edit shows at once), else found by
@@ -80,15 +81,15 @@ export function VehicleDetail() {
         <dl className="kv">
           <div><dt>Status</dt><dd><Pill tone={/task/i.test(String(v.status)) ? "live" : /garage/i.test(String(v.status)) ? "warn" : ""}>{v.status || "—"}</Pill>{v.availability && <div className={`sub status ${vehicleAvailabilityTone(v.availability)}`}>{v.availability}</div>}</dd></div>
           <div><dt>Type · seats</dt><dd>{joinDots([v.type, v.seats ? `${v.seats} seats` : ""]) || "—"}</dd></div>
-          <div><dt>Rented from</dt><dd>{v.rented_from || "—"}{v.rent_until && <div className="sub">until {v.rent_until}</div>}</dd></div>
+          <div><dt>Rented from</dt><dd>{v.rented_from || "—"}{v.rent_until && <div className="sub">until {dayWords(v.rent_until, { inline: true })}</div>}</dd></div>
           <div><dt>Monthly rent</dt><dd>{v.monthly_rent_lkr != null ? `LKR ${num(v.monthly_rent_lkr)}` : "—"}</dd></div>
           <div><dt>Regular driver</dt><dd>{v.regular_driver || "—"}</dd></div>
           <div><dt>Assigned to</dt><dd>{v.assigned_to ? <>{v.assigned_to}{v.custodian_note && <div className="sub">{v.custodian_note}</div>}</> : <span className="muted">Pool</span>}</dd></div>
           <div><dt>Km this month</dt><dd className="num">{num(used)} km{allow ? ` / ${num(allow)}` : ""}{!allow && v.km_allowance_note && <div className="sub" data-testid="km-allowance-note">{v.km_allowance_note}</div>}</dd></div>
           <div><dt>Odometer</dt><dd className="num">{v.odometer_km != null ? `${num(v.odometer_km)} km` : "—"}</dd></div>
           <div><dt>Next service</dt><dd>{v.next_service || "—"}{v.service_state && <div className="sub">{v.service_state}</div>}</dd></div>
-          <div><dt>Garage booked</dt><dd>{v.garage_booked || "—"}</dd></div>
-          <div style={{ gridColumn: "1/-1" }}><dt>Documents</dt><dd><DocChip name="Lic" d={docs.lic} /><DocChip name="Ins" d={docs.ins} /><DocChip name="Emi" d={docs.emi} />{[docs.lic, docs.ins, docs.emi].some((x) => x?.expiry) && <div className="sub">{joinDots([docs.lic?.expiry && `licence ${docs.lic.expiry}`, docs.ins?.expiry && `insurance ${docs.ins.expiry}`, docs.emi?.expiry && `emission ${docs.emi.expiry}`])}</div>}<MissingDocs v={v} /></dd></div>
+          <div><dt>Garage booked</dt><dd>{v.garage_booked ? dayWords(v.garage_booked) : "—"}</dd></div>
+          <div style={{ gridColumn: "1/-1" }}><dt>Documents</dt><dd><DocChip name="Lic" d={docs.lic} /><DocChip name="Ins" d={docs.ins} /><DocChip name="Emi" d={docs.emi} />{[docs.lic, docs.ins, docs.emi].some((x) => x?.expiry) && <div className="sub">{joinDots([docs.lic?.expiry && `licence ${dayWords(docs.lic.expiry, { inline: true })}`, docs.ins?.expiry && `insurance ${dayWords(docs.ins.expiry, { inline: true })}`, docs.emi?.expiry && `emission ${dayWords(docs.emi.expiry, { inline: true })}`])}</div>}<MissingDocs v={v} /></dd></div>
         </dl>
       </div>
       <VehicleDocumentsSection key={`docs-${v.reg_no}`} reg={v.reg_no} rented={!!v.rented_from} dates={vehicleDates(v)} />

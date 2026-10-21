@@ -24,6 +24,7 @@ import type { RequestsList } from '@/office/types';
 import { BackHeader, ListFailed, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords } from '@/lib/dateWords';
 
 export default function ChangeTimeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -62,7 +63,7 @@ export default function ChangeTimeScreen() {
         {q.data && !card && <ListEmpty text={t('office.request.notFound')} />}
         {card && asked && shown && (
           <>
-            <Txt variant="muted" size={15}>{t('office.decide.asked', { day: asked.date, leave: asked.leaveBy || '—', back: asked.back || '—' })}</Txt>
+            <Txt variant="muted" size={15}>{t('office.decide.asked', { day: dateWords(t, asked.date), leave: asked.leaveBy || '—', back: asked.back || '—' })}</Txt>
             <Section title={t('office.decide.day')}>
               <TripDayPicker value={shown.date} onChange={(d) => setC((x) => ({ ...x, date: d }))} testID="decide-day" />
             </Section>

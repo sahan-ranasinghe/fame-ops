@@ -17,12 +17,15 @@
 // may still give a driver instead (two pick-one rows: as asked · give a driver). The drivers are the driver-first cards
 // (components/office/DriverRows.tsx: the photo, the vehicle chip under the name); the button is disabled with the reason
 // under it until the approval is complete.
+// Round 3 Part A: a self-drive request says the asker's licence on the trip's day (A5: "Self-drive · licence on file ✓" /
+// "no licence on file" / "licence expired", amber for the last two, never a block); an expired request (A6) has its badge
+// with the icon, the line "Expired · nobody decided it in time" and, for the person who asked, Request again.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { Phone } from '@/components/icons';
+import { CalendarX, Phone, RotateCcw } from '@/components/icons';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ChoiceRow } from '@/components/patterns/Select';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
@@ -32,12 +35,16 @@ import { SavedNotice } from '@/components/office/SavedNotice';
 import { TellRequester } from '@/components/office/TellRequester';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Txt } from '@/components/ui';
+import { dateWords } from '@/lib/dateWords';
 import { durationText, shortDate } from '@/lib/durations';
+import { colomboDate } from '@/lib/time';
+import { selfDriveLine } from '@/office/licenceLogic';
+import { requestAgainDraft, setDraft } from '@/office/trip/draft';
 import { telLink } from '@/lib/format';
 import { alreadyDecided, approveProblem, availabilityArgs, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, presenceLine, rankedDrivers, tripView } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
 import { askedOf, availabilityAt, decideTimes, hasChange, redecideTimes, shownOf } from '@/office/decideLogic';
-import { CANCEL_TEXT, canCancelBooking, cancelReason, canWithdrawOwn, decides, eventLine } from '@/office/requestsLogic';
+import { CANCEL_TEXT, canCancelBooking, cancelReason, canRequestAgain, canWithdrawOwn, decides, eventLine, expiredText, isExpired } from '@/office/requestsLogic';
 import { canEdit as canEditTrip } from '@/office/tripsLogic';
 import { decideStore, useTimeChange } from '@/office/decideStore';
 import { requestTitle } from '@/office/homeLogic';
@@ -51,6 +58,7 @@ import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { whenWords } from '@/lib/dateWords';
 
 const REVIEWING_EVERY_MS = 20_000;
 
@@ -211,6 +219,13 @@ export default function ApproveRequest() {
   const pickedDriver = drivers.find((d) => d.username === pick);
   const bestUsername = avail.data?.best?.username ?? drivers.find((d) => d.name === avail.data?.best?.name)?.username ?? '';
   const whoAsked = card ? askedWords(card) : null;
+  const selfLicence = card ? selfDriveLine(card) : null;
+  // Request again (Round 3, A6; Airbnb's and Uber's "Book again"): the copy in place, then the trip editor at Where.
+  const requestAgain = () => {
+    if (!card) return;
+    setDraft(requestAgainDraft(card, colomboDate()));
+    router.push({ pathname: '/office/trip/where', params: { mode: 'request', again: card.id } });
+  };
   // The name in "Approved · <name>" when approved as asked: the asker, someone else, or the vehicle.
   const askedName = card?.driven_by === 'other' ? card.driver_name : card?.driven_by === 'self' ? card.requested_by : undefined;
   const approveReason = card ? approveProblem(card, { asAsked, driver: pick, vehicle }) : null;
@@ -233,10 +248,19 @@ export default function ApproveRequest() {
         {q.data && !card && <ListEmpty text={t('office.request.notFound')} />}
         {card && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Pill text={card.status === 'waiting' ? t('office.request.waitingYourOk') : card.status === 'changed' ? t('office.request.changedByRequester') : t(`office.requests.status_${card.status}`)} tone={open ? 'amber' : card.status === 'approved' ? 'green' : 'red'} size={15} />
+            <Pill text={card.status === 'waiting' ? t('office.request.waitingYourOk') : card.status === 'changed' ? t('office.request.changedByRequester') : t(`office.requests.status_${card.status}`)} tone={open ? 'amber' : card.status === 'approved' ? 'green' : isExpired(card) ? 'muted' : 'red'} size={15} icon={isExpired(card) ? CalendarX : undefined} />
             {others.length > 0 && <Pill text={t('office.request.alsoLooking', { name: others.join(', ') })} tone="muted" size={15} />}
             {card.late && <Pill text={t('office.approve.late')} tone="red" size={15} />}
           </View>
+        )}
+        {/* Round 3 (A6): nobody decided it before its day was over; the person who asked may request it again. */}
+        {card && isExpired(card) && (
+          <Section title={t('office.requests.status_expired')}>
+            <Txt variant="strong" testID="request-expired-line">{expiredText(card, t, (at) => dateWords(t, at))}</Txt>
+            {canRequestAgain(card, me.tools, !decider || card.requested_by === me.name) && (
+              <Button kind="outline" icon={RotateCcw} label={t('office.requests.requestAgain')} onPress={requestAgain} style={{ minHeight: 52, marginTop: 10 }} testID="request-again" />
+            )}
+          </Section>
         )}
         {card && !open && (card.approved_by || card.declined_by || card.cancelled_by) && (
           <Section title={t('office.request.decided')}>
@@ -260,7 +284,7 @@ export default function ApproveRequest() {
                 <Mono size={28} bold>{trip.leaveBy}</Mono>
               </View>
             )}
-            {!trip.leaveBy && card.when && <Txt variant="heading" size={22}>{card.when}</Txt>}
+            {!trip.leaveBy && card.when && <Txt variant="heading" size={22}>{whenWords(t, card.when)}</Txt>}
             <View style={{ gap: 12, marginTop: 4 }}>
               {trip.rows.map((r, i) => (
                 <View key={`${r.mark}-${i}`} style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
@@ -309,6 +333,9 @@ export default function ApproveRequest() {
         {card && (whoAsked || card.assigned) && (
           <Section title={t('office.who.title')}>
             {whoAsked && <Txt variant="strong" testID="request-who-asked">{t(whoAsked.key, whoAsked.vars)}</Txt>}
+            {/* Round 3 (A5, Zipcar for Business): the asker's driving licence on the trip's day; amber when missing or
+                expired, never a block. */}
+            {selfLicence && <Txt variant="strong" size={15} color={selfLicence.warn ? colors.amberText : colors.green} style={{ marginTop: 4 }} testID="request-self-licence">{t(selfLicence.key)}</Txt>}
             {/* Round 3: the outcome, once approved: who drives (the driver, the asker, someone else), the vehicle, Call / WhatsApp. */}
             {card.assigned && (
               <View style={{ marginTop: whoAsked ? 10 : 0 }} testID="request-assigned">
@@ -388,7 +415,7 @@ export default function ApproveRequest() {
           <Section title={t('office.requests.timeline')} count={card.events!.length}>
             {card.events!.map((e, i) => (
               <View key={`${e.at}-${e.action}-${i}`} style={styles.event} testID="request-event">
-                <Mono size={13} color={colors.muted} style={{ width: 92 }}>{e.at}</Mono>
+                <Mono size={13} color={colors.muted} style={{ width: 92 }}>{dateWords(t, e.at)}</Mono>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Txt variant="strong" size={15}>{eventLine(e, t)}</Txt>
                   {e.note ? <Txt variant="small">{e.note}</Txt> : null}

@@ -25,6 +25,7 @@ import type { FleetError, Issue, IssueHistory } from '@/office/types';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Row, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
+import { dateWords, whenWords } from '@/lib/dateWords';
 
 /** update_issue's answer. */
 interface UpdateIssueAnswer {
@@ -117,7 +118,7 @@ export default function IssueScreen() {
 
   const actions = i ? issueActions(i, me.tools) : [];
   const links = h ? linksFor(h, me.permissions) : {};
-  const facts = i ? issueFacts(i, { system: t('office.issues.system'), nobody: t('office.issues.nobody'), by: (name) => t('office.issues.by', { name }) }) : [];
+  const facts = i ? issueFacts(i, { system: t('office.issues.system'), nobody: t('office.issues.nobody'), by: (name) => t('office.issues.by', { name }), when: (at) => dateWords(t, at) }) : [];
   const statusWord = (s?: string) => (s ? t(`office.issues.status.${s}`) : '—');
   // A request's "declined" is a decision, not a task without a driver (office.status.declined says "needs a driver").
   const requestStatusWord = (s: string) => (s === 'declined' ? t('office.request.declinedTitle') : t(`office.status.${s}`));
@@ -163,7 +164,7 @@ export default function IssueScreen() {
             {i.detail ? <Txt variant="body" size={17}>{i.detail}</Txt> : null}
             {snooze && (
               <Txt variant="small" color={colors.amberText}>
-                {snooze.by ? t('office.issues.snoozedUntilBy', { at: snooze.until, name: snooze.by }) : t('office.issues.snoozedUntil', { at: snooze.until })}
+                {snooze.by ? t('office.issues.snoozedUntilBy', { at: dateWords(t, snooze.until), name: snooze.by }) : t('office.issues.snoozedUntil', { at: dateWords(t, snooze.until) })}
               </Txt>
             )}
             <View style={{ gap: 6 }}>
@@ -180,8 +181,8 @@ export default function IssueScreen() {
               <View style={styles.resolution}>
                 <Txt variant="strong" size={15} color={colors.green}>
                   {i.status === 'dismissed'
-                    ? t('office.issues.dismissedBy', { name: i.resolved_by ?? '—', at: i.resolved_at ?? i.resolved ?? '' })
-                    : t('office.issues.resolvedBy', { name: i.resolved_by ?? '—', at: i.resolved_at ?? i.resolved ?? '' })}
+                    ? t('office.issues.dismissedBy', { name: i.resolved_by ?? '—', at: dateWords(t, i.resolved_at ?? i.resolved ?? '') })
+                    : t('office.issues.resolvedBy', { name: i.resolved_by ?? '—', at: dateWords(t, i.resolved_at ?? i.resolved ?? '') })}
                 </Txt>
                 <Txt variant="body" size={15}>{i.resolution_note}</Txt>
               </View>
@@ -218,7 +219,7 @@ export default function IssueScreen() {
             {h.task && (
               <Row
                 title={t('office.issues.taskLink', { title: h.task.title })}
-                line={[h.task.driver, h.task.vehicle, h.task.leave_by].filter(Boolean).join(' · ')}
+                line={[h.task.driver, h.task.vehicle, h.task.leave_by ? whenWords(t, h.task.leave_by) : ''].filter(Boolean).join(' · ')}
                 line2={h.task.status ? t(`office.status.${h.task.status}`) : undefined}
                 right={links.task ? <ChevronRight size={22} color={colors.ink} strokeWidth={2.4} /> : undefined}
                 onPress={links.task ? () => router.push({ pathname: '/office/task/[id]', params: { id: h.task!.id } }) : undefined}
@@ -228,7 +229,7 @@ export default function IssueScreen() {
             {h.request && (
               <Row
                 title={t('office.issues.requestLink', { name: h.request.requested_by })}
-                line={[h.request.route, h.request.when].filter(Boolean).join(' · ')}
+                line={[h.request.route, h.request.when ? whenWords(t, h.request.when) : ''].filter(Boolean).join(' · ')}
                 line2={h.request.status ? requestStatusWord(h.request.status) : undefined}
                 right={links.request ? <ChevronRight size={22} color={colors.ink} strokeWidth={2.4} /> : undefined}
                 onPress={links.request ? () => router.push({ pathname: '/office/request/[id]', params: { id: h.request!.id } }) : undefined}
@@ -240,7 +241,7 @@ export default function IssueScreen() {
           <Section title={t('office.issues.report')}>
             <View style={{ gap: 6, paddingTop: 4 }}>
               <Txt variant="strong" size={16}>
-                {[reportCategoryKey(h.report.category) ? t(reportCategoryKey(h.report.category)!) : null, h.report.driver, t('office.issues.reported', { at: h.report.reported })].filter(Boolean).join(' · ')}
+                {[reportCategoryKey(h.report.category) ? t(reportCategoryKey(h.report.category)!) : null, h.report.driver, t('office.issues.reported', { at: dateWords(t, h.report.reported) })].filter(Boolean).join(' · ')}
               </Txt>
               {REPORT_STATUS_KEYS[h.report.status] ? <Pill text={t(REPORT_STATUS_KEYS[h.report.status])} tone={h.report.status === 'open' ? 'red' : h.report.status === 'in_garage' ? 'amber' : 'muted'} /> : null}
               {h.report.note ? <Txt variant="body" size={16}>{h.report.note}</Txt> : null}
@@ -264,7 +265,7 @@ export default function IssueScreen() {
               <View key={n}>
                 {n > 0 && <Divider />}
                 <View style={{ paddingVertical: 10, gap: 2 }}>
-                  <Mono size={13} color={colors.muted}>{e.at}</Mono>
+                  <Mono size={13} color={colors.muted}>{dateWords(t, e.at)}</Mono>
                   <Txt variant="body" size={16}>{eventText(e)}</Txt>
                 </View>
               </View>

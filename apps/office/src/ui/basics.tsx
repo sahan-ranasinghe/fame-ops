@@ -5,6 +5,7 @@ import { clock, initials, plateOf, type Tone } from "../lib/format";
 import { AUTHZ, errText, type Fix } from "../transport/errors";
 import { Icon } from "./icons";
 import { ChoiceChip } from "./Select";
+import { datesInWords } from "../lib/when";
 
 export const Plate = ({ v }: { v?: string | null }) => v ? <span className="plate">{plateOf(v)}</span> : null;
 export const Pill = ({ tone = "", children }: { tone?: Tone; children: ReactNode }) => <span className={`pill ${tone}`}>{children}</span>;
@@ -161,7 +162,7 @@ export const WarningsNote = ({ warnings }: { warnings: string[] }) =>
   warnings.length ? (
     <div className="notice" style={{ marginTop: 10 }}>
       <p>
-        <b>Check:</b> {warnings.map((w, i) => <span key={i}>{i > 0 && <br />}{w}</span>)}
+        <b>Check:</b> {warnings.map((w, i) => <span key={i}>{i > 0 && <br />}{datesInWords(w)}</span>)}
       </p>
     </div>
   ) : null;

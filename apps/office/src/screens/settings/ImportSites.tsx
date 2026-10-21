@@ -25,6 +25,7 @@ import { PageTop } from "../../ui/Page";
 import { useToast } from "../../ui/Toast";
 import { ListFooter, useLocalPages } from "../listLocal";
 import { guessMapping, presetKeyFor, problemRows } from "./importLogic";
+import { whenText } from "../../lib/when";
 
 export const BATCH = 500;
 const CUSTOM = "__custom__";
@@ -193,7 +194,7 @@ export default function ImportSites() {
   }
 
   async function undo(i: PlaceImport) {
-    if (!window.confirm(`Undo the import of ${i.file ?? "this list"} (${i.at})? The places it added are switched off, the ones it changed are put back. Nothing is deleted.`)) return;
+    if (!window.confirm(`Undo the import of ${i.file ?? "this list"} (${whenText(i.at, { inline: true })})? The places it added are switched off, the ones it changed are put back. Nothing is deleted.`)) return;
     setBusy(true);
     try {
       const r = await transport.call<UndoAnswer>("undo_place_import", { import_id: i.id });
@@ -379,14 +380,14 @@ export function ImportHistory({ imports, busy, onUndo }: { imports: PlaceImport[
             <tbody>
               {list.items.map((i) => (
                 <tr key={i.id} data-testid="import-row">
-                  <td data-label="When" className="mono">{i.at}</td>
+                  <td data-label="When">{whenText(i.at)}</td>
                   <td data-label="Who">{i.by}</td>
                   <td data-label="File · preset">{i.file ?? "—"}<div className="sub">{i.preset}</div></td>
                   <td data-label="Added" className="num">{num(i.added)}</td>
                   <td data-label="Updated" className="num">{num(i.updated + (i.attached ?? 0))}</td>
                   <td data-label="Skipped" className="num">{num(i.skipped ?? 0)}</td>
                   <td>{i.undone
-                    ? <span className="sub">Undone {i.undone.at}{i.undone.by ? ` by ${i.undone.by}` : ""}{i.undone.left_as_is ? ` · ${i.undone.left_as_is} left as they were` : ""}</span>
+                    ? <span className="sub">Undone {whenText(i.undone.at, { inline: true })}{i.undone.by ? ` by ${i.undone.by}` : ""}{i.undone.left_as_is ? ` · ${i.undone.left_as_is} left as they were` : ""}</span>
                     : <button type="button" className="btn small" disabled={busy} onClick={() => onUndo(i)}>Undo this import</button>}</td>
                 </tr>
               ))}

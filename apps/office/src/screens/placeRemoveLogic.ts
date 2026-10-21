@@ -6,6 +6,7 @@
 // which buttons a person sees, and the Removed places view on Places
 // (list_places with removed, Restore on each row).
 import type { Place, PlaceDetail } from "../data/types";
+import type { WhenOptions } from "../lib/when";
 import { byWhenText } from "./mediaLogic";
 
 /** One task today or later that starts or stops at the place (remove_place's answer). */
@@ -124,8 +125,8 @@ export function removedNotice(baseCleared: boolean, tools: readonly string[]): R
     : { text, base: { text: "The base place is no longer set: someone with Settings → Fleet picks another.", link: false } };
 }
 
-/** "Removed by Sahan 17 Oct 10:05" (the year only when it is not this year's). */
-export const removedLine = (removed: string | undefined, thisYear: string) => byWhenText("Removed", removed, thisYear);
+/** "Removed by Sahan Sat 17 Oct 10:05" (dates in words, lib/when.ts: the year only when it is not this year's). */
+export const removedLine = (removed: string | undefined, opts: WhenOptions = {}) => byWhenText("Removed", removed, opts);
 
 /** Which buttons the place page shows: a removed place is read-only with Restore; one switched off by an undone import has no Remove. */
 export function placeActions(tools: readonly string[], removed: boolean, switchedOff = false): { edit: boolean; remove: boolean; restore: boolean } {

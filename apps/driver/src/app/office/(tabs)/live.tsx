@@ -32,7 +32,6 @@ import { DriversMap } from '@/components/DriversMap';
 import { type LucideIcon, MessageCircle, Navigation, Phone, X } from '@/components/icons';
 import { type Playback, PlaybackBar, usePlayback } from '@/components/office/PlaybackBar';
 import { pickedStyle } from '@/components/patterns/Select';
-import { LanguagePill } from '@/components/LanguageSwitch';
 import { DriverDot } from '@/components/mapPins';
 import { VehicleChipView } from '@/components/office/DriverRows';
 import { vehicleChip } from '@/office/approveLogic';
@@ -244,13 +243,13 @@ export default function LiveTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      {/* A slim dark bar (the other tabs' header, shorter): the title, the count and the language pill; the map wants the room. */}
+      {/* A slim dark bar (the other tabs' header, shorter): the title and the count; the map wants the room. No language
+          switch (Round 3 Part A2): it is on My profile only. */}
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
         <View style={{ flex: 1 }}>
           <Txt variant="heading" color="#ffffff" numberOfLines={1}>{t('office.live.title')}</Txt>
           {q.data ? <Txt variant="small" color="#c9ccd1" numberOfLines={1}>{subtitle}</Txt> : null}
         </View>
-        <LanguagePill />
       </View>
 
       <View style={styles.map} testID="live-map">

@@ -12,6 +12,7 @@ import { phoneDisplay } from "../../ui/ContactButtons";
 import { EmptyLine, ListHeader, usePagedList, SkeletonRows } from "../../ui/ListKit";
 import { ListFooter, ListStale, ListWaiting, SearchBox, useSearchBox } from "../listLocal";
 import { PermissionChips, userPath } from "./userParts";
+import { whenText } from "../../lib/when";
 
 export { PermissionChips } from "./userParts";
 
@@ -58,7 +59,7 @@ export function Users() {
                         <td data-label="E-mail">{u.email || "—"}</td>
                         <td data-label="Phone" className="num">{u.phone_display ?? (u.phone ? phoneDisplay(u.phone) : "—")}</td>
                         <td data-label="Permissions"><span><PermissionChips permissions={u.permissions} /></span></td>
-                        <td data-label="Since">{u.since || "—"}</td>
+                        <td data-label="Since">{u.since ? whenText(u.since) : "—"}</td>
                         {keys && <td data-label="Claude keys">{u.connector_keys?.length || "—"}</td>}
                         <td className="r">{u.email && <Link className="btn small" to={userPath(u.email)}>Manage</Link>}</td>
                       </tr>

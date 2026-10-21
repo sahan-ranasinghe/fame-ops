@@ -28,6 +28,7 @@ import { useDateRange } from "../ui/DateRangePicker";
 import { DayStrip } from "../ui/DayPicker";
 import { Icon } from "../ui/icons";
 import { GapsList, useGaps } from "./GapsList";
+import { TimelineIcon } from "./TimelineIcon";
 import { clockText, gapWindowsOf, playbackPath } from "./playbackLogic";
 import { type PlaybackSpeed, SPEEDS, usePlayback } from "./usePlayback";
 
@@ -217,7 +218,7 @@ export function DriverPage() {
           <div className="card timeline" data-testid="timeline">
             {route && route.timeline.length ? route.timeline.map((row, i) => (
               <button type="button" key={i} className={`tl-row ${row.kind}${selected === i ? " sel" : ""}`} onClick={() => pickRow(i, row)}>
-                <span className="bar" />
+                <TimelineIcon kind={row.kind} />
                 <span className="when">{row.from}–{row.to}</span>
                 <span className="grow">
                   <span className="what">

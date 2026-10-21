@@ -53,6 +53,8 @@ export interface GoogleApi {
   OverlayView: (new () => GOverlayView) & { preventMapHitsAndGesturesFrom(el: HTMLElement): void };
   event: { addListenerOnce(target: GMap, event: string, fn: () => void): GListener };
   importLibrary(name: string): Promise<unknown>;
+  /** google.maps.ColorScheme (LIGHT, DARK, FOLLOW_SYSTEM): the map's colours, set when it is made. */
+  ColorScheme?: { LIGHT: string };
 }
 
 /** One of the tab's Google maps: its box (moved into a page's box), the map, and whether it has drawn its tiles once. */
@@ -104,6 +106,8 @@ function makeEntry(): GoogleEntry {
     keyboardShortcuts: false,
     // One finger moves the map and the wheel zooms (the site's §23): never "Use two fingers to move the map".
     gestureHandling: 'greedy',
+    // Always the light map, whatever the browser's dark mode (Round 3 Part A3; Google reads it only when the map is made).
+    colorScheme: api.ColorScheme?.LIGHT ?? 'LIGHT',
   });
   return { holder, map, loaded: false };
 }

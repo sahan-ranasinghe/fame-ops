@@ -2,14 +2,16 @@
 // the search (?q=), list_requests' arguments (the server pages them: waiting soonest first, the others newest first) and
 // the empty line in words that say what the filter means.
 
-export type RequestsFilter = "waiting" | "changed" | "approved" | "declined" | "cancelled" | "all";
+export type RequestsFilter = "waiting" | "changed" | "approved" | "declined" | "cancelled" | "expired" | "all";
 
+/** Round 3 (A6): Expired = nobody decided it before its day was over (list_requests status expired; never waiting). */
 export const REQUEST_FILTERS: [RequestsFilter, string][] = [
   ["waiting", "Waiting"],
   ["changed", "Changed"],
   ["approved", "Approved"],
   ["declined", "Declined"],
   ["cancelled", "Cancelled"],
+  ["expired", "Expired"],
   ["all", "All"],
 ];
 export const REQUEST_FILTER_KEYS = REQUEST_FILTERS.map(([k]) => k);
@@ -34,6 +36,8 @@ export function requestsEmptyText(status: RequestsFilter, search: string, staff:
       return staff ? "You have no request waiting. Add one with New request." : "No requests are waiting. Add one with New request when someone asks for a vehicle.";
     case "changed":
       return "No approved booking was changed: nothing waits for a new decision.";
+    case "expired":
+      return staff ? "None of your requests expired: each was decided before its day." : "No request expired: each was decided before its day.";
     case "all":
       return staff ? "You have not asked for a vehicle yet. Add a request with New request." : "No requests yet.";
     default:

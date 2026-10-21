@@ -38,6 +38,7 @@ import { sentenceText } from '@/office/statusWords';
 import { statusTone } from '@/office/homeLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords, shortWhen } from '@/lib/dateWords';
 
 type CancelReasonKey = 'not_needed' | 'plans_changed' | 'no_vehicle' | 'other';
 const CANCEL_REASONS: { value: CancelReasonKey; label: string }[] = [
@@ -175,7 +176,7 @@ export default function TaskDetailScreen() {
         )}
         {task && task.needs_driver && (
           <View style={styles.needs}>
-            <Txt variant="strong" color={colors.red}>{[t('office.task.needsDriverSince', { since: task.needs_driver.since }), task.needs_driver.reason === 'declined' ? t('office.task.declinedWhy', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '' }) : t('office.task.notAccepted', { name: task.driver ?? '' })].join(' · ')}</Txt>
+            <Txt variant="strong" color={colors.red}>{[t('office.task.needsDriverSince', { since: dateWords(t, task.needs_driver.since) }), task.needs_driver.reason === 'declined' ? t('office.task.declinedWhy', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '' }) : t('office.task.notAccepted', { name: task.driver ?? '' })].join(' · ')}</Txt>
           </View>
         )}
         {task && task.status === 'cancelled' && task.cancelled_reason && <Txt variant="muted">{t('office.task.cancelledWhy', { why: task.cancelled_reason })}</Txt>}
@@ -189,7 +190,8 @@ export default function TaskDetailScreen() {
                 <View key={s.key} style={{ alignItems: 'center', flex: 1, gap: 4 }}>
                   <View style={[styles.dot, s.state === 'done' && { backgroundColor: colors.blue, borderColor: colors.blue }, s.state === 'now' && { borderColor: colors.amber, borderWidth: 3 }]} />
                   <Txt variant={s.state === 'todo' ? 'small' : 'strong'} size={13} style={{ textAlign: 'center' }} numberOfLines={1}>{t(`office.task.step_${s.key}`)}</Txt>
-                  <Mono size={13} color={s.state === 'todo' ? colors.muted : colors.ink}>{s.time}</Mono>
+                  {/* The step's time: alone today, else with its day in words (Round 3 A4, lib/dateWords.ts shortWhen). */}
+                  <Mono size={13} color={s.state === 'todo' ? colors.muted : colors.ink} style={{ textAlign: 'center' }}>{shortWhen(t, s.time)}</Mono>
                 </View>
               ))}
             </View>
@@ -231,7 +233,7 @@ export default function TaskDetailScreen() {
                   <View style={[styles.mark, { backgroundColor: colors.amber }]}><Mono size={14} bold>S</Mono></View>
                   <View style={{ flex: 1 }}>
                     <Txt variant="strong">{task.start_place}</Txt>
-                    {task.leave_by && <Txt variant="muted" size={15}>{t('office.task.planned', { time: task.leave_by })}{task.started ? ` · ${t('office.task.left', { time: task.started })}` : ''}</Txt>}
+                    {task.leave_by && <Txt variant="muted" size={15}>{t('office.task.planned', { time: task.leave_by })}{task.started ? ` · ${t('office.task.left', { time: shortWhen(t, task.started) })}` : ''}</Txt>}
                   </View>
                 </View>
               )}

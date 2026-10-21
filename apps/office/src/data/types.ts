@@ -671,6 +671,8 @@ export interface RequestTimeline {
   decided_by?: string;
   changed?: string;
   cancelled?: string;
+  /** Round 3 (A6): still waiting when its day was over. */
+  expired?: string;
 }
 
 /** One row of a request's timeline (request_events). */
@@ -786,9 +788,17 @@ export interface RequestCard {
   back_by?: string;
   route?: string;
   need?: string;
-  status: "waiting" | "approved" | "changed" | "declined" | "cancelled";
+  /** Round 3 (A6): expired = still waiting when its trip's day was over (never counts as waiting; "Request again"). */
+  status: "waiting" | "approved" | "changed" | "declined" | "cancelled" | "expired";
   asked?: string;
   decided?: string;
+  /** Round 3 (A6): when it expired ("2026-10-21 00:05", Colombo). */
+  expired?: string;
+  /**
+   * Round 3 (A5, Zipcar for Business): the asker drives it themselves (driven_by self): is their driving licence on file
+   * on the trip's day? A warning for the approver, never a block.
+   */
+  self_drive_licence?: "on_file" | "none" | "expired";
   decline_reason?: string;
   task_id?: string;
   note?: string;
@@ -876,7 +886,7 @@ export interface PhoneLinks {
 /** A trip's live state on My trips (Hotfix 2, A), from the request and its task. */
 export interface TripLive {
   /** Hotfix 3: "missed" = the trip's task was never started (its leave-by over a day ago). */
-  state: "waiting" | "approved" | "accepted" | "on_the_way" | "arrived" | "completed" | "declined" | "cancelled" | "missed";
+  state: "waiting" | "approved" | "accepted" | "on_the_way" | "arrived" | "completed" | "declined" | "cancelled" | "missed" | "expired";
   /** "Waiting", "Approved", "Driver accepted · 09:12", "On the way · 09:30", "Arrived · 10:05", "Completed · 11:40",
    * "Declined · no vehicle that day", "Cancelled · not needed". */
   text: string;

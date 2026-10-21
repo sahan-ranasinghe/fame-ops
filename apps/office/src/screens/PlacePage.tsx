@@ -8,7 +8,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import { today } from "../lib/format";
 import { PinMap } from "../map/PinMap";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
@@ -186,7 +185,7 @@ export function PlacePage() {
       {p.removed && (
         <div className="card card-b stack" data-testid="place-removed">
           <div>
-            <b>{removedLine(p.removed, today().slice(0, 4))}</b>
+            <b>{removedLine(p.removed)}</b>
             <p className="muted small" style={{ margin: "4px 0 0" }}>It is left out of every search, list and picker. Past tasks keep its name.</p>
           </div>
           {rmErr && <Notice tone="bad">{rmErr}</Notice>}

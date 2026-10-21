@@ -22,6 +22,7 @@ import { BackHeader, ErrorNotice, ListFailed, Screen, Section, StickyActions } f
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { dateWords, datesInWords } from '@/lib/dateWords';
 
 export default function VehicleDocScreen() {
   const params = useLocalSearchParams<{ reg: string; kind?: string; id?: string }>();
@@ -78,7 +79,7 @@ export default function VehicleDocScreen() {
         {docsQ.error && <ListFailed stale={!!docsQ.data} error={docsQ.error} onRetry={() => void docsQ.reload()} onSignIn={() => void signOut()} />}
         {doc && (
           <Section title={t('office.media.onRecord')}>
-            <Txt variant="small">{[doc.expiry ? t('office.vehicles.expires', { date: doc.expiry }) : '', doc.uploaded].filter(Boolean).join(' · ')}</Txt>
+            <Txt variant="small">{[doc.expiry ? t('office.vehicles.expires', { date: dateWords(t, doc.expiry) }) : '', datesInWords(t, doc.uploaded)].filter(Boolean).join(' · ')}</Txt>
             {doc.url ? (
               <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(doc.url!).catch(() => undefined)} style={{ minHeight: 48, justifyContent: 'center' }}>
                 <Txt variant="strong" size={15} color={colors.blue}>{t('office.vehicles.open')}</Txt>

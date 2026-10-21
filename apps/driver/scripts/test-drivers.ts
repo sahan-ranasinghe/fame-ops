@@ -8,7 +8,7 @@ import { join } from 'node:path';
 
 import {
   BAND_COLORS, boardArgs, boardChoice, boardFilterDefs, BOARD_FILTERS, boardPill, coversDay, dayNumbers, entryParts, estimatedLines, heldPlate, HOLE_MIN, PARTS, REASONS, routeFrame, routeLines, routePoints, rowFrame, rowLines,
-  segmentLine, segmentTone, SPEED_BANDS, speedBand, speedLines, stopMarks, unavailabilityInput, weekDays, weekGrid, type Words,
+  segmentIcon, segmentLine, SPEED_BANDS, speedBand, speedLines, stopMarks, unavailabilityInput, weekDays, weekGrid, type Words,
 } from '../src/office/driversLogic';
 import type { BoardDriver, DriverRoute, UnavailableEntry } from '../src/office/types';
 
@@ -170,7 +170,7 @@ console.log('\n== The route: the points, the legs, the stops, the frames ==');
   check(rowFrame([], route.timeline![2]).kind === 'point' && rowFrame([], { kind: 'no_data', from_at: 'x', to_at: 'y' }).kind === 'none', 'no points: the row\'s own position, else nothing');
   check(same(dayNumbers(route), { km: 14.3, drivingMin: 41, stoppedMin: 22, stops: 1 }), 'the day\'s numbers', dayNumbers(route));
   check(same(dayNumbers({}), { km: null, drivingMin: 0, stoppedMin: 0, stops: 0 }), 'nothing yet: km unknown');
-  check(segmentTone('driving') === 'blue' && segmentTone('stopped') === 'muted' && segmentTone('no_gps') === 'amber' && segmentTone('no_data') === 'red', 'the timeline\'s marks');
+  check(segmentIcon('driving') === 'car' && segmentIcon('stopped') === 'pin' && segmentIcon('no_gps') === 'warning' && segmentIcon('no_data') === 'warning', 'the timeline\'s icons (Part A1: a car, a pin, a warning; no coloured bar)');
   check(segmentLine(seg, t) === '09:00–09:02 · dur.minutes(2) · 0.6 common.km', 'a driving row: the span, the minutes, the km', segmentLine(seg, t));
   check(segmentLine(route.timeline![2], t) === '09:10–09:32 · dur.minutes(22) · office.drivers.uploadedLater(09:40)', 'a stop uploaded later: no km, the upload time', segmentLine(route.timeline![2], t));
 }

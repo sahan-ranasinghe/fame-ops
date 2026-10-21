@@ -8,9 +8,9 @@ import { cap, type Tone } from "../lib/format";
 import { linksOf, phoneDisplay } from "../ui/ContactButtons";
 import { rangeText } from "../ui/dateRange";
 
-export type TripStatus = "waiting" | "approved" | "under_way" | "completed" | "declined" | "cancelled" | "all";
+export type TripStatus = "waiting" | "approved" | "under_way" | "completed" | "declined" | "cancelled" | "expired" | "all";
 
-/** The filter's chips, in the order of the plan; All (the default) last. */
+/** The filter's chips, in the order of the plan; All (the default) last. Round 3 (A6): Expired (my_trips status expired). */
 export const TRIP_STATUS_OPTIONS: [TripStatus, string][] = [
   ["waiting", "Waiting"],
   ["approved", "Approved"],
@@ -18,6 +18,7 @@ export const TRIP_STATUS_OPTIONS: [TripStatus, string][] = [
   ["completed", "Completed"],
   ["declined", "Declined"],
   ["cancelled", "Cancelled"],
+  ["expired", "Expired"],
   ["all", "All"],
 ];
 
@@ -66,7 +67,7 @@ export function tripsArgs(from: string, to: string, status: TripStatus, show?: T
 /** A live state as one short word for its chip (Gmail's label; the full sentence goes on the line under the title). */
 const LIVE_WORD: Record<string, string> = {
   waiting: "Waiting", approved: "Approved", accepted: "Accepted", sent: "Sent", on_the_way: "On the way", arrived: "Arrived",
-  completed: "Done", declined: "Declined", cancelled: "Cancelled", missed: "Missed", changed: "Changed",
+  completed: "Done", declined: "Declined", cancelled: "Cancelled", missed: "Missed", changed: "Changed", expired: "Expired",
 };
 export function liveWord(state: string | undefined): string {
   return LIVE_WORD[state ?? ""] ?? "Waiting";
@@ -87,6 +88,7 @@ export function liveTone(state: TripLive["state"] | undefined): Tone {
       return "bad";
     case "completed":
     case "cancelled":
+    case "expired":
       return "muted";
     default:
       return "";
@@ -105,6 +107,8 @@ export function liveOf(q: RequestCard): TripLive {
       return { state: "declined", text: q.decline_reason ? `Declined · ${q.decline_reason}` : "Declined" };
     case "cancelled":
       return { state: "cancelled", text: q.cancel_reason ? `Cancelled · ${q.cancel_reason}` : "Cancelled" };
+    case "expired":
+      return { state: "expired", text: "Expired · nobody decided it in time", at: q.expired };
     default:
       return { state: "waiting", text: cap(q.status || "waiting") };
   }

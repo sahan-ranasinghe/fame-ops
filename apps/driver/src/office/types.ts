@@ -673,6 +673,8 @@ export interface RequestTimeline {
   decided_by?: string;
   changed?: string;
   cancelled?: string;
+  /** Round 3 (A6): "2026-10-22 00:15": nobody decided it before its day was over. */
+  expired?: string;
 }
 
 /** One row of a request's timeline (request_events). */
@@ -788,7 +790,8 @@ export interface RequestCard {
   back_by?: string;
   route?: string;
   need?: string;
-  status: "waiting" | "approved" | "changed" | "declined" | "cancelled";
+  /** Round 3 (A6): expired = still waiting when its trip's day was over (never counted as waiting). */
+  status: "waiting" | "approved" | "changed" | "declined" | "cancelled" | "expired";
   asked?: string;
   decided?: string;
   decline_reason?: string;
@@ -809,6 +812,10 @@ export interface RequestCard {
   driven_by?: Exclude<AskedDrivenBy, "driver">;
   driver_name?: string;
   driver_phone?: string;
+  /** Round 3 (A5, Zipcar for Business): the asker drives it themselves: their licence on the trip's day (a warning, never a block). */
+  self_drive_licence?: LicenceState;
+  /** Round 3 (A6): when it expired ("2026-10-22 00:15", Colombo). */
+  expired?: string;
   /** Booked directly by the office: request and task in one go. */
   one_step?: boolean;
   cancelled?: string;
@@ -877,7 +884,7 @@ export interface PhoneLinks {
 /** A trip's live state on My trips (Hotfix 2, A), from the request and its task. */
 export interface TripLive {
   /** Hotfix 3: "missed" = the trip's task was never started (its leave-by over a day ago). */
-  state: "waiting" | "approved" | "accepted" | "on_the_way" | "arrived" | "completed" | "declined" | "cancelled" | "missed";
+  state: "waiting" | "approved" | "accepted" | "on_the_way" | "arrived" | "completed" | "declined" | "cancelled" | "missed" | "expired";
   /** "Waiting", "Approved", "Driver accepted · 09:12", "On the way · 09:30", "Arrived · 10:05", "Completed · 11:40",
    * "Declined · no vehicle that day", "Cancelled · not needed". */
   text: string;
@@ -2163,6 +2170,20 @@ export interface Me {
   phone_display?: string;
   /** Approve or assign_tasks and no number yet: "Add your phone number so drivers can call you". */
   phone_required?: boolean;
+  /** Round 3 (A5): the person's own driving licence, for the trips they drive themselves (My profile). */
+  licence?: MyLicence;
+}
+
+/** A person's driving licence on the trip's day (supabase/functions/_shared/fleet/licence.ts): on file, none, expired. */
+export type LicenceState = "on_file" | "none" | "expired";
+
+/** GET /me's licence (Round 3, A5): the number, the expiry (YYYY-MM-DD), the state today, the photos' 1-hour links. */
+export interface MyLicence {
+  number?: string;
+  expiry?: string;
+  state: LicenceState;
+  front_url?: string;
+  back_url?: string;
 }
 
 /** True when the person holds any one of the permissions (none asked = everyone). */

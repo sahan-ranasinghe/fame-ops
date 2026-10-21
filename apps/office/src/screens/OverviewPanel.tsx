@@ -22,6 +22,7 @@ import { FULL_PATH, OPEN_TEXT, type OverviewOpen, VEHICLE_FILTER_WORDS } from ".
 import { ReminderList } from "./Reminders";
 import { TripTags } from "./TripPurpose";
 import { vehiclePath } from "./Vehicles";
+import { dayWords } from "../lib/when";
 
 /** The drivers on the road now: the Overview's card and the panel. */
 export function RoadRows({ rows }: { rows: RoadDriver[] }) {
@@ -72,7 +73,7 @@ function VehicleRows({ filter }: { filter: "available" | "in_garage" }) {
               <span className="grow">
                 <span className="name"><span className="plate">{v.reg_no}</span>{v.make_model && <span>{v.make_model}</span>}</span>
                 <span className="sub" style={{ display: "block" }}>
-                  {joinDots([v.seats ? `${v.seats} seats` : null, v.assigned_to ? `assigned to ${v.assigned_to}` : "pool", filter === "in_garage" && v.garage_booked ? `garage ${v.garage_booked}` : null])}
+                  {joinDots([v.seats ? `${v.seats} seats` : null, v.assigned_to ? `assigned to ${v.assigned_to}` : "pool", filter === "in_garage" && v.garage_booked ? `garage ${dayWords(v.garage_booked, { inline: true })}` : null])}
                 </span>
               </span>
               {v.availability && <span className={`sub status ${vehicleAvailabilityTone(v.availability)}`}>{v.availability}</span>}

@@ -20,6 +20,7 @@ import type { DriversList, FleetError, VehicleCard, VehiclesList } from '@/offic
 import { BackHeader, ErrorNotice, Screen, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
+import { datesInWords } from '@/lib/dateWords';
 
 export default function VehicleFormScreen() {
   const { reg } = useLocalSearchParams<{ reg?: string }>();
@@ -94,7 +95,7 @@ export default function VehicleFormScreen() {
     // A date is picked on the calendar (docs/ui-patterns.md §3: a plain date), never typed.
     <View style={{ gap: 4 }}>
       <DateField label={label} value={f[k] as string} onChange={(v) => set(k, v as never)} testID={`vehicle-${k}`} />
-      {!isNew && opts.now != null && opts.now !== '' ? <Txt variant="small">{t('office.vehicles.now', { value: String(opts.now) })}</Txt> : null}
+      {!isNew && opts.now != null && opts.now !== '' ? <Txt variant="small">{t('office.vehicles.now', { value: datesInWords(t, String(opts.now)) })}</Txt> : null}
     </View>
   ) : (
     <View style={{ gap: 4 }}>
@@ -111,7 +112,7 @@ export default function VehicleFormScreen() {
         accessibilityLabel={label}
         style={[styles.input, (opts.numeric || opts.date) && { fontFamily: fonts.monoSemiBold, fontSize: 20 }, !(opts.numeric || opts.date) && bodyFont]}
       />
-      {!isNew && opts.now != null && opts.now !== '' ? <Txt variant="small">{t('office.vehicles.now', { value: String(opts.now) })}</Txt> : null}
+      {!isNew && opts.now != null && opts.now !== '' ? <Txt variant="small">{t('office.vehicles.now', { value: datesInWords(t, String(opts.now)) })}</Txt> : null}
     </View>
   );
   // The shared chips (patterns/Select): the check, the tint and the border on the picked one.

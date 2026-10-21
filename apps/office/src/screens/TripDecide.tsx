@@ -18,10 +18,10 @@ import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
 import type { Conflict, DecideResult, RequestCard, Suggestions } from "../data/types";
 import { useQuery } from "../data/useQuery";
-import { cap, joinDots, requestTone, today, warnList } from "../lib/format";
+import { joinDots, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
-import { Notice, Pill, WarningsNote } from "../ui/basics";
+import { Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { driverOptions } from "../ui/driverPickerLogic";
 import { firstName } from "../ui/driverRowLogic";
@@ -39,7 +39,7 @@ import { checkDeparture, departurePlan } from "./departureLogic";
 import { DecidedBy, refreshRequest, ReviewingLine, useReviewing } from "./approvers";
 import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
 import { RequestDetailCard } from "./RequestDetailCard";
-import { LateNotice } from "./requestParts";
+import { LateNotice, RequestStatusPill } from "./requestParts";
 import { TripSection, useTripLine } from "./RequestTrip";
 import { isChoice, knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 import { TripDayPicker } from "../ui/DayPicker";
@@ -184,7 +184,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   if (q.status !== "waiting" || !me.tools.includes("decide_request")) {
     return (
       <section className="view">
-        <PageTop title={title} sub={<Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>} backTo={`/requests/${id}`} />
+        <PageTop title={title} sub={<RequestStatusPill status={q.status} />} backTo={`/requests/${id}`} />
         {/* The server's refusal of a second decision ("Already approved by Palitha at 10:42"). */}
         {msg && <div style={{ marginBottom: 12 }} data-testid="decide-message"><Notice tone={msg.tone}>{msg.text}</Notice></div>}
         <Notice tone="info">This {proposal ? "task" : "request"} is {q.status}; there is nothing to decide. <Link to={`/requests/${id}`}>Open it →</Link>.</Notice>

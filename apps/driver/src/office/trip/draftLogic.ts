@@ -6,9 +6,10 @@
 // The fields are the site's (tripLogic / assignLogic / requestLogic, copied): the trip part is one shape for all three;
 // the task's own fields live beside it, the request's own beside that.
 
-import { colomboDate } from '@/lib/time';
+import { addDays, colomboDate } from '@/lib/time';
+import type { RequestCard } from '../types';
 import { type AssignFields, emptyAssign, type ProjectRow } from './assignLogic';
-import { type RequestFields } from './requestLogic';
+import { editFields, type RequestFields } from './requestLogic';
 import type { TripFields } from './tripLogic';
 import { whoOf, type WhoDrives } from './whoDrivesLogic';
 
@@ -60,6 +61,8 @@ export interface TripDraft {
   step: Step;
   /** When it was last changed (ms). */
   at: number;
+  /** request: made by "Request again" from this expired request (Round 3, A6): Where keeps it, no "Resume draft?" asked. */
+  againOf?: string;
 }
 
 export const emptyExtras = (): RequestExtras => ({ behalf: '', project: '', need: '', tools: false, note: '', driverRequired: true, requesterPhone: '' });
@@ -73,6 +76,22 @@ export function withDriver(d: TripDraft, username?: string, name?: string): Trip
   const u = username?.trim();
   if (d.mode !== 'task' || !u) return d;
   return { ...d, fields: { ...d.fields, driver: u }, ...(name?.trim() ? { driverName: name.trim() } : {}) };
+}
+
+/**
+ * Round 3 (A6), "Request again" on an expired request: a fresh Request a vehicle with everything the request asked (the
+ * route or the stops and the start, the times, passengers, vehicle type, tools, the note, who drives, the project, on behalf
+ * of) except the day, which is tomorrow (editable on When). Airbnb's and Uber's "Book again".
+ */
+export function requestAgainDraft(q: Pick<RequestCard, 'id' | 'fields' | 'note' | 'requester_phone' | 'trip' | 'project'>, today: string): TripDraft {
+  const date = addDays(today, 1);
+  const { behalf, project: _p, need, tools, note, driver, requesterPhone, who, ...trip } = editFields(q);
+  return {
+    ...newDraft('request', date),
+    againOf: q.id,
+    fields: { ...emptyAssign(date), ...trip, date },
+    req: { behalf, project: q.project ?? '', need, tools, note, driverRequired: driver, requesterPhone: requesterPhone ?? '', who },
+  };
 }
 
 /** The request's fields as the copied requestLogic takes them (create_request, update_request). */

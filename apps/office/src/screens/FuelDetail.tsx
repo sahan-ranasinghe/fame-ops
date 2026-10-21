@@ -15,6 +15,7 @@ import { Loading, Notice, Pill } from "../ui/basics";
 import { PageTop } from "../ui/Page";
 import { checklistWords, clockOf, megabytes, pieceAt, videoChip, videoTone } from "./fuelLogic";
 import { canOpenTask } from "../transport/types";
+import { whenText } from "../lib/when";
 
 export function FuelDetail() {
   const { id = "" } = useParams();
@@ -77,7 +78,7 @@ export function FuelDetail() {
 
   return (
     <div data-testid="fuel-detail">
-      <PageTop title={<span className="mono">{e.at}</span>} sub={joinDots([e.vehicle, e.driver])} backTo={backTo} />
+      <PageTop title={whenText(e.at)} sub={joinDots([e.vehicle, e.driver])} backTo={backTo} />
       {v.status === "uploaded" && v.url ? (
         <div className="card" style={{ overflow: "hidden" }}>
           <video

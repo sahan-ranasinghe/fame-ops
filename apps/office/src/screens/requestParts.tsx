@@ -3,15 +3,20 @@
 // requester's timeline, and (Phase 7, §33) the card's head: who asked, or a
 // proposed task's title with its driver and vehicle, and "Leave-by passed".
 // Round 3: the asker's photo in the head, and who the request asked to drive (AskedWho).
+// Round 3 Part A: the self-drive licence line (A5), the status pill with the Expired badge (A6), dates in words (A4).
+import { Link } from "react-router";
+import { useFleet } from "../app/FleetContext";
 import type { FieldChanges, RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
-import { joinDots } from "../lib/format";
+import { addDays, cap, joinDots, requestTone, today } from "../lib/format";
+import { datesInWords } from "../lib/when";
 import { Avatar, Pill } from "../ui/basics";
 import { ContactButtons, linksOf } from "../ui/ContactButtons";
 import { DriverLine } from "../ui/DriverRow";
 import { firstName } from "../ui/driverRowLogic";
-import { askedOf } from "../ui/whoDrivesLogic";
+import { Icon } from "../ui/icons";
+import { askedOf, selfDriveLicenceLine } from "../ui/whoDrivesLogic";
 import { LATE_TEXT, proposalLine } from "./approvalLogic";
-import { diffLines, timelineSteps } from "./requestLogic";
+import { againFields, diffLines, timelineSteps } from "./requestLogic";
 
 export const GROUPS: [keyof NonNullable<Suggestions["groups"]>, string][] = [
   ["free_pool", "Free"],
@@ -49,7 +54,7 @@ export function Timeline({ q }: { q: RequestCard }) {
           <i className={`dot ${s.done ? "ok" : "muted"}`} />
           <span>
             <b>{s.label}</b>
-            {s.at ? <span className="sub" style={{ display: "block" }}>{s.at}</span> : null}
+            {s.at ? <span className="sub" style={{ display: "block" }}>{datesInWords(s.at)}</span> : null}
             {s.lines?.length ? <span className="sub" style={{ display: "block" }}>{s.lines.join(" · ")}</span> : null}
           </span>
         </li>
@@ -109,7 +114,7 @@ export function RequestHead({ q, proposal }: { q: RequestCard; proposal: boolean
             <span>{q.requested_by}{q.on_behalf_of ? <span className="muted"> · for {q.on_behalf_of}</span> : null}</span>
           </div>
         )}
-      <div className="sub">{joinDots([q.project, q.asked, q.one_step ? "booked directly by the office" : ""])}</div>
+      <div className="sub">{joinDots([q.project, datesInWords(q.asked), q.one_step ? "booked directly by the office" : ""])}</div>
     </>
   );
 }
@@ -144,4 +149,50 @@ export function AskedWho({ q }: { q: RequestCard }) {
       {phone && <ContactButtons phone={phone} label={`Call ${firstName(name)}`} testId="call-asked" />}
     </span>
   );
+}
+
+/** Round 3 (A6): an expired request's own badge (nobody decided it before its day was over): the hourglass and the word. */
+export const ExpiredBadge = () => <span className="pill expired" data-testid="expired-badge"><Icon name="expired" />Expired</span>;
+
+/**
+ * A request's status as one pill, the same on every page: Waiting / Changed amber, Approved green, Declined red,
+ * Cancelled grey, Expired its own badge with an icon (never colour alone).
+ */
+export function RequestStatusPill({ status }: { status?: RequestCard["status"] | string }) {
+  if (status === "expired") return <ExpiredBadge />;
+  return <Pill tone={requestTone(status)}>{cap(status || "waiting")}</Pill>;
+}
+
+/**
+ * Round 3 (A5; Zipcar for Business / Enterprise CarShare: the member's licence on file): on a request the asker drives
+ * themselves, whether their driving licence is on file on the trip's day. Amber for none or expired, a warning only: the
+ * approver may still approve. `mine`: the page is the asker's own (a link to add it on My profile).
+ */
+export function SelfDriveLicence({ q, mine }: { q: Pick<RequestCard, "self_drive_licence">; mine?: boolean }) {
+  const line = selfDriveLicenceLine(q.self_drive_licence);
+  if (!line) return null;
+  return (
+    <p className={`licence-line ${line.tone}`} data-testid="self-drive-licence" data-state={q.self_drive_licence}>
+      <Icon name="licence" />
+      <span>{line.text}{mine && line.tone === "warn" ? <> · <Link to="/settings/profile">Add it on My profile</Link></> : null}</span>
+    </p>
+  );
+}
+
+/** What New request reads from the link's state: the fields of an expired request asked again (Round 3, A6). */
+export interface AgainState {
+  again: ReturnType<typeof againFields>;
+  /** The expired request's route, for the line at the top of the form. */
+  from?: string;
+}
+
+/**
+ * Round 3 (A6): "Request again" on an expired request (its page and its My trips row; Uber's and Airbnb's "Book again"):
+ * New request opens with everything copied but the day, which starts as tomorrow. For anyone who may ask for a vehicle.
+ */
+export function RequestAgain({ q, className = "btn" }: { q: RequestCard; className?: string }) {
+  const { me } = useFleet();
+  if (q.status !== "expired" || !me.tools.includes("create_request")) return null;
+  const state: AgainState = { again: againFields(q, { tomorrow: addDays(today(), 1), me: me.name }), from: q.route };
+  return <Link className={className} to="/requests/new" state={state} data-testid="request-again" onClick={(e) => e.stopPropagation()}>Request again</Link>;
 }

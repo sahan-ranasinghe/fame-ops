@@ -60,6 +60,9 @@ export function GoogleTaskMap({ stops, lines, start, me, fit, follow, onUserMove
       <GoogleMapView
         ref={map}
         provider={PROVIDER_GOOGLE}
+        // Always the light map, whatever the phone's dark mode (Round 3 Part A3; read once when the map is made: Android's
+        // MapColorScheme.LIGHT through react-native-maps 1.27.2's initial props, no native change).
+        userInterfaceStyle="light"
         style={StyleSheet.absoluteFill}
         initialRegion={{ latitude: SRI_LANKA.lat, longitude: SRI_LANKA.lng, latitudeDelta: 3.5, longitudeDelta: 3.5 }}
         mapPadding={{ top: 0, right: 0, bottom: SHEET_OVERLAP, left: 0 }}

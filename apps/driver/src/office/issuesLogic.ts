@@ -225,21 +225,24 @@ export interface FactWords {
   system: string;
   nobody: string;
   by: (name: string) => string;
+  /** The server's "2026-10-18 09:12" in words ("Today 09:12", lib/dateWords.ts; Round 3 A4); as it is without. */
+  when?: (at: string) => string;
 }
 
 /** The issue's facts on the page: opened, opened by, taken by, due, and when closed, at and by; updated last. */
 export function issueFacts(i: Issue, w: FactWords): { key: FactKey; value: string }[] {
+  const when = w.when ?? ((at: string) => at);
   const rows: { key: FactKey; value: string }[] = [
-    { key: 'opened', value: i.opened },
+    { key: 'opened', value: when(i.opened) },
     { key: 'openedBy', value: i.opened_by ?? w.system },
-    { key: 'takenBy', value: i.taken_by ? [i.taken_by.name, i.taken_by.at].filter(Boolean).join(' · ') : i.assigned_to ? i.assigned_to.name : w.nobody },
+    { key: 'takenBy', value: i.taken_by ? [i.taken_by.name, i.taken_by.at ? when(i.taken_by.at) : ''].filter(Boolean).join(' · ') : i.assigned_to ? i.assigned_to.name : w.nobody },
   ];
   if (i.due) rows.push({ key: 'due', value: i.due });
   const closedAt = i.resolved_at ?? i.resolved;
   if (!isActive(i.status) && (closedAt || i.resolved_by)) {
-    rows.push({ key: i.status === 'dismissed' ? 'dismissed' : 'resolved', value: [closedAt, i.resolved_by ? w.by(i.resolved_by) : ''].filter(Boolean).join(' ') });
+    rows.push({ key: i.status === 'dismissed' ? 'dismissed' : 'resolved', value: [closedAt ? when(closedAt) : '', i.resolved_by ? w.by(i.resolved_by) : ''].filter(Boolean).join(' ') });
   }
-  if (i.updated && i.updated !== i.opened) rows.push({ key: 'updated', value: i.updated });
+  if (i.updated && i.updated !== i.opened) rows.push({ key: 'updated', value: when(i.updated) });
   return rows;
 }
 

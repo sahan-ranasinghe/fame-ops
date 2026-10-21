@@ -14,6 +14,7 @@ import { useToast } from "../ui/Toast";
 import { useFleetSettings } from "./dispatchParts";
 import { entryError, entryForm, type EntryForm, partChoices, REASONS, setUnavailabilityArgs, shortDay, splitOf } from "./unavailabilityLogic";
 import { DateField } from "../ui/DayPicker";
+import { whenText } from "../lib/when";
 
 export function UnavailabilityEditor({ driver, driverName, entry, day, onDone }: {
   /** The driver's username (or code or name). */
@@ -89,7 +90,7 @@ export function UnavailabilityEditor({ driver, driverName, entry, day, onDone }:
     <form className="card card-b form unav-editor" data-testid="unav-editor" onSubmit={(e) => void save(e)} aria-label={`Not available: ${driverName}`}>
       <div className="unav-editor-h">
         <h3>{entry ? "Change: not available" : "Not available"} · {driverName}</h3>
-        {entry && <span className="muted small">Added by {entry.added_by} · {entry.added}{entry.changed_by ? ` · changed by ${entry.changed_by}` : ""}</span>}
+        {entry && <span className="muted small">Added by {entry.added_by} · {whenText(entry.added)}{entry.changed_by ? ` · changed by ${entry.changed_by}` : ""}</span>}
       </div>
       <div className="grid2">
         <div className="field">

@@ -3,6 +3,7 @@
 // needs-attention items, so the same reminders are read off the vehicles
 // list (document chips, next service, rent end, garage date).
 import type { Attention, VehicleCard } from "../data/types";
+import { dayWords } from "../lib/when";
 
 const DOC_NAME: Record<string, string> = { lic: "Revenue licence", ins: "Insurance", emi: "Emission test" };
 const DAY_MS = 86400000;
@@ -12,11 +13,12 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
 }
 
-function dueText(days: number, date: string): string {
+function dueText(days: number, date: string, today: string): string {
   if (days < 0) return `${-days} d overdue`;
   if (days === 0) return "today";
   if (days === 1) return "tomorrow";
-  return days <= 7 ? `in ${days} days` : date;
+  // Round 3 (A4): a later day in words ("Sun 25 Oct"), never "2026-10-25".
+  return days <= 7 ? `in ${days} days` : dayWords(date, { now: new Date(`${today}T12:00:00+05:30`) });
 }
 
 /** The reminders fleet_overview would list for these vehicles, within 14 days, red within 7 or overdue. */
@@ -29,7 +31,7 @@ export function dueFromVehicles(vehicles: VehicleCard[], today: string, windowDa
       if (!doc?.expiry) continue;
       const days = daysBetween(today, doc.expiry);
       if (days > windowDays) continue;
-      out.push({ what: `${DOC_NAME[key] ?? key} ${days < 0 ? "expired" : "expires"}`, subject: label, due: dueText(days, doc.expiry), level: days <= 7 ? "red" : "amber", days });
+      out.push({ what: `${DOC_NAME[key] ?? key} ${days < 0 ? "expired" : "expires"}`, subject: label, due: dueText(days, doc.expiry, today), level: days <= 7 ? "red" : "amber", days });
     }
     const svc = String(v.service_state ?? "").toLowerCase();
     if (svc === "overdue" || svc === "due soon") {
@@ -38,12 +40,12 @@ export function dueFromVehicles(vehicles: VehicleCard[], today: string, windowDa
     if (v.rent_until) {
       const days = daysBetween(today, v.rent_until);
       if (days <= windowDays) {
-        out.push({ what: days < 0 ? "Rental agreement ended" : "Rental agreement ends", subject: [v.reg_no, v.rented_from].filter(Boolean).join(" · "), due: dueText(days, v.rent_until), level: days <= 7 ? "red" : "amber", days });
+        out.push({ what: days < 0 ? "Rental agreement ended" : "Rental agreement ends", subject: [v.reg_no, v.rented_from].filter(Boolean).join(" · "), due: dueText(days, v.rent_until, today), level: days <= 7 ? "red" : "amber", days });
       }
     }
     if (v.garage_booked) {
       const days = daysBetween(today, v.garage_booked);
-      if (days >= 0 && days <= windowDays) out.push({ what: "Garage booked", subject: label, due: dueText(days, v.garage_booked), level: "amber", days });
+      if (days >= 0 && days <= windowDays) out.push({ what: "Garage booked", subject: label, due: dueText(days, v.garage_booked, today), level: "amber", days });
     }
   }
   return out.sort((a, b) => a.days - b.days).map(({ days: _days, ...item }) => item);

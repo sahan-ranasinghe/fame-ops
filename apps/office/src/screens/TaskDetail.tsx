@@ -44,6 +44,7 @@ import { readFlashWarnings } from "../data/flash";
 import { findDriverPath } from "./needsDriverLogic";
 import { dwellNote, needsDriverText, segmentRows, segmentsTotal, taskTone, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
+import { datesInWords, whenText } from "../lib/when";
 
 /** The arrival flags shown in amber (an override, no GPS fix, Done without Arrived); "no pin" is plain. */
 const ARRIVAL_WARN = new Set(["override", "no_gps", "not_arrived"]);
@@ -187,7 +188,7 @@ export function TaskDetail() {
             </dd>
           </div>
           <div><dt>Status</dt><dd>{t.status_line || cap(t.status)}</dd></div>
-          {t.accepted && <div><dt>Accepted</dt><dd>{t.accepted}</dd></div>}
+          {t.accepted && <div><dt>Accepted</dt><dd>{whenText(t.accepted)}</dd></div>}
           <div><dt>Leave by</dt><dd className="mono">{t.leave_by ? `${hhmm(t.leave_by)} (${t.leave_by_source === "plan" ? "planned" : "typed"})` : "—"}</dd></div>
           {eta && (
             <div style={{ gridColumn: "1/-1" }} data-testid="eta">
@@ -236,12 +237,12 @@ export function TaskDetail() {
       {t.can_reopen && me.tools.includes("reopen_task") && <ReopenTask id={id} onDone={reload} />}
       {p.unlogged_km && (
         <Notice>
-          {num(p.unlogged_km.km)} km were driven before this task that nobody logged (last reading {num(p.unlogged_km.last_logged_km)} km at {p.unlogged_km.last_logged_at}, this task started at {num(p.unlogged_km.start_km)} km).
+          {num(p.unlogged_km.km)} km were driven before this task that nobody logged (last reading {num(p.unlogged_km.last_logged_km)} km {whenText(p.unlogged_km.last_logged_at, { inline: true })}, this task started at {num(p.unlogged_km.start_km)} km).
         </Notice>
       )}
       {t.declined && (
         <Notice tone="bad">
-          Declined{t.declined.after_accept ? " after accepting" : ""}{t.declined.at ? ` at ${t.declined.at}` : ""}: {t.declined.reason_text ?? t.declined.reason ?? "no reason given"}
+          Declined{t.declined.after_accept ? " after accepting" : ""}{t.declined.at ? ` ${whenText(t.declined.at, { inline: true })}` : ""}: {t.declined.reason_text ?? t.declined.reason ?? "no reason given"}
           {t.declined.note ? ` · “${t.declined.note}”` : ""}. {canChange && !findDriver ? <Link to={findDriverPath(id)} state={FROM_TASK}>Give it to another driver →</Link> : null}
         </Notice>
       )}
@@ -249,7 +250,7 @@ export function TaskDetail() {
         <div className="notice" data-testid="warnings-saved">
           <p>
             <b>Saved past these warnings:</b>
-            {t.warnings_saved.map((w, i) => <span key={i}><br />{w}</span>)}
+            {t.warnings_saved.map((w, i) => <span key={i}><br />{datesInWords(w)}</span>)}
           </p>
         </div>
       ) : null}
@@ -297,7 +298,7 @@ export function TaskDetail() {
           <div className="section-t">Plan</div>
           <PlanWithMap timeline={p.timeline} plan={p.plan} startName={p.task.start_place} stops={p.stops}
             start={{ name: t.start_place, lat: t.start_lat, lng: t.start_lng, google: !!t.start_google_place_id }} />
-          <p className="muted small" style={{ margin: 0 }}>{driveText(p.plan.total_drive_min)} driving in {p.plan.legs.length} leg{p.plan.legs.length === 1 ? "" : "s"} · computed {p.plan.computed_at}</p>
+          <p className="muted small" style={{ margin: 0 }}>{driveText(p.plan.total_drive_min)} driving in {p.plan.legs.length} leg{p.plan.legs.length === 1 ? "" : "s"} · computed {whenText(p.plan.computed_at, { inline: true })}</p>
         </>
       )}
 
@@ -338,7 +339,7 @@ export function TaskDetail() {
             <div className="row" key={i}>
               <div className="grow">
                 <div className="name num">{num(o.reading_km)} km {o.flag && <Pill tone="warn">{cap(o.flag)}</Pill>}</div>
-                <div className="sub">{joinDots([cap(o.kind), o.at, o.check, o.photo_reading != null ? `photo shows ${o.photo_reading}` : ""])}</div>
+                <div className="sub">{joinDots([cap(o.kind), whenText(o.at), o.check, o.photo_reading != null ? `photo shows ${o.photo_reading}` : ""])}</div>
               </div>
               {o.photo && <a className="btn small" href={o.photo} {...ext}>Photo</a>}
             </div>
@@ -347,7 +348,7 @@ export function TaskDetail() {
             <div className="row" key={"f" + i}>
               <div className="grow">
                 <div className="name">{num(f.litres)} L · LKR {num(f.amount_lkr)}</div>
-                <div className="sub">{joinDots(["Fuel", f.at, f.video ? videoWords(f.video) : ""])}</div>
+                <div className="sub">{joinDots(["Fuel", whenText(f.at), f.video ? videoWords(f.video) : ""])}</div>
               </div>
               {f.video?.status === "uploaded" && f.id && can(me, "vehicles") && <Link className="btn small" to={`/fuel/${f.id}${f.at ? `?range=custom&from=${f.at.slice(0, 10)}&to=${f.at.slice(0, 10)}` : ""}`}><Icon name="video" />Video</Link>}
               {f.receipt_photo && <a className="btn small" href={f.receipt_photo} {...ext}>Receipt</a>}
@@ -365,7 +366,7 @@ export function TaskDetail() {
               {p.vehicle_reports.map((r) => (
                 <div className="row" key={r.id}>
                   <span className="att-ic bad"><Icon name="alert" /></span>
-                  <div className="grow"><div className="name">{cap(r.category)}</div><div className="sub">{r.at} · {cap(r.status)}{r.note ? " · " + r.note : ""}</div></div>
+                  <div className="grow"><div className="name">{cap(r.category)}</div><div className="sub">{whenText(r.at)} · {cap(r.status)}{r.note ? " · " + r.note : ""}</div></div>
                   <div className="photos">{(r.photos ?? []).map((u, i) => <a key={i} className="btn small" href={u} {...ext}>Photo {i + 1}</a>)}</div>
                 </div>
               ))}
@@ -388,7 +389,7 @@ export function TaskDetail() {
             <dl className="kv">
               {p.assignment_history.map((e, i) => (
                 <div key={i} style={{ gridColumn: "1/-1" }}>
-                  <dt>{e.at}</dt>
+                  <dt>{whenText(e.at)}</dt>
                   <dd>
                     {e.action === "reopened"
                       // "Reopened by Sahan: wrong reading · was completed 14:20 · end odometer 1003 km"

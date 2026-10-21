@@ -15,6 +15,7 @@
 // leave-by time is already in the past.", "Not available …" and "Running late …" and "Last seen …" (presence.ts), and the
 // best match's reason (availability.ts rankMatches: "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today").
 
+import { dateWords } from '../lib/dateWords';
 import { durationText } from '../lib/durations';
 import type { Tone } from './ui';
 
@@ -63,12 +64,17 @@ export function sentenceWords(line: string | undefined | null): Words | null {
   if (s === 'Drives themselves · no app') return { key: 'office.line.noAppSelf' };
   if (s === 'Someone else drives · no app') return { key: 'office.line.noAppOther' };
   if ((m = s.match(/^Missed · not started \(leave by (\d{2}:\d{2})\)$/))) return { key: 'office.line.missed', vars: { time: m[1] } };
+  // Round 3 (A6): a request nobody decided before its day was over (requests.ts liveOf).
+  if (s === 'Expired · nobody decided it in time') return { key: 'office.line.expired' };
   return presenceWords(s) ?? warningWords(s) ?? matchWhyWords(s);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Round 3: the server's other sentences
 // ---------------------------------------------------------------------------------------------------------------------
+
+/** A server date ("2026-10-01") said in words when the sentence is shown (Round 3 A4, lib/dateWords.ts): "Thu 1 Oct". */
+const dateVar = (day: string): Words => ({ key: '', vars: { isoDate: day } });
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -147,8 +153,10 @@ function warningWords(s: string): Words | null {
   if ((m = s.match(/^([^a-z]+) is marked as in the garage\.$/))) return { key: 'office.warn.inGarage', vars: { plate: m[1] } };
   if ((m = s.match(/^([^a-z]+) is in the garage$/))) return { key: 'office.warn.inGarageNow', vars: { plate: m[1] } };
   if ((m = s.match(/^([^a-z]+) is over its monthly km allowance \(([\d,]+) of ([\d,]+) km\)\.$/))) return { key: 'office.warn.overKm', vars: { plate: m[1], used: m[2], allowance: m[3] } };
-  if ((m = s.match(/^([^a-z]+): (revenue licence|insurance|emission test) expired on (\d{4}-\d{2}-\d{2})\.$/))) return { key: 'office.warn.docExpired', vars: { plate: m[1], doc: { key: DOCS[m[2]] }, date: m[3] } };
-  if ((m = s.match(/^(.+)'s driving licence expired on (\d{4}-\d{2}-\d{2})\.$/))) return { key: 'office.warn.licenceExpired', vars: { name: m[1], date: m[2] } };
+  if ((m = s.match(/^([^a-z]+): (revenue licence|insurance|emission test) expired on (\d{4}-\d{2}-\d{2})\.$/))) return { key: 'office.warn.docExpired', vars: { plate: m[1], doc: { key: DOCS[m[2]] }, date: dateVar(m[3]) } };
+  if ((m = s.match(/^(.+)'s driving licence expired on (\d{4}-\d{2}-\d{2})\.$/))) return { key: 'office.warn.licenceExpired', vars: { name: m[1], date: dateVar(m[2]) } };
+  // Round 3 (A5): a self-driven trip whose driver has no licence on file (_shared/fleet/licence.ts noLicenceWarning).
+  if ((m = s.match(/^(.+) has no driving licence on file \(self-drive\)\.$/))) return { key: 'office.warn.noLicence', vars: { name: m[1] } };
   if ((m = s.match(/^(.+?) is not available (then|that day) · (.+)$/))) {
     const detail = awayDetail(m[3]);
     return detail ? { key: m[2] === 'then' ? 'office.warn.notAvailableThen' : 'office.warn.notAvailableDay', vars: { name: m[1], detail } } : null;
@@ -252,6 +260,8 @@ export function wordsText(t: T, w: Words): string {
   if (w.parts) return w.parts.map((p) => wordsText(t, p)).join(' · ');
   // A duration (plan.ts "A long day: 10 h 30 min"): the app's own words for it.
   if (w.key === '' && typeof w.vars?.minutes === 'number') return durationText(t, w.vars.minutes);
+  // A date (an expiry): in words, "Thu 1 Oct" (Round 3 A4).
+  if (w.key === '' && typeof w.vars?.isoDate === 'string') return dateWords(t, w.vars.isoDate);
   const vars: Record<string, string | number> = {};
   for (const [k, v] of Object.entries(w.vars ?? {})) vars[k] = typeof v === 'object' ? wordsText(t, v) : v;
   if (typeof w.vars?.reason === 'string') vars.reason = t(`office.line.reason_${w.vars.reason}`);
@@ -314,6 +324,8 @@ const TRIP_CHIP: Record<string, { key: string; tone: Tone }> = {
   cancelled: { key: 'cancelled', tone: 'muted' },
   missed: { key: 'missed', tone: 'red' },
   changed: { key: 'changed', tone: 'amber' },
+  // Round 3 (A6): nobody decided it before its day was over (grey, with its own icon on the chip).
+  expired: { key: 'expired', tone: 'muted' },
 };
 
 export function tripChip(state: string | undefined): { key: string; tone: Tone } {

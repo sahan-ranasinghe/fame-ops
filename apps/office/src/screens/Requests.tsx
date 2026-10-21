@@ -13,7 +13,7 @@
 import { Link, useLocation, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import type { RequestCard, RequestsList } from "../data/types";
-import { cap, requestTone } from "../lib/format";
+import { datesInWords } from "../lib/when";
 import { can, canOpenTask } from "../transport/types";
 import { Avatar, ErrBox, Pill, StaleNote } from "../ui/basics";
 import { phoneDisplay } from "../ui/ContactButtons";
@@ -26,6 +26,7 @@ import { drivenByWord } from "../ui/driverRowLogic";
 import { askedOf, askedWords } from "../ui/whoDrivesLogic";
 import { LATE_BADGE, proposalLine, requestView } from "./approvalLogic";
 import { ReviewingLine } from "./approvers";
+import { RequestStatusPill } from "./requestParts";
 import { timelineSteps } from "./requestLogic";
 import { DEFAULT_REQUESTS_FILTER, filterTitle, REQUEST_FILTER_KEYS, REQUEST_FILTERS, requestsArgs, requestsEmptyText, REQUESTS_KEY, type RequestsFilter } from "./requestsListLogic";
 
@@ -107,11 +108,12 @@ export function Requests() {
                               return who ? <div className="sub" data-testid="row-asked">{who}</div> : null;
                             })()}</td>
                             <td data-label="Status">
-                              <Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>
+                              <RequestStatusPill status={q.status} />
                               {q.late && <> <Pill tone="bad">{LATE_BADGE}</Pill></>}
                               {(() => {
                                 const last = timelineSteps(q).filter((s) => s.done).pop();
-                                const words = q.one_step ? "booked directly" : last && last.label !== "Sent" ? `${last.label}${last.at ? ` · ${last.at}` : ""}` : last?.at ? `sent ${last.at}` : "";
+                                const at = datesInWords(last?.at);
+                                const words = q.one_step ? "booked directly" : last && last.label !== "Sent" ? `${last.label}${at ? ` · ${at}` : ""}` : at ? `sent ${at}` : "";
                                 return words ? <div className="sub" style={{ marginTop: 4 }}>{words}</div> : null;
                               })()}
                               {/* Hotfix 2 (K): another approver has its decide page open. */}

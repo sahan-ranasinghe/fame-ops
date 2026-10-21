@@ -115,9 +115,12 @@ describe("the words", () => {
   });
 
   it("Removed by whom and when, the year only when it is not this one", () => {
-    expect(removedLine("2026-10-17 10:05 by Sahan", "2026")).toBe("Removed by Sahan 17 Oct 10:05");
-    expect(removedLine("2025-12-30 09:00", "2026")).toBe("Removed 30 Dec 2025 09:00");
-    expect(removedLine("just now", "2026")).toBe("Removed just now");
+    // Dates in words (Round 3 A4), on 21 October 2026 in Colombo.
+    const now = new Date("2026-10-21T04:30:00Z");
+    expect(removedLine("2026-10-17 10:05 by Sahan", { now })).toBe("Removed by Sahan Sat 17 Oct 10:05");
+    expect(removedLine("2026-10-20 10:05 by Sahan", { now })).toBe("Removed by Sahan yesterday 10:05");
+    expect(removedLine("2025-12-30 09:00", { now })).toBe("Removed Tue 30 Dec 2025 09:00");
+    expect(removedLine("just now", { now })).toBe("Removed just now");
   });
 });
 

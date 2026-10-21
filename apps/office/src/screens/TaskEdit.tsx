@@ -37,6 +37,7 @@ import { taskTone } from "./taskDetailLogic";
 import { leaveIn, TaskSummary } from "./TaskSummary";
 import { TripDayPicker } from "../ui/DayPicker";
 import { ChoiceChip } from "../ui/Select";
+import { whenText } from "../lib/when";
 
 interface EditForm {
   driver: string;
@@ -98,10 +99,10 @@ export function needsDriverText(t: TaskDetail["task"]): string | null {
   if (t.declined || t.needs_driver?.reason === "declined") {
     const d = t.declined;
     const reason = d?.reason_text ?? t.needs_driver?.reason_text ?? d?.reason ?? "no reason given";
-    return `${who} declined${d?.after_accept ? " after accepting" : ""}${d?.at ? ` at ${d.at}` : ""}: ${reason}${d?.note ? ` · “${d.note}”` : ""}. Give it to another driver, or cancel it.`;
+    return `${who} declined${d?.after_accept ? " after accepting" : ""}${d?.at ? ` ${whenText(d.at, { inline: true })}` : ""}: ${reason}${d?.note ? ` · “${d.note}”` : ""}. Give it to another driver, or cancel it.`;
   }
   if (t.needs_driver) {
-    return `${who} hasn’t accepted it${t.needs_driver.since ? ` (needs a driver since ${t.needs_driver.since})` : ""}. Give it to another driver, or call ${who.split(" ")[0]}.`;
+    return `${who} hasn’t accepted it${t.needs_driver.since ? ` (needs a driver since ${whenText(t.needs_driver.since, { inline: true })})` : ""}. Give it to another driver, or call ${who.split(" ")[0]}.`;
   }
   return null;
 }

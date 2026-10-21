@@ -1040,7 +1040,8 @@
       "search": "Title, place, driver or plate",
       "filterShow": "Show",
       "noneMatch": "Nothing for “{search}”.",
-      "noneInFilter": "No trips under this filter."
+      "noneInFilter": "No trips under this filter.",
+      "expired": "Expired"
     },
     "request": {
       "title": "Approve a request",
@@ -1318,7 +1319,16 @@
       "language": "Language",
       "officePhone": "Office phone",
       "officePhoneNone": "Not set · Settings → Fleet on the office site",
-      "privacyHint": "What the app collects"
+      "privacyHint": "What the app collects",
+      "licence": "Driving licence",
+      "licenceNo": "Licence number",
+      "licenceExpires": "Expires {date}",
+      "licenceNoExpiry": "No expiry date",
+      "licenceExpiryLabel": "Licence expires",
+      "licenceOnFile": "On file",
+      "licenceNone": "No licence on file",
+      "licenceExpired": "Expired",
+      "licenceDateBad": "The expiry is a day: pick it on the calendar."
     },
     "live": {
       "title": "Live",
@@ -2472,7 +2482,11 @@
       "reasonVehicle": "Vehicle problem",
       "reasonOther": "Other",
       "cancelledTitle": "Booking cancelled",
-      "withdrawnTitle": "Request withdrawn"
+      "withdrawnTitle": "Request withdrawn",
+      "status_expired": "Expired",
+      "expiredLine": "Nobody decided it in time · expired {at}",
+      "expiredLineNoTime": "Nobody decided it in time",
+      "requestAgain": "Request again"
     },
     "reminders": {
       "title": "Reminders",
@@ -2804,7 +2818,8 @@
       "notAvailable": "Not available · {detail}",
       "runningLate": "Running late {min} min · said {said}",
       "lastSeen": "Last seen {when}",
-      "lastSeenNear": "Last seen {when} near {town}"
+      "lastSeenNear": "Last seen {when} near {town}",
+      "expired": "Expired · nobody decided it in time"
     },
     "chip": {
       "sent": "Sent",
@@ -2831,7 +2846,8 @@
       "busy": "Busy",
       "off": "Off duty",
       "onDuty": "On duty",
-      "someoneElse": "Someone else"
+      "someoneElse": "Someone else",
+      "expired": "Expired"
     },
     "timeline": {
       "planned": "Planned {time}",
@@ -2916,7 +2932,13 @@
       "saveTrip": "Save trip",
       "reviewSelf": "You drive it yourself",
       "reviewOther": "{name} · someone else · {phone}",
-      "selfDriveOff": "Trips with no Fame Fleet driver are switched off: give a driver."
+      "selfDriveOff": "Trips with no Fame Fleet driver are switched off: give a driver.",
+      "licenceOnFile": "Self-drive · licence on file ✓",
+      "licenceNone": "Self-drive · no licence on file",
+      "licenceExpired": "Self-drive · licence expired",
+      "myLicenceNone": "You have no driving licence on file: the approver sees this.",
+      "myLicenceExpired": "Your driving licence on file has expired: the approver sees this.",
+      "addLicence": "Add it on My profile"
     },
     "when": {
       "day": "{day} {date} {month}",
@@ -2968,7 +2990,8 @@
       "onTaskFor": "{who} is on task {title} {window} for {name}",
       "onTaskDriver": "{who} is on task {title} {window} (driver {driver})",
       "onTaskForDriver": "{who} is on task {title} {window} for {name} (driver {driver})",
-      "savedBy": "{text} (saved by {name})"
+      "savedBy": "{text} (saved by {name})",
+      "noLicence": "{name} has no driving licence on file (self-drive)."
     },
     "why": {
       "onDuty": "On duty",
@@ -3096,5 +3119,10 @@
     "passedTitle": "Did you stop at {stop}?",
     "passedYes": "Yes, I was there",
     "passedSkip": "Skip it"
+  },
+  "date": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow"
   }
 }

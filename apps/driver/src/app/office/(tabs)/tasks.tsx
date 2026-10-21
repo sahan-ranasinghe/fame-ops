@@ -17,6 +17,7 @@ import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListSta
 import { Button, Txt } from '@/components/ui';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { colomboDate } from '@/lib/time';
+import { whenWords } from '@/lib/dateWords';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { addColumnPage, BOARD_LIMIT, type BoardColumn, columnArgs, type ColumnMore, columnView } from '@/office/taskHistoryLogic';
@@ -114,7 +115,7 @@ export default function TasksTab() {
                 {i > 0 && <Divider />}
                 <Row
                   title={x.title}
-                  line={`${x.start} · ${x.line}`}
+                  line={`${whenWords(t, x.start)} · ${x.line}`}
                   right={<Button kind="dark" label={t('office.home.giveDriver')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: x.task_id } })} style={{ minHeight: 48, backgroundColor: colors.red, paddingHorizontal: 14 }} />}
                   onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: x.task_id } })}
                 />
