@@ -31,7 +31,7 @@ import { shortDate } from '@/lib/durations';
 import { MAX_DAYS } from '@/lib/availability';
 import { addDays, colomboDate } from '@/lib/time';
 import { askTargetsFromBoard } from '@/office/askLogic';
-import { boardArgs, boardChoice, boardFilterDefs, boardPill, entryParts, heldPlate, PARTS, REASONS, rowLines, type UnavailabilityForm, unavailabilityInput, weekDays, weekGrid, type WeekRow } from '@/office/driversLogic';
+import { attendanceGroups, attendanceLine, boardArgs, boardChoice, boardFilterDefs, boardPill, entryParts, heldPlate, PARTS, REASONS, rowLines, type UnavailabilityForm, unavailabilityInput, weekDays, weekGrid, type WeekRow } from '@/office/driversLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { BoardDriver, DriversBoard, FleetError, SetUnavailabilityResult, UnavailabilityList, UnavailableEntry, UnavailablePart, UnavailableReason } from '@/office/types';
 import { Avatar, DarkHeader, ErrorNotice, ListFailed, Screen, StatusChip } from '@/office/ui';
@@ -42,7 +42,7 @@ const EVERY_MS = 60_000;
 const SEARCH_DEBOUNCE_MS = 500;
 const DOT: Record<'blue' | 'green' | 'red' | 'muted', string> = { blue: colors.blue, green: colors.green, red: colors.red, muted: '#9aa0a8' };
 
-type ViewKey = 'now' | 'week';
+type ViewKey = 'now' | 'attendance' | 'week';
 
 export default function DriversTab() {
   const { t, tList } = useApp();
@@ -111,7 +111,7 @@ export default function DriversTab() {
       <DarkHeader above={subtitle} title={t('office.drivers.title')}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 10 }}>
           <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
-            {(['now', 'week'] as const).map((k) => (
+            {(['now', 'attendance', 'week'] as const).map((k) => (
               <ChoiceChip key={k} onDark label={t(`office.drivers.${k}`)} selected={view === k} onPress={() => setView(k)} />
             ))}
           </View>
@@ -133,6 +133,16 @@ export default function DriversTab() {
         {problem && <ErrorNotice error={problem} onRetry={() => { if (lastRemove) void remove(lastRemove); else setProblem(null); }} />}
         {view === 'now' && board.data && drivers.length === 0 && <ListEmpty text={search ? t('office.drivers.noneMatch', { search }) : filter === 'all' ? t('office.drivers.empty') : t('office.drivers.noneInFilter')} />}
         {view === 'now' && drivers.map((d) => <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} />)}
+
+        {/* Round 2b: Today's attendance (Samsara's driver day): four groups from the day's duty sessions; Call on each row. */}
+        {view === 'attendance' && board.data && attendanceGroups(drivers).map((g) => (
+          <View key={g.state} style={{ gap: 8 }} testID={`attendance-${g.state}`}>
+            <Txt variant="label" color={colors.muted}>{`${t(`office.attendance.${g.state}`)} · ${g.drivers.length}`.toUpperCase()}</Txt>
+            {g.drivers.length === 0 ? <Txt variant="small">{t('office.attendance.nobody')}</Txt> : g.drivers.map((d) => (
+              <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} line={attendanceLine(d, t)} />
+            ))}
+          </View>
+        ))}
 
         {view === 'week' && (
           <>
@@ -184,10 +194,12 @@ export default function DriversTab() {
 }
 
 /** A driver's row (design 12): the avatar with the state's dot, "Name · [plate]", the two lines, Call or the not-available pill. */
-function DriverRow({ d, onPress }: { d: BoardDriver; onPress: () => void }) {
+function DriverRow({ d, onPress, line }: { d: BoardDriver; onPress: () => void; line?: string }) {
   const { t } = useApp();
   const pill = boardPill(d);
-  const [line1, line2] = rowLines(d, t);
+  const lines = rowLines(d, t);
+  // The attendance view's own line ("Started 07:12") instead of the board's.
+  const [line1, line2] = line ? [line, undefined] : lines;
   const plate = heldPlate(d);
   const call = d.links?.call;
   return (

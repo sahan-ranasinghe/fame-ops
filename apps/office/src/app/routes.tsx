@@ -38,6 +38,7 @@ import { Tasks } from "../screens/Tasks";
 import { TaskStops } from "../screens/TaskStops";
 import { FleetSettings, FleetSettingsRoute } from "../screens/settings/FleetSettings";
 import AppErrorsPage from "../screens/settings/AppErrors";
+import ActivityLogPage from "../screens/settings/ActivityLog";
 import { MyProfile } from "../screens/settings/MyProfile";
 import { UserForm } from "../screens/settings/UserForm";
 import { UserManage } from "../screens/settings/UserManage";
@@ -183,6 +184,8 @@ export const routes: RouteObject[] = [
       // Hotfix O2-H2 (Part 2): each section of Fleet settings on its own page.
       { path: "settings/fleet/:section", element: <Guard need={["users"]}><FleetSettingsRoute /></Guard> },
       { path: "settings/app-errors", element: <Guard need={["users"]}><AppErrorsPage /></Guard> },
+      // Round 2b: who changed what and when (activity_log).
+      { path: "settings/activity", element: <Guard need={["users"]}><ActivityLogPage /></Guard> },
       { path: "settings/import-sites", element: <Guard need={["vehicles"]}><ImportRoute /></Guard> },
       { path: "settings/notifications", element: <Suspense fallback={<div className="loading">Opening notifications…</div>}><Notifications /></Suspense> },
       // Hotfix O2-H2 (Part 2): the sounds and each group of events on their own page (a static segment outranks :group).

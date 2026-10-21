@@ -14,8 +14,8 @@ export const BOARD_FILTERS: [BoardFilter, string][] = [
 ];
 export const BOARD_FILTER_KEYS: readonly BoardFilter[] = BOARD_FILTERS.map(([k]) => k);
 
-export type BoardView = "now" | "week";
-export const BOARD_VIEWS: readonly BoardView[] = ["now", "week"];
+export type BoardView = "now" | "attendance" | "week";
+export const BOARD_VIEWS: readonly BoardView[] = ["now", "attendance", "week"];
 
 /** The server's matching rule for a filter (tools/board.ts). */
 export function matchesFilter(d: Pick<BoardDriver, "free_now" | "status">, f: BoardFilter): boolean {
@@ -164,3 +164,38 @@ export function weekGrid(board: Pick<DriversBoard, "week"> | undefined, shown: P
 
 /** "09:00–11:30 Team drop", or "09:00 Team drop" with no end. */
 export const weekTaskText = (t: WeekTask) => `${t.time}${t.end ? `–${t.end}` : ""} ${t.title}`;
+
+/**
+ * Round 2b: Today's attendance (for the coordinators): every active driver in four groups, in this order: on duty, not
+ * started yet, finished, on leave; each row's words ("Started 07:12", "Started 07:12 · finished 17:40", "Usually starts
+ * 07:40", "Not available today").
+ */
+export const ATTENDANCE_GROUPS = [
+  ["on_duty", "On duty"],
+  ["not_started", "Not started yet"],
+  ["finished", "Finished for today"],
+  ["on_leave", "On leave"],
+] as const;
+export type AttendanceState = typeof ATTENDANCE_GROUPS[number][0];
+
+export function attendanceOf(d: Pick<BoardDriver, "attendance">): AttendanceState {
+  return d.attendance?.state ?? "not_started";
+}
+
+export function attendanceLine(d: Pick<BoardDriver, "attendance" | "usual_start">): string {
+  const a = d.attendance;
+  switch (attendanceOf(d)) {
+    case "on_duty":
+      return a?.started ? `Started ${a.started}` : "On duty";
+    case "finished":
+      return [a?.started ? `Started ${a.started}` : "", a?.finished ? `finished ${a.finished}` : "Finished"].filter(Boolean).join(" · ");
+    case "on_leave":
+      return "Not available today";
+    default:
+      return d.usual_start ? `Usually starts ${d.usual_start}` : "Not started yet";
+  }
+}
+
+export function attendanceGroups<D extends Pick<BoardDriver, "attendance">>(drivers: readonly D[]): { state: AttendanceState; label: string; drivers: D[] }[] {
+  return ATTENDANCE_GROUPS.map(([state, label]) => ({ state, label, drivers: drivers.filter((d) => attendanceOf(d) === state) }));
+}

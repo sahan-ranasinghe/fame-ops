@@ -37,6 +37,13 @@ export const driversBoard = tool({
     };
     const { rows } = await driverRows(db, refs, w, now, null, undefined, { presence: true });
     const byName = new Map(refs.employees.map((e) => [e.username ?? e.name, e]));
+    // Round 2b: today's attendance from the duty sessions (no new tracking): the first start, the last finish.
+    const dayStart = dayRange(today).from;
+    const sessions = unwrap(
+      await db.from("duty_sessions").select("employee_id, started_at, ended_at")
+        .or(`started_at.gte.${dayStart},ended_at.is.null,ended_at.gte.${dayStart}`).order("started_at").limit(5000),
+      "duty sessions",
+    );
     const all = rows.map((r) => {
       const e = byName.get(r.username ?? r.name);
       return {
@@ -52,6 +59,7 @@ export const driversBoard = tool({
         current_task: r.current_task,
         licence: r.licence,
         links: personLinks(e?.phone, e?.whatsapp),
+        attendance: attendanceOf(sessions.filter((x) => x.employee_id === e?.id), r.now_status.kind === "not_available", dayStart),
       };
     });
     const matches = (row: typeof all[number], f: Filter) =>
@@ -116,3 +124,26 @@ export const driversBoard = tool({
     };
   },
 });
+
+/**
+ * Round 2b: a driver's attendance today (Today's attendance for the coordinators): on duty (a duty session is open),
+ * finished (worked today and clocked out), on leave (not available now), or not started yet; with the first start and the
+ * last finish of the day (Colombo HH:MM).
+ */
+export function attendanceOf(
+  sessions: readonly { started_at: string; ended_at: string | null }[],
+  onLeave: boolean,
+  dayStart: string,
+): { state: "on_duty" | "finished" | "on_leave" | "not_started"; started?: string; finished?: string } {
+  const from = Date.parse(dayStart);
+  const today = sessions.filter((x) => x.ended_at === null || Date.parse(x.ended_at) >= from);
+  const open = today.some((x) => x.ended_at === null);
+  const firstStart = today.length ? today.map((x) => Math.max(Date.parse(x.started_at), from)).reduce((a, b) => Math.min(a, b)) : null;
+  const started = firstStart !== null ? colomboTime(new Date(firstStart).toISOString()) : undefined;
+  if (open) return { state: "on_duty", started };
+  if (today.length) {
+    const lastEnd = today.map((x) => Date.parse(x.ended_at!)).reduce((a, b) => Math.max(a, b));
+    return { state: "finished", started, finished: colomboTime(new Date(lastEnd).toISOString()) };
+  }
+  return { state: onLeave ? "on_leave" : "not_started" };
+}

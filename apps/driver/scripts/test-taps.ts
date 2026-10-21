@@ -134,6 +134,8 @@ console.log('\nCards and rows open their place');
   // Every Row in Office mode has an onPress, except the informational ones listed here (a fact, not a thing).
   const INFO = new Set([
     'office/(tabs)/more.tsx:me',
+    // Round 2b: an Activity log entry is a record of what happened (the site's log is the same: no page per entry).
+    'office/people/activity.tsx:[e.action, e.about].filter(Boolean).join',
   ]);
   const files: string[] = [];
   const walk = (d: string) => { for (const e of readdirSync(d)) { const p = join(d, e); if (statSync(p).isDirectory()) walk(p); else if (e.endsWith('.tsx')) files.push(p); } };

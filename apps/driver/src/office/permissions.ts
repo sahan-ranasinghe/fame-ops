@@ -129,6 +129,8 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   update_settings: USERS,
   routing_usage: USERS,
   list_app_errors: USERS,
+  // Round 2b: the Activity log (office_audit's changes) is the account keepers' (Admins).
+  activity_log: USERS,
   register_vehicle: VEH,
   update_vehicle: VEH,
   add_rental_company: VEH,

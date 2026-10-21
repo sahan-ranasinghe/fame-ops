@@ -33,9 +33,35 @@ export const boardChoice = (values: FilterValues): BoardFilter =>
  * drivers_board's input: Now with the filter chosen, Week every driver (no filter); the words searched for (the tool's
  * own `search`: the name, the username, the plate) only when there are any.
  */
-export function boardArgs(view: 'now' | 'week', filter: BoardFilter, search = ''): Record<string, unknown> {
+export function boardArgs(view: 'now' | 'attendance' | 'week', filter: BoardFilter, search = ''): Record<string, unknown> {
   const words = search.trim();
   return { ...(view === 'now' ? { filter } : {}), ...(words ? { search: words } : {}) };
+}
+
+/**
+ * Round 2b: Today's attendance (for the coordinators; the site's boardLogic has the same rules): every driver in four groups
+ * in this order, each row's words from the day's duty sessions.
+ */
+export const ATTENDANCE_STATES = ['on_duty', 'not_started', 'finished', 'on_leave'] as const;
+export type AttendanceState = typeof ATTENDANCE_STATES[number];
+export const attendanceOf = (d: Pick<BoardDriver, 'attendance'>): AttendanceState => d.attendance?.state ?? 'not_started';
+
+export function attendanceLine(d: Pick<BoardDriver, 'attendance' | 'usual_start'>, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  const a = d.attendance;
+  switch (attendanceOf(d)) {
+    case 'on_duty':
+      return a?.started ? t('office.attendance.started', { time: a.started }) : t('office.attendance.on_duty');
+    case 'finished':
+      return a?.started && a.finished ? t('office.attendance.startedFinished', { start: a.started, end: a.finished }) : t('office.attendance.finished');
+    case 'on_leave':
+      return t('office.attendance.leaveLine');
+    default:
+      return d.usual_start ? t('office.attendance.usually', { time: d.usual_start }) : t('office.attendance.not_started');
+  }
+}
+
+export function attendanceGroups<D extends Pick<BoardDriver, 'attendance'>>(drivers: readonly D[]): { state: AttendanceState; drivers: D[] }[] {
+  return ATTENDANCE_STATES.map((state) => ({ state, drivers: drivers.filter((d) => attendanceOf(d) === state) }));
 }
 
 export type BoardTone = 'blue' | 'green' | 'red' | 'muted';

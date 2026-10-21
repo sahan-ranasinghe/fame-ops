@@ -1977,6 +1977,8 @@ export interface BoardDriver {
   current_task?: { title: string; ends_planned?: string; ends_live?: string };
   licence: { chip: "ok" | "orange" | "red" | "not set"; expiry?: string };
   links?: PersonLinks;
+  /** Round 2b: today's attendance (the duty sessions): on duty, finished, on leave or not started yet, with the times. */
+  attendance?: { state: "on_duty" | "finished" | "on_leave" | "not_started"; started?: string; finished?: string };
 }
 
 export type BoardFilter = "all" | "free_now" | "on_task" | "off_duty" | "not_available";
@@ -2126,4 +2128,27 @@ export interface FleetError {
   status?: number;
   /** The call was a write (office/api.ts): never repeated on its own; the person may try again. */
   write?: boolean;
+}
+
+/** Round 2b: activity_log(from?, to?, person?, limit?, cursor?): the changes, newest first (users). */
+export interface ActivityEntry {
+  id: number;
+  /** "2026-10-21 10:42" */
+  at: string;
+  person?: string;
+  /** "Website or app", "Claude", "Driver app" */
+  channel?: string;
+  /** The action in words: the tool's title ("Create an office user") or the driver app's event. */
+  action: string;
+  /** What it was about: a name, an e-mail, a plate, a title. */
+  about?: string;
+  outcome: "done" | "refused" | "failed" | "running";
+  /** A refusal's sentence. */
+  reason?: string;
+}
+export interface ActivityLog extends Paged {
+  from: string;
+  to: string;
+  count: number;
+  entries: ActivityEntry[];
 }

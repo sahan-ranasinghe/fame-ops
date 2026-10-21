@@ -82,3 +82,19 @@ describe("the week", () => {
     expect(weekGrid(undefined, [KAMAL], "2026-10-20")).toBeNull();
   });
 });
+
+describe("Round 2b: today's attendance", () => {
+  it("four groups in order, each driver once, with the times in words", async () => {
+    const { attendanceGroups, attendanceLine } = await import("./boardLogic");
+    const ds = [
+      { name: "A", attendance: { state: "on_duty" as const, started: "07:12" } },
+      { name: "B", usual_start: "07:40" },
+      { name: "C", attendance: { state: "finished" as const, started: "07:00", finished: "17:40" } },
+      { name: "D", attendance: { state: "on_leave" as const } },
+    ];
+    expect(attendanceGroups(ds).map((g) => [g.label, g.drivers.map((d) => d.name)])).toEqual([
+      ["On duty", ["A"]], ["Not started yet", ["B"]], ["Finished for today", ["C"]], ["On leave", ["D"]],
+    ]);
+    expect(ds.map((d) => attendanceLine(d))).toEqual(["Started 07:12", "Usually starts 07:40", "Started 07:00 · finished 17:40", "Not available today"]);
+  });
+});

@@ -70,6 +70,7 @@ import {
 } from "./tools/notifications.ts";
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
 import { listAppErrors } from "./tools/appErrors.ts";
+import { makeActivityLog } from "./tools/activity.ts";
 import {
   cancelTask,
   createTask,
@@ -92,6 +93,9 @@ import {
   vehicleDocuments,
   vehicleDocumentUploadUrl,
 } from "./tools/media.ts";
+
+// Round 2b: the Activity log reads every tool's title and whether it writes (TOOLS, read when it runs).
+const activityLog = makeActivityLog(() => TOOLS);
 
 export const TOOLS: AnyTool[] = [
   fleetOverview,
@@ -199,6 +203,8 @@ export const TOOLS: AnyTool[] = [
   driversBoard,
   askDrivers,
   askAnswers,
+  // Round 2b: who changed what and when (users).
+  activityLog,
 ];
 
 export { WEB_ONLY_TOOLS } from "./tools/media.ts";

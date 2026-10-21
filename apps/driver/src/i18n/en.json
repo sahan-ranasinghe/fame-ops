@@ -1009,7 +1009,9 @@
       "quickSettings": "Quick settings",
       "quickSettingsLine": "approval, vehicle on the day, personal trips, clock-out",
       "search": "Find a screen",
-      "noMatch": "Nothing called “{text}”"
+      "noMatch": "Nothing called “{text}”",
+      "activity": "Activity log",
+      "activityLine": "Who changed what, and when"
     },
     "trips": {
       "backBy": "back by",
@@ -1903,7 +1905,8 @@
       "search": "Name, username or plate",
       "filterLabel": "Status",
       "noneMatch": "Nobody matches “{search}”.",
-      "newTaskFor": "New task for {name}"
+      "newTaskFor": "New task for {name}",
+      "attendance": "Attendance"
     },
     "vehicles": {
       "title": "Vehicles",
@@ -2830,6 +2833,29 @@
       "skip_other": "Other",
       "now": "Now",
       "live": "Live"
+    },
+    "attendance": {
+      "on_duty": "On duty",
+      "not_started": "Not started yet",
+      "finished": "Finished for today",
+      "on_leave": "On leave",
+      "started": "Started {time}",
+      "startedFinished": "Started {start} · finished {end}",
+      "usually": "Usually starts {time}",
+      "leaveLine": "Not available today",
+      "nobody": "Nobody."
+    },
+    "activity": {
+      "title": "Activity log",
+      "sub": "Who changed what, and when",
+      "search": "A person: name, e-mail or a driver's username",
+      "empty": "No changes on these days.",
+      "emptyPerson": "No changes on these days by this person.",
+      "done": "Done",
+      "refused": "Refused",
+      "failed": "Failed",
+      "running": "In progress",
+      "loading": "Loading the activity…"
     }
   },
   "patterns": {

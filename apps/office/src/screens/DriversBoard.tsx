@@ -27,6 +27,8 @@ import {
   BOARD_FILTER_KEYS,
   BOARD_FILTERS,
   BOARD_VIEWS,
+  attendanceGroups,
+  attendanceLine,
   boardCounts,
   boardEmpty,
   type BoardView,
@@ -98,7 +100,7 @@ export function DriversBoard() {
         filters={[pairsDef("filter", "Show", BOARD_FILTERS, "all", q.data ? counts : undefined)]}
         values={{ filter }}
         onChange={(v) => setFilter(((v.filter as string) || "all") as BoardFilter)}
-        extra={<Segmented label="View" options={[["now", "Now"], ["week", "Week"]] as const} value={view} onChange={setView} />}
+        extra={<Segmented label="View" options={[["now", "Now"], ["attendance", "Attendance"], ["week", "Week"]] as const} value={view} onChange={setView} />}
       />
       {ask && (
         <p className="ask-status sub" data-testid="board-ask-status">
@@ -116,7 +118,26 @@ export function DriversBoard() {
       )}
       {q.loading && <div className="card"><SkeletonRows label="Loading the drivers…" /></div>}
       {q.err && !q.data && <Notice tone="bad">{errText(q.err)[0]}</Notice>}
-      {q.data && !week && (
+      {/* Round 2b: Today's attendance (Samsara's driver day, from the duty sessions; no new tracking). */}
+      {q.data && view === "attendance" && (
+        <div className="stack" data-testid="attendance" aria-busy={q.updating || undefined}>
+          {attendanceGroups(shown).map((g) => (
+            <div className="card" key={g.state} data-testid={`attendance-${g.state}`}>
+              <ListHeader title={g.label} count={g.drivers.length} />
+              {g.drivers.length ? (
+                <div className="rows board-rows">
+                  {g.drivers.map((d) => (
+                    <DriverRow key={driverKey(d)} d={{ ...d, now_status: d.status }} phone={toPhoneLinks(d.links)} testId="attendance-row" contactTestId="attendance-contact">
+                      <span className="sub drow-line" data-testid="attendance-line">{attendanceLine(d)}</span>
+                    </DriverRow>
+                  ))}
+                </div>
+              ) : <EmptyLine>Nobody.</EmptyLine>}
+            </div>
+          ))}
+        </div>
+      )}
+      {q.data && view === "now" && (
         <div className="card" data-testid="board-list" aria-busy={q.updating || undefined}>
           <ListHeader title={filter === "all" ? "Drivers" : BOARD_FILTERS.find(([k]) => k === filter)?.[1] ?? "Drivers"} count={shown.length} updating={q.updating} />
           {shown.length ? (
