@@ -12,6 +12,10 @@ alter table public.vehicle_requests add constraint vehicle_requests_status_check
   check (status in ('waiting', 'approved', 'changed', 'declined', 'cancelled', 'expired'));
 alter table public.vehicle_requests add constraint vehicle_requests_expired_check
   check ((status = 'expired') = (expired_at is not null));
+-- Nobody decided an expired request: like a waiting one it has no decided_at (the schema's rule said only waiting).
+alter table public.vehicle_requests drop constraint vehicle_requests_decided_at_check;
+alter table public.vehicle_requests add constraint vehicle_requests_decided_at_check
+  check ((status in ('waiting', 'expired')) = (decided_at is null));
 
 alter table public.request_events drop constraint request_events_action_check;
 alter table public.request_events add constraint request_events_action_check

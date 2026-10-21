@@ -705,100 +705,6 @@ r = tool("update_settings", {"key": "self_drive_allowed", "value": "yes"}, expec
 check("true or false" in r, "the switch takes only true or false", r)
 tool("update_settings", {"key": "self_drive_allowed", "value": True})
 
-# Round 3 (21 October 2026): who drives: a driver, the person asking ("I'll drive myself"), or someone else (a name and a phone).
-print("\n== 2r3. Round 3: who drives ==")
-re6 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "08:00", "route_to": "Galle", "driven_by": "self"})
-check(re6["request"].get("driven_by") == "self" and re6["request"]["driver_required"] is False and re6["request"]["status"] == "waiting",
-      "a request where the asker drives it themselves (driver_required false)", json.dumps(re6["request"])[:300])
-ap6 = tool("decide_request", {"request_id": re6["request"]["id"], "decision": "approve", "vehicle": "ph2087"})
-T6 = ap6["task_id"]
-check(ap6["driver"] == "Pool Custodian" and ap6.get("driven_by") == "self" and ap6["sent"] == "Drives themselves · no app"
-      and psql(f"select driven_by || '|' || (employee_id = '{CUST}')::text from tasks where id = '{T6}'") == "self|true",
-      "approved with a pool vehicle: the asker drives it, on their own account", json.dumps(ap6)[:300])
-b6 = tool("task_board", {"date": day(5)})
-check(any(c["id"] == T6 and c.get("driven_by") == "self" and c["status"] == "Drives themselves · no app" for c in b6["assigned"]),
-      "the board: drives themselves, no app", json.dumps(b6["assigned"])[:300])
-r = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "10:00", "route_to": "Galle", "driven_by": "other", "driver_name": "Nimal Perera"}, expect_error=True)
-check("give their phone" in r, "someone else needs a phone", r)
-re7 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "10:00", "route_to": "Matara", "driven_by": "other",
-                              "driver_name": "Nimal Perera", "driver_phone": "077 123 4567"})
-check(re7["request"].get("driven_by") == "other" and re7["request"].get("driver_name") == "Nimal Perera" and re7["request"].get("driver_phone") == "+94771234567",
-      "a request where someone else drives: their name and phone, stored +94", json.dumps(re7["request"])[:300])
-r = tool("decide_request", {"request_id": re7["request"]["id"], "decision": "approve"}, expect_error=True)
-check("vehicle" in r, "approving someone else's trip needs a vehicle", r)
-ap7 = tool("decide_request", {"request_id": re7["request"]["id"], "decision": "approve", "vehicle": "car1182"})
-T7 = ap7["task_id"]
-td7 = tool("task_detail", {"task_id": T7})["task"]
-check(td7["driver"] == "Nimal Perera" and td7.get("driven_by") == "other" and "driver_photo_url" not in td7
-      and (td7.get("driver_phone") or {}).get("call") == "tel:+94771234567" and td7["status_line"] == "Someone else drives · no app"
-      and psql(f"select employee_id = '{CUST}' from tasks where id = '{T7}'") == "t",
-      "someone else drives: the task shows their name and phone, never the account behind it", json.dumps(td7)[:400])
-lr7 = [c for c in tool("list_requests", {"status": "approved"})["requests"] if c["id"] == re7["request"]["id"]]
-check(lr7 and lr7[0]["assigned"]["driver"] == "Nimal Perera" and lr7[0]["assigned"].get("driven_by") == "other" and "photo_url" not in lr7[0]["assigned"],
-      "the request card's outcome: someone else drives", json.dumps(lr7)[:300])
-re8 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "13:00", "route_to": "Kandy", "driven_by": "self"})
-ap8 = tool("decide_request", {"request_id": re8["request"]["id"], "decision": "approve", "driver": "kasun.s"})
-check(ap8["driver"] == "Kasun Silva" and "driven_by" not in ap8 and psql(f"select driven_by from tasks where id = '{ap8['task_id']}'") == "driver",
-      "a driver named by the approver makes it a driver's trip", json.dumps(ap8)[:300])
-rt6 = tool("reassign_task", {"task_id": T6, "driver": "nuwan.p"})
-check(psql(f"select driven_by || '|' || coalesce(driver_name, '-') from tasks where id = '{T6}'") == "driver|-", "reassign_task gives a self-driven trip to a driver", json.dumps(rt6)[:200])
-if CHANNEL == "api":
-    ct9 = tool("create_task", {"title": "Someone else drives", "date": day(5), "start_time": "15:00", "driven_by": "other", "driver_name": "Sunil Fernando",
-                               "driver_phone": "0712345678", "vehicle": "ph2087", "pickup": "Head office", "dropoff": "Kelaniya"})
-    check(ct9["driver"] == "Sunil Fernando" and ct9.get("driven_by") == "other" and ct9.get("driver_phone") == "+94712345678",
-          "create_task: someone else drives (on the person assigning it)", json.dumps(ct9)[:300])
-    r = tool("create_task", {"title": "Myself", "date": day(5), "start_time": "16:00", "driven_by": "self", "pickup": "Head office", "dropoff": "Kelaniya"}, expect_error=True)
-    check("name the vehicle" in r, "create_task: I'll drive myself needs a plate", r)
-else:
-    r = tool("create_task", {"title": "Myself", "date": day(5), "start_time": "16:00", "driven_by": "self", "vehicle": "ph2087", "pickup": "Head office", "dropoff": "Kelaniya"}, expect_error=True)
-    check("own sign-in" in r, "the shared key is no person: it cannot drive itself", r)
-    r = tool("create_task", {"title": "Someone", "date": day(5), "start_time": "16:00", "driven_by": "other", "driver_name": "Sunil", "driver_phone": "0712345678",
-                             "vehicle": "ph2087", "pickup": "Head office", "dropoff": "Kelaniya"}, expect_error=True)
-    check("person who books it" in r, "… nor book someone else to drive", r)
-tool("update_settings", {"key": "self_drive_allowed", "value": False})
-r = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "17:00", "route_to": "Kandy", "driven_by": "self"}, expect_error=True)
-check("switched off" in r, "with self-drive off, 'I'll drive myself' is refused", r)
-tool("update_settings", {"key": "self_drive_allowed", "value": True})
-# The missed task says so (never "Cancelled:").
-psql(f"update tasks set status = 'missed' where id = '{ap8['task_id']}'")
-check(tool("task_detail", {"task_id": ap8["task_id"]})["task"]["status_line"].startswith("Missed · not started (leave by "),
-      "a missed task's line: Missed · not started (Round 3)")
-# The free drivers carry their photo and vehicle (the driver-first card).
-fr = tool("suggest_vehicles", {"date": day(5), "time": "20:00"})["drivers_free"]
-check(fr and all(d.get("username") and set(d) <= {"name", "username", "photo_url", "vehicle"} for d in fr)
-      and all(d["vehicle"]["source"] in ("on_duty", "regular") for d in fr if "vehicle" in d),
-      "suggest_vehicles' free drivers: name, username, photo and vehicle (held or regular)", json.dumps(fr)[:300])
-# The Activity log hides routine actions unless asked.
-tool("watch_drivers", {"drivers": ["kasun.s"]})
-quiet = tool("activity_log", {"limit": 100})["entries"]
-loud = tool("activity_log", {"limit": 100, "include_routine": True})["entries"]
-check(not any(e.get("routine") for e in quiet) and any(e.get("routine") for e in loud) and len(loud) > len(quiet),
-      "the Activity log: routine actions (watching drivers) only with include_routine", f"{len(quiet)} {len(loud)}")
-# Round 3, Part A 6: a request still waiting after its day expires (the job); it is out of waiting and cannot be decided.
-re10 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "18:00", "route_to": "Jaffna"})
-psql(f"update vehicle_requests set needed_at = now() - interval '2 days' where id = '{re10['request']['id']}'")
-check(psql("select public.expire_requests()") != "0", "expire_requests expires a request whose day is over")
-ex = [c for c in tool("list_requests", {"status": "expired"})["requests"] if c["id"] == re10["request"]["id"]]
-check(ex and ex[0]["status"] == "expired" and ex[0].get("expired") and ex[0]["timeline"].get("expired")
-      and not any(c["id"] == re10["request"]["id"] for c in tool("list_requests", {})["requests"]),
-      "an expired request: its own status and time, out of the waiting list", json.dumps(ex)[:300])
-r = tool("decide_request", {"request_id": re10["request"]["id"], "decision": "approve", "driver": "kasun.s"}, expect_error=True)
-check("expired" in r, "an expired request cannot be approved", r)
-# Round 3, Part A 5: a self-driven request carries the asker's licence state for the approver.
-re11 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(6), "time": "08:00", "route_to": "Galle", "driven_by": "self"})
-check(re11["request"].get("self_drive_licence") == "none", "self-drive: no licence on file", json.dumps(re11["request"])[:300])
-psql(f"update employees set licence_no = 'B7654321', licence_expiry = '2030-01-01' where id = '{CUST}'")
-c11 = [c for c in tool("list_requests", {})["requests"] if c["id"] == re11["request"]["id"]]
-check(c11 and c11[0].get("self_drive_licence") == "on_file", "self-drive: licence on file once it is set", json.dumps(c11)[:200])
-psql(f"update employees set licence_no = null, licence_expiry = null where id = '{CUST}'")
-ap11 = tool("decide_request", {"request_id": re11["request"]["id"], "decision": "approve", "vehicle": "ph2087"})
-check(any("no driving licence on file" in w for w in ap11.get("warnings", [])), "approving a self-drive with no licence: a warning, not a block", json.dumps(ap11.get("warnings"))[:300])
-if CHANNEL == "api":
-    up = tool("update_my_profile", {"licence_no": "B1112223", "licence_expiry": "2029-06-30"})
-    code, me_l = http("GET", f"{API}/functions/v1/office-api/me", api_headers(API_TOKEN))
-    check(up.get("licence_no") == "B1112223" and me_l.get("licence", {}).get("state") == "on_file" and me_l["licence"].get("expiry") == "2029-06-30"
-          and psql(f"select count(*) from employee_changes where field = 'licence_no' and new_value = 'B1112223'") == "1",
-          "My profile: an office person's own licence, on /me, every change logged", json.dumps(me_l.get("licence")))
 tool("update_vehicle", {"reg_no": "WP CAR-1182", "in_garage": True})  # back in the garage: the later sections count on it
 
 # ---------------------------------------------------------------------------
@@ -3332,6 +3238,108 @@ if CHANNEL == "api":
             psql(f"update employees set active = true where id in ({ids})")
     ok, body = mcp_as(MCP_URL, "set_office_user_active", {"email": la_email, "active": False})
     check(ok, "with another admin on, the shared key may switch that admin off", body[:200])
+
+# ---------------------------------------------------------------------------
+# Round 3 last: its own driver and trips never touch the earlier sections' counts.
+# Round 3 (21 October 2026): who drives: a driver, the person asking ("I'll drive myself"), or someone else (a name and a phone).
+print("\n== 2r3. Round 3: who drives ==")
+re6 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "08:00", "route_to": "Galle", "driven_by": "self"})
+check(re6["request"].get("driven_by") == "self" and re6["request"]["driver_required"] is False and re6["request"]["status"] == "waiting",
+      "a request where the asker drives it themselves (driver_required false)", json.dumps(re6["request"])[:300])
+ap6 = tool("decide_request", {"request_id": re6["request"]["id"], "decision": "approve", "vehicle": "ph2087"})
+T6 = ap6["task_id"]
+check(ap6["driver"] == "Pool Custodian" and ap6.get("driven_by") == "self" and ap6["sent"] == "Drives themselves · no app"
+      and psql(f"select driven_by || '|' || (employee_id = '{CUST}')::text from tasks where id = '{T6}'") == "self|true",
+      "approved with a pool vehicle: the asker drives it, on their own account", json.dumps(ap6)[:300])
+b6 = tool("task_board", {"date": day(5)})
+check(any(c["id"] == T6 and c.get("driven_by") == "self" and c["status"] == "Drives themselves · no app" for c in b6["assigned"]),
+      "the board: drives themselves, no app", json.dumps(b6["assigned"])[:300])
+r = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "10:00", "route_to": "Galle", "driven_by": "other", "driver_name": "Nimal Perera"}, expect_error=True)
+check("give their phone" in r, "someone else needs a phone", r)
+re7 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "10:00", "route_to": "Matara", "driven_by": "other",
+                              "driver_name": "Nimal Perera", "driver_phone": "077 123 4567"})
+check(re7["request"].get("driven_by") == "other" and re7["request"].get("driver_name") == "Nimal Perera" and re7["request"].get("driver_phone") == "+94771234567",
+      "a request where someone else drives: their name and phone, stored +94", json.dumps(re7["request"])[:300])
+r = tool("decide_request", {"request_id": re7["request"]["id"], "decision": "approve"}, expect_error=True)
+check("vehicle" in r, "approving someone else's trip needs a vehicle", r)
+ap7 = tool("decide_request", {"request_id": re7["request"]["id"], "decision": "approve", "vehicle": "ph2087"})
+T7 = ap7["task_id"]
+td7 = tool("task_detail", {"task_id": T7})["task"]
+check(td7["driver"] == "Nimal Perera" and td7.get("driven_by") == "other" and "driver_photo_url" not in td7
+      and (td7.get("driver_phone") or {}).get("call") == "tel:+94771234567" and td7["status_line"] == "Someone else drives · no app"
+      and psql(f"select employee_id = '{CUST}' from tasks where id = '{T7}'") == "t",
+      "someone else drives: the task shows their name and phone, never the account behind it", json.dumps(td7)[:400])
+lr7 = [c for c in tool("list_requests", {"status": "approved"})["requests"] if c["id"] == re7["request"]["id"]]
+check(lr7 and lr7[0]["assigned"]["driver"] == "Nimal Perera" and lr7[0]["assigned"].get("driven_by") == "other" and "photo_url" not in lr7[0]["assigned"],
+      "the request card's outcome: someone else drives", json.dumps(lr7)[:300])
+# A driver of this section's own, so the later sections' drivers keep their task counts.
+r3u = f"r3.{uuid.uuid4().hex[:5]}"
+tool("create_driver", {"name": "Ravi Three", "code": f"R3{r3u[-5:]}", "username": r3u, "pin": "583920", "phone": f"+94 71 33{int(r3u[-5:], 16) % 100000:05d}"})
+re8 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "13:00", "route_to": "Kandy", "driven_by": "self"})
+ap8 = tool("decide_request", {"request_id": re8["request"]["id"], "decision": "approve", "driver": r3u, "vehicle": "ph2087"})
+check(ap8["driver"] == "Ravi Three" and "driven_by" not in ap8 and psql(f"select driven_by from tasks where id = '{ap8['task_id']}'") == "driver",
+      "a driver named by the approver makes it a driver's trip", json.dumps(ap8)[:300])
+rt6 = tool("reassign_task", {"task_id": T6, "driver": r3u})
+check(psql(f"select driven_by || '|' || coalesce(driver_name, '-') from tasks where id = '{T6}'") == "driver|-", "reassign_task gives a self-driven trip to a driver", json.dumps(rt6)[:200])
+if CHANNEL == "api":
+    ct9 = tool("create_task", {"title": "Someone else drives", "date": day(5), "start_time": "15:00", "driven_by": "other", "driver_name": "Sunil Fernando",
+                               "driver_phone": "0712345678", "vehicle": "ph2087", "pickup": "Head office", "dropoff": "Kelaniya"})
+    check(ct9["driver"] == "Sunil Fernando" and ct9.get("driven_by") == "other" and ct9.get("driver_phone") == "+94712345678",
+          "create_task: someone else drives (on the person assigning it)", json.dumps(ct9)[:300])
+    r = tool("create_task", {"title": "Myself", "date": day(5), "start_time": "16:00", "driven_by": "self", "pickup": "Head office", "dropoff": "Kelaniya"}, expect_error=True)
+    check("name the vehicle" in r, "create_task: I'll drive myself needs a plate", r)
+else:
+    r = tool("create_task", {"title": "Myself", "date": day(5), "start_time": "16:00", "driven_by": "self", "vehicle": "ph2087", "pickup": "Head office", "dropoff": "Kelaniya"}, expect_error=True)
+    check("own sign-in" in r, "the shared key is no person: it cannot drive itself", r)
+    r = tool("create_task", {"title": "Someone", "date": day(5), "start_time": "16:00", "driven_by": "other", "driver_name": "Sunil", "driver_phone": "0712345678",
+                             "vehicle": "ph2087", "pickup": "Head office", "dropoff": "Kelaniya"}, expect_error=True)
+    check("person who books it" in r, "… nor book someone else to drive", r)
+tool("update_settings", {"key": "self_drive_allowed", "value": False})
+r = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "17:00", "route_to": "Kandy", "driven_by": "self"}, expect_error=True)
+check("switched off" in r, "with self-drive off, 'I'll drive myself' is refused", r)
+tool("update_settings", {"key": "self_drive_allowed", "value": True})
+# The missed task says so (never "Cancelled:").
+psql(f"update tasks set status = 'missed' where id = '{ap8['task_id']}'")
+check(tool("task_detail", {"task_id": ap8["task_id"]})["task"]["status_line"].startswith("Missed · not started (leave by "),
+      "a missed task's line: Missed · not started (Round 3)")
+# The free drivers carry their photo and vehicle (the driver-first card).
+fr = tool("suggest_vehicles", {"date": day(5), "time": "20:00"})["drivers_free"]
+check(fr and all(d.get("username") and set(d) <= {"name", "username", "photo_url", "vehicle"} for d in fr)
+      and all(d["vehicle"]["source"] in ("on_duty", "regular") for d in fr if "vehicle" in d),
+      "suggest_vehicles' free drivers: name, username, photo and vehicle (held or regular)", json.dumps(fr)[:300])
+# The Activity log hides routine actions unless asked.
+tool("watch_drivers", {"drivers": ["kasun.s"]})
+quiet_page = tool("activity_log", {"limit": 100})
+loud_page = tool("activity_log", {"limit": 100, "include_routine": True})
+quiet, loud = quiet_page["entries"], loud_page["entries"]
+check(all(e["outcome"] in ("refused", "failed") for e in quiet if e.get("routine")) and any(e.get("routine") and e["outcome"] == "done" for e in loud)
+      and loud_page["total"] > quiet_page["total"],
+      "the Activity log: routine actions (watching drivers) only with include_routine", f"{quiet_page['total']} {loud_page['total']}")
+# Round 3, Part A 6: a request still waiting after its day expires (the job); it is out of waiting and cannot be decided.
+re10 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "18:00", "route_to": "Jaffna"})
+psql(f"update vehicle_requests set needed_at = now() - interval '2 days' where id = '{re10['request']['id']}'")
+check(psql("select public.expire_requests()") != "0", "expire_requests expires a request whose day is over")
+ex = [c for c in tool("list_requests", {"status": "expired"})["requests"] if c["id"] == re10["request"]["id"]]
+check(ex and ex[0]["status"] == "expired" and ex[0].get("expired") and ex[0]["timeline"].get("expired")
+      and not any(c["id"] == re10["request"]["id"] for c in tool("list_requests", {})["requests"]),
+      "an expired request: its own status and time, out of the waiting list", json.dumps(ex)[:300])
+r = tool("decide_request", {"request_id": re10["request"]["id"], "decision": "approve", "driver": r3u, "vehicle": "ph2087"}, expect_error=True)
+check("expired" in r, "an expired request cannot be approved", r)
+# Round 3, Part A 5: a self-driven request carries the asker's licence state for the approver.
+re11 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(6), "time": "08:00", "route_to": "Galle", "driven_by": "self"})
+check(re11["request"].get("self_drive_licence") == "none", "self-drive: no licence on file", json.dumps(re11["request"])[:300])
+psql(f"update employees set licence_no = 'B7654321', licence_expiry = '2030-01-01' where id = '{CUST}'")
+c11 = [c for c in tool("list_requests", {})["requests"] if c["id"] == re11["request"]["id"]]
+check(c11 and c11[0].get("self_drive_licence") == "on_file", "self-drive: licence on file once it is set", json.dumps(c11)[:200])
+psql(f"update employees set licence_no = null, licence_expiry = null where id = '{CUST}'")
+ap11 = tool("decide_request", {"request_id": re11["request"]["id"], "decision": "approve", "vehicle": "ph2087"})
+check(any("no driving licence on file" in w for w in ap11.get("warnings", [])), "approving a self-drive with no licence: a warning, not a block", json.dumps(ap11.get("warnings"))[:300])
+if CHANNEL == "api":
+    up = tool("update_my_profile", {"licence_no": "B1112223", "licence_expiry": "2029-06-30"})
+    code, me_l = http("GET", f"{API}/functions/v1/office-api/me", api_headers(API_TOKEN))
+    check(up.get("licence_no") == "B1112223" and me_l.get("licence", {}).get("state") == "on_file" and me_l["licence"].get("expiry") == "2029-06-30"
+          and psql(f"select count(*) from employee_changes where field = 'licence_no' and new_value = 'B1112223'") == "1",
+          "My profile: an office person's own licence, on /me, every change logged", json.dumps(me_l.get("licence")))
 
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:
