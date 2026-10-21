@@ -79,6 +79,8 @@ export const webInnerInput: TextStyle | null = isWeb ? ({ outlineStyle: 'none' }
  *  one. Nothing on the phone. */
 export function setWebThemeColor(color: string): void {
   if (!isWeb || typeof document === 'undefined') return;
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta && meta.getAttribute('content') !== color) meta.setAttribute('content', color);
+  // Every theme-color tag (the export adds its own beside the page template's).
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    if (meta.getAttribute('content') !== color) meta.setAttribute('content', color);
+  });
 }

@@ -83,7 +83,7 @@ export function BellButton({ onPress, count = 0 }: { onPress: () => void; count?
 
 export function Badge({ n }: { n: number }) {
   return (
-    <View style={styles.badge}>
+    <View style={styles.badge} testID="badge">
       <Mono size={12} bold color="#ffffff">{n > 99 ? '99+' : String(n)}</Mono>
     </View>
   );

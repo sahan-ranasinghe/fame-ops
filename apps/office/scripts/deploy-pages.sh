@@ -43,21 +43,29 @@ echo "scan: nothing found"
 
 if [ "${1:-}" = "--deploy" ]; then
   echo "== 5. Upload"
-  NODE_OPTIONS=--dns-result-order=ipv4first npx wrangler pages deploy --branch main
-  echo "== 6. The live /m/ files: 200, their own type, no redirect (21 October 2026: the fonts were left out by the upload"
-  echo "   and the offline page was redirected)"
-  site="https://fame-fleet.pages.dev"
-  sleep 10
+  NODE_OPTIONS=--dns-result-order=ipv4first npx wrangler pages deploy --branch main 2>&1 | tee /tmp/fleet-pages-deploy.$$
+  # The new deployment's own address (wrangler prints it): the alias may still serve the old one for a moment.
+  site=$(grep -oE 'https://[a-z0-9]+\.fame-fleet\.pages\.dev' /tmp/fleet-pages-deploy.$$ | tail -1 || true)
+  rm -f /tmp/fleet-pages-deploy.$$
+  site="${site:-https://fame-fleet.pages.dev}"
+  echo "== 6. The live /m/ files on $site: 200, their own type, no redirect (21 October 2026: the fonts were left out by"
+  echo "   the upload and the offline page was redirected)"
   bad=0
-  check() { # path, the content type it must have
-    local got; got=$(curl -s -o /dev/null --max-redirs 0 -w '%{http_code} %{content_type}' "$site$1")
-    if [[ "$got" == 200\ $2* ]]; then echo "   ok   $1  ($got)"; else echo "   BAD  $1  ($got)"; bad=1; fi
+  check() { # path, the start of the content type it must have; up to 3 tries over 30 s
+    local got="" i
+    for i in 1 2 3; do
+      got=$(curl -s -o /dev/null --max-redirs 0 --max-time 20 -w '%{http_code} %{content_type}' "$site$1" || true)
+      [[ "$got" == 200\ $2* ]] && break
+      sleep 10
+    done
+    if [[ "$got" == 200\ $2* ]]; then echo "   ok   $1  ($got)"; else echo "   BAD  $1  (${got:-no answer})"; bad=1; fi
   }
   check /m/ text/html
   check /m/office/approve text/html
   check /m/offline text/html
   check /m/sw.js application/javascript
   check /m/manifest.webmanifest application/manifest+json
+  # Pages sends font/<kind> for font files (font/woff2 for the desktop site's): any font/ type.
   for f in $(cd dist && find m/assets -name '*.ttf' | sort); do check "/$f" font/; done
   [ "$bad" = 0 ] || { echo "STOP: a /m/ file is not served as itself (above)"; exit 1; }
 else

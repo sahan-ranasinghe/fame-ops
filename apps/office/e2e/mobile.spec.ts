@@ -288,6 +288,9 @@ test("the app's fonts on /m/: every family loads (self-hosted), headings Archivo
   expect(used).toEqual(expect.arrayContaining(["Archivo_800ExtraBold", "IBMPlexSans_400Regular", "IBMPlexMono_600SemiBold"]));
 });
 
+// A regression guard: nothing on Live redraws by itself once loaded (no state set on a map move or render, no endless
+// animation). It runs on the faked free style (no tiles, no sprites): the missing-sprite answer is checked against the real
+// style by hand (docs/mobile-website.md), not here.
 test("the map stays idle on /m/: a handful of frames at most in 5 s with no input", async ({ page }) => {
   await page.addInitScript(() => {
     const w = window as unknown as { __frames: number; requestAnimationFrame: typeof requestAnimationFrame };
@@ -298,6 +301,7 @@ test("the map stays idle on /m/: a handful of frames at most in 5 s with no inpu
   await signInMobile(page, "idle", ["view"]);
   await tab(page, "Live").click();
   await expect(page.getByTestId("live-map")).toBeVisible();
+  await expect(page.getByTestId("skeleton-rows")).toHaveCount(0); // the list loaded (a skeleton pulses by design)
   await page.waitForTimeout(6_000); // the map comes to rest
   const before = await page.evaluate(() => (window as unknown as { __frames: number }).__frames);
   await page.waitForTimeout(5_000);
@@ -354,7 +358,7 @@ for (const lang of ["en", "si"] as const) {
     await shot("more");
     // More is the same for everyone with these permissions but for the person's own row (masked).
     if (process.env.CI) {
-      await expect(page).toHaveScreenshot(`more-${lang}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01, mask: [page.getByText(`Shots ${lang}`), page.getByText(email)] });
+      await expect(page).toHaveScreenshot(`more-${lang}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01, mask: [page.getByText(`Shots ${lang}`), page.getByText(email), page.getByTestId("badge")] });
     }
   });
 }

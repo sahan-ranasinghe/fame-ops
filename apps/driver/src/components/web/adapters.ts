@@ -242,7 +242,9 @@ export function createFreeMap(container: HTMLElement, start: Camera, padding: Pa
 
 // --- Google's map ---------------------------------------------------------------------------------------------------------
 
-/** Google's map is judged loaded when its tiles have drawn once (a refused key never draws them). */
+/** Google's map is loaded once its script is ready and the map is made (the desktop site's rule). The trade-off: only a
+ *  failed script, the 15 s script limit or Google refusing the key (gm_authFailure → failGoogle) move the tab to the free
+ *  map; a map whose tiles never come stays grey (Google's own fault, rare) instead of switching on a guess. */
 export function createGoogleMap(container: HTMLElement, g: GoogleApi, entry: GoogleEntry, start: Camera, padding: Padding, on: MapEvents): MapAdapter {
   const m = entry.map;
   container.appendChild(entry.holder);
