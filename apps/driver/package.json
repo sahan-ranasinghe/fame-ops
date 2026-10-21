@@ -122,7 +122,8 @@
     "test:web": "tsx scripts/test-web.ts",
     "web:export": "node scripts/make-web-routes.mjs && FLEET_WEB=1 EXPO_NO_WEB_SETUP=1 expo export --platform web --output-dir dist-web --clear && node scripts/web-vendor-assets.mjs dist-web",
     "test:status-words": "tsx scripts/test-status-words.ts",
-    "test:stop-timeline": "tsx scripts/test-stop-timeline.ts"
+    "test:stop-timeline": "tsx scripts/test-stop-timeline.ts",
+    "test:stop-slides": "tsx scripts/test-stop-slides.ts"
   },
   "private": true,
   "expo": {

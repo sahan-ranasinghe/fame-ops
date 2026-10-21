@@ -43,6 +43,8 @@ import { taskCalls } from '@/lib/contacts';
 import { firstName } from '@/lib/format';
 import { canReportLate, declineKey } from '@/lib/late';
 import { todayLists } from '@/lib/lists';
+import { stopProgress } from '@/lib/stopProgress';
+import { nextAbout } from '@/lib/stopProgressWords';
 import { hasChanges, vehicleLine, vehicleWords } from '@/lib/taskPreview';
 import { colomboDate, colomboHour, colomboTime } from '@/lib/time';
 import { isSelfTrip } from '@/lib/trips';
@@ -98,6 +100,13 @@ export default function TodayScreen() {
   const noVehicleWords = next && !nextVehicle ? vehicleWords(t, vehicleLine(next, app.vehicles)) : null;
   const calls = next ? taskCalls(next, app.taskContacts[next.id] ?? null) : [];
   const nextChanged = next?.status === 'assigned' && hasChanges(app.changesFor(next));
+  // Round 2: under way, the next stop's "about HH:MM" once the trip has been re-estimated (lib/stopProgress.ts).
+  const nextEta = (() => {
+    if (next?.status !== 'in_progress') return null;
+    const about = nextAbout(stopProgress(next.task_stops, new Date(now)));
+    const stop = about ? next.task_stops.find((s) => s.id === about.id) : undefined;
+    return about && stop ? { place: stop.place_name, time: about.time } : null;
+  })();
   const openCard = () => next && router.push({ pathname: '/task/[id]', params: { id: next.id } });
   const thumbs = useVehicleThumbs(nextVehicle ? [nextVehicle.id] : []);
   // The office swapped the running task's vehicle: the readings wait on the task screen (Open task).
@@ -175,6 +184,9 @@ export default function TodayScreen() {
                 <Txt variant="title" size={27} style={{ marginTop: 4, marginBottom: 14 }}>{taskTitle(t, next)}</Txt>
               </Pressable>
               <StopTimeline stops={next.task_stops} compact />
+              {nextEta && (
+                <Txt variant="strong" color={colors.blue} style={{ marginTop: 12 }} testID="today-next-about">{t('today.nextStopAbout', { stop: nextEta.place, time: nextEta.time })}</Txt>
+              )}
               {people && <Txt variant="muted" style={{ marginTop: 14 }}>{people}</Txt>}
               {/* Phase 7 §6: the task's vehicle, with its photo when it has one. */}
               {nextVehicle && (

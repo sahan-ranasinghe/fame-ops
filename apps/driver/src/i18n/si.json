@@ -121,7 +121,8 @@
     "accepted": "පිළිගත්තා",
     "allTasks": "අද සියලු කාර්යයන්",
     "allTasksTitle": "අද කාර්යයන්",
-    "moreLater": "අද පසුව තවත් {n}"
+    "moreLater": "අද පසුව තවත් {n}",
+    "nextStopAbout": "ඊළඟට: {stop} · {time} ට පමණ"
   },
   "task": {
     "started": "ආරම්භය {time}",
@@ -183,7 +184,22 @@
     "distanceLeftRoad": "මාර්ගයේ ඉතිරි දුර",
     "noRouteLine": "කඩ ඉරි නැවතුම් යා කරයි: මෙම කාර්යයට සැලසුම් කළ මාර්ග රේඛාවක් නැත",
     "cantMakeIt": "එන්න බැහැ",
-    "lineGoogleOnly": "කඩ ඉරි නැවතුම් යා කරයි: මාර්ග රේඛාව Google සිතියමේ පමණක් පෙන්වයි"
+    "lineGoogleOnly": "කඩ ඉරි නැවතුම් යා කරයි: මාර්ග රේඛාව Google සිතියමේ පමණක් පෙන්වයි",
+    "slideArrive": "{stop} වෙත ළඟා වූ විට දකුණට අදින්න",
+    "slideLeave": "{stop} වෙතින් පිටත් වන විට දකුණට අදින්න",
+    "slideFinish": "අවසන් කිරීමට දකුණට අදින්න",
+    "undo": "අහෝසි කරන්න",
+    "undoArrived": "{stop} වෙත ළඟා විය",
+    "undoLeft": "{stop} වෙතින් පිටත් විය",
+    "progress": {
+      "planned": "සැලසුම {time}",
+      "arrived": "ළඟා විය {time}",
+      "left": "පිටත් විය {time}",
+      "late": "මිනිත්තු {n} ප්‍රමාදයි",
+      "early": "මිනිත්තු {n} කලින්",
+      "onTime": "වේලාවට",
+      "about": "{time} ට පමණ"
+    }
   },
   "log": {
     "title": "ධාවන දුර සටහන් කරන්න",
@@ -2861,7 +2877,8 @@
     "custom": "අභිරුචි",
     "hoursCol": "පැය",
     "minutesCol": "මිනිත්තු",
-    "suggestedValue": "{value} · යෝජිත"
+    "suggestedValue": "{value} · යෝජිත",
+    "slideHint": "තහවුරු කිරීමට දකුණට අදින්න"
   },
   "crash": {
     "title": "යම් දෙයක් වැරදුණා",
@@ -2920,5 +2937,10 @@
       "pin": "පින්",
       "link": "සබැඳිය"
     }
+  },
+  "geofence": {
+    "arrivedTitle": "{stop} වෙත ළඟා වුණාද?",
+    "doneTitle": "{stop} අවසන් ලෙස සලකුණු කරනවාද?",
+    "doneBody": "ඔබ දැන් {next} හි සිටී."
   }
 }

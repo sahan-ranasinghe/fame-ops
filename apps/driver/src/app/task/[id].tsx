@@ -21,6 +21,12 @@
 // Hotfix 3: a missed task (lib/lists.ts isMissed) is not shown: "This task is no longer assigned to you."
 // Part 3b (H4): "Running late" under way (components/LateSheet.tsx: 10 · 15 · 30 · Other, queued), with "You said 15 min
 // late at 08:52"; before the start it is on the preview, with "Can't make it" once accepted. Never on a self trip.
+// Round 2 (21 October 2026): the current stop is slides, never taps (components/patterns/SlideToConfirm.tsx): "Slide when
+// you arrive at …" (the 300 m rule and its override as before), then "Slide when you leave …"; the last stop's is "Slide
+// to finish", which opens Log mileage as Complete task does. Each slide has Undo for 6 s. A stop further down (visited out
+// of order) gets the same slides under its row, only when the phone is there or once it is Arrived. Each row shows its
+// progress ("Planned 10:30 · Arrived 10:52 · Left 11:40 · 22 min late", "about 12:10": lib/stopProgress.ts), and the
+// arrival card (components/GeofenceCard.tsx) asks after 60 s within 150 m.
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -29,7 +35,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ArrivalButton, useHere } from '@/components/ArrivalButton';
+import { ArrivalButton, useHere, useStopSlides } from '@/components/ArrivalButton';
+import { GeofenceCard } from '@/components/GeofenceCard';
+import { SlideToConfirm } from '@/components/patterns/SlideToConfirm';
+import { StopProgressLine } from '@/components/StopProgressLine';
 import { ApprovedLine, CallButtons } from '@/components/CallButtons';
 import { GoogleCredit } from '@/components/GoogleCredit';
 import { RunningLate } from '@/components/LateSheet';
@@ -42,12 +51,13 @@ import { leaveTime, nextStop, StopTimeline, useDateLabel, useDurations, usePeopl
 import { shownTaskKm, stopLabel, stopTimeAt, taskTitle } from '@/components/taskLines';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
-import { arrivalCheck, arrivalRecord, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/dayRules';
+import { arrivalCheck, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/dayRules';
 import { approvedBy, taskCalls } from '@/lib/contacts';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { canReportLate } from '@/lib/late';
 import { isMissed } from '@/lib/lists';
 import { colomboDate, colomboTime } from '@/lib/time';
+import { stopProgress } from '@/lib/stopProgress';
 import { canAddStop } from '@/lib/trips';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
@@ -74,6 +84,7 @@ export default function TaskScreen() {
   const hereLng = here.fix?.lng;
   const me = useMemo((): LatLng | null => (hereLat != null && hereLng != null ? { lat: hereLat, lng: hereLng } : null), [hereLat, hereLng]);
   const [skipping, setSkipping] = useState<TaskStop | null>(null);
+  const slides = useStopSlides();
   // Who to call about the task (F, K): read when the screen opens; the copy on the phone shows meanwhile and offline.
   const { loadTaskContacts } = app;
   const found = task !== undefined;
@@ -147,6 +158,27 @@ export default function TaskScreen() {
   // After a vehicle swap: the start of the stretch in the vehicle now (null until its start reading is logged).
   const startOdo = stretchStartKm(task);
   const finishedKm = shownTaskKm(task);
+  // Round 2: each stop planned against what happened, the stops to come estimated again (the shared rule).
+  const progress = new Map(stopProgress(task.task_stops, new Date(here.now)).map((p) => [p.id, p]));
+  const ordered = task.task_stops.filter((s) => s.status !== 'removed').sort((a, b) => a.seq - b.seq);
+  const lastId = ordered[ordered.length - 1]?.id;
+
+  // Complete task (and the last stop's "Slide to finish", which closes that stop on the way): open stops left = the
+  // question first; then Log mileage.
+  const finishTask = (closing?: TaskStop) => {
+    const open = task.task_stops.filter((item) => (item.status === 'pending' || item.status === 'arrived') && item.id !== closing?.id).length;
+    const finish = () => {
+      if (closing) app.markStopDone(closing);
+      router.push({ pathname: '/log-mileage', params: { mode: 'finish', taskId: task.id } });
+    };
+    if (open === 0) finish();
+    else {
+      Alert.alert(t('task.stopsLeftTitle', { n: open }), t('task.stopsLeftBody'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('task.finishAnyway'), style: 'destructive', onPress: finish },
+      ]);
+    }
+  };
 
   const overlay = (
     <>
@@ -207,6 +239,7 @@ export default function TaskScreen() {
         {running ? (
           <>
             <TrackingNotice />
+            <GeofenceCard task={task} here={here} />
             <SwapCard task={task} />
             <View style={styles.stats}>
               <View style={{ flex: 1 }}>
@@ -245,9 +278,9 @@ export default function TaskScreen() {
                 const detail = [
                   item.arrive_by ? t('task.arriveBy', { time: colomboTime(item.arrive_by) }) : null,
                   timeAt === null && item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min, duration: duration(item.dwell_min) }) : null,
-                  item.status === 'skipped' ? t('task.skipped') : item.status === 'arrived' && item.arrived_at ? `${t('task.arrived')} ${colomboTime(item.arrived_at)}` : null,
+                  item.status === 'skipped' ? t('task.skipped') : null,
                 ].filter(Boolean).join(' · ');
-                // A stop further down (visited out of order): Done once arrived, Arrived only when the phone is there.
+                // A stop further down (visited out of order): the leave slide once arrived, the arrive slide only when the phone is there.
                 const nearHere = !done && !current && !canMarkDone(item) ? arrivalCheck(item, here.fix) : null;
                 return (
                   <View key={item.id} style={[styles.stopCard, current && styles.stopRowCurrent, done && { opacity: 0.6 }]}>
@@ -260,30 +293,29 @@ export default function TaskScreen() {
                         <GoogleCredit show={!!item.google_place_id} />
                         {item.is_start && <Txt variant="small">{t('stop.start')}</Txt>}
                         {detail !== '' && <Txt variant="small">{detail}</Txt>}
+                        {item.status !== 'skipped' && <StopProgressLine progress={progress.get(item.id)} />}
                         {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
                       </View>
                       {done ? (
                         <View style={styles.doneBadge}><Check size={18} color={colors.blue} strokeWidth={3} /></View>
                       ) : (
                         <View style={{ gap: 6, alignItems: 'flex-end' }}>
-                          {!current && canMarkDone(item) && (
-                            <Pressable accessibilityRole="button" onPress={() => app.markStopDone(item)} style={[styles.doneButton, { backgroundColor: colors.ink }]}>
-                              <Txt variant="strong" size={15} color="#ffffff">{t('task.done')}</Txt>
-                            </Pressable>
-                          )}
-                          {nearHere?.state === 'ok' && (
-                            <Pressable accessibilityRole="button" onPress={() => app.markStopArrived(item, arrivalRecord(nearHere))} style={styles.doneButton}>
-                              <Txt variant="strong" size={15}>{t('task.arrived')}</Txt>
-                            </Pressable>
-                          )}
                           <Pressable accessibilityRole="button" onPress={() => setSkipping(item)} hitSlop={8} style={styles.skip}>
                             <Txt variant="small" color={colors.red}>{t('task.skip')}</Txt>
                           </Pressable>
                         </View>
                       )}
                     </View>
-                    {/* The current stop: Arrived by the distance rule, then Done (keyed by stop: the GPS wait starts again per stop). */}
-                    {!done && current && <ArrivalButton key={item.id} stop={item} here={here} />}
+                    {/* The current stop: the arrive slide by the distance rule, then the leave slide (keyed by stop: the GPS wait
+                        starts again per stop); the last stop's leave slide finishes the task. */}
+                    {!done && current && <ArrivalButton key={item.id} stop={item} here={here} last={item.id === lastId} onFinish={finishTask} />}
+                    {/* A stop further down, visited out of order: the same slides, only when they apply. */}
+                    {!current && canMarkDone(item) && (
+                      <SlideToConfirm tone="dark" label={t('task.slideLeave', { stop: item.place_name })} onConfirm={() => slides.leave(item)} testID={`slide-leave-${item.id}`} />
+                    )}
+                    {nearHere?.state === 'ok' && (
+                      <SlideToConfirm label={t('task.slideArrive', { stop: item.place_name })} onConfirm={() => slides.arrive(item, nearHere)} testID={`slide-arrive-${item.id}`} />
+                    )}
                   </View>
                 );
               })}
@@ -311,17 +343,7 @@ export default function TaskScreen() {
               icon={Check}
               label={t('task.complete')}
               disabled={lastOpen !== null}
-              onPress={() => {
-                const open = task.task_stops.filter((item) => item.status === 'pending' || item.status === 'arrived').length;
-                const finish = () => router.push({ pathname: '/log-mileage', params: { mode: 'finish', taskId: task.id } });
-                if (open === 0) finish();
-                else {
-                  Alert.alert(t('task.stopsLeftTitle', { n: open }), t('task.stopsLeftBody'), [
-                    { text: t('common.cancel'), style: 'cancel' },
-                    { text: t('task.finishAnyway'), style: 'destructive', onPress: finish },
-                  ]);
-                }
-              }}
+              onPress={() => finishTask()}
             />
             <Button
               kind="danger-text"
@@ -388,6 +410,5 @@ const styles = StyleSheet.create({
   stopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   skip: { minHeight: 32, justifyContent: 'center' },
   stopRowCurrent: { borderColor: colors.blue, borderWidth: 2, backgroundColor: colors.blueChip },
-  doneButton: { minHeight: 44, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   doneBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.blueChip, alignItems: 'center', justifyContent: 'center' },
 });

@@ -121,7 +121,8 @@
     "accepted": "Accepted",
     "allTasks": "All today's tasks",
     "allTasksTitle": "Today's tasks",
-    "moreLater": "{n} more later today"
+    "moreLater": "{n} more later today",
+    "nextStopAbout": "Next: {stop} · about {time}"
   },
   "task": {
     "started": "Started {time}",
@@ -183,7 +184,22 @@
     "distanceLeftRoad": "Distance left by road",
     "noRouteLine": "Dashed lines join the stops: no planned road line for this task",
     "cantMakeIt": "Can't make it",
-    "lineGoogleOnly": "Dashed lines join the stops: the road line shows on Google's map only"
+    "lineGoogleOnly": "Dashed lines join the stops: the road line shows on Google's map only",
+    "slideArrive": "Slide when you arrive at {stop}",
+    "slideLeave": "Slide when you leave {stop}",
+    "slideFinish": "Slide to finish",
+    "undo": "Undo",
+    "undoArrived": "Arrived at {stop}",
+    "undoLeft": "Left {stop}",
+    "progress": {
+      "planned": "Planned {time}",
+      "arrived": "Arrived {time}",
+      "left": "Left {time}",
+      "late": "{n} min late",
+      "early": "{n} min early",
+      "onTime": "on time",
+      "about": "about {time}"
+    }
   },
   "log": {
     "title": "Log mileage",
@@ -2861,7 +2877,8 @@
     "custom": "Custom",
     "hoursCol": "Hours",
     "minutesCol": "Minutes",
-    "suggestedValue": "{value} · suggested"
+    "suggestedValue": "{value} · suggested",
+    "slideHint": "Slide right to confirm"
   },
   "crash": {
     "title": "Something went wrong",
@@ -2920,5 +2937,10 @@
       "pin": "Pin",
       "link": "Link"
     }
+  },
+  "geofence": {
+    "arrivedTitle": "Arrived at {stop}?",
+    "doneTitle": "Mark {stop} as done?",
+    "doneBody": "You are at {next}."
   }
 }

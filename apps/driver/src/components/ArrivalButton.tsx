@@ -5,14 +5,17 @@
 //   far      "You are 42 km from Kurunegala site" and "I'm here, the pin is wrong" (flag override)
 //   waiting  "Waiting for GPS…"; after 60 s the same override (flag no_gps)
 //   no pin   Arrived, with the note "No pin for this stop" (flag no_pin)
-// Done appears only once the stop is Arrived.
+// Done (Left) appears only once the stop is Arrived.
+// Round 2 (21 October 2026): every one of these is a slide (components/patterns/SlideToConfirm.tsx), never a tap, with
+// Undo in a snackbar for 6 s; the last stop's Left is "Slide to finish" (then Log mileage).
 
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { Check, MapPin } from '@/components/icons';
-import { Button, Txt } from '@/components/ui';
+import { showSnackbar, SNACK_ACTION_MS } from '@/components/patterns/Snackbar';
+import { SlideToConfirm } from '@/components/patterns/SlideToConfirm';
+import { Txt } from '@/components/ui';
 import type { Vars } from '@/i18n';
 import { type ArrivalCheck, arrivalCheck, arrivalRecord, canMarkDone, type Fix, NO_GPS_OVERRIDE_AFTER_MS } from '@/lib/dayRules';
 import type { TaskStop } from '@/lib/types';
@@ -79,26 +82,61 @@ export function distanceText(t: (key: string, vars?: Vars) => string, meters: nu
   return t('arrive.km', { n: km < 10 ? km.toFixed(1) : String(Math.round(km)) });
 }
 
-/** The current stop's actions: Arrived (with the distance rule) or, once arrived, Done. */
-export function ArrivalButton({ stop, here }: { stop: TaskStop; here: Here }) {
-  const { t, markStopArrived, markStopDone } = useApp();
+/**
+ * Round 2: the slides with their Undo (a snackbar for 6 s). Arrived and Left are the same queued writes as before, with
+ * the phone's own time; Undo queues the revert after them.
+ */
+export function useStopSlides(): { arrive: (stop: TaskStop, made: ArrivalCheck) => void; leave: (stop: TaskStop) => void } {
+  const { t, markStopArrived, markStopDone, undoStopStep } = useApp();
+  return {
+    arrive: (stop, made) => {
+      markStopArrived(stop, arrivalRecord(made));
+      showSnackbar({
+        text: t('task.undoArrived', { stop: stop.place_name }),
+        action: { label: t('task.undo'), onPress: () => undoStopStep(stop, 'arrived') },
+        ms: SNACK_ACTION_MS,
+      });
+    },
+    leave: (stop) => {
+      if (!canMarkDone(stop)) return;
+      markStopDone(stop);
+      showSnackbar({
+        text: t('task.undoLeft', { stop: stop.place_name }),
+        action: { label: t('task.undo'), onPress: () => undoStopStep(stop, 'left') },
+        ms: SNACK_ACTION_MS,
+      });
+    },
+  };
+}
+
+/**
+ * The current stop's one action, always a slide (never a tap): "Slide when you arrive at …" by the distance rule (or the
+ * override slide, flagged as before), then "Slide when you leave …"; on the last stop "Slide to finish", which hands over
+ * to the screen's finish (Log mileage, as Complete task does; no Undo there).
+ */
+export function ArrivalButton({ stop, here, last = false, onFinish }: { stop: TaskStop; here: Here; last?: boolean; onFinish?: (stop: TaskStop) => void }) {
+  const { t } = useApp();
+  const slides = useStopSlides();
   const check = arrivalCheck(stop, here.fix);
   const waitStart = useWaitStart(check.state === 'waiting', here.now);
 
   if (canMarkDone(stop)) {
-    return <Button kind="dark" icon={Check} label={t('task.done')} onPress={() => markStopDone(stop)} style={styles.button} />;
+    return last && onFinish
+      ? <SlideToConfirm tone="dark" label={t('task.slideFinish')} onConfirm={() => onFinish(stop)} testID="slide-finish" />
+      : <SlideToConfirm tone="dark" label={t('task.slideLeave', { stop: stop.place_name })} onConfirm={() => slides.leave(stop)} testID="slide-leave" />;
   }
 
-  const arrive = (made: ArrivalCheck) => markStopArrived(stop, arrivalRecord(made));
-  const override = <Button kind="outline" icon={MapPin} label={t('arrive.override')} onPress={() => arrive(check)} style={styles.button} />;
+  const arrive = () => slides.arrive(stop, check);
+  const override = <SlideToConfirm tone="outline" label={t('arrive.override')} onConfirm={arrive} testID="slide-override" />;
+  const slide = <SlideToConfirm label={t('task.slideArrive', { stop: stop.place_name })} onConfirm={arrive} testID="slide-arrive" />;
 
   switch (check.state) {
     case 'ok':
-      return <Button kind="dark" label={t('task.arrived')} onPress={() => arrive(check)} style={styles.button} />;
+      return slide;
     case 'no_pin':
       return (
         <View style={{ gap: 6 }}>
-          <Button kind="dark" label={t('task.arrived')} onPress={() => arrive(check)} style={styles.button} />
+          {slide}
           <Txt variant="small">{t('arrive.noPin')}</Txt>
         </View>
       );
@@ -137,7 +175,6 @@ function useWaitStart(waiting: boolean, now: number): number | null {
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 56 },
   // Reads like a button, but is not one: the phone is not at the stop yet.
   status: { minHeight: 56, borderRadius: 16, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.page, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
 });
