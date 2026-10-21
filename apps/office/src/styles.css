@@ -971,6 +971,14 @@ button.wk-off:hover { border-color: var(--warn) }
 .timefield { position: relative; display: block }
 .timefield > input { width: 100% }
 .tf-drop { position: absolute; z-index: 35; top: calc(100% + 4px); left: 0; width: max(100%, 280px); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, .16); padding: 8px }
+/* The Stay field (21 October 2026; Google Calendar's duration): one compact button, the sheet's presets and two lists. */
+.stayfield { min-height: 40px; display: flex; align-items: center; width: 100%; max-width: 220px; padding: 6px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; text-align: left; cursor: pointer }
+.stayfield:hover { border-color: var(--muted) }
+.stay-wheels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px }
+.stay-wheel { display: grid; gap: 4px }
+.stay-wheel-list { max-height: 176px; overflow-y: auto; border: 1.5px solid var(--line); border-radius: 10px; display: grid }
+.stay-wheel-list button { border: 0; background: none; padding: 9px 4px; font-size: 18px; font-weight: 600; color: var(--ink); cursor: pointer }
+.stay-wheel-list button.on { background: var(--live-bg); color: var(--live) }
 .tf-choices { display: grid; gap: 8px }
 /* The clock (21 October 2026; Material 3's time picker): the time on top, the dial under it (ui/TimeDial.tsx). */
 .tdial { display: grid; justify-items: center; gap: 10px; padding-top: 4px }

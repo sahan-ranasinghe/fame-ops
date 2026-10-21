@@ -1,6 +1,6 @@
 // The dispatch forms' pieces as the office sees them: the plan as a timeline,
 // the overlaps as cards, the time at a stop, the departure check's line.
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
@@ -84,30 +84,30 @@ describe("the overlaps as cards", () => {
   });
 });
 
-describe("Time at this stop", () => {
+describe("Stay at a stop (21 October 2026: one field, a sheet of presets and Custom)", () => {
   function Picker({ fallback }: { fallback: { min: number; source: "place" | "default" | "either" } }) {
     const [v, setV] = useState("");
     return <><DwellPicker id="d" value={v} fallback={fallback} onChange={setV} /><output data-testid="value">{v}</output></>;
   }
-  it("shows the usual time until a pick; quick picks and Other (h:mm) set the value; back to the usual time", () => {
+  it("shows the usual time until a pick; a preset counts at once; Custom 5 h; back to the usual time", () => {
     render(<Picker fallback={{ min: 30, source: "place" }} />);
     expect(screen.getByTestId("dwell-fallback").textContent).toBe("30 min · usual here");
-    expect(screen.getByRole("button", { name: "30 min" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "1 h 30 min" }));
-    expect(screen.getByTestId("value").textContent).toBe("90");
-    fireEvent.click(screen.getByRole("button", { name: "Other" }));
-    fireEvent.change(screen.getByLabelText("Time at this stop: other"), { target: { value: "2:45" } });
-    expect(screen.getByTestId("value").textContent).toBe("2:45");
-    fireEvent.change(screen.getByLabelText("Time at this stop: other"), { target: { value: "13:00" } });
-    expect(screen.getByText("Minutes or h:mm, up to 12 h.")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Time at this stop: other"), { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: "Stay" }));
+    for (const w of ["5 min", "15 min", "30 min", "1 h", "2 h", "4 h", "Custom"]) expect(within(screen.getByTestId("stay-sheet")).getByRole("button", { name: w })).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId("stay-sheet")).getByRole("button", { name: "2 h" }));
+    expect(screen.getByTestId("value").textContent).toBe("120");
+    fireEvent.click(screen.getByRole("button", { name: "Stay" }));
+    fireEvent.click(within(screen.getByTestId("stay-sheet")).getByRole("button", { name: "Custom" }));
+    fireEvent.click(screen.getByRole("radio", { name: "5 hours" }));
+    fireEvent.click(screen.getByRole("radio", { name: "0 minutes" }));
+    fireEvent.click(within(screen.getByTestId("stay-sheet")).getByRole("button", { name: "Done" }));
+    expect(screen.getByTestId("value").textContent).toBe("300");
     fireEvent.click(screen.getByRole("button", { name: "Use the usual time here (30 min)" }));
     expect(screen.getByTestId("value").textContent).toBe("");
   });
   it("a request's From and To: the usual time there, else the default", () => {
     render(<Picker fallback={{ min: 5, source: "either" }} />);
     expect(screen.getByTestId("dwell-fallback").textContent).toBe("The usual time there, else 5 min");
-    expect(screen.getByRole("button", { name: "5 min" }).getAttribute("aria-pressed")).toBe("false");
   });
 });
 

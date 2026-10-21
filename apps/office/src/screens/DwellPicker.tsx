@@ -1,11 +1,12 @@
-// "Time at this stop" (Phase 7, §17): always visible on every stop row. Quick
-// picks 5 min, 15 min, 30 min, 1 h, 1 h 30, 2 h, and Other (minutes or h:mm,
-// up to 12 h). Until the person picks, the first value is the place's usual
-// time ("usual here") or the default for the type, and nothing is sent: the
-// server uses the same.
-import { useState } from "react";
-import { DWELL_PICKS, dwellText, parseDwell } from "./stopsLogic";
+// How long at a stop (21 October 2026: Google Calendar's duration; the app's components/patterns/DurationField.tsx, the
+// same rules): one compact field, "Stay  1 h", the suggested stay in grey until one is chosen ("30 min · usual here");
+// a click opens the sheet (a pop-over on a desktop): 5 min · 15 min · 30 min · 1 h · 2 h · 4 h · Custom, where Custom
+// is an hours list and a minutes list (5 h is two clicks). Until the person picks, nothing is sent: the server uses the
+// place's usual time or the type's default, which is what the field shows. Replaces the chip row and the minutes box.
+import { useRef, useState } from "react";
+import { Sheet } from "../ui/Sheet";
 import { ChoiceChip } from "../ui/Select";
+import { dwellText, parseDwell } from "./stopsLogic";
 
 export interface DwellFallback {
   min: number;
@@ -16,12 +17,15 @@ export interface DwellFallback {
   source: "place" | "default" | "either";
 }
 
+/** The presets (the app's STAY_PRESETS). */
+export const STAY_PRESETS = [5, 15, 30, 60, 120, 240] as const;
+const HOURS = Array.from({ length: 13 }, (_, i) => i);
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+
 const fallbackWords = (f: DwellFallback) =>
-  f.source === "place" ? `${dwellText(f.min)} · usual here` : f.source === "default" ? `${dwellText(f.min)} · the default` : `The usual time there, else ${dwellText(f.min)}`;
+  f.source === "place" ? `${dwellText(f.min)} · usual here` : f.source === "default" ? `${dwellText(f.min)} · suggested` : `The usual time there, else ${dwellText(f.min)}`;
 
-const chipStyle = { minHeight: 40, padding: "6px 12px", fontSize: 14 } as const;
-
-export function DwellPicker({ id, value, fallback, onChange, label = "Time at this stop" }: {
+export function DwellPicker({ id, value, fallback, onChange, label = "Stay" }: {
   id: string;
   /** What the person chose (minutes or h:mm); "" = not chosen. */
   value: string;
@@ -31,33 +35,67 @@ export function DwellPicker({ id, value, fallback, onChange, label = "Time at th
 }) {
   const parsed = parseDwell(value);
   const chosen = typeof parsed === "number" ? parsed : null;
-  const isPick = chosen !== null && (DWELL_PICKS as readonly number[]).includes(chosen);
-  const [otherOpen, setOtherOpen] = useState(false);
-  const showOther = otherOpen || (value.trim() !== "" && !isPick);
-  const shown = chosen ?? (value.trim() === "" && fallback?.source !== "either" ? fallback?.min ?? null : null);
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState(false);
+  const start = chosen ?? fallback?.min ?? 60;
+  const [h, setH] = useState(0);
+  const [m, setM] = useState(0);
+  const btn = useRef<HTMLButtonElement>(null);
+  const openSheet = () => {
+    setH(Math.floor(start / 60));
+    setM(start % 60 - ((start % 60) % 5));
+    setCustom(chosen !== null && !(STAY_PRESETS as readonly number[]).includes(chosen));
+    setOpen(true);
+  };
+  const pick = (v: string) => { onChange(v); setOpen(false); };
   return (
     <div className="field" data-testid="dwell-picker">
       <span className="lab" id={`${id}-l`}>{label}</span>
-      <div className="chips" role="group" aria-labelledby={`${id}-l`}>
-        {DWELL_PICKS.map((m) => (
-          <ChoiceChip key={m} style={chipStyle} selected={!showOther && shown === m}
-            onClick={() => { setOtherOpen(false); onChange(String(m)); }}>{dwellText(m)}</ChoiceChip>
-        ))}
-        <ChoiceChip style={chipStyle} selected={showOther} onClick={() => setOtherOpen(true)}>Other</ChoiceChip>
-      </div>
-      {showOther && (
-        <input id={id} aria-label={`${label}: other`} placeholder="Minutes or h:mm, e.g. 45 or 2:30" inputMode="numeric" maxLength={5}
-          value={value} onChange={(e) => onChange(e.target.value)} style={{ maxWidth: 240 }} />
-      )}
-      {parsed === "bad" ? (
-        <span className="hint" style={{ color: "var(--bad)" }}>Minutes or h:mm, up to 12 h.</span>
-      ) : value.trim() === "" && fallback ? (
-        <span className="hint" data-testid="dwell-fallback">{fallbackWords(fallback)}</span>
-      ) : chosen !== null && fallback ? (
-        <span className="hint"><button type="button" className="linkish" onClick={() => { setOtherOpen(false); onChange(""); }}>
-          {fallback.source === "place" ? `Use the usual time here (${dwellText(fallback.min)})` : fallback.source === "default" ? `Use the default (${dwellText(fallback.min)})` : "Use the usual time there"}
+      <button ref={btn} id={id} type="button" className="stayfield" aria-labelledby={`${id}-l`} aria-haspopup="dialog" onClick={openSheet}>
+        {chosen !== null ? <span>{dwellText(chosen)}</span> : <span className="muted" data-testid="dwell-fallback">{fallback ? fallbackWords(fallback) : "–"}</span>}
+      </button>
+      {parsed === "bad" && <span className="hint" style={{ color: "var(--bad)" }}>Pick how long, up to 12 h.</span>}
+      {chosen !== null && fallback && (
+        <span className="hint"><button type="button" className="linkish" onClick={() => onChange("")}>
+          {fallback.source === "place" ? `Use the usual time here (${dwellText(fallback.min)})` : fallback.source === "default" ? `Use the suggestion (${dwellText(fallback.min)})` : "Use the usual time there"}
         </button></span>
-      ) : null}
+      )}
+      <Sheet open={open} onClose={() => setOpen(false)} title={label} anchor={btn} testId="stay-sheet"
+        footer={(
+          <>
+            <button type="button" className="btn" onClick={() => pick("")}>Clear</button>
+            {custom && <button type="button" className="btn primary" disabled={h * 60 + m === 0} onClick={() => pick(String(h * 60 + m))}>Done</button>}
+          </>
+        )}>
+        <div className="chips" role="group" aria-label={`${label}: how long`}>
+          {STAY_PRESETS.map((x) => (
+            <ChoiceChip key={x} selected={!custom && chosen === x} onClick={() => pick(String(x))}>{dwellText(x)}</ChoiceChip>
+          ))}
+          <ChoiceChip selected={custom} onClick={() => setCustom(true)}>Custom</ChoiceChip>
+        </div>
+        {custom && (
+          <div className="stay-wheels" data-testid="stay-wheels">
+            <Wheel label="Hours" items={HOURS} value={h} onChange={setH} />
+            <Wheel label="Minutes" items={MINUTES} value={m} onChange={setM} />
+          </div>
+        )}
+      </Sheet>
+    </div>
+  );
+}
+
+/** One column of numbers: the chosen one marked; a click chooses. */
+function Wheel({ label, items, value, onChange }: { label: string; items: number[]; value: number; onChange: (n: number) => void }) {
+  return (
+    <div className="stay-wheel">
+      <span className="lab">{label}</span>
+      <div role="radiogroup" aria-label={label} className="stay-wheel-list">
+        {items.map((n) => (
+          <button key={n} type="button" role="radio" aria-checked={n === value} aria-label={`${n} ${label.toLowerCase()}`} className={`mono${n === value ? " on" : ""}`} onClick={() => onChange(n)}>
+            {String(n).padStart(2, "0")}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

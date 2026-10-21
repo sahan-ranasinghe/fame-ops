@@ -73,8 +73,6 @@ export function parsePin(text: string): { lat: number; lng: number } | null | "b
 
 const isTime = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 
-/** The quick picks for the time at a stop, in minutes. */
-export const DWELL_PICKS = [5, 15, 30, 60, 90, 120] as const;
 /** The longest time at a stop the form takes: 12 h. */
 export const DWELL_MAX = 720;
 

@@ -106,7 +106,7 @@ describe("the Selection CSS and the screens", () => {
     expect(src("ui/DriverRow.tsx")).toMatch(/\{onPick && <SelectMark kind="radio" on=\{!!picked\} \/>\}/);
     expect(src("ui/basics.tsx")).toMatch(/<ChoiceChip key=\{k\} selected=\{value === k\}/);
     expect(src("screens/settings/userParts.tsx")).toMatch(/<ChoiceChip key=\{k\} selected=\{current === k\}/);
-    expect(src("screens/DwellPicker.tsx")).toMatch(/<ChoiceChip key=\{m\}/);
+    expect(src("screens/DwellPicker.tsx")).toMatch(/<ChoiceChip key=\{x\} selected=/); // the Stay sheet's presets
     expect(src("screens/TaskEdit.tsx")).toMatch(/<ChoiceChip key=\{d\.username \?\? d\.name\}/);
     expect(src("screens/TripPurpose.tsx")).toMatch(/<ChoiceChip key=\{p\} selected=\{choice === p\}/);
   });
