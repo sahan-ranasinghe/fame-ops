@@ -393,7 +393,7 @@ export function userFields(u: OfficeUser, email: string): UserFields {
 
 // ---- Quick settings (design 19's card as a page) ----
 
-export type QuickKey = 'tasks_need_approval' | 'vehicle_on_the_day' | 'driver_personal_trips' | 'duty_cutoff' | 'accept_within_min' | 'accept_before_leave_min' | 'office_phone';
+export type QuickKey = 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions' | 'driver_personal_trips' | 'duty_cutoff' | 'accept_within_min' | 'accept_before_leave_min' | 'office_phone';
 export type SettingKind = 'switch' | 'choice' | 'time' | 'minutes' | 'phone';
 
 export interface QuickRow {
@@ -405,6 +405,7 @@ export interface QuickRow {
 export const QUICK_SETTINGS: readonly QuickRow[] = [
   { key: 'tasks_need_approval', kind: 'switch' },
   { key: 'vehicle_on_the_day', kind: 'switch' },
+  { key: 'planner_suggestions', kind: 'switch' },
   { key: 'driver_personal_trips', kind: 'choice' },
   { key: 'duty_cutoff', kind: 'time' },
   { key: 'accept_within_min', kind: 'minutes' },
@@ -426,9 +427,9 @@ export function personalTripsValue(saved?: string | null, fallback?: string | nu
 }
 
 /** A switch as shown: the saved value, else the server's default, else the site's (approval on, vehicle on the day off). */
-export function switchValue(key: 'tasks_need_approval' | 'vehicle_on_the_day', settings: Partial2, defaults?: Partial2): boolean {
+export function switchValue(key: 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions', settings: Partial2, defaults?: Partial2): boolean {
   const v = settings?.[key] ?? defaults?.[key];
-  return typeof v === 'boolean' ? v : key === 'tasks_need_approval';
+  return typeof v === 'boolean' ? v : key !== 'vehicle_on_the_day';
 }
 
 /** The auto clock-out as shown: "" = off. */

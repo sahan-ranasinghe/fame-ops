@@ -42,8 +42,8 @@ export function TimeDial({ value, onChange, testID }: { value: string; onChange:
     onStartShouldSetPanResponderCapture: () => true,
     onMoveShouldSetPanResponderCapture: () => true,
     onPanResponderGrant: (e) => {
-      face.current?.measureInWindow((x, y) => { origin.current = { x, y }; });
-      // measureInWindow answers on the next frame: the page coordinates minus the layout's own position until then.
+      // The face's page origin from the first touch (its children take no touches, so locationX/Y are the face's own).
+      // Not measureInWindow: inside an Android Modal its window coordinates can differ from the page's by the status bar.
       origin.current = { x: e.nativeEvent.pageX - e.nativeEvent.locationX, y: e.nativeEvent.pageY - e.nativeEvent.locationY };
       setAt(e);
     },
@@ -94,7 +94,6 @@ export function TimeDial({ value, onChange, testID }: { value: string; onChange:
       {!typing && (
         <View
           ref={face}
-          onLayout={() => face.current?.measureInWindow((x, y) => { origin.current = { x, y }; })}
           style={styles.face}
           accessible
           accessibilityRole="adjustable"

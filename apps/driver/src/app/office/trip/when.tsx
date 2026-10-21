@@ -18,6 +18,7 @@ import { nextStep, updateDraft, useTripDraft } from '@/office/trip/draft';
 import { dwellFallbacks } from '@/office/trip/planLogic';
 import { parseDwell, type StopDraft, stopsInput } from '@/office/trip/stopsLogic';
 import { useTrip } from '@/office/trip/useTrip';
+import { usedLeave } from '@/office/trip/departureLogic';
 import { departureText, lateByText, reasonText } from '@/office/trip/words';
 import type { SettingsResult } from '@/office/types';
 import { Loading, Screen } from '@/office/ui';
@@ -72,7 +73,7 @@ export default function TripWhen() {
               </View>
               {i === f.stops.length - 1 && <TimeField compact label={t(draft.mode === 'task' || draft.mode === 'stops' ? 'office.trip.freeBy' : 'office.trip.backBy')} value={f.end} onCommit={(end) => setF({ end })} tone={trip.lateBack ? 'amber' : undefined} />}
               {check && check.kind === 'late' && trip.lateKey === s.key && (
-                <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(check.leaveBy)} moveLabel={check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
+                <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(usedLeave(check))} moveLabel={check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
               )}
             </View>
           );
@@ -89,7 +90,7 @@ export default function TripWhen() {
           </View>}
           {!f.leaveBy && trip.suggestions && <Txt variant="small">{trip.plan.updating ? t('office.trip.planning') : t('office.trip.leaveHint')}</Txt>}
           {check && check.kind === 'late' && !trip.lateKey && (
-            <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(check.leaveBy)} moveLabel={check.back && check.moveBackTo ? t('office.trip.moveBackBy', { time: check.moveBackTo }) : check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.back && check.moveBackTo ? () => trip.setEnd(check.moveBackTo!) : check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
+            <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(usedLeave(check))} moveLabel={check.back && check.moveBackTo ? t('office.trip.moveBackBy', { time: check.moveBackTo }) : check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.back && check.moveBackTo ? () => trip.setEnd(check.moveBackTo!) : check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
           )}
           {check && check.kind === 'early' && <Txt variant="small">{departureText(t, check)}</Txt>}
           {trip.reasons.filter((r) => !r.note).length > 0 && f.leaveBy ? (

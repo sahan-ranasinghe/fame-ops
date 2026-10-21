@@ -32,13 +32,21 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
   const { t } = useApp();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [touched, setTouched] = useState(false);
   const now = colomboTime(Date.now());
   const pick = (time: string) => { onCommit(time); setOpen(false); };
-  // The draft starts at the value, else the suggestion, else now (the time, not a preset).
+  // The draft starts at the value, else the suggestion, else now (the time, not a preset). Done on an empty field whose
+  // clock was not moved keeps it empty when it shows the suggestion: the planner's own time stays the planner's (written
+  // in, it would be planned again as a chosen time and judged a few minutes late; Round 1 review).
+  const done = () => {
+    if (!touched && !isHHMM(value) && suggested && draft === suggested) setOpen(false);
+    else pick(draft);
+  };
+  const setDial = (time: string) => { setTouched(true); setDraft(time); };
   return (
     <View style={{ flex: 1, gap: 6 }}>
       {label ? <Txt variant="label" color={colors.muted}>{label.toUpperCase()}</Txt> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel={label ?? t('patterns.time')} onPress={() => { setDraft(isHHMM(value) ? value : suggested && isHHMM(suggested) ? suggested : now); setOpen(true); }} style={[styles.box, compact && styles.compact, tone === 'red' && { borderColor: colors.red }, tone === 'amber' && { borderColor: colors.amber }]} testID={testID}>
+      <Pressable accessibilityRole="button" accessibilityLabel={label ?? t('patterns.time')} onPress={() => { setTouched(false); setDraft(isHHMM(value) ? value : suggested && isHHMM(suggested) ? suggested : now); setOpen(true); }} style={[styles.box, compact && styles.compact, tone === 'red' && { borderColor: colors.red }, tone === 'amber' && { borderColor: colors.amber }]} testID={testID}>
         <Clock size={20} color={colors.muted} />
         {isHHMM(value) ? <Mono size={compact ? 20 : 26} bold>{value}</Mono> : <Txt variant="muted" size={16} style={{ flex: 1 }} numberOfLines={1}>{placeholder ?? '--:--'}</Txt>}
         {isHHMM(value) ? <View style={{ flex: 1 }} /> : null}
@@ -49,10 +57,10 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
       <Sheet visible={open} title={label ?? t('patterns.time')} onClose={() => setOpen(false)} scroll={false} testID="time-sheet" actions={(
         <>
           <Button kind="outline" label={t('patterns.clear')} onPress={() => pick('')} style={{ flex: 1, minHeight: 52 }} />
-          <Button label={t('patterns.done')} disabled={!isHHMM(draft)} onPress={() => pick(draft)} style={{ flex: 1.4, minHeight: 52 }} />
+          <Button label={t('patterns.done')} disabled={!isHHMM(draft)} onPress={done} style={{ flex: 1.4, minHeight: 52 }} />
         </>
       )}>
-        <TimeDial value={draft} onChange={setDraft} testID="time-clock" />
+        <TimeDial value={draft} onChange={setDial} testID="time-clock" />
       </Sheet>
     </View>
   );

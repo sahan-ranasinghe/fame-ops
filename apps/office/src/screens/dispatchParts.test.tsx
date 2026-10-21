@@ -120,6 +120,6 @@ describe("the departure check beside the fields", () => {
     expect(screen.getByTestId("departure-check").textContent).toContain("Leaving 08:00 you reach Kurunegala site at 09:36, 36 min after 09:00. Leave by 07:24.");
     fireEvent.click(screen.getByRole("button", { name: "Use 07:24" }));
     fireEvent.click(screen.getByRole("button", { name: "Move arrive-by to 09:40" }));
-    expect(done).toEqual(["use 07:24", "move 1 09:40"]);
+    expect(done).toEqual(["use ", "move 1 09:40"]); // Use = the planner's own time (an empty field)
   });
 });

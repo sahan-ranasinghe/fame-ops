@@ -64,7 +64,7 @@ export function DwellPicker({ id, value, fallback, onChange, label = "Stay" }: {
         footer={(
           <>
             <button type="button" className="btn" onClick={() => pick("")}>Clear</button>
-            {custom && <button type="button" className="btn primary" disabled={h * 60 + m === 0} onClick={() => pick(String(h * 60 + m))}>Done</button>}
+            {custom && <button type="button" className="btn primary" disabled={h * 60 + m === 0} onClick={() => pick(String(Math.min(h * 60 + (h === 12 ? 0 : m), 12 * 60)))}>Done</button>}
           </>
         )}>
         <div className="chips" role="group" aria-label={`${label}: how long`}>
@@ -76,7 +76,7 @@ export function DwellPicker({ id, value, fallback, onChange, label = "Stay" }: {
         {custom && (
           <div className="stay-wheels" data-testid="stay-wheels">
             <Wheel label="Hours" items={HOURS} value={h} onChange={setH} />
-            <Wheel label="Minutes" items={MINUTES} value={m} onChange={setM} />
+            <Wheel label="Minutes" items={h === 12 ? [0] : MINUTES} value={h === 12 ? 0 : m} onChange={setM} />
           </div>
         )}
       </Sheet>

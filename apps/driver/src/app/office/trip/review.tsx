@@ -15,6 +15,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
+import { TimeField } from '@/components/patterns/TimeField';
 import { TaskMap } from '@/components/TaskMap';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
@@ -186,6 +187,14 @@ export default function TripReview() {
           {trip.plan.updating && !p && <Loading text={t('office.trip.planning')} />}
           {trip.plan.updating && p && <Txt variant="small" color={colors.blue} testID="plan-updating">{t('office.trip.updatingPlan')}</Txt>}
           {reasons.filter((r) => !r.note).map((r, i) => <Txt key={i} variant="strong" size={15} color={colors.amberText}>{r.text}</Txt>)}
+          {/* Round 1 review: Next on When needs only the stops, so a trip with no time at all gets its one time here (the leave
+              time; an arrive-by is set on When), never a dead end. */}
+          {!d.running && !f.leaveBy.trim() && !hasDeadline(f.stops) && (
+            <View style={{ gap: 6 }} testID="review-leave">
+              <TimeField label={t('office.request.leaveBy')} value={f.leaveBy} onCommit={trip.setLeave} placeholder={t('office.trip.leaveAuto')} testID="review-leave-by" />
+              <Txt variant="small">{t('office.trip.reasonLeave')}</Txt>
+            </View>
+          )}
           {p && leave && leave.kind === 'leave' && (
             <View style={{ gap: 2 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>

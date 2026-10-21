@@ -28,6 +28,9 @@ check(sentenceText(tr('en'), 'Sent · not opened yet') === 'Sent · not opened y
 check(sentenceText(tr('en'), 'Seen by driver 16:06') === tr('en')('office.line.seen', { time: '16:06' }), 'Seen by driver 16:06');
 check(sentenceText(tr('si'), 'Seen by driver 16:06').includes('16:06') && !/Seen by driver/.test(sentenceText(tr('si'), 'Seen by driver 16:06')), 'in Sinhala, with the time in Latin digits');
 
+check(sentenceText(tr('en'), 'Declined (no reason given)') === tr('en')('office.line.declined', { reason: tr('en')('office.line.reason_none') }), 'Declined (no reason given)', sentenceText(tr('en'), 'Declined (no reason given)'));
+check(!/no reason/.test(sentenceText(tr('si'), 'Declined (no reason given)')), 'in Sinhala too');
+
 console.log('\nPresence sentences (status_text)');
 const cases: [string, string][] = [
   ['Live · now', 'Live · now'],

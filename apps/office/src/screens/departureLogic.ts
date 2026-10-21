@@ -167,3 +167,13 @@ export function checkDeparture(departure: string, plan: DeparturePlan | null): D
   if (-need >= EARLY_NOTE_MIN) return { kind: "early", text: `Arrives ${duration(slack)} early`, minutes: slack };
   return null;
 }
+
+/**
+ * What "Use 07:24" puts in the leave field (Round 1 review, 21 October 2026): for a missed arrive-by, nothing: an empty
+ * leave time is the planner's own, planned from the deadlines with the buffer (writing 07:24 in would be planned again as
+ * a chosen time, with the road times asked again for that departure, and could be judged a few minutes late once more).
+ * For a late return (the back-by, which the planner does not plan from) the time itself.
+ */
+export function usedLeave(check: { leaveBy: string; back?: true }): string {
+  return check.back ? check.leaveBy : "";
+}

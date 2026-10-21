@@ -37,6 +37,8 @@ export interface Trip {
   preview: PlanPreview | null;
   /** The departure check from the latest plan; `lateBack`: the plan ends after the back-by time. */
   check: DepartureCheck | null;
+  /** planner_suggestions (Settings → Fleet): off = no suggestions and no hints. */
+  suggestions: boolean;
   /** The planner's leave time, shown grey in the empty field ("07:24 · suggested"); never sent. */
   suggestedLeave?: string;
   lateBack: boolean;
@@ -98,6 +100,7 @@ export function useTrip<F extends TripFields>(f: F, setF: (fn: (x: F) => F) => v
     preview,
     check,
     suggestedLeave,
+    suggestions,
     lateBack,
     lateKey,
     offset,
@@ -150,7 +153,7 @@ export function TripRoute({ trip, prefix }: { trip: Trip; prefix: string }) {
       <StartFrom id={`${prefix}-start`} value={f} base={base} stay={trip.stay} onChange={(patch) => update((x) => ({ ...x, ...patch }))} />
       <span className="lab">Stops</span>
       <StopsRows list={f.stops} onChange={(stops) => update((x) => ({ ...x, stops }))} offset={trip.offset}
-        fallbacks={dwellFallbacks(f.stops, preview?.stops, trip.dwellSetting)}
+        fallbacks={trip.suggestions ? dwellFallbacks(f.stops, preview?.stops, trip.dwellSetting) : undefined}
         start={startPoint(f, base)} startIsStop={f.startPax} onTickStart={trip.onTickStart}
         note={(s) => (s.key === lateKey ? <DepartureNote check={check} onUse={trip.setLeave} onMove={trip.moveArriveBy} testId="departure-check-stop" /> : null)} />
       <div className="grid2">

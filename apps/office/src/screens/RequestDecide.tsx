@@ -34,7 +34,7 @@ import { ConflictCards } from "./ConflictCards";
 import { checkDeparture, departurePlan } from "./departureLogic";
 import { DecidedBy, refreshRequest, ReviewingLine, useReviewing } from "./approvers";
 import { basePlace, DepartureNote, useFleetSettings, usePlanPreview, VehicleChoiceRadios, vehicleOnTheDay } from "./dispatchParts";
-import { DwellPicker } from "./DwellPicker";
+import { type DwellFallback, DwellPicker } from "./DwellPicker";
 import { dwellFallbacks, planReasons } from "./planLogic";
 import { PlanWithMap } from "./PlanMap";
 import { RequestDetailCard } from "./RequestDetailCard";
@@ -169,9 +169,10 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
   const preview = plan.err ? null : plan.data ?? null;
   // Hotfix 2 (K): this page is open (every 20 s), and who else has it open.
   const reviewers = useReviewing(id, q.status === "waiting" || q.status === "changed");
-  const fallbacks = dwellFallbacks(rows, preview?.stops, settings.data?.settings.dwell_min);
+  const suggestions = settings.data?.settings.planner_suggestions !== false;
+  const fallbacks = suggestions ? dwellFallbacks(rows, preview?.stops, settings.data?.settings.dwell_min) : new Map<string, DwellFallback>();
   // Leaving at the time asked for, is the vehicle back by the time asked for (§20)? Said in the plan card; the requester's times stay.
-  const backCheck = fields?.back_by ? checkDeparture(fields.time ?? "", departurePlan(preview?.timeline, preview?.plan?.buffer_min, fields.back_by)) : null;
+  const backCheck = suggestions && fields?.back_by ? checkDeparture(fields.time ?? "", departurePlan(preview?.timeline, preview?.plan?.buffer_min, fields.back_by)) : null;
 
   async function decide(decision: "approve" | "decline") {
     if (!q) return;

@@ -937,7 +937,8 @@
       "tileRoad": "On the road",
       "tileFree": "Free",
       "tileGarage": "In garage",
-      "remindersRow": "{n} reminders"
+      "remindersRow": "{n} reminders",
+      "remindersRowOne": "1 reminder"
     },
     "status": {
       "assigned": "sent",
@@ -2252,7 +2253,9 @@
       "driverContact": "Show as a contact for drivers",
       "driverContactNoPhone": "Add a mobile number first.",
       "driverContactAdmin": "Drivers see {name} on Me with Call and WhatsApp, as Fleet admin.",
-      "driverContactOffice": "Drivers see {name} on Me with Call and WhatsApp, as Office."
+      "driverContactOffice": "Drivers see {name} on Me with Call and WhatsApp, as Office.",
+      "plannerSuggestions": "Suggest times on the trip forms",
+      "plannerSuggestionsHint": "The leave time and each stop's stay are suggested in grey; a chosen time that misses an arrive-by gets a hint. Off: just the fields. A trip is never blocked."
     },
     "permission": {
       "view": "View",
@@ -2757,7 +2760,8 @@
       "onTaskUntil_live": "On a task until ~{time} (live)",
       "onTaskUntil_planned": "On a task until ~{time} (planned)",
       "onTaskNoEnd": "On a task · end time not set",
-      "refused": "{n} points refused"
+      "refused": "{n} points refused",
+      "reason_none": "no reason given"
     },
     "chip": {
       "sent": "Sent",

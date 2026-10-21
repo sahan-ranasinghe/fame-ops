@@ -937,7 +937,8 @@
       "tileRoad": "මඟ",
       "tileFree": "නිදහස්",
       "tileGarage": "ගරාජයේ",
-      "remindersRow": "සිහිකැඳවීම් {n}"
+      "remindersRow": "සිහිකැඳවීම් {n}",
+      "remindersRowOne": "සිහිකැඳවීම් 1"
     },
     "status": {
       "assigned": "යවා ඇත",
@@ -2252,7 +2253,9 @@
       "driverContact": "රියදුරන්ට සම්බන්ධතාවක් ලෙස පෙන්වන්න",
       "driverContactNoPhone": "මුලින් ජංගම අංකයක් එක් කරන්න.",
       "driverContactAdmin": "රියදුරන්ට “මම” තුළ {name} අමතන්න සහ WhatsApp සමඟ, වාහන කළමනාකරු ලෙස පෙනේ.",
-      "driverContactOffice": "රියදුරන්ට “මම” තුළ {name} අමතන්න සහ WhatsApp සමඟ, කාර්යාලය ලෙස පෙනේ."
+      "driverContactOffice": "රියදුරන්ට “මම” තුළ {name} අමතන්න සහ WhatsApp සමඟ, කාර්යාලය ලෙස පෙනේ.",
+      "plannerSuggestions": "ගමන් පෝරමවල වේලාවන් යෝජනා කරන්න",
+      "plannerSuggestionsHint": "පිටත්වන වේලාව සහ එක් එක් නැවතුමේ රැඳීම අළු පැහැයෙන් යෝජනා කෙරේ; පැමිණිය යුතු වේලාව මඟහරින තෝරාගත් වේලාවකට ඉඟියක් ලැබේ. අක්‍රිය නම්: ක්ෂේත්‍ර පමණි. ගමනක් කිසිවිට නවතන්නේ නැත."
     },
     "permission": {
       "view": "බලන්න",
@@ -2757,7 +2760,8 @@
       "onTaskUntil_live": "~{time} දක්වා කාර්යයක (සජීවී)",
       "onTaskUntil_planned": "~{time} දක්වා කාර්යයක (සැලසුම්)",
       "onTaskNoEnd": "කාර්යයක · අවසන් වේලාව නැත",
-      "refused": "ලක්ෂ්‍ය {n}ක් ප්‍රතික්ෂේප විය"
+      "refused": "ලක්ෂ්‍ය {n}ක් ප්‍රතික්ෂේප විය",
+      "reason_none": "හේතුවක් දී නැත"
     },
     "chip": {
       "sent": "යැව්වා",

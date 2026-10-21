@@ -107,11 +107,12 @@ describe("TimeField (desktop: the list)", () => {
   it("a click drops the clock only (no quick-time chips); it starts at the suggestion, which shows grey in the empty field", () => {
     const commits: string[] = [];
     render(<Harness initial="" onCommit={(v) => commits.push(v)} />);
-    expect(field().placeholder).toBe("07:24");
+    expect(field().placeholder).toBe("07:24 · suggested");
     expect(field().title).toBe("07:24 · suggested");
     fireEvent.click(field());
     const list = screen.getByTestId("time-list");
     expect(within(list).queryByRole("group", { name: "Quick times" })).toBeNull();
+    expect(within(list).queryByTestId("time-keyboard")).toBeNull(); // the desktop field is typed itself
     expect(within(list).queryAllByRole("button", { name: /^Now|^Planned|^\d\d:\d\d$/ })).toHaveLength(0);
     // The clock starts at the suggested time; → moves the hour by one, any minute; the field shows it and it counts.
     const dial = within(list).getByTestId("time-dial");
@@ -142,7 +143,7 @@ describe("TimeField (phone: the sheet)", () => {
   });
   afterEach(() => { window.matchMedia = realMatch; });
 
-  it("is never typed: a tap opens the sheet with the clock only; Done takes the suggestion it starts at; Clear empties it", () => {
+  it("is never typed: a tap opens the sheet with the clock only; Done without moving it keeps the suggestion the planner's; typed 09:00 counts; Clear empties it", () => {
     vi.setSystemTime(new Date("2026-10-21T03:26:00Z"));
     const commits: string[] = [];
     render(<Harness initial="" onCommit={(v) => commits.push(v)} />);
@@ -153,11 +154,19 @@ describe("TimeField (phone: the sheet)", () => {
     const sheet = screen.getByTestId("time-sheet");
     expect(within(sheet).getByTestId("time-dial")).toBeTruthy();
     expect(within(sheet).queryByRole("button", { name: /^Now|^09:00$/ })).toBeNull();
+    // Done with the clock not moved: the planner's suggestion stays the planner's (the field stays empty).
     fireEvent.click(within(sheet).getByRole("button", { name: "Done" }));
-    expect(commits).toEqual(["07:24"]);
+    expect(commits).toEqual([]);
     expect(screen.queryByTestId("time-sheet")).toBeNull();
+    // The keyboard toggle types 09:00; Done takes it; Clear empties it.
+    fireEvent.click(screen.getByLabelText("Leave by"));
+    fireEvent.click(within(screen.getByTestId("time-sheet")).getByTestId("time-keyboard"));
+    fireEvent.change(screen.getByTestId("time-type-hour"), { target: { value: "09" } });
+    fireEvent.change(screen.getByTestId("time-type-minute"), { target: { value: "00" } });
+    fireEvent.click(within(screen.getByTestId("time-sheet")).getByRole("button", { name: "Done" }));
+    expect(commits).toEqual(["09:00"]);
     fireEvent.click(screen.getByLabelText("Leave by"));
     fireEvent.click(within(screen.getByTestId("time-sheet")).getByRole("button", { name: "Clear" }));
-    expect(commits).toEqual(["07:24", ""]);
+    expect(commits).toEqual(["09:00", ""]);
   });
 });

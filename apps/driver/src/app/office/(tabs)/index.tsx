@@ -112,7 +112,7 @@ export default function OfficeHome() {
         {ov && chipTarget('reminders', me) && ov.reminders.count > 0 && (
           <Row
             left={<Bell size={22} color={ov.reminders.red ? colors.red : colors.ink} strokeWidth={2.2} />}
-            title={t('office.home.remindersRow', { n: ov.reminders.count })}
+            title={ov.reminders.count === 1 ? t('office.home.remindersRowOne') : t('office.home.remindersRow', { n: ov.reminders.count })}
             right={<ChevronRight size={20} color={colors.muted} />}
             onPress={go('reminders')}
             testID="home-reminders"

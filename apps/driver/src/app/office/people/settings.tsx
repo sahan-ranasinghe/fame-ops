@@ -79,7 +79,7 @@ export default function QuickSettings() {
     );
   };
 
-  const switchRow = (key: 'tasks_need_approval' | 'vehicle_on_the_day', label: string, hint: string) => {
+  const switchRow = (key: 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions', label: string, hint: string) => {
     const on = switchValue(key, settings, defaults);
     return (
       <View style={{ gap: 6, paddingVertical: 10 }}>
@@ -144,6 +144,8 @@ export default function QuickSettings() {
               {switchRow('tasks_need_approval', t('office.people.tasksNeedApproval'), t('office.people.tasksNeedApprovalHint'))}
               <Divider />
               {switchRow('vehicle_on_the_day', t('office.people.vehicleOnTheDay'), t('office.people.vehicleOnTheDayHint'))}
+              <Divider />
+              {switchRow('planner_suggestions', t('office.people.plannerSuggestions'), t('office.people.plannerSuggestionsHint'))}
               <Divider />
               <View style={{ gap: 8, paddingVertical: 10 }}>
                 <Txt variant="strong" size={17}>{t('office.people.personalTrips')}</Txt>

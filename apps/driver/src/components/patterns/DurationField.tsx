@@ -13,6 +13,7 @@ import { colors, hoverStyle } from '@/theme';
 
 import { Sheet } from './Sheet';
 
+/** Up to 12 h 00 (the server's longest stay, DWELL_MAX 720). */
 const HOURS = Array.from({ length: 13 }, (_, i) => i);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
 
@@ -56,7 +57,7 @@ export function DurationField({ value, onCommit, label, suggestedMin, testID }: 
       <Sheet visible={open} title={title} onClose={() => setOpen(false)} scroll={false} testID="stay-sheet" actions={(
         <>
           <Button kind="outline" label={t('patterns.clear')} onPress={() => pick(null)} style={{ flex: 1, minHeight: 52 }} />
-          {custom && <Button label={t('patterns.done')} disabled={h * 60 + m === 0} onPress={() => pick(h * 60 + m)} style={{ flex: 1.4, minHeight: 52 }} />}
+          {custom && <Button label={t('patterns.done')} disabled={h * 60 + m === 0} onPress={() => pick(Math.min(h * 60 + (h === 12 ? 0 : m), 12 * 60))} style={{ flex: 1.4, minHeight: 52 }} />}
         </>
       )}>
         <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -68,7 +69,7 @@ export function DurationField({ value, onCommit, label, suggestedMin, testID }: 
         {custom && (
           <View style={styles.wheels} testID="stay-wheels">
             <Wheel label={t('patterns.hoursCol')} items={HOURS} value={h} onChange={setH} testID="stay-hours" />
-            <Wheel label={t('patterns.minutesCol')} items={MINUTES} value={m} onChange={setM} testID="stay-minutes" />
+            <Wheel label={t('patterns.minutesCol')} items={h === 12 ? [0] : MINUTES} value={h === 12 ? 0 : m} onChange={setM} testID="stay-minutes" />
           </View>
         )}
       </Sheet>

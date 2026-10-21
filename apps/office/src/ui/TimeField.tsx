@@ -39,7 +39,8 @@ function TimeChoices({ value, dial, onDial, suggested, mouseKeepsFocus }: {
   const keep = mouseKeepsFocus ? { onMouseDown: (e: MouseEvent) => e.preventDefault() } : {};
   return (
     <div className="tf-choices" {...keep}>
-      <TimeDial value={isWholeTime(dial) ? dial : isWholeTime(value) ? value : suggested && isWholeTime(suggested) ? suggested : nowExact()} onChange={onDial} />
+      <TimeDial value={isWholeTime(dial) ? dial : isWholeTime(value) ? value : suggested && isWholeTime(suggested) ? suggested : nowExact()} onChange={onDial}
+        typeable={!mouseKeepsFocus} />
     </div>
   );
 }
@@ -57,6 +58,14 @@ function PhoneTime({ value, onCommit, suggested, id, disabled, className, ...res
     if (t !== value) onCommit(t);
     setOpen(false);
   };
+  // Done takes the clock once it was moved. Not moved: the value stays; an empty field showing the planner's suggestion
+  // stays empty (the planner's own time; written in it would be planned again as a chosen time: Round 1 review); an empty
+  // field with no suggestion takes the time the clock shows (now).
+  const done = () => {
+    if (isWholeTime(dial)) pick(dial);
+    else if (value || (suggested && isWholeTime(suggested))) setOpen(false);
+    else pick(nowExact());
+  };
   const label = rest["aria-label"];
   return (
     <>
@@ -69,7 +78,7 @@ function PhoneTime({ value, onCommit, suggested, id, disabled, className, ...res
         footer={(
           <>
             <button type="button" className="btn" onClick={() => pick("")} disabled={!value}>Clear</button>
-            <button type="button" className="btn primary" onClick={() => { const t = isWholeTime(dial) ? dial : !value && suggested && isWholeTime(suggested) ? suggested : ""; if (t) pick(t); else setOpen(false); }}>Done</button>
+            <button type="button" className="btn primary" onClick={done}>Done</button>
           </>
         )}>
         <TimeChoices value={value} dial={dial} onDial={setDial} suggested={suggested} />
@@ -129,7 +138,7 @@ function DesktopTime({ value, onCommit, onBlur, onKeyDown, onFocus, suggested, c
         type="text"
         inputMode="numeric"
         autoComplete="off"
-        placeholder={rest.placeholder ?? (suggested && isWholeTime(suggested) ? suggested : "HH:MM")}
+        placeholder={rest.placeholder ?? (suggested && isWholeTime(suggested) ? `${suggested} · suggested` : "HH:MM")}
         title={!text && suggested && isWholeTime(suggested) ? `${suggested} · suggested` : rest.title}
         className={`mono ${className ?? ""}`}
         role="combobox"

@@ -9,7 +9,7 @@ import { type Query, useQuery } from "../data/useQuery";
 import { LocationSearch } from "../ui/LocationSearch";
 import type { Picked } from "../ui/locationLogic";
 import type { DefaultVehicle } from "./availabilityLogic";
-import type { DepartureCheck } from "./departureLogic";
+import { type DepartureCheck, usedLeave } from "./departureLogic";
 import { DwellPicker } from "./DwellPicker";
 import { type StartFields, WHAT_LABEL } from "./stopsLogic";
 import { ANY_TYPES, anyValue, isChoice, ON_THE_DAY, ON_THE_DAY_LABEL } from "./vehicleChoiceLogic";
@@ -145,7 +145,7 @@ export function DepartureNote({ check, onUse, onMove, onMoveBack, backLabel = "b
       <span style={{ color: check.tone === "bad" ? "var(--bad)" : "var(--warn)", fontWeight: 600, fontSize: 14 }}>{check.text}</span>
       {buttons && (
         <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {onUse && <button type="button" className="btn small" onClick={() => onUse(check.leaveBy)}>Use {check.leaveBy}</button>}
+          {onUse && <button type="button" className="btn small" onClick={() => onUse(usedLeave(check))}>Use {check.leaveBy}</button>}
           {onMove && check.moveTo && <button type="button" className="btn small" onClick={() => onMove(check.n, check.moveTo!)}>Move arrive-by to {check.moveTo}</button>}
           {onMoveBack && check.moveBackTo && <button type="button" className="btn small" onClick={() => onMoveBack(check.moveBackTo!)}>Move {backLabel} to {check.moveBackTo}</button>}
         </span>

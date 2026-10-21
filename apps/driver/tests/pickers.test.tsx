@@ -20,7 +20,7 @@ function Harness({ initial = '', suggested, onCommit }: { initial?: string; sugg
 }
 
 describe('The time field: the clock only', () => {
-  it('no quick-time chips; the suggestion shows grey and the clock starts there; Done takes it', () => {
+  it('no quick-time chips; the clock starts at the suggestion; Done without moving it keeps the field empty (the planner\'s time stays the planner\'s)', () => {
     const commits: string[] = [];
     render(<Harness suggested="07:24" onCommit={(v) => commits.push(v)} />);
     fireEvent.press(screen.getByTestId('leave'));
@@ -28,7 +28,7 @@ describe('The time field: the clock only', () => {
     expect(screen.queryByTestId(/^time-quick-/)).toBeNull();
     expect(screen.queryByText(/^Now|^09:00$/)).toBeNull();
     fireEvent.press(screen.getByText('Done'));
-    expect(commits).toEqual(['07:24']);
+    expect(commits).toEqual([]);
   });
 
   it('the clock: the hour then the minute, any minute (its adjustable steps), then Done', () => {

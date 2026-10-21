@@ -111,7 +111,8 @@ export function TaskStops() {
   // The task's end time is its back-by: a plan that ends after it says so beside Leave by (§20; it is changed on the task's edit page).
   const dPlan = running ? null : departurePlan(preview?.timeline, preview?.plan?.buffer_min, t?.end_by);
   // The planner advises (21 October 2026): its leave time is a grey suggestion, never filled in; a chosen time is checked.
-  const raw = form ? checkDeparture(form.leaveBy, dPlan) : null;
+  const suggestions = settings.data?.settings.planner_suggestions !== false;
+  const raw = form && suggestions ? checkDeparture(form.leaveBy, dPlan) : null;
   const check = raw?.kind === "fill" ? null : raw;
   const suggestedLeave = form && !form.leaveBy && raw?.kind === "fill" ? raw.leaveBy : undefined;
 
@@ -203,7 +204,7 @@ export function TaskStops() {
             </div>
           )}
           <StopsRows list={form.list} onChange={(list) => set({ list })} idPrefix="ts" offset={offset}
-            fallbacks={dwellFallbacks(form.list, preview?.stops, settings.data?.settings.dwell_min)}
+            fallbacks={suggestions ? dwellFallbacks(form.list, preview?.stops, settings.data?.settings.dwell_min) : undefined}
             start={!running && t.start_place ? { name: t.start_place } : null} startIsStop={startPax}
             onTickStart={running ? undefined : (i) => {
               const r = tickStart(form.list, i);

@@ -12,7 +12,8 @@ const C = SIZE / 2;
 const OUTER = 108;
 const INNER = 72;
 
-export function TimeDial({ value, onChange }: { value: string; onChange: (time: string) => void }) {
+/** `typeable` false: no keyboard toggle (the desktop drop-down, where the field itself is typed and keeps the focus). */
+export function TimeDial({ value, onChange, typeable = true }: { value: string; onChange: (time: string) => void; typeable?: boolean }) {
   const { h, m } = partsOf(value);
   const [mode, setMode] = useState<DialMode>("hour");
   const [typing, setTyping] = useState(false);
@@ -61,10 +62,10 @@ export function TimeDial({ value, onChange }: { value: string; onChange: (time: 
             <button type="button" className={`tdial-part mono${mode === "minute" ? " on" : ""}`} aria-pressed={mode === "minute"} onClick={() => setMode("minute")} data-testid="time-part-minute">{String(m).padStart(2, "0")}</button>
           </>
         )}
-        <button type="button" className="tdial-toggle" aria-label={typing ? "Use the clock" : "Type the time"} data-testid="time-keyboard"
+        {typeable && <button type="button" className="tdial-toggle" aria-label={typing ? "Use the clock" : "Type the time"} data-testid="time-keyboard"
           onClick={() => { setTypedH(String(h).padStart(2, "0")); setTypedM(String(m).padStart(2, "0")); setTyping((x) => !x); }}>
           <Icon name={typing ? "clock" : "keyboard"} />
-        </button>
+        </button>}
       </div>
       {!typing && (
       <svg

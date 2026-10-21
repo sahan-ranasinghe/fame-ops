@@ -23,6 +23,7 @@ const REASONS: Record<string, string> = {
   'Not available': 'not_available',
   Unwell: 'unwell',
   Other: 'other',
+  'no reason given': 'none',
 };
 
 /** The server's status sentence as a key with its values, or null for a sentence this app does not know. */
