@@ -7,6 +7,7 @@ import { Stack } from 'expo-router';
 import { act } from 'react';
 
 import { answers, failOnConsoleError, FIX, resetFake } from './fakeOffice';
+import { colomboDate } from '@/lib/time';
 
 jest.mock('@/office/client', () => ({ officeApi: require('./fakeOffice').mockOfficeApi }));
 jest.mock('@/state/app', () => ({ useApp: () => require('./fakeOffice').mockUseApp() }));
@@ -51,7 +52,8 @@ const card = (id: string, status: string, extra: Partial<BoardCard> = {}): Board
 
 // The server's own status sentences (supabase/functions/_shared/fleet/tools/tasks.ts statusLine), one per column.
 const board = (): Board => ({
-  date: '2026-10-21',
+  // Today's board (a fixed date turned into another day's board after midnight in Colombo, CI 39654093267).
+  date: colomboDate(new Date()),
   counts: { assigned: 3, in_progress: 1, completed: 1, cancelled: 0, declined: 1 },
   assigned: [card('1', 'Sent · not opened yet'), card('2', 'Seen by driver 16:06'), card('3', 'Accepted 16:10', { accepted: '16:10' })],
   in_progress: [card('4', 'Started 07:06 · sharing location')],
