@@ -4,9 +4,10 @@
 // page, the request form's "Assign now" and the task form read it.
 
 import { z } from "zod";
-import type { AvailabilityWindow } from "../availability.ts";
+import { type AvailabilityWindow, taskBusy } from "../availability.ts";
 import { ToolError } from "../db.ts";
-import { loadRefs } from "../fleet.ts";
+import { loadRefs, openTasksOn } from "../fleet.ts";
+import { holdersOf } from "../holders.ts";
 import { personLinks } from "../format.ts";
 import { findPlace } from "./places.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
@@ -61,6 +62,8 @@ export const availability = tool({
       : null;
     const { rows: ranked, best } = await driverRows(db, refs, w, now, place, undefined, { presence: true });
 
+    const dayTasks = await openTasksOn(db, day);
+    const holders = await holdersOf(db, dayTasks.filter((t) => taskBusy(t, w)));
     const vehicles = await availabilityFor(db, refs, {
       neededAt: from,
       backBy: to,
@@ -75,7 +78,9 @@ export const availability = tool({
         // Part 3b (G): WhatsApp to the driver's WhatsApp number when they gave one.
         drivers: ranked.map((r) => {
           const e = refs.employees.find((x) => x.username === r.username);
-          return { ...r, phone: personLinks(e?.phone, e?.whatsapp) };
+          // Round 4–7 (7): a busy driver's holder (the trip that makes them busy).
+          const holding = !r.free && e ? dayTasks.find((t) => t.employee_id === e.id && taskBusy(t, w)) : undefined;
+          return { ...r, phone: personLinks(e?.phone, e?.whatsapp), holder: holding ? holders.get(holding.id) : undefined };
         }),
         // Phase 7 (§3): the best match (drivers on duty and free, nearest to the first stop, then the fewest tasks today).
         best,

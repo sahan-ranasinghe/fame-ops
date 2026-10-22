@@ -120,4 +120,6 @@ export const ALL_TOOLS = [
   "vehicle_checks", "my_trip", "my_trip_check", "finish_my_trip",
   // Round 4–7 (6): people for the Passengers field.
   "find_people",
+  // Round 4–7 (7): someone else has that driver or vehicle.
+  "ask_for_it", "answer_holder_ask", "holder_asks", "day_timeline",
 ];

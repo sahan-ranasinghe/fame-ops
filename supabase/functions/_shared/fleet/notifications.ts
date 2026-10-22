@@ -48,7 +48,9 @@ export type NotifyEvent =
   | "vehicle.check_problem"
   | "trip.finish_ask"
   | "passenger.trip"
-  | "passenger.moving";
+  | "passenger.moving"
+  | "holder.asked"
+  | "holder.answered";
 
 export interface EventInfo {
   event: NotifyEvent;
@@ -153,6 +155,19 @@ export const EVENTS: readonly EventInfo[] = [
     event: "passenger.moving",
     label: "A trip you ride in: on the way, late, arrived",
     text: "The driver sets off, says they are running late, reaches each stop",
+    needs: [],
+  },
+  // Round 4–7 (7): Ask for it: the holder of a busy driver or vehicle answers Yes / No; the fleet admins see both.
+  {
+    event: "holder.asked",
+    label: "Someone asks for a driver or vehicle you hold",
+    text: "Yes or No in one tap; the fleet admins see the asks too",
+    needs: [],
+  },
+  {
+    event: "holder.answered",
+    label: "Your ask for a driver or vehicle is answered",
+    text: "The holder says Yes or No; the fleet admins see the answers too",
     needs: [],
   },
   // Round 4–7 (4b): written in SQL by no_app_trips at the trip's back-by time (or the day's cut-off).
@@ -261,6 +276,7 @@ const INBOX_KIND: Record<NotifyEvent, InboxKind> = {
   "task.not_accepted": "urgent",
   "task.vehicle_needed": "urgent",
   "vehicle.check_urgent": "urgent",
+  "holder.asked": "urgent",
   "request.decided": "alert",
   "request.redecided": "alert",
   "request.driver_changed": "alert",
@@ -274,6 +290,7 @@ const INBOX_KIND: Record<NotifyEvent, InboxKind> = {
   "vehicle.check_problem": "alert",
   "trip.finish_ask": "alert",
   "passenger.trip": "alert",
+  "holder.answered": "alert",
   "request.on_the_way": "soft",
   "request.running_late": "soft",
   "request.arrived": "soft",
@@ -298,6 +315,8 @@ export interface Message {
   tag?: string;
   /** Hotfix 2 (A): who did it, shown in the notification centre ("Palitha"). */
   who?: string;
+  /** Round 4–7 (7): buttons on the notification centre item, each a tool call (Yes / No of an Ask for it). */
+  actions?: { label: string; tool: string; args: Record<string, string> }[];
   /** Phase 7 (§4): the driver's photo (icon) and the vehicle's (image) as storage paths; notify-office signs them. */
   icon_path?: { bucket: "driver-photos"; path: string };
   image_path?: { bucket: "vehicle-photos"; path: string };
@@ -371,6 +390,11 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
     case "vehicle.check_urgent":
     case "vehicle.check_problem":
       ids = holders("issues");
+      break;
+    case "holder.asked":
+    case "holder.answered":
+      // The holder (asked) or the asker (answered), and the fleet admins (the tools write them).
+      ids = [...(ctx.assignee ? [ctx.assignee] : []), ...holders("approve")];
       break;
     case "passenger.trip":
     case "passenger.moving":

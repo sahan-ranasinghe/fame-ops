@@ -374,6 +374,8 @@ export interface Conflict {
   task?: { id: string; title: string; window: string };
   requester?: ConflictPerson;
   driver?: ConflictPerson;
+  /** Round 4–7 (7): who holds it (none while holder_contact is off). */
+  holder?: Holder;
 }
 
 /** The vehicle a task took when none was named (Phase 7, §3): the driver's vehicle today, else their regular one. */
@@ -654,6 +656,8 @@ export interface TaskDetail {
     fuel_card?: FuelCard;
     /** Round 4–7 (6): who rides, by name. */
     passengers_list?: Passenger[];
+    /** Round 4–7 (7): who holds this trip (its requester, else who assigned it). */
+    holder?: Holder;
     can_reopen?: boolean;
     /** "WP CAB-4521 taken over from Nuwan 08:40" */
     vehicle_taken?: string;
@@ -970,6 +974,8 @@ export interface InboxItem {
   /** The sound and the banner (B): urgent (a task to approve, needs a driver), alert (decided, declined), soft (on the
    * way, arrived), alarm (a critical issue), info (everything else: no sound). */
   kind: "urgent" | "alert" | "soft" | "alarm" | "info";
+  /** Round 4–7 (7): the item's buttons (an Ask for it's Yes / No). */
+  actions?: InboxAction[];
 }
 
 export interface Inbox extends Paged {
@@ -2364,4 +2370,86 @@ export interface PassengerTrip {
   vehicle?: string | null;
   stops: { n: number; type: string; place: string; status: string; arrived?: string; planned?: string }[];
   seen_at: string;
+}
+
+// ---- Round 4–7, feature 7 (22 October 2026): someone else has that driver or vehicle ----
+
+/** Who holds a busy driver or vehicle: the trip's requester (asked), else who assigned it. None while holder_contact is off. */
+export interface Holder {
+  task_id: string;
+  employee_id?: string;
+  name: string;
+  label?: string;
+  photo_url?: string;
+  by: "asked" | "assigned";
+  window: string;
+  from: string;
+  to?: string;
+  phone?: string;
+  phone_display?: string;
+  call?: string;
+  whatsapp?: string;
+}
+
+/** ask_for_it's answer. */
+export interface AskedForIt {
+  ask_id: string;
+  asked?: string | null;
+  what: string;
+  wanted: string;
+  next: string;
+}
+
+/** holder_asks: asks to me, by me or (approve) all of the last 14 days. */
+export interface HolderAsks {
+  which: "to_me" | "by_me" | "all";
+  count: number;
+  asks: {
+    id: string;
+    task_id: string;
+    trip?: string;
+    resource: "driver" | "vehicle";
+    what?: string;
+    wanted: string;
+    asked_by?: string;
+    holder?: string;
+    note?: string;
+    answer?: "yes" | "no";
+    answered_by?: string;
+    answered_at?: string;
+    asked_at: string;
+  }[];
+}
+
+/** day_timeline: a day per driver or per vehicle (Google Calendar's resource view). */
+export interface DayTimeline {
+  date: string;
+  kind: "drivers" | "vehicles";
+  count: number;
+  busy: number;
+  rows: {
+    id: string;
+    name: string;
+    username?: string;
+    label?: string;
+    in_garage?: boolean;
+    bookings: {
+      task_id: string;
+      title: string;
+      from: string;
+      to?: string;
+      status: string;
+      driver?: string;
+      vehicle?: string;
+      holder?: { name: string; label?: string; photo_url?: string; by: "asked" | "assigned" };
+    }[];
+    not_available?: { from: string; to: string; part?: string; reason?: string }[];
+  }[];
+}
+
+/** A notification centre item's button: a tool call made as it is (an Ask for it's Yes / No). */
+export interface InboxAction {
+  label: string;
+  tool: string;
+  args: Record<string, string>;
 }

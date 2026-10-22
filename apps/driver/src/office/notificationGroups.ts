@@ -86,6 +86,8 @@ export const NOTIF_GROUPS: readonly NotifGroupDef[] = [
       { event: "vehicle.booked", title: "Your vehicle is booked", text: "A vehicle you look after", needs: [] },
       { event: "vehicle.booking_cancelled", title: "Your vehicle's booking cancelled", text: "A vehicle you look after", needs: [] },
       { event: "booking.changed", title: "Booking changed by the office", text: "The time, vehicle or driver", needs: [] },
+      { event: "holder.asked", title: "Asked for my driver or vehicle", text: "Yes or No in one tap", needs: [] },
+      { event: "holder.answered", title: "My ask is answered", text: "Yes or No from the holder", needs: [] },
     ],
   },
   {

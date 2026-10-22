@@ -2,6 +2,7 @@
 // vehicle status, document chips, service, km this month, and the warnings
 // shown when a task is assigned.
 
+import { type Holder, holdersOf } from "./holders.ts";
 import type { Db, Row } from "./db.ts";
 import { fetchAll, ToolError, unwrap } from "./db.ts";
 import { closest } from "./geo.ts";
@@ -549,6 +550,8 @@ export interface Conflict {
   task?: { id: string; title: string; window: string };
   requester?: ConflictPerson;
   driver?: ConflictPerson;
+  /** Round 4–7 (7): who holds it (the other trip's requester, else who assigned it): photo, label, time, Call / WhatsApp. */
+  holder?: Holder;
 }
 
 /** The warnings (words, as always) and the overlaps as structured cards. */
@@ -593,6 +596,8 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
       ? unwrap(await db.from("employees").select("id, name, phone").in("id", peopleIds), "employees").map((e) => [e.id, e])
       : [],
   );
+  // Round 4–7 (7): the holder of each overlapping trip (none while the switch holder_contact is off).
+  const holders = await holdersOf(db, clashing);
   const person = (id: string | null | undefined, fallbackName?: string | null): ConflictPerson | undefined => {
     const e = id ? people.get(id) : undefined;
     const name = e?.name ?? fallbackName ?? undefined;
@@ -621,6 +626,7 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
       task: { id: other.id, title: other.title, window: windowText(other) },
       requester,
       driver: otherDriver,
+      holder: holders.get(other.id),
     });
     if (vehicle && other.vehicle_id === vehicle.id) {
       warnings.push(`${vehicle.reg_no} is booked ${taskWindow(other)} ${clash} (${other.title}).`);

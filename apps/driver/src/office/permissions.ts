@@ -1,5 +1,5 @@
 // Office mode (Phase 8, O1): the server's permission table, copied from supabase/functions/_shared/fleet/permissions.ts at
-// phase9-r47 (Round 4–7: the vehicle checks, a no-app trip's own tools, find_people, My trips for everyone; the site imports that very file). Copy again when it changes, never edit this one alone.
+// phase9-r47 (Round 4–7: the vehicle checks, a no-app trip's own tools, find_people, My trips for everyone, the holder tools; the site imports that very file). Copy again when it changes, never edit this one alone.
 
 // Who may call which tool: the permissions a person holds (employees.permissions)
 // against the permission each tool needs. One table, applied by office-mcp (Claude)
@@ -174,6 +174,12 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   // Round 4–7 (6): the Passengers field's people search (no phone or e-mail); My trips for everyone (a passenger may hold
   // only view).
   find_people: ANY,
+  // Round 4–7 (7): ask for a busy driver or vehicle (whoever plans a trip), the holder's answer and the asks (personal,
+  // checked in the tools), the day's timeline (anyone who sees the fleet).
+  ask_for_it: ["request", "approve", "assign_tasks"],
+  answer_holder_ask: ANY,
+  holder_asks: ANY,
+  day_timeline: ["view"],
   // Round 2b: office_users runs these for accounts holding none of office_users, users, approve (the guards: accountGuards.ts).
   list_office_users: ACCOUNTS,
   create_office_user: ACCOUNTS,

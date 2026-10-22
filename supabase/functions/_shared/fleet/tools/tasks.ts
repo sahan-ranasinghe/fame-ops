@@ -2,6 +2,7 @@
 // change the stops of a task, the day's board, one task in detail, cancel,
 // reassign.
 
+import { holdersOf } from "../holders.ts";
 import { z } from "zod";
 import type { Json } from "../database.types.ts";
 import type { Db, Row } from "../db.ts";
@@ -1983,6 +1984,8 @@ export const taskDetail = tool({
             : undefined,
           driver_phone: phoneLinks(task.driven_by === "other" ? task.driver_phone : driver?.phone),
           passengers: task.passengers,
+          // Round 4–7 (7): who holds this trip (its requester, else who assigned it); none while holder_contact is off.
+          holder: (await holdersOf(db, [task], now)).get(task.id),
           passengers_list: riders.length
             ? riders.map((p) => ({
               ...p,
@@ -2479,7 +2482,10 @@ export async function changeTask(
       tag: task.request_id ? `request:${task.request_id}` : `task:${task.id}`,
     }, {
       actor: actor.employeeId,
-      requester: opts.tellRequester === false ? null : request?.requested_by_employee_id ?? null,
+      // Round 4–7 (7): a task made directly (no request): the person who assigned it hears instead.
+      requester: opts.tellRequester === false
+        ? null
+        : request?.requested_by_employee_id ?? (task.request_id ? null : task.assigned_by_employee_id),
       custodian: vehicle?.custodian_employee_id ?? null,
     });
     if (vehicleChanged && oldVehicle?.custodian_employee_id && oldVehicle.custodian_employee_id !== vehicle?.custodian_employee_id) {
@@ -2664,7 +2670,16 @@ async function tellAsker(
   title: string,
   body: string,
 ) {
-  if (!task.request_id) return;
+  if (!task.request_id) {
+    // Round 4–7 (7): a task made directly: the person who assigned it hears its new driver in plain words.
+    if (event === "request.driver_changed" && task.assigned_by_employee_id) {
+      await notifyEvent(db, "booking.changed", { title, body, url: `/tasks?task=${task.id}`, tag: `task:${task.id}` }, {
+        actor: actor.employeeId,
+        requester: task.assigned_by_employee_id,
+      });
+    }
+    return;
+  }
   const request = unwrapMaybe(
     await db.from("vehicle_requests").select("id, status, requested_by_employee_id").eq("id", task.request_id).maybeSingle(),
     "vehicle request",

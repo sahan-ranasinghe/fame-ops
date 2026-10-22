@@ -497,6 +497,56 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"holder_asks": {
+                  Row: {
+                    "answer": string | null,"answered_at": string | null,"answered_by": string | null,"asked_by": string,"created_at": string,"for_request_id": string | null,"for_task_id": string | null,"holder_id": string | null,"id": string,"note": string | null,"resource": string,"resource_id": string,"task_id": string,"wanted_from": string,"wanted_to": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "answer"?: string | null,"answered_at"?: string | null,"answered_by"?: string | null,"asked_by": string,"created_at"?: string,"for_request_id"?: string | null,"for_task_id"?: string | null,"holder_id"?: string | null,"id"?: string,"note"?: string | null,"resource": string,"resource_id": string,"task_id": string,"wanted_from": string,"wanted_to"?: string | null
+                  }
+                  Update: {
+                    "answer"?: string | null,"answered_at"?: string | null,"answered_by"?: string | null,"asked_by"?: string,"created_at"?: string,"for_request_id"?: string | null,"for_task_id"?: string | null,"holder_id"?: string | null,"id"?: string,"note"?: string | null,"resource"?: string,"resource_id"?: string,"task_id"?: string,"wanted_from"?: string,"wanted_to"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "holder_asks_answered_by_fkey"
+      columns: ["answered_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "holder_asks_asked_by_fkey"
+      columns: ["asked_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "holder_asks_for_request_id_fkey"
+      columns: ["for_request_id"]
+isOneToOne: false
+      referencedRelation: "vehicle_requests"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "holder_asks_for_task_id_fkey"
+      columns: ["for_task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "holder_asks_holder_id_fkey"
+      columns: ["holder_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "holder_asks_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"issue_events": {
                   Row: {
                     "action": string,"actor": string | null,"actor_employee_id": string | null,"at": string,"from_status": string | null,"id": number,"issue_id": string,"note": string | null,"to_status": string | null
@@ -779,14 +829,14 @@ isOneToOne: false
                   ]
                 },"office_inbox": {
                   Row: {
-                    "body": string | null,"created_at": string,"employee_id": string,"event": string,"id": number,"read_at": string | null,"title": string,"url": string | null,"who": string | null
+                    "actions": Json | null,"body": string | null,"created_at": string,"employee_id": string,"event": string,"id": number,"read_at": string | null,"title": string,"url": string | null,"who": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "body"?: string | null,"created_at"?: string,"employee_id": string,"event": string,"id"?: never,"read_at"?: string | null,"title": string,"url"?: string | null,"who"?: string | null
+                    "actions"?: Json | null,"body"?: string | null,"created_at"?: string,"employee_id": string,"event": string,"id"?: never,"read_at"?: string | null,"title": string,"url"?: string | null,"who"?: string | null
                   }
                   Update: {
-                    "body"?: string | null,"created_at"?: string,"employee_id"?: string,"event"?: string,"id"?: never,"read_at"?: string | null,"title"?: string,"url"?: string | null,"who"?: string | null
+                    "actions"?: Json | null,"body"?: string | null,"created_at"?: string,"employee_id"?: string,"event"?: string,"id"?: never,"read_at"?: string | null,"title"?: string,"url"?: string | null,"who"?: string | null
                   }
                   Relationships: [
                     {

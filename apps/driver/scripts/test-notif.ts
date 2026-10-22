@@ -101,7 +101,7 @@ console.log('\n== Who sees what ==');
   check(!requester.some((g) => g.key === 'issues'), 'a requester sees no Issues group');
   check(!requester.flatMap((g) => g.events).some((e) => e.event === 'request.created'), 'a requester never sees "New vehicle request" (approve only)');
   check(requester.some((g) => g.key === 'mine' && g.events.some((e) => e.event === 'request.on_the_way')), 'a requester sees My trips with "Driver on the way"');
-  check(requester.some((g) => g.key === 'vehicles' && g.total === 3), 'everyone sees Vehicles and bookings (a custodian may be anyone)');
+  check(requester.some((g) => g.key === 'vehicles' && g.total === 5), 'everyone sees Vehicles and bookings (a custodian may be anyone; Round 4–7: the two holder asks)');
 
   const viewer = groupsFor(answerFor(['view']), ['view']);
   check(same(viewer.map((g) => g.key), ['vehicles', 'mine']), 'view alone: Vehicles and bookings, and My trips (a trip they ride in, Round 4–7)', viewer.map((g) => g.key));

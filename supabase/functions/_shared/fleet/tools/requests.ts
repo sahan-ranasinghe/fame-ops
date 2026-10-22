@@ -8,6 +8,7 @@
 // (redecide_request: keep, change, decline), every step is a request_events row
 // (the timeline), and a request can be made on behalf of someone else.
 
+import { holdersOf } from "../holders.ts";
 import { passengerCards } from "./passengers.ts";
 import { noAppAction } from "./checks.ts";
 import { z } from "zod";
@@ -1196,6 +1197,8 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
       .lt("starts_at", new Date(to).toISOString()).gt("ends_at", new Date(from).toISOString()),
   ]);
   const away = new Map(unwrap(offRes, "availability").map((u) => [u.employee_id, u]));
+  // Round 4–7 (7): who holds each busy vehicle or driver (none while holder_contact is off).
+  const holders = await holdersOf(db, tasks.filter(busy));
 
   const ranked = vehicles.map((v) => {
     const mine = tasks.filter((t) => t.vehicle_id === v.id);
@@ -1242,7 +1245,7 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
     const extra = group === "free_assigned"
       ? { ...contactLinks(custodian?.phone), note: "ask first" }
       : group === "busy" && clash
-      ? { back: clash.end_by ? `back ~${colomboTime(clash.end_by)}` : "end time not set" }
+      ? { back: clash.end_by ? `back ~${colomboTime(clash.end_by)}` : "end time not set", holder: holders.get(clash.id) }
       : {};
     return { rank, group, card, entry: { ...card, ...extra } };
   }).sort((a, b) => a.rank - b.rank);
@@ -1262,6 +1265,7 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
         ? "free all day"
         : `free at that time (other task ${taskWindow(mine[0])})`,
       free: !clash && !off,
+      holder: clash ? holders.get(clash.id) : undefined,
     };
   }).sort((a, b) => Number(b.free) - Number(a.free));
   const groups = {

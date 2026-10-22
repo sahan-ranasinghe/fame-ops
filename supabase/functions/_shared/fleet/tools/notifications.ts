@@ -198,6 +198,7 @@ function inboxItem(
     who: string | null;
     created_at: string;
     read_at: string | null;
+    actions?: unknown;
   },
   now: Date,
 ) {
@@ -212,6 +213,10 @@ function inboxItem(
     ago: whenText(r.created_at, now),
     read: r.read_at !== null,
     kind: inboxKind(r.event),
+    // Round 4–7 (7): the item's buttons (an Ask for it's Yes / No), each a tool call the screen makes as it is.
+    actions: Array.isArray(r.actions) && r.actions.length
+      ? r.actions as { label: string; tool: string; args: Record<string, string> }[]
+      : undefined,
   };
 }
 
@@ -242,7 +247,7 @@ export const myInbox = tool({
   async run({ limit = 30, cursor, unread, archived, search }, { db, actor, now }) {
     const id = person(actor);
     const w = pageWindow(limit, cursor);
-    let q = db.from("office_inbox").select("id, event, title, body, url, who, created_at, read_at", { count: "exact" }).eq(
+    let q = db.from("office_inbox").select("id, event, title, body, url, who, created_at, read_at, actions", { count: "exact" }).eq(
       "employee_id",
       id,
     );

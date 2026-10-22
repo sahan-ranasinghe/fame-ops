@@ -73,6 +73,7 @@ import { listAppErrors } from "./tools/appErrors.ts";
 import { activityLog, setActivityTools } from "./tools/activity.ts";
 import { finishMyTrip, myTrip, myTripCheck, vehicleChecks } from "./tools/checks.ts";
 import { createdTargets, findPeople, requestTargets, taskTarget, withPassengerList } from "./tools/passengers.ts";
+import { answerHolderAsk, askForIt, dayTimeline, holderAsks, withConflicts } from "./tools/holders.ts";
 import {
   cancelTask,
   createTask,
@@ -128,12 +129,12 @@ export const TOOLS: AnyTool[] = [
   taskBoard,
   taskDetail,
   cancelTask,
-  reassignTask,
+  withConflicts(reassignTask, (a) => a.task_id as string),
   withPassengerList(createRequest, { count: "pax", targets: createdTargets }),
   listRequests,
   suggestVehicles,
   decideRequest,
-  withPassengerList(bookVehicle, { count: "pax", targets: createdTargets }),
+  withConflicts(withPassengerList(bookVehicle, { count: "pax", targets: createdTargets }), (_a, r) => r.task_id as string),
   cancelRequest,
   mileageSummary,
   listVehicleReports,
@@ -163,11 +164,14 @@ export const TOOLS: AnyTool[] = [
   availability,
   withPassengerList(updateRequest, { count: "pax", ids: ["request_id", "version"], targets: requestTargets }),
   redecideRequest,
-  withPassengerList(updateTask, {
-    count: "passengers",
-    ids: ["task_id", "plan_version"],
-    targets: (a) => [taskTarget(a.task_id as string)],
-  }),
+  withConflicts(
+    withPassengerList(updateTask, {
+      count: "passengers",
+      ids: ["task_id", "plan_version"],
+      targets: (a) => [taskTarget(a.task_id as string)],
+    }),
+    (a) => a.task_id as string,
+  ),
   listFuel,
   dutyLog,
   clockOutDriver,
@@ -215,6 +219,11 @@ export const TOOLS: AnyTool[] = [
   finishMyTrip,
   // Round 4–7 (6): people for the Passengers field (passenger_list rides on the trip tools above).
   findPeople,
+  // Round 4–7 (7): someone else has that driver or vehicle: ask for it, answer, the asks, the day's timeline.
+  askForIt,
+  answerHolderAsk,
+  holderAsks,
+  dayTimeline,
 ];
 // Round 2b: the Activity log reads every tool's title and whether it writes (this list, read when it runs).
 setActivityTools(() => TOOLS);
@@ -299,6 +308,11 @@ export const INSTRUCTIONS = [
   'vehicle says "Fuel type: not set"). At Start task the driver sees the trip\'s km and roughly how many litres it takes (km ' +
   'per litre from the vehicle\'s last 3 fills, else a default by type) and answers "Enough fuel?"; task_detail fuel_card ' +
   "shows the estimate and the answer. Never blocks.",
+  "Passengers (Round 4–7; get_settings passengers): trips may name who rides (passenger_list: office people from find_people, " +
+  "or a name and phone); registered passengers are told and see the trip in my_trips (role passenger); task_detail gives a " +
+  "Share trip link for the others. Busy drivers and vehicles (get_settings holder_contact): conflicts, availability, " +
+  "suggest_vehicles and task_detail name the holder (who asked for the trip, else who assigned it) with Call and WhatsApp; " +
+  "ask_for_it asks them (Yes / No in one tap; never changes a trip); day_timeline shows a day per driver or vehicle.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
   "Office accounts (users permission): create_office_user returns a one-time set-password link to send by WhatsApp; never ask for or type a password. " +
   "Each office person has permissions (view, request, approve, assign_tasks, vehicles, issues, users); update_office_user changes them.",
