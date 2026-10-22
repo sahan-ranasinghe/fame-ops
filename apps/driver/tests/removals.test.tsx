@@ -246,12 +246,11 @@ describe('4. Vehicles: one quiet line when every document is valid', () => {
     expect(screen.getAllByTestId('doc-ok').length).toBeGreaterThanOrEqual(4);
   });
 
-  it('the vehicle page: the line instead of the chips; an expiring one keeps its chips with their dates', async () => {
+  it('the vehicle page keeps each document with its date, even when all are valid (the one line is the list\'s)', async () => {
     renderRouter(routesFor(vehiclesAnswers([VALID, EXPIRING]), { 'office/vehicles/[reg]': VehicleScreen }), { initialUrl: '/office/vehicles/WP CAB-4521' });
-    const line = await screen.findByTestId('docs-valid');
-    expect(within(line).getByText(t('office.lists2.vehicles.docsValid'))).toBeTruthy();
-    expect(line.props.accessibilityLabel).toContain(valid('lic', '2027-03-12'));
-    expect(screen.queryByTestId('doc-chips')).toBeNull();
+    const chips = await screen.findByTestId('doc-chips');
+    expect(within(chips).getByText(`${t('office.vehicles.doc_lic')} · ${dateWords(t, '2027-03-12')}`)).toBeTruthy();
+    expect(screen.queryByTestId('docs-valid')).toBeNull();
   });
 
   it('the vehicle page of an expiring one: the chips as before', async () => {

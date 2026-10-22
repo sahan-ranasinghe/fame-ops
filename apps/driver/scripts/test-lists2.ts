@@ -197,8 +197,9 @@ console.log('\nThe screens use the rules and keep every key action');
   check(/vehicleRowShown\(v, t\)/.test(vehicles) && /docQuiet\(tone\)/.test(vehicles) && /office\.lists2\.vehicles\.docValid/.test(vehicles) && /office\.vehicles\.register/.test(vehicles) && /<LoadMore/.test(vehicles) && /<FilterBar/.test(vehicles),
     'Vehicles: one status, quiet valid documents; Register, the Filter, Load more kept');
   const vehicle = read('app/office/vehicles/[reg].tsx');
-  check([vehicles, vehicle].every((x) => /docsAllValid\(v\) \?|if \(docsAllValid\(v\)\)/.test(x) && /accessibilityLabel=\{docsValidLabel\(v, t\)\}/.test(x) && /t\('office\.lists2\.vehicles\.docsValid'\)/.test(x) && /testID="docs-valid"/.test(x)),
-    'Vehicles (list and page): all valid = the one line with each expiry for the screen reader');
+  check([vehicles].every((x) => /docsAllValid\(v\) \?|if \(docsAllValid\(v\)\)/.test(x) && /accessibilityLabel=\{docsValidLabel\(v, t\)\}/.test(x) && /t\('office\.lists2\.vehicles\.docsValid'\)/.test(x) && /testID="docs-valid"/.test(x))
+    && !/docsAllValid/.test(vehicle),
+    'Vehicles: all valid = the one line on the list (each expiry for the screen reader); the vehicle page keeps each with its date');
   check(/<Pill key=\{k\} text=\{`\$\{t\(`office\.vehicles\.doc_\$\{k\}`\)\}\$\{dc\?\.expiry \? ` · \$\{dateWords\(t, dc\.expiry\)\}` : ''\}`\} tone=\{docTone\(dc\?\.chip\)\} \/>/.test(vehicle) && /v\.documents_missing_text \?/.test(vehicle),
     'the vehicle page: any other documents keep their chips with the dates, and what is missing');
   const activity = read('app/office/people/activity.tsx');

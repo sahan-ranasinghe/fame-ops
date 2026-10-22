@@ -18,11 +18,9 @@ import { Image, Linking, Pressable, View } from 'react-native';
 
 import { PhotoPick } from '@/components/office/PhotoPick';
 import { VehicleChecksSection } from '@/components/office/VehicleChecks';
-import { Check } from '@/components/icons';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { availabilityText } from '@/office/availabilityWords';
 import { docTone, fuelKeys, kmLine, vehicleTone } from '@/office/manageLogic';
-import { docsAllValid, docsValidLabel } from '@/office/lists2Logic';
 import { uploadToTicket, type Shot } from '@/office/media';
 import { canSetVehiclePhoto, canUploadDocs, documentRows, ticketOf } from '@/office/mediaLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -153,19 +151,13 @@ export default function VehicleScreen() {
               {fact(t('office.vehicles.garageBooked'), v.garage_booked ? dateWords(t, v.garage_booked) : v.garage_booked)}
               <View style={{ gap: 6 }}>
                 <Txt variant="label" color={colors.muted}>{t('office.vehicles.documents').toUpperCase()}</Txt>
-                {docsAllValid(v) ? (
-                  <View accessible accessibilityLabel={docsValidLabel(v, t)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} testID="docs-valid">
-                    <Check size={16} color={colors.green} strokeWidth={2.6} />
-                    <Txt variant="body" size={15}>{t('office.lists2.vehicles.docsValid')}</Txt>
-                  </View>
-                ) : (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }} testID="doc-chips">
-                    {(['lic', 'ins', 'emi'] as const).map((k) => {
-                      const dc = docs[k];
-                      return <Pill key={k} text={`${t(`office.vehicles.doc_${k}`)}${dc?.expiry ? ` · ${dateWords(t, dc.expiry)}` : ''}`} tone={docTone(dc?.chip)} />;
-                    })}
-                  </View>
-                )}
+                {/* The vehicle's own page keeps each document with its date (Sahan approved the one line for the list's rows). */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }} testID="doc-chips">
+                  {(['lic', 'ins', 'emi'] as const).map((k) => {
+                    const dc = docs[k];
+                    return <Pill key={k} text={`${t(`office.vehicles.doc_${k}`)}${dc?.expiry ? ` · ${dateWords(t, dc.expiry)}` : ''}`} tone={docTone(dc?.chip)} />;
+                  })}
+                </View>
                 {v.documents_missing_text ? <Txt variant="small" color={colors.amberText}>{v.documents_missing_text}</Txt> : null}
               </View>
             </View>

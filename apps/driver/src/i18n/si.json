@@ -1277,7 +1277,9 @@
       "purposeSaved": "ගමන සුරැකුවා",
       "purposeNowPersonal": "දැන් පුද්ගලික: එහි km ජොබ්වලින් වෙනම ගණන් කෙරේ.",
       "purposeNowCompany": "දැන් සමාගම් වැඩ",
-      "purposeNotSelf": "ඇප් එකෙන් රියදුරු ආරම්භ කළ ගමනක් පමණක් වෙනස් කෙරේ: කාර්යාලයේ කාර්ය සමාගම් වැඩයි."
+      "purposeNotSelf": "ඇප් එකෙන් රියදුරු ආරම්භ කළ ගමනක් පමණක් වෙනස් කෙරේ: කාර්යාලයේ කාර්ය සමාගම් වැඩයි.",
+      "sentAt": "{time}ට යැව්වා",
+      "seenAt": "{time}ට දුටුවා"
     },
     "give": {
       "title": "රියදුරෙක් අවශ්‍යයි",
@@ -2974,7 +2976,8 @@
       "onDuty": "සේවයේ",
       "someoneElse": "වෙනත් අයෙක්",
       "expired": "කල් ඉකුත්",
-      "notConfirmed": "තහවුරු කර නැත"
+      "notConfirmed": "තහවුරු කර නැත",
+      "lateWord": "ප්‍රමාදයි"
     },
     "timeline": {
       "planned": "සැලසුම {time}",
@@ -3543,7 +3546,9 @@
       "showAll": "සියල්ල ({n})",
       "vehicles": {
         "noMake": "වර්ගය සහ මාදිලිය නැත",
-        "docValid": "{doc} වලංගුයි"
+        "docValid": "{doc} වලංගුයි",
+        "docsValid": "ලේඛන වලංගුයි",
+        "docValidUntil": "{doc} {date} දක්වා වලංගුයි"
       },
       "rest": {
         "until": "~{time} දක්වා",

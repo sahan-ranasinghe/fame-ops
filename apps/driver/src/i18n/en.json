@@ -1277,7 +1277,9 @@
       "purposeSaved": "Trip saved",
       "purposeNowPersonal": "Now personal: its km are counted apart from the jobs.",
       "purposeNowCompany": "Now company work",
-      "purposeNotSelf": "Only a trip a driver started in the app is switched: the office's tasks are company work."
+      "purposeNotSelf": "Only a trip a driver started in the app is switched: the office's tasks are company work.",
+      "sentAt": "Sent {time}",
+      "seenAt": "Seen {time}"
     },
     "give": {
       "title": "Needs a driver",
@@ -2974,7 +2976,8 @@
       "onDuty": "On duty",
       "someoneElse": "Someone else",
       "expired": "Expired",
-      "notConfirmed": "Not confirmed"
+      "notConfirmed": "Not confirmed",
+      "lateWord": "Late"
     },
     "timeline": {
       "planned": "Planned {time}",
@@ -3543,7 +3546,9 @@
       "showAll": "Show all {n}",
       "vehicles": {
         "noMake": "Make not set",
-        "docValid": "{doc} valid"
+        "docValid": "{doc} valid",
+        "docsValid": "Documents valid",
+        "docValidUntil": "{doc} valid until {date}"
       },
       "rest": {
         "until": "Until ~{time}",

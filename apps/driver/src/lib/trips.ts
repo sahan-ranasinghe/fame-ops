@@ -588,6 +588,8 @@ export function localTrip(input: {
     end_odometer_km: null,
     km: null,
     passengers: null,
+    // Round 4–7 (6): write-only on the server (always null when read).
+    passenger_list: null,
     contact_name: null,
     contact_phone: null,
     notes: request.note ?? null,
