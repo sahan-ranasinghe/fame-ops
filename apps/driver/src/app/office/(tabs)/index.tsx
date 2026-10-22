@@ -9,10 +9,15 @@
 // (expand in place, each item to its issue) with Snooze for tomorrow or a week (update_issue snooze on every issue
 // behind the group). The rules: office/overviewLogic.ts. The trip editor (+ Assign a task, Request) is round O2: no big
 // action button yet, so none is shown.
+// Round 4–7, item 12 (the approved mockup 1, design/mockups/2026-10-22): restyled, nothing removed. The thin top bar (the
+// date over the greeting, the bell, the avatar to My profile), the stats row with icons (On the road blue, Free green, In
+// garage grey; each opens its list as before), "Needs you now" with its total over the kinds that wait (requests, trips
+// that need a driver, needs attention, the reminders), each a card of list rows with an icon tile and its own View all;
+// then On the road, Today's tasks and My trips as list-look sections; the floating New trip button.
 
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Mono, Txt } from '@/components/ui';
 import { addDays, colomboDate } from '@/lib/time';
@@ -30,7 +35,9 @@ import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { Button } from '@/components/ui';
-import { Bell, ChevronDown, ChevronRight, Plus } from '@/components/icons';
+import { Bell, Check, ChevronDown, ChevronRight, ClipboardCheck, FileText, MapPin, TriangleAlert, UserX, Wrench } from '@/components/icons';
+import { RowIcon, RowPlate } from '@/components/patterns/ListRow';
+import { look } from '@/components/patterns/look';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { Sheet } from '@/components/patterns/Sheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
@@ -98,38 +105,49 @@ export default function OfficeHome() {
   const ov = overview.data;
   const refreshing = overview.refreshing || requests.refreshing || board.refreshing || trips.refreshing;
 
+  // "Needs you now" (the approved mockup 1): what waits for this person, by kind, in one group of cards under one heading
+  // with the total. Each kind keeps its own list, its View all and its actions.
+  const needsTotal = (sections.includes('requests') ? ov?.requests.waiting ?? 0 : 0)
+    + (sections.includes('needs_driver') ? ov?.needs_driver?.count ?? 0 : 0)
+    + (sections.includes('critical') ? attentionCount(ov) : 0);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       {/* Round 2b (Gmail / Uber Fleet / Shopify): a thin top bar; the counts as a strip in the page; "Needs you now" first;
-          one floating "+ New trip". The language switch is on My profile. */}
+          one floating "+ New trip". The language switch is on My profile. Round 4–7, item 12 (the approved mockup 1): the
+          date over the greeting, the bell and the avatar; the stats row with icons; the sections as list rows. */}
       <TopBar greeting={t(`office.home.${greeting()}`, { name: firstName(me.name) })} date={shortDate(names, Date.now())} />
-      <Screen refreshing={refreshing} onRefresh={refresh} bottom={actions.length > 0 ? 96 : 24}>
+      <Screen refreshing={refreshing} onRefresh={refresh} bottom={actions.length > 0 ? 96 : 24} style={{ paddingTop: 4 }}>
         <SavedNotice noticeKey="/office" />
         {ov && (
           <StatTiles light tiles={[
-            ...(chips.includes('road') ? [{ key: 'road', n: ov.vehicles.on_the_road, label: t('office.home.tileRoad'), tone: 'blue' as const, onPress: go('road') }] : []),
-            ...(chips.includes('free') ? [{ key: 'free', n: ov.vehicles.parked, label: t('office.home.tileFree'), onPress: go('free') }] : []),
-            ...(chips.includes('garage') && ov.vehicles.in_garage !== undefined ? [{ key: 'garage', n: ov.vehicles.in_garage, label: t('office.home.tileGarage'), onPress: go('garage') }] : []),
+            ...(chips.includes('road') ? [{ key: 'road', n: ov.vehicles.on_the_road, label: t('office.home.tileRoad'), tone: 'blue' as const, icon: MapPin, onPress: go('road') }] : []),
+            ...(chips.includes('free') ? [{ key: 'free', n: ov.vehicles.parked, label: t('office.home.tileFree'), tone: 'green' as const, icon: Check, onPress: go('free') }] : []),
+            ...(chips.includes('garage') && ov.vehicles.in_garage !== undefined ? [{ key: 'garage', n: ov.vehicles.in_garage, label: t('office.home.tileGarage'), icon: Wrench, onPress: go('garage') }] : []),
           ]} />
         )}
         {overview.error && <ListFailed stale={!!ov} error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {(sections.includes('requests') || sections.includes('needs_driver') || sections.includes('critical') || (ov && chipTarget('reminders', me) && ov.reminders.count > 0)) && (
-          <Txt variant="heading" size={20} testID="needs-you-now">{t('office.home.needsYouNow')}</Txt>
+          <View style={styles.needsHead}>
+            <Txt variant="strong" size={17} testID="needs-you-now" accessibilityRole="header">{t('office.home.needsYouNow')}</Txt>
+            {needsTotal > 0 ? <View style={styles.needsChip}><Mono size={12} bold color={colors.red}>{String(needsTotal)}</Mono></View> : null}
+          </View>
         )}
 
         {sections.includes('requests') && (
-          <Section title={t('office.home.requests')} count={ov?.requests.waiting} link={t('office.common.viewAll')} onLink={() => router.push('/office/(tabs)/approve')}>
-            {!requests.data && !requests.error && <SkeletonRows rows={2} lines={2} />}
-            {requests.error && <ListFailed stale={!!requests.data} error={requests.error} onRetry={refresh} />}
-            {requests.data && requests.data.requests.length === 0 && <ListEmpty text={t('office.home.noRequests')} />}
+          <Section look="group" title={t('office.home.requests')} count={ov?.requests.waiting} link={t('office.common.viewAll')} onLink={() => router.push('/office/(tabs)/approve')}>
+            {!requests.data && !requests.error && <View style={styles.inset}><SkeletonRows rows={2} lines={2} /></View>}
+            {requests.error && <View style={styles.inset}><ListFailed stale={!!requests.data} error={requests.error} onRetry={refresh} /></View>}
+            {requests.data && requests.data.requests.length === 0 && <View style={styles.inset}><ListEmpty text={t('office.home.noRequests')} /></View>}
             {requests.data?.requests.map((r, i) => (
               <View key={r.id}>
-                {i > 0 && <Divider />}
+                {i > 0 && <Divider soft />}
                 <Row
-                  left={<Avatar name={r.requested_by} photo={r.requested_by_photo_url} />}
+                  inset
+                  chevron
+                  left={r.requested_by_photo_url ? <Avatar name={r.requested_by} photo={r.requested_by_photo_url} /> : <RowIcon icon={ClipboardCheck} tone="amber" />}
                   title={requestTitle(r)}
-                  line={requestLine({ ...r, when: whenWords(t, r.when) })}
-                  right={r.asked ? <Txt variant="small" style={{ maxWidth: 90, textAlign: 'right' }}>{whenWords(t, r.asked)}</Txt> : undefined}
+                  line={[requestLine({ ...r, when: whenWords(t, r.when) }), r.asked ? whenWords(t, r.asked) : ''].filter(Boolean).join(' · ')}
                   onPress={() => router.push({ pathname: '/office/request/[id]', params: { id: r.id } })}
                 />
               </View>
@@ -138,17 +156,19 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('needs_driver') && (
-          <Section title={t('office.home.needsDriver')} count={ov?.needs_driver?.count ?? 0} tone="red" link={has(me.permissions, 'assign_tasks') ? t('office.common.viewAll') : undefined} onLink={() => router.push('/office/(tabs)/tasks')}>
-            {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
-            {ov && (ov.needs_driver?.tasks.length ?? 0) === 0 && <ListEmpty text={t('office.home.noNeedsDriver')} />}
+          <Section look="group" title={t('office.home.needsDriver')} count={ov?.needs_driver?.count ?? 0} tone="red" link={has(me.permissions, 'assign_tasks') ? t('office.common.viewAll') : undefined} onLink={() => router.push('/office/(tabs)/tasks')}>
+            {!ov && !overview.error && <View style={styles.inset}><SkeletonRows rows={2} lines={2} /></View>}
+            {ov && (ov.needs_driver?.tasks.length ?? 0) === 0 && <View style={styles.inset}><ListEmpty text={t('office.home.noNeedsDriver')} /></View>}
             {ov?.needs_driver?.tasks.slice(0, ROWS).map((x, i) => (
               <View key={x.task_id}>
-                {i > 0 && <Divider />}
+                {i > 0 && <Divider soft />}
                 <Row
+                  inset
+                  left={<RowIcon icon={UserX} tone="red" />}
                   title={x.title}
                   line={`${whenWords(t, x.start)} · ${x.line}`}
                   right={has(me.permissions, 'assign_tasks')
-                    ? <Button kind="dark" label={t('office.home.giveDriver')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: x.task_id } })} style={{ minHeight: 48, backgroundColor: colors.red, paddingHorizontal: 14 }} />
+                    ? <Button kind="dark" label={t('office.home.giveDriver')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: x.task_id } })} style={{ minHeight: 44, backgroundColor: colors.red, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }} />
                     : <Pill text={whenWords(t, x.when)} tone="red" />}
                 />
               </View>
@@ -157,29 +177,32 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('critical') && (
-          <Section title={t('office.home.attention')} count={attentionCount(ov)} tone={attentionCount(ov) ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
-            {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
-            {snoozeError && !snoozing && <ErrorNotice error={snoozeError.error} onSignIn={() => void signOut()} />}
-            {ov && attentionGroups(ov).length === 0 && <ListEmpty text={t('office.home.noAttention')} />}
+          <Section look="group" title={t('office.home.attention')} count={attentionCount(ov)} tone={attentionCount(ov) ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
+            {!ov && !overview.error && <View style={styles.inset}><SkeletonRows rows={2} lines={2} /></View>}
+            {snoozeError && !snoozing && <View style={styles.inset}><ErrorNotice error={snoozeError.error} onSignIn={() => void signOut()} /></View>}
+            {ov && attentionGroups(ov).length === 0 && <View style={styles.inset}><ListEmpty text={t('office.home.noAttention')} /></View>}
             {attentionGroups(ov).slice(0, ROWS).map((g, i) => {
               const open = expanded.has(g.key);
               const single = g.items.length === 1 && g.items[0].issue_id;
               return (
                 <View key={g.key} testID="attention-group">
-                  {i > 0 && <Divider />}
+                  {i > 0 && <Divider soft />}
                   <Row
-                    left={g.items.length > 1 ? (open ? <ChevronDown size={20} color={colors.ink} /> : <ChevronRight size={20} color={colors.ink} />) : undefined}
+                    inset
+                    left={g.items.length > 1
+                      ? <View style={styles.groupIcon}>{open ? <ChevronDown size={20} color={colors.ink} /> : <ChevronRight size={20} color={colors.ink} />}</View>
+                      : <RowIcon icon={g.vehicle ? FileText : TriangleAlert} tone={g.severity === 'critical' ? 'red' : 'amber'} />}
                     title={g.title}
                     line={[g.vehicle, g.count > 1 ? t('office.home.attentionN', { n: g.count }) : dueWords(t, g.items[0]?.due)].filter(Boolean).join(' · ') || undefined}
                     chip={{ text: t(`office.home.sev_${g.severity}`), tone: g.severity === 'critical' ? 'red' : 'amber' }}
                     onPress={single ? () => router.push({ pathname: '/office/issues/[id]', params: { id: g.items[0].issue_id ?? '' } }) : () => setExpanded((x) => { const n = new Set(x); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n; })}
                   />
                   {open && g.items.map((x, k) => (
-                    <Row key={x.issue_id ?? `${g.key}-${k}`} title={x.what} line={[x.subject, x.vehicle, dueWords(t, x.due)].filter(Boolean).join(' · ') || undefined}
+                    <Row key={x.issue_id ?? `${g.key}-${k}`} inset chevron title={x.what} line={[x.subject, x.vehicle, dueWords(t, x.due)].filter(Boolean).join(' · ') || undefined}
                       onPress={x.issue_id ? () => router.push({ pathname: '/office/issues/[id]', params: { id: x.issue_id ?? '' } }) : undefined} />
                   ))}
                   {maySnooze && g.issue_ids.length > 0 && (
-                    <Pressable accessibilityRole="button" onPress={() => { setSnoozeError(null); setSnoozing(g); }} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }} testID="attention-snooze">
+                    <Pressable accessibilityRole="button" onPress={() => { setSnoozeError(null); setSnoozing(g); }} style={styles.snooze} testID="attention-snooze">
                       <Txt variant="strong" size={15} color={colors.blue}>{t('office.home.snooze')}</Txt>
                     </Pressable>
                   )}
@@ -190,31 +213,59 @@ export default function OfficeHome() {
         )}
 
         {ov && chipTarget('reminders', me) && ov.reminders.count > 0 && (
-          <Row
-            left={<Bell size={22} color={ov.reminders.red ? colors.red : colors.ink} strokeWidth={2.2} />}
-            title={ov.reminders.count === 1 ? t('office.home.remindersRowOne') : t('office.home.remindersRow', { n: ov.reminders.count })}
-            right={<ChevronRight size={20} color={colors.muted} />}
-            onPress={go('reminders')}
-            testID="home-reminders"
-          />
+          <View style={styles.card}>
+            <Row
+              inset
+              chevron
+              left={<RowIcon icon={Bell} tone={ov.reminders.red ? 'red' : 'amber'} />}
+              title={ov.reminders.count === 1 ? t('office.home.remindersRowOne') : t('office.home.remindersRow', { n: ov.reminders.count })}
+              onPress={go('reminders')}
+              testID="home-reminders"
+            />
+          </View>
         )}
+
+        {sections.includes('road') && (
+          <Section look="list" title={t('office.home.road')} count={ov?.on_the_road.length} link={t('office.home.liveMap')} onLink={() => router.push('/office/(tabs)/live')}>
+            {!ov && !overview.error && <View style={styles.inset}><SkeletonRows rows={2} lines={2} /></View>}
+            {ov && ov.on_the_road.length === 0 && <View style={styles.inset}><ListEmpty text={t('office.home.noRoad')} /></View>}
+            {ov?.on_the_road.slice(0, ROWS).map((d, i) => (
+              <View key={d.username ?? d.driver}>
+                {i > 0 && <Divider soft />}
+                <Row
+                  inset
+                  left={<Avatar name={d.driver} />}
+                  title={d.driver}
+                  titleAfter={d.vehicle ? <RowPlate regNo={d.vehicle} /> : undefined}
+                  line={[d.task ?? d.going_to, d.near ? `${d.near}` : sentenceText(t, d.status_text)].filter(Boolean).join(' · ')}
+                  chip={{ text: d.task ? t('office.chip.underWay') : t('office.chip.onDuty'), tone: d.task ? 'blue' : 'green' }}
+                  onPress={() => router.push({ pathname: '/office/(tabs)/live', params: d.username ? { driver: d.username } : {} })}
+                />
+              </View>
+            ))}
+          </Section>
+        )}
+
         {sections.includes('tasks') && (
-          <Section title={t('office.home.tasks')} count={board.data ? board.data.counts.assigned + board.data.counts.in_progress + board.data.counts.completed : undefined} link={t('office.home.board')} onLink={() => router.push('/office/(tabs)/tasks')}>
-            {!board.data && !board.error && <SkeletonRows rows={3} lines={2} />}
-            {board.error && <ListFailed stale={!!board.data} error={board.error} onRetry={refresh} />}
+          <Section look="list" title={t('office.home.tasks')} count={board.data ? board.data.counts.assigned + board.data.counts.in_progress + board.data.counts.completed : undefined} link={t('office.home.board')} onLink={() => router.push('/office/(tabs)/tasks')}>
+            {!board.data && !board.error && <View style={styles.inset}><SkeletonRows rows={3} lines={2} /></View>}
+            {board.error && <View style={styles.inset}><ListFailed stale={!!board.data} error={board.error} onRetry={refresh} /></View>}
             {board.data && [...board.data.in_progress, ...board.data.assigned].length === 0 && (
-              <ListEmpty
-                text={t('office.home.noTasks')}
-                action={actions.includes('assign') ? t('office.trip.assignTask') : undefined}
-                onAction={actions.includes('assign') ? () => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } }) : undefined}
-              />
+              <View style={styles.inset}>
+                <ListEmpty
+                  text={t('office.home.noTasks')}
+                  action={actions.includes('assign') ? t('office.trip.assignTask') : undefined}
+                  onAction={actions.includes('assign') ? () => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } }) : undefined}
+                />
+              </View>
             )}
             {board.data && [...board.data.in_progress.map((c) => ({ c, col: 'in_progress' as const })), ...board.data.assigned.map((c) => ({ c, col: 'assigned' as const }))].slice(0, ROWS).map(({ c, col }, i) => {
               const k = taskChip(col, c);
               return (
                 <View key={c.id}>
-                  {i > 0 && <Divider />}
+                  {i > 0 && <Divider soft />}
                   <Row
+                    inset
                     time={c.time}
                     title={c.title}
                     line={taskRowLine(t, c)}
@@ -225,49 +276,36 @@ export default function OfficeHome() {
               );
             })}
             {board.data && (board.data.counts.assigned + board.data.counts.in_progress) > ROWS && (
-              <Txt variant="strong" color={colors.blue} style={{ textAlign: 'center', paddingVertical: 10 }} onPress={() => router.push('/office/(tabs)/tasks')}>
-                {t('office.home.allTasks', { n: board.data.counts.assigned + board.data.counts.in_progress })}
-              </Txt>
+              <>
+                <Divider soft />
+                <Txt variant="strong" color={colors.blue} style={{ textAlign: 'center', paddingVertical: 12 }} onPress={() => router.push('/office/(tabs)/tasks')}>
+                  {t('office.home.allTasks', { n: board.data.counts.assigned + board.data.counts.in_progress })}
+                </Txt>
+              </>
             )}
           </Section>
         )}
 
-        {sections.includes('road') && (
-          <Section title={t('office.home.road')} count={ov?.on_the_road.length} link={t('office.home.liveMap')} onLink={() => router.push('/office/(tabs)/live')}>
-            {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
-            {ov && ov.on_the_road.length === 0 && <ListEmpty text={t('office.home.noRoad')} />}
-            {ov?.on_the_road.slice(0, ROWS).map((d, i) => (
-              <View key={d.username ?? d.driver}>
-                {i > 0 && <Divider />}
-                <Row
-                  left={<Avatar name={d.driver} />}
-                  title={[d.driver, d.vehicle].filter(Boolean).join(' · ')}
-                  line={[d.task ?? d.going_to, d.near ? `${d.near}` : sentenceText(t, d.status_text)].filter(Boolean).join(' · ')}
-                  chip={{ text: d.task ? t('office.chip.underWay') : t('office.chip.onDuty'), tone: d.task ? 'blue' : 'green' }}
-                  onPress={() => router.push({ pathname: '/office/(tabs)/live', params: d.username ? { driver: d.username } : {} })}
+        {sections.includes('trips') && (
+          <Section look="list" title={t('office.home.trips')} count={trips.data?.count} link={t('office.common.viewAll')} onLink={() => router.push('/office/(tabs)/trips')}>
+            {!trips.data && !trips.error && <View style={styles.inset}><SkeletonRows rows={2} lines={2} /></View>}
+            {trips.error && <View style={styles.inset}><ListFailed stale={!!trips.data} error={trips.error} onRetry={refresh} /></View>}
+            {trips.data && trips.data.trips.length === 0 && (
+              <View style={styles.inset}>
+                <ListEmpty
+                  text={t('office.home.noTrips')}
+                  action={actions.includes('request') ? t('office.trip.requestVehicle') : undefined}
+                  onAction={actions.includes('request') ? () => router.push({ pathname: '/office/trip/where', params: { mode: 'request' } }) : undefined}
                 />
               </View>
-            ))}
-          </Section>
-        )}
-
-        {sections.includes('trips') && (
-          <Section title={t('office.home.trips')} count={trips.data?.count} link={t('office.common.viewAll')} onLink={() => router.push('/office/(tabs)/trips')}>
-            {!trips.data && !trips.error && <SkeletonRows rows={2} lines={2} />}
-            {trips.error && <ListFailed stale={!!trips.data} error={trips.error} onRetry={refresh} />}
-            {trips.data && trips.data.trips.length === 0 && (
-              <ListEmpty
-                text={t('office.home.noTrips')}
-                action={actions.includes('request') ? t('office.trip.requestVehicle') : undefined}
-                onAction={actions.includes('request') ? () => router.push({ pathname: '/office/trip/where', params: { mode: 'request' } }) : undefined}
-              />
             )}
             {trips.data?.trips.slice(0, ROWS).map((x, i) => {
               const live = tripLive(x);
               return (
                 <View key={isCreatedTask(x) ? `t-${x.id}` : `r-${x.id}`}>
-                  {i > 0 && <Divider />}
+                  {i > 0 && <Divider soft />}
                   <Row
+                    inset
                     title={tripTitle(x)}
                     line={[whenWords(t, x.when), x.back_by ? `${t('office.trips.backBy')} ${x.back_by}` : ''].filter(Boolean).join(' · ')}
                     chip={(() => { const k = tripChip(live.state); return { text: t(`office.chip.${k.key}`), tone: k.tone }; })()}
@@ -293,3 +331,12 @@ export default function OfficeHome() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  needsHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
+  needsChip: { backgroundColor: colors.redChip, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 1 },
+  inset: { paddingHorizontal: 14, paddingBottom: 8 },
+  card: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, overflow: 'hidden' },
+  groupIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: look.quiet, alignItems: 'center', justifyContent: 'center' },
+  snooze: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 14, marginLeft: 52 },
+});
