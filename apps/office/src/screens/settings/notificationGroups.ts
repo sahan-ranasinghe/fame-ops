@@ -91,7 +91,7 @@ export const NOTIF_GROUPS: readonly NotifGroupDef[] = [
   {
     key: "mine",
     title: "My trips",
-    sub: "Things I asked for",
+    sub: "Things I asked for or ride in",
     events: [
       { event: "request.decided", title: "Request decided", text: "Approved or declined", needs: ["request", "assign_tasks"] },
       { event: "request.redecided", title: "Changed request decided", text: "Kept, changed or declined", needs: ["request"] },
@@ -102,6 +102,8 @@ export const NOTIF_GROUPS: readonly NotifGroupDef[] = [
       { event: "request.driver_changed", title: "Driver changed", needs: ["request", "assign_tasks"] },
       { event: "request.cancelled", title: "Trip cancelled", text: "By the office", needs: ["request", "assign_tasks"] },
       { event: "trip.finish_ask", title: "Trip finished? Enter the odometer", text: "A trip you drive or booked for someone else", needs: ["request", "assign_tasks"] },
+      { event: "passenger.trip", title: "A trip I ride in changes", text: "Added, accepted, changed, cancelled", needs: [] },
+      { event: "passenger.moving", title: "A trip I ride in moves", text: "On the way, running late, arrived", needs: [] },
     ],
   },
 ];

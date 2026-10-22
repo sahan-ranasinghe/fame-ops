@@ -7,6 +7,7 @@
 import { z } from "zod";
 import { type Db, type Row, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { type Employee, findVehicle, loadRefs, type Refs, vehicleLabel } from "../fleet.ts";
+import { contactLinks } from "../format.ts";
 import { pageOf, pageWindow } from "../paging.ts";
 import { photoLinks } from "../photos.ts";
 import { loadSettings } from "../settings.ts";
@@ -267,19 +268,75 @@ async function tripView(db: Db, t: Task, now: Date) {
   };
 }
 
+/** Round 4–7 (6): a registered passenger's view of a trip: the time, the stops as they go, the driver and the plate. */
+async function passengerView(db: Db, t: Task, now: Date) {
+  const refs = await loadRefs(db);
+  const stops = unwrap(
+    await db.from("task_stops").select("seq, type, place_name, status, arrived_at, planned_arrive_at").eq("task_id", t.id)
+      .neq("status", "removed").order("seq"),
+    "stops",
+  );
+  const driver = refs.emp.get(t.employee_id);
+  const phone = t.driven_by === "other" ? t.driver_phone : driver?.phone ?? null;
+  const live = t.status === "cancelled"
+    ? "Cancelled"
+    : t.status === "completed"
+    ? `Completed${t.completed_at ? ` · ${colomboTime(t.completed_at)}` : ""}`
+    : t.status === "in_progress"
+    ? `On the way${t.started_at ? ` · ${colomboTime(t.started_at)}` : ""}`
+    : t.accepted_at
+    ? "Driver accepted"
+    : "Sent to the driver";
+  return {
+    viewer: "passenger" as const,
+    task_id: t.id,
+    title: t.title,
+    date: colomboDate(t.start_at),
+    leave_at: colomboTime(t.leave_by ?? t.start_at),
+    ...(t.end_by && { back_by: colomboTime(t.end_by), back_by_date: colomboDate(t.end_by) }),
+    status: t.status,
+    live_text: live,
+    driver: t.driven_by === "other" ? t.driver_name : driver?.name ?? null,
+    ...(phone && { driver_phone: phone, ...contactLinks(phone) }),
+    vehicle: t.vehicle_id ? refs.veh.get(t.vehicle_id)?.reg_no ?? null : null,
+    stops: stops.map((x, i) => ({
+      n: i + 1,
+      type: x.type,
+      place: x.place_name,
+      status: x.status,
+      ...(x.arrived_at && { arrived: colomboTime(x.arrived_at) }),
+      ...(x.planned_arrive_at && { planned: colomboTime(x.planned_arrive_at) }),
+    })),
+    seen_at: colomboTime(now),
+  };
+}
+
 export const myTrip = tool({
   name: "my_trip",
   title: "My trip",
-  description: "One of the person's own trips that nobody drives with the app (I'll drive myself, or Someone else): the trip " +
+  description: "A registered passenger's view of a trip they ride in (viewer passenger: the time, the stops as they go, the " +
+    "driver with their phone, the plate, the live state). Or one of the person's own trips that nobody drives with the app (I'll drive myself, or Someone else): the trip " +
     "(day, leave time, back-by, the vehicle, the stops), where it is (to_check, on_the_way, finish, done, not_confirmed), the " +
     "check of the day, the readings and what can be done now: the vehicle check before setting off (it starts the trip from " +
     "2 h before the planned start, on the trip's day) and \"Trip finished? Enter the odometer\". Personal.",
   readOnly: true,
   input: z.object({ task_id: zId }),
   async run({ task_id }, { db, now, actor }) {
+    if (actor.employeeId) {
+      const riding = unwrapMaybe(
+        await db.from("task_passengers").select("id").eq("task_id", task_id).eq("employee_id", actor.employeeId).is("removed_at", null)
+          .limit(1).maybeSingle(),
+        "passengers",
+      );
+      const t = riding ? unwrapMaybe(await db.from("tasks").select("*").eq("id", task_id).maybeSingle(), "task") : null;
+      if (t && t.employee_id !== actor.employeeId) {
+        const view = await passengerView(db, t, now);
+        return { result: view, summary: `trip ${t.title} as a passenger` };
+      }
+    }
     const t = await ownNoAppTrip(db, task_id, actor.employeeId);
     const trip = await tripView(db, t, now);
-    return { result: trip, summary: `trip ${t.title} (${trip.state})` };
+    return { result: { viewer: "owner" as const, ...trip }, summary: `trip ${t.title} (${trip.state})` };
   },
 });
 

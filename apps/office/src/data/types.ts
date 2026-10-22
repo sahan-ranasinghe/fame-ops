@@ -652,6 +652,8 @@ export interface TaskDetail {
     vehicle_checks?: VehicleCheck[];
     /** Round 4–7 (5): the fuel card the driver saw at Start task and their answer. */
     fuel_card?: FuelCard;
+    /** Round 4–7 (6): who rides, by name. */
+    passengers_list?: Passenger[];
     can_reopen?: boolean;
     /** "WP CAB-4521 taken over from Nuwan 08:40" */
     vehicle_taken?: string;
@@ -793,6 +795,9 @@ export interface RequestProposal {
 }
 
 export interface RequestCard {
+  /** Round 4–7 (6): who rides, by name (request cards); "passenger" = a trip the person rides in, view only (My trips). */
+  passengers_list?: Passenger[];
+  role?: "passenger";
   /** Round 4–7 (4b): a trip nobody drives with the app, on the person's account: what it asks of them now (my_trip). */
   trip_action?: TripAction;
   id: string;
@@ -925,6 +930,9 @@ export interface MyTrips extends Paged {
 
 /** A task the person created directly (no request), on My trips (Hotfix 3): it opens /tasks/:id. */
 export interface CreatedTaskCard {
+  /** Round 4–7 (6): who rides, by name (request cards); "passenger" = a trip the person rides in, view only (My trips). */
+  passengers_list?: Passenger[];
+  role?: "passenger";
   /** Round 4–7 (4b): a trip nobody drives with the app, on the person's account: what it asks of them now (my_trip). */
   trip_action?: TripAction;
   source: "task";
@@ -2247,8 +2255,9 @@ export type NoAppState = "to_check" | "on_the_way" | "finish" | "done" | "not_co
 /** The row's button on My trips for such a trip. */
 export type TripAction = "check" | "finish" | "confirm";
 
-/** my_trip, and the answer of my_trip_check / finish_my_trip (with started / next). */
+/** my_trip, and the answer of my_trip_check / finish_my_trip (with started / next). A passenger gets PassengerTrip. */
 export interface MyTrip {
+  viewer?: "owner";
   task_id: string;
   title: string;
   date: string;
@@ -2304,4 +2313,55 @@ export interface FuelCard {
   answer?: "enough" | "fill_on_way";
   answer_text: string;
   answered_at?: string;
+}
+
+// ---- Round 4–7, feature 6 (22 October 2026): passengers on trips ----
+
+/** One passenger as sent (passenger_list on create_task, create_request, book_vehicle, update_task, update_request). */
+export interface PassengerIn {
+  /** A registered office person's id (find_people). */
+  person?: string;
+  /** Someone without an account. */
+  name?: string;
+  phone?: string;
+}
+
+/** A passenger on an answer (task_detail.task.passengers_list, a request card's passengers_list). */
+export interface Passenger {
+  name: string;
+  registered: boolean;
+  employee_id?: string;
+  photo_url?: string;
+  phone?: string;
+  phone_display?: string;
+  call?: string;
+  whatsapp?: string;
+  /** task_detail: a typed passenger with a phone: the trip by WhatsApp ("Share trip"). */
+  share?: string;
+}
+
+/** find_people: active office people for the Passengers field (no phone or e-mail). */
+export interface FoundPeople {
+  count: number;
+  people: { id: string; name: string; label: string; photo_url?: string }[];
+}
+
+/** my_trip for a registered passenger (viewer passenger): the time, the stops as they go, the driver and the plate. */
+export interface PassengerTrip {
+  viewer: "passenger";
+  task_id: string;
+  title: string;
+  date: string;
+  leave_at: string;
+  back_by?: string;
+  back_by_date?: string;
+  status: string;
+  live_text: string;
+  driver?: string | null;
+  driver_phone?: string;
+  call?: string;
+  whatsapp?: string;
+  vehicle?: string | null;
+  stops: { n: number; type: string; place: string; status: string; arrived?: string; planned?: string }[];
+  seen_at: string;
 }

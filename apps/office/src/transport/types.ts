@@ -118,4 +118,6 @@ export const ALL_TOOLS = [
   "activity_log",
   // Round 4–7 (4): the vehicle checks; a no-app trip's own page, check and close.
   "vehicle_checks", "my_trip", "my_trip_check", "finish_my_trip",
+  // Round 4–7 (6): people for the Passengers field.
+  "find_people",
 ];

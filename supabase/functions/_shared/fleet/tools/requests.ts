@@ -8,6 +8,7 @@
 // (redecide_request: keep, change, decline), every step is a request_events row
 // (the timeline), and a request can be made on behalf of someone else.
 
+import { passengerCards } from "./passengers.ts";
 import { noAppAction } from "./checks.ts";
 import { z } from "zod";
 import type { Json } from "../database.types.ts";
@@ -634,7 +635,13 @@ async function requestCards(db: Db, rows: VehicleRequest[], now: Date, withLine 
     reviewing,
     officePhone: settings.office_phone,
   };
-  return rows.map((r) => requestCard(r, now, evs.filter((e) => e.request_id === r.id), stops.get(r.id) ?? [], refs, withLine));
+  // Round 4–7 (6): who rides, by name.
+  const riders = await passengerCards(db, { requestIds: ids }, now);
+  return rows.map((r) => {
+    const card = requestCard(r, now, evs.filter((e) => e.request_id === r.id), stops.get(r.id) ?? [], refs, withLine);
+    const list = riders.get(r.id);
+    return list ? { ...card, passengers_list: list } : card;
+  });
 }
 
 async function requestCardOf(db: Db, row: VehicleRequest, now: Date, withLine = false, viewer?: string | null) {
@@ -1027,7 +1034,8 @@ function taskLive(t: Task, trip: TripOutcome | undefined, now: Date) {
 export const myTrips = tool({
   name: "my_trips",
   title: "My trips",
-  description: "The person's own requests and proposed tasks, and with include tasks or all (Hotfix 3) the tasks they created " +
+  description: "The person's own requests and proposed tasks, the trips they ride in as a registered passenger (role " +
+    "passenger, view only: not with include tasks), and with include tasks or all (Hotfix 3) the tasks they created " +
     "directly (source task), " +
     "whose trip day is between from and to (Colombo dates, at most a " +
     "year), newest first, each with its live state from its task (live: waiting, approved, accepted, on_the_way, arrived, " +
@@ -1068,9 +1076,24 @@ export const myTrips = tool({
         .gte("start_at", span.from).lt("start_at", span.to).order("start_at", { ascending: false }).limit(500),
       "tasks",
     );
-    const [requestRows, taskRows] = await Promise.all([
+    // Round 4–7 (6): the trips the person rides in (a registered passenger), view only: never their own or asked by them.
+    const riding = include === "tasks" ? [] : await (async () => {
+      const ids = unwrap(
+        await db.from("task_passengers").select("task_id").eq("employee_id", actor.employeeId!).is("removed_at", null),
+        "passengers",
+      ).map((p) => p.task_id);
+      if (!ids.length) return [];
+      const mine = new Set(rows.flatMap((r) => (r.task_id ? [r.task_id] : [])));
+      return unwrap(
+        await db.from("tasks").select("*").in("id", ids).neq("employee_id", actor.employeeId!).eq("demo", false)
+          .gte("start_at", span.from).lt("start_at", span.to).order("start_at", { ascending: false }).limit(500),
+        "tasks",
+      ).filter((t) => !mine.has(t.id) && t.assigned_by_employee_id !== actor.employeeId);
+    })();
+    const [requestRows, taskRows, ridingRows] = await Promise.all([
       requestCards(db, rows, now, false, actor.employeeId),
       createdTaskCards(db, made, now),
+      createdTaskCards(db, riding, now),
     ]);
     // Newest trip first, requests and tasks together.
     const all = [
@@ -1079,6 +1102,11 @@ export const myTrips = tool({
         at: rows.find((r) => r.id === c.id)!.needed_at,
       })),
       ...taskRows.map((c) => ({ card: c as Record<string, unknown> & { live: { state: string } }, at: c.at })),
+      // A passenger sees the time, the stops, the driver with their phone, the plate and the live state: not who approved.
+      ...ridingRows.map(({ approved_by: _a, created: _c, ...c }) => ({
+        card: { ...c, role: "passenger" } as Record<string, unknown> & { live: { state: string } },
+        at: c.at,
+      })),
     ].sort((a, b) => b.at.localeCompare(a.at));
     const wanted = status === "all" ? null : TRIP_FILTER[status];
     const key = search ? plain(search) : "";

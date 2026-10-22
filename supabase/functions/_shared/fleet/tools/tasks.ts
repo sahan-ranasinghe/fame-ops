@@ -29,12 +29,14 @@ import {
   type Task,
   type Vehicle,
 } from "../fleet.ts";
-import { centsToLkr, contactLinks, mapsDirections, mapsPoint, phoneLinks, telLink, waLink } from "../format.ts";
+import { centsToLkr, contactLinks, mapsDirections, mapsPoint, phoneDisplay, phoneLinks, telLink, waLink } from "../format.ts";
 import { atText } from "../requests_rules.ts";
 import { GPS_KM_NOTE, haversineKm, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { checkCards } from "./checks.ts";
 import { estimateText, FUEL_ANSWER_TEXT, type FuelEstimate } from "../fuelCard.ts";
+import { shareText } from "../passengers.ts";
+import { passengerCards } from "./passengers.ts";
 import { videoCard, videoLinks } from "../videos.ts";
 import {
   legSequence,
@@ -1874,6 +1876,18 @@ export const taskDetail = tool({
         "vehicle checks",
       )
       : [];
+    // Round 4–7 (6): who rides, by name; a typed one with a phone can be sent the trip (Share trip, wa.me).
+    const riders = (await passengerCards(db, { taskIds: [task.id] }, now)).get(task.id) ?? [];
+    const firstStop = stops[0];
+    const lastStop = stops[stops.length - 1];
+    const shareTrip = {
+      when: colomboDayTime(task.leave_by ?? task.start_at),
+      from: task.start_name ?? firstStop?.place_name,
+      to: lastStop?.place_name,
+      driver: shownDriver(task, refs.emp.get(task.employee_id)),
+      driverPhone: phoneDisplay(task.driven_by === "other" ? task.driver_phone : refs.emp.get(task.employee_id)?.phone),
+      plate: task.vehicle_id ? refs.veh.get(task.vehicle_id)?.reg_no : null,
+    };
     // Round 4–7 (5): the fuel card the driver saw at Start task (the estimate is the database's) and their answer.
     const fuelCard = task.driven_by === "driver" && task.vehicle_id
       ? (unwrapMaybe(await db.rpc("fuel_estimate", { p_task_id: task.id }), "fuel estimate") as FuelEstimate | null)
@@ -1969,6 +1983,12 @@ export const taskDetail = tool({
             : undefined,
           driver_phone: phoneLinks(task.driven_by === "other" ? task.driver_phone : driver?.phone),
           passengers: task.passengers,
+          passengers_list: riders.length
+            ? riders.map((p) => ({
+              ...p,
+              share: !p.registered && p.phone ? waLink(p.phone, shareText(p.name, shareTrip)) ?? undefined : undefined,
+            }))
+            : undefined,
           contact: task.contact_name || task.contact_phone
             ? { name: task.contact_name, phone: task.contact_phone, ...contactLinks(task.contact_phone) }
             : undefined,

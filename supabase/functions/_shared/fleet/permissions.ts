@@ -168,6 +168,9 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   my_trip: ANY,
   my_trip_check: ANY,
   finish_my_trip: ANY,
+  // Round 4–7 (6): the Passengers field's people search (no phone or e-mail); My trips for everyone (a passenger may hold
+  // only view).
+  find_people: ANY,
   // Round 2b: office_users runs these for accounts holding none of office_users, users, approve (the guards: accountGuards.ts).
   list_office_users: ACCOUNTS,
   create_office_user: ACCOUNTS,
@@ -181,7 +184,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   register_web_push: ANY,
   remove_web_push: ANY,
   // Hotfix 2 (A, F, K): the person's own trips, notification centre and number; "Palitha is reviewing" on the decide page.
-  my_trips: ["request", "assign_tasks"],
+  my_trips: ANY,
   my_inbox: ANY,
   mark_inbox_read: ANY,
   update_my_profile: ANY,

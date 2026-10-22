@@ -1021,6 +1021,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"request_passengers": {
+                  Row: {
+                    "added_by": string | null,"created_at": string,"employee_id": string | null,"id": string,"name": string,"phone": string | null,"removed_at": string | null,"request_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "added_by"?: string | null,"created_at"?: string,"employee_id"?: string | null,"id"?: string,"name": string,"phone"?: string | null,"removed_at"?: string | null,"request_id": string
+                  }
+                  Update: {
+                    "added_by"?: string | null,"created_at"?: string,"employee_id"?: string | null,"id"?: string,"name"?: string,"phone"?: string | null,"removed_at"?: string | null,"request_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "request_passengers_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "request_passengers_request_id_fkey"
+      columns: ["request_id"]
+isOneToOne: false
+      referencedRelation: "vehicle_requests"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"request_stops": {
                   Row: {
                     "address": string | null,"arrive_by": string | null,"created_at": string,"dwell_min": number | null,"dwell_source": string | null,"google_fetched_at": string | null,"google_place_id": string | null,"id": string,"is_start": boolean,"lat": number | null,"lng": number | null,"note": string | null,"place_id": string | null,"place_name": string,"planned_arrive_at": string | null,"planned_depart_at": string | null,"removed_at": string | null,"request_id": string,"seq": number,"type": string,"what": string | null
@@ -1197,6 +1223,32 @@ isOneToOne: false
       foreignKeyName: "task_eta_task_id_fkey"
       columns: ["task_id"]
 isOneToOne: true
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"task_passengers": {
+                  Row: {
+                    "added_by": string | null,"created_at": string,"employee_id": string | null,"id": string,"name": string,"phone": string | null,"removed_at": string | null,"task_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "added_by"?: string | null,"created_at"?: string,"employee_id"?: string | null,"id"?: string,"name": string,"phone"?: string | null,"removed_at"?: string | null,"task_id": string
+                  }
+                  Update: {
+                    "added_by"?: string | null,"created_at"?: string,"employee_id"?: string | null,"id"?: string,"name"?: string,"phone"?: string | null,"removed_at"?: string | null,"task_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "task_passengers_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_passengers_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
       referencedRelation: "tasks"
       referencedColumns: ["id"]
     }
@@ -1726,6 +1778,9 @@ isOneToOne: false
 "notify_needs_driver":
 { Args: { "p_body": string,"p_task": string,"p_title": string }; Returns: undefined
                            },
+"notify_passengers":
+{ Args: { "p_body": string,"p_event": string,"p_task_id": string,"p_title": string }; Returns: number
+                           },
 "notify_requester":
 { Args: { "p_body": string,"p_event": string,"p_task": string,"p_title": string }; Returns: undefined
                            },
@@ -1764,6 +1819,9 @@ isOneToOne: false
                            },
 "on_duty_since":
 { Args: { "p_employee": string }; Returns: string
+                           },
+"passenger_trip_line":
+{ Args: { "p_leave": string,"p_title": string }; Returns: string
                            },
 "prune_app_errors":
 { Args: Record<PropertyKey, never>; Returns: number

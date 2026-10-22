@@ -46,7 +46,9 @@ export type NotifyEvent =
   | "request.running_late"
   | "vehicle.check_urgent"
   | "vehicle.check_problem"
-  | "trip.finish_ask";
+  | "trip.finish_ask"
+  | "passenger.trip"
+  | "passenger.moving";
 
 export interface EventInfo {
   event: NotifyEvent;
@@ -138,6 +140,20 @@ export const EVENTS: readonly EventInfo[] = [
     label: "A vehicle check finds a problem",
     text: "Damage, a tyre, a warning light or another problem reported before setting off, with photos",
     needs: ["issues"],
+  },
+  // Round 4–7 (6): a registered passenger follows the trip they ride in (written in SQL by the triggers on tasks,
+  // task_stops and task_passengers; the person who asked has their own request.* events).
+  {
+    event: "passenger.trip",
+    label: "A trip you ride in: added, accepted, changed or cancelled",
+    text: "You are named as a passenger; the driver accepts it; its time, driver, vehicle or stops change; it is cancelled",
+    needs: [],
+  },
+  {
+    event: "passenger.moving",
+    label: "A trip you ride in: on the way, late, arrived",
+    text: "The driver sets off, says they are running late, reaches each stop",
+    needs: [],
   },
   // Round 4–7 (4b): written in SQL by no_app_trips at the trip's back-by time (or the day's cut-off).
   {
@@ -257,10 +273,12 @@ const INBOX_KIND: Record<NotifyEvent, InboxKind> = {
   "ask.answered": "alert",
   "vehicle.check_problem": "alert",
   "trip.finish_ask": "alert",
+  "passenger.trip": "alert",
   "request.on_the_way": "soft",
   "request.running_late": "soft",
   "request.arrived": "soft",
   "request.stop_arrived": "soft",
+  "passenger.moving": "soft",
   "task.stop_skipped": "soft",
   "issue.opened": "alarm",
   "trip.personal": "info",
@@ -353,6 +371,11 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
     case "vehicle.check_urgent":
     case "vehicle.check_problem":
       ids = holders("issues");
+      break;
+    case "passenger.trip":
+    case "passenger.moving":
+      // The registered passengers (the SQL writes them; listed here for the rule).
+      ids = ctx.assignee ? [ctx.assignee] : [];
       break;
     case "trip.finish_ask":
       // The person the no-app trip is on (the SQL writes it).

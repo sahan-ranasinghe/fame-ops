@@ -104,7 +104,7 @@ console.log('\n== Who sees what ==');
   check(requester.some((g) => g.key === 'vehicles' && g.total === 3), 'everyone sees Vehicles and bookings (a custodian may be anyone)');
 
   const viewer = groupsFor(answerFor(['view']), ['view']);
-  check(same(viewer.map((g) => g.key), ['vehicles']), 'view alone: only Vehicles and bookings', viewer.map((g) => g.key));
+  check(same(viewer.map((g) => g.key), ['vehicles', 'mine']), 'view alone: Vehicles and bookings, and My trips (a trip they ride in, Round 4–7)', viewer.map((g) => g.key));
 
   const approver = groupsFor(answerFor(['view', 'approve']), ['view', 'approve']);
   const req = approver.find((g) => g.key === 'requests');
@@ -199,7 +199,7 @@ console.log("\n== The app's words ==");
   check(eventTitle(t, ev) === 'Driver arrived' && eventText(t, ev) === 'At the first pickup', "a known event shows our words, not the server's");
   check(eventText(t, { ...ev, event: 'request.on_the_way' }) === undefined, 'an event without a description shows no second line');
   check(eventTitle(t, { ...ev, event: 'x.y' }) === 'L' && eventText(t, { ...ev, event: 'x.y' }) === 'T', "an unknown event shows the server's words");
-  check(groupTitle(t, 'mine') === 'My trips' && groupSub(t, 'mine') === 'Things I asked for' && groupSub(t, 'issues') === undefined, 'group titles and the My trips line');
+  check(groupTitle(t, 'mine') === 'My trips' && groupSub(t, 'mine') === 'Things I asked for or ride in' && groupSub(t, 'issues') === undefined, 'group titles and the My trips line');
   check(isGroupKey('requests') && isGroupKey('other') && !isGroupKey('nope') && !isGroupKey(undefined), 'only known groups open a group screen');
   check(routeForUrl('https://fame-fleet.pages.dev/settings/notifications', []) === '/office/notifications' && routeForUrl('/settings/notifications/mine', ['request']) === '/office/notifications/mine', "the site's Notifications links open the app's screens");
   check(routeForUrl('/tasks/history', ['assign_tasks']) === '/office/task-history' && routeForUrl('/vehicles/WP%20CAB-4521', ['view']) === '/office/vehicles/WP%20CAB-4521'

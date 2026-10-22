@@ -72,6 +72,7 @@ import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
 import { listAppErrors } from "./tools/appErrors.ts";
 import { activityLog, setActivityTools } from "./tools/activity.ts";
 import { finishMyTrip, myTrip, myTripCheck, vehicleChecks } from "./tools/checks.ts";
+import { createdTargets, findPeople, requestTargets, taskTarget, withPassengerList } from "./tools/passengers.ts";
 import {
   cancelTask,
   createTask,
@@ -123,16 +124,16 @@ export const TOOLS: AnyTool[] = [
   googlePlace,
   registerMapLoad,
   saveArrivalPlace,
-  createTask,
+  withPassengerList(createTask, { count: "passengers", targets: createdTargets }),
   taskBoard,
   taskDetail,
   cancelTask,
   reassignTask,
-  createRequest,
+  withPassengerList(createRequest, { count: "pax", targets: createdTargets }),
   listRequests,
   suggestVehicles,
   decideRequest,
-  bookVehicle,
+  withPassengerList(bookVehicle, { count: "pax", targets: createdTargets }),
   cancelRequest,
   mileageSummary,
   listVehicleReports,
@@ -160,9 +161,13 @@ export const TOOLS: AnyTool[] = [
   registerWebPush,
   removeWebPush,
   availability,
-  updateRequest,
+  withPassengerList(updateRequest, { count: "pax", ids: ["request_id", "version"], targets: requestTargets }),
   redecideRequest,
-  updateTask,
+  withPassengerList(updateTask, {
+    count: "passengers",
+    ids: ["task_id", "plan_version"],
+    targets: (a) => [taskTarget(a.task_id as string)],
+  }),
   listFuel,
   dutyLog,
   clockOutDriver,
@@ -208,6 +213,8 @@ export const TOOLS: AnyTool[] = [
   myTrip,
   myTripCheck,
   finishMyTrip,
+  // Round 4–7 (6): people for the Passengers field (passenger_list rides on the trip tools above).
+  findPeople,
 ];
 // Round 2b: the Activity log reads every tool's title and whether it writes (this list, read when it runs).
 setActivityTools(() => TOOLS);
