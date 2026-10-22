@@ -3577,6 +3577,23 @@
       "arrivesAbout": "Arrives about {time}",
       "askedBy": "Asked by {name}",
       "assignedBy": "Assigned by {name}"
+    },
+    "avail": {
+      "free": "Free",
+      "inGarage": "In garage",
+      "onTask_live": "On a task · back ~{time} (live)",
+      "onTask_planned": "On a task · back ~{time} (planned)",
+      "onTaskNoEnd": "On a task · end time not set",
+      "bookedLater": "Booked later today · {time}",
+      "bookedNotStarted": "Booked · {time} (not started yet)",
+      "then_garage": "in garage",
+      "then_freeAllDay": "free all day",
+      "then_free": "free at that time (other task {window})",
+      "then_booked": "booked {window} · {title}",
+      "then_overKm": "over km allowance",
+      "fromTime": "from {time}",
+      "back": "back ~{time}",
+      "endNotSet": "end time not set"
     }
   },
   "patterns": {

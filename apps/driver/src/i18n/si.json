@@ -3577,6 +3577,23 @@
       "arrivesAbout": "{time} පමණ ළඟා වේ",
       "askedBy": "ඉල්ලුවේ {name}",
       "assignedBy": "පැවරුවේ {name}"
+    },
+    "avail": {
+      "free": "නිදහස්",
+      "inGarage": "ගරාජයේ",
+      "onTask_live": "කාර්යයක · ~{time} ට ආපසු (සජීවී)",
+      "onTask_planned": "කාර්යයක · ~{time} ට ආපසු (සැලසුම්)",
+      "onTaskNoEnd": "කාර්යයක · අවසන් වේලාව නැත",
+      "bookedLater": "අද පසුව වෙන් කර ඇත · {time}",
+      "bookedNotStarted": "වෙන් කර ඇත · {time} (තවම ආරම්භ කර නැත)",
+      "then_garage": "ගරාජයේ",
+      "then_freeAllDay": "මුළු දවසම නිදහස්",
+      "then_free": "එම වේලාවට නිදහස් (වෙනත් කාර්යය {window})",
+      "then_booked": "{window} වෙන් කර ඇත · {title}",
+      "then_overKm": "කි.මී. දීමනාව ඉක්මවා",
+      "fromTime": "{time} සිට",
+      "back": "~{time} ට ආපසු",
+      "endNotSet": "අවසන් වේලාව නැත"
     }
   },
   "patterns": {

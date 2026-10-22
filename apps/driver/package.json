@@ -136,7 +136,8 @@
     "test:perperson": "tsx scripts/test-perperson.ts",
     "test:driver-3": "tsx scripts/test-driver-3.ts",
     "test:lists2": "tsx scripts/test-lists2.ts",
-    "test:office-3": "tsx scripts/test-office-3.ts"
+    "test:office-3": "tsx scripts/test-office-3.ts",
+    "test:availability-words": "tsx scripts/test-availability-words.ts"
   },
   "private": true,
   "expo": {
