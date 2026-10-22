@@ -28,7 +28,7 @@ export function StatsRow({ cells, testID = 'stats-row' }: { cells: readonly Stat
       {cells.map((c, i) => {
         const body = (
           <>
-            <Txt variant="label" size={12} color={colors.muted} numberOfLines={1}>{c.label.toUpperCase()}</Txt>
+            <Txt variant="label" size={12} color={colors.muted} numberOfLines={2}>{c.label.toUpperCase()}</Txt>
             {c.words
               ? <Txt variant="strong" size={18} color={INK[c.tone ?? 'ink']} numberOfLines={2}>{c.value}</Txt>
               : <Mono size={22} bold color={INK[c.tone ?? 'ink']} numberOfLines={1}>{c.value}</Mono>}

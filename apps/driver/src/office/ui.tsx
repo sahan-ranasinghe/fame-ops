@@ -168,7 +168,7 @@ export function BackHeader({ title, subtitle, right, chips }: { title: string; s
   const { t } = useApp();
   useWebThemeColor(colors.page);
   return (
-    <View style={[styles.backHeader, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.backHeader, { paddingTop: insets.top + 8 }, chips ? { alignItems: 'flex-start' } : null]}>
       <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/office'))} style={(state) => [styles.backBtn, hoverStyle(state)]}>
         <ChevronLeft size={28} color={colors.ink} strokeWidth={2.4} />
       </Pressable>

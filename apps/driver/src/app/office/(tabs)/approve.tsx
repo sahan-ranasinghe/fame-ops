@@ -131,7 +131,7 @@ export default function ApproveTab() {
                   <Row
                     left={<Avatar name={r.requested_by} photo={r.requested_by_photo_url} />}
                     title={requestTitle(r)}
-                    line={requestLine(r)}
+                    line={requestLine({ ...r, when: whenWords(t, r.when) })}
                     line2={reviewing ? t('office.approve.reviewing', { name: reviewing }) : r.late ? t('office.approve.late') : licence ? t(licence.key) : undefined}
                     line2Warn={!reviewing && !r.late && !!licence?.warn}
                     right={<View style={{ alignItems: 'flex-end', gap: 4 }}>

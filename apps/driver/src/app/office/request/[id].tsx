@@ -46,7 +46,7 @@ import { telLink } from '@/lib/format';
 import { alreadyDecided, approveProblem, availabilityArgs, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, presenceLine, rankedDrivers, tripView } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
 import { askedOf, availabilityAt, decideTimes, hasChange, redecideTimes, shownOf } from '@/office/decideLogic';
-import { CANCEL_TEXT, canCancelBooking, cancelReason, canRequestAgain, canWithdrawOwn, decides, eventLine, expiredText, isExpired } from '@/office/requestsLogic';
+import { CANCEL_TEXT, canCancelBooking, cancelReason, canRequestAgain, canWithdrawOwn, decides, eventLine, expiredText, isExpired, requestStateChip } from '@/office/requestsLogic';
 import { canEdit as canEditTrip } from '@/office/tripsLogic';
 import { decideStore, useTimeChange } from '@/office/decideStore';
 import { requestTitle } from '@/office/homeLogic';
@@ -247,7 +247,7 @@ export default function ApproveRequest() {
         subtitle={card ? [card.kind === 'task' ? t('office.request.proposedTask') : t('office.request.request'), card.requested_by, whenWords(t, card.asked)].filter(Boolean).join(' · ') : undefined}
         chips={card ? (
           <>
-            <Pill text={card.status === 'waiting' ? t('office.request.waitingYourOk') : card.status === 'changed' ? t('office.request.changedByRequester') : t(`office.requests.status_${card.status}`)} tone={open ? 'amber' : card.status === 'approved' ? 'green' : isExpired(card) ? 'muted' : 'red'} size={14} icon={isExpired(card) ? CalendarX : undefined} />
+            {(() => { const c = requestStateChip(card.status); return <Pill text={t(c.key)} tone={c.tone} size={14} icon={isExpired(card) ? CalendarX : undefined} />; })()}
             {others.length > 0 && <Pill text={t('office.request.alsoLooking', { name: others.join(', ') })} tone="muted" size={14} />}
             {card.late && <Pill text={t('office.approve.late')} tone="red" size={14} />}
           </>

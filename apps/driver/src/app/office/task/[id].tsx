@@ -36,16 +36,15 @@ import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
 import { DETAIL_LINKS_FRESH_MS, type LinkKey, linkOf } from '@/office/taskDetailLogic';
 import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
-import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStatusKey } from '@/office/taskLogic';
+import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStateChip } from '@/office/taskLogic';
 import type { FleetError, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { taskSteps } from '@/office/stepsLogic';
 import { BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { sentenceText } from '@/office/statusWords';
-import { statusTone } from '@/office/homeLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
-import { dateWords, shortWhen } from '@/lib/dateWords';
+import { dateWords, shortWhen, whenWords } from '@/lib/dateWords';
 
 type CancelReasonKey = 'not_needed' | 'plans_changed' | 'no_vehicle' | 'other';
 const CANCEL_REASONS: { value: CancelReasonKey; label: string }[] = [
@@ -161,7 +160,6 @@ export default function TaskDetailScreen() {
   const may = allowedActions(task ?? { status: 'cancelled' });
   const actions = { reassign: may.reassign && me.tools.includes('reassign_task'), cancel: may.cancel && me.tools.includes('cancel_task') };
   const extras = task ? extrasFor(task, me.tools) : { time: false, stops: false, swap: false, reopen: false };
-  const statusKey = task ? taskStatusKey(task) : '';
 
   const started = !!task && (task.status === 'in_progress' || task.status === 'completed');
   // Part B pilot (docs/design-pass.md §5 b): the stops as the RouteStepper, the start (S) and the way back (B) included,
@@ -191,9 +189,9 @@ export default function TaskDetailScreen() {
         subtitle={task ? [t('office.task.task'), task.start, p?.from_request ? t('office.task.askedBy', { name: p.from_request.requested_by }) : task.created_by ? t('office.task.madeBy', { name: task.created_by }) : ''].filter(Boolean).join(' · ') : undefined}
         chips={task ? (
           <>
-            <Pill text={t(`office.status.${statusKey}`)} tone={statusTone(statusKey)} size={14} />
+            {(() => { const c = taskStateChip(task); return <Pill text={t(c.key)} tone={c.tone} size={14} />; })()}
             {task.late_report && <Pill text={sentenceText(t, task.late_report.text)} tone="amber" size={14} />}
-            {!task.late_report && task.status === 'in_progress' && task.eta?.late_min ? <Pill text={t('office.status.late', { min: task.eta.late_min })} tone="amber" size={14} /> : null}
+            {!task.late_report && task.status === 'in_progress' && task.eta?.late_min ? <Pill text={t('office.chip.late', { min: task.eta.late_min })} tone="amber" size={14} /> : null}
             {task.label && <Pill text={task.label} tone="muted" size={14} />}
             {task.kind === 'self' && <Pill text={t('office.task.driverStarted')} tone="muted" size={14} />}
             {task.finish_flag && <Pill text={task.finish_flag.text} tone="amber" size={14} />}
@@ -221,7 +219,12 @@ export default function TaskDetailScreen() {
           <StatsRow
             testID="task-stats"
             cells={[
-              { key: 'leave', label: t('office.request.leaveBy'), value: task.leave_by ?? task.start ?? '—' },
+              // The time in the cell, the day under it ("Fri 23 Oct 07:00" → 07:00, "Tomorrow").
+              (() => {
+                const at = task.leave_by ?? task.start ?? '';
+                const m = at.match(/^(.*?)\s*(\d{2}:\d{2})$/);
+                return { key: 'leave', label: t('office.request.leaveBy'), value: m ? m[2] : at || '—', sub: m && m[1] ? whenWords(t, m[1]) : undefined };
+              })(),
               task.status === 'in_progress' && task.eta?.final
                 ? { key: 'back', label: t('office.trip.backAtShort'), value: task.eta.final, sub: t('office.task.statLive'), tone: 'blue' as const }
                 : { key: 'back', label: task.return_to_base ? t('office.trip.backAtShort') : t('office.trip.endsShort'), value: p?.timeline?.totals.ends ?? task.end_by ?? '—', sub: p?.timeline?.totals.ends ? t('office.task.statPlanned') : undefined },

@@ -36,6 +36,23 @@ export function taskStatusKey(t: Pick<Task, 'status' | 'accepted' | 'needs_drive
   return t.status;
 }
 
+/**
+ * The task's state as the one chip of docs/design-pass.md §3 (Part B): Sent, Seen, Accepted, On the way, Done, Needs a driver,
+ * Missed, Cancelled, with its tone (R3: red = act now, blue = moving or taken, green = done, grey = still to come or over).
+ */
+export function taskStateChip(t: Pick<Task, 'status' | 'accepted' | 'needs_driver' | 'seen'>): { key: string; tone: 'blue' | 'green' | 'amber' | 'red' | 'muted' } {
+  const k = taskStatusKey(t);
+  switch (k) {
+    case 'declined': return { key: 'office.chip.needsDriver', tone: 'red' };
+    case 'accepted': return { key: 'office.chip.accepted', tone: 'blue' };
+    case 'in_progress': return { key: 'office.chip.underWay', tone: 'blue' };
+    case 'completed': return { key: 'office.chip.done', tone: 'green' };
+    case 'missed': return { key: 'office.chip.missed', tone: 'red' };
+    case 'cancelled': return { key: 'office.chip.cancelled', tone: 'muted' };
+    default: return { key: t.seen ? 'office.chip.seen' : 'office.chip.sent', tone: 'muted' };
+  }
+}
+
 /** "planned 08:30 · left 08:31 · 4 passengers" / "arrive by 10:30 · about 10:38 · 8 min late · 1 h 30 there": the parts. */
 export function stopParts(s: Stop, words: {
   planned: (t: string) => string;

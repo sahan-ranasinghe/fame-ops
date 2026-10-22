@@ -82,6 +82,10 @@ export function taskSteps(t: T, stops: readonly Stop[], o: { started: boolean; s
   }
   for (const s of stops) {
     const line = stopLine(s, t);
+    const planned = s.progress?.planned_arrive ?? s.planned_arrive;
+    const plannedText = planned ? t('office.timeline.planned', { time: planned }) : '';
+    // The planned time is the step's time column: the line keeps what happened (arrived, left, skipped).
+    const happened = line.times.split(' · ').filter((x) => x && x !== plannedText).join(' · ');
     const state: StepState = !o.started ? 'todo'
       : line.state === 'left' ? 'done'
       : line.state === 'skipped' ? 'skipped'
@@ -93,9 +97,9 @@ export function taskSteps(t: T, stops: readonly Stop[], o: { started: boolean; s
       state,
       place: s.place || s.address || s.label || '',
       type: stopType(t, s.type, s.what),
-      time: s.progress?.planned_arrive ?? s.planned_arrive,
+      time: planned,
       actual: s.progress?.arrived ?? s.arrived,
-      times: line.times || undefined,
+      times: happened || undefined,
       delta: line.delta ? { text: line.delta.text, tone: line.delta.tone === 'late' ? 'late' : 'ok' } : undefined,
       note: line.estimate ?? line.arriveBy ?? line.confirmed ?? undefined,
       noteTone: line.estimate ? 'blue' : 'muted',

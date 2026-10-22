@@ -66,11 +66,24 @@ async function decline(username: string, pin: string, taskId: string): Promise<v
 
 const colomboDay = (plusDays: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(Date.now() + plusDays * 864e5));
 
-async function shot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
+async function shot(page: Page, testInfo: TestInfo, name: string, full = false): Promise<void> {
   await expect(page.getByTestId("skeleton-rows")).toHaveCount(0, { timeout: 20_000 }).catch(() => undefined);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(1_500);
+  // What the phone shows first (the window as it is), then, for a screen that scrolls inside itself (Office mode, the
+  // driver's sheet), the whole of it: the window as tall as its longest scrolling part.
   await page.screenshot({ path: testInfo.outputPath(`design-pilot-${name}.png`), fullPage: true, animations: "disabled" });
+  if (!full) return;
+  const size = page.viewportSize()!;
+  const tallest = await page.evaluate(() => Math.max(...[...document.querySelectorAll("*")].filter((e) => {
+    const o = getComputedStyle(e).overflowY;
+    return (o === "auto" || o === "scroll") && e.scrollHeight > e.clientHeight;
+  }).map((e) => e.scrollHeight - e.clientHeight), 0));
+  if (tallest <= 0) return;
+  await page.setViewportSize({ width: size.width, height: Math.min(size.height + tallest, 5_000) });
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: testInfo.outputPath(`design-pilot-${name}-full.png`), animations: "disabled" });
+  await page.setViewportSize(size);
 }
 
 /** A phone's context for /m/ in a language (the tab marked as a phone's, as mobile.spec.ts does). */
@@ -119,8 +132,9 @@ test("the design pilot: the six screens before and after (pictures kept with the
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible({ timeout: 30_000 });
     await shot(page, testInfo, `site-${size}-overview`);
-    await page.goto("/tasks");
-    await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
+    // Tomorrow's board: the pilot's tasks (one sent, one that needs a driver) are on it.
+    await page.goto(`/tasks?date=${tomorrow}`);
+    await expect(page.getByText(`Team drop ${stamp}`).first()).toBeVisible({ timeout: 30_000 });
     await shot(page, testInfo, `site-${size}-tasks`);
     await context.close();
   }
@@ -135,13 +149,13 @@ test("the design pilot: the six screens before and after (pictures kept with the
     await page.getByRole("button", { name: lang === "en" ? "Sign in" : "ඇතුළු වන්න", exact: true }).click();
     await expect(page).toHaveURL(/\/m\/office/, { timeout: 30_000 });
     await page.waitForTimeout(2_000);
-    await shot(page, testInfo, `m-${lang}-home`);
+    await shot(page, testInfo, `m-${lang}-home`, true);
     await page.goto(`/m/office/task/${task.task_id}`);
     await expect(page.getByText(`Team drop ${stamp}`).first()).toBeVisible({ timeout: 20_000 });
-    await shot(page, testInfo, `m-${lang}-task`);
+    await shot(page, testInfo, `m-${lang}-task`, true);
     await page.goto(`/m/office/request/${rq.request.id}`);
     await page.waitForTimeout(2_000);
-    await shot(page, testInfo, `m-${lang}-request`);
+    await shot(page, testInfo, `m-${lang}-request`, true);
     // Review: a draft as the trip editor keeps it (lib/kv on localStorage, office.trip.draft), then the step itself.
     await page.evaluate(({ day, d, v, name }) => {
       const stop = (key: string, type: string, place: string, pin: string, arriveBy = "") => ({ key, type, what: type === "pickup" ? "people" : "", place, pin, dwell: "", arriveBy, note: "" });
@@ -159,10 +173,10 @@ test("the design pilot: the six screens before and after (pictures kept with the
     await page.goto("/m/office/trip/review");
     await page.waitForTimeout(5_000); // the plan comes (the estimate: no routing key on the local stack)
     await page.addStyleTag({ content: "canvas, [data-fake-google-map] { visibility: hidden !important; }" });
-    await shot(page, testInfo, `m-${lang}-review`);
+    await shot(page, testInfo, `m-${lang}-review`, true);
     await page.goto("/m/design/driver-task");
     await expect(page.getByTestId("design-driver-task")).toBeVisible({ timeout: 20_000 });
-    await shot(page, testInfo, `driver-${lang}-task`);
+    await shot(page, testInfo, `driver-${lang}-task`, true);
     await context.close();
   }
 });

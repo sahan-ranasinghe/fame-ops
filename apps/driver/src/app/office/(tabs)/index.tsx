@@ -132,7 +132,7 @@ export default function OfficeHome() {
                 <Row
                   left={<Avatar name={r.requested_by} photo={r.requested_by_photo_url} />}
                   title={requestTitle(r)}
-                  line={requestLine(r)}
+                  line={requestLine({ ...r, when: whenWords(t, r.when) })}
                   right={r.asked ? <Txt variant="small" style={{ maxWidth: 90, textAlign: 'right' }}>{whenWords(t, r.asked)}</Txt> : undefined}
                   onPress={() => router.push({ pathname: '/office/request/[id]', params: { id: r.id } })}
                 />

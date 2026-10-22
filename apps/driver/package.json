@@ -127,7 +127,8 @@
     "test:who-drives": "tsx scripts/test-who-drives.ts",
     "test:part-a": "tsx scripts/test-part-a.ts",
     "test:shared-logic": "node ../../scripts/shared-logic.mjs --check",
-    "test:relative-words": "tsx scripts/test-relative-words.ts"
+    "test:relative-words": "tsx scripts/test-relative-words.ts",
+    "test:steps": "tsx scripts/test-steps.ts"
   },
   "private": true,
   "expo": {

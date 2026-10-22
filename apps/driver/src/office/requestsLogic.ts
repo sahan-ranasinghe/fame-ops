@@ -122,3 +122,10 @@ export function withArrivals(current: readonly RequestCard[], first: readonly Re
   const inFirst = new Set(first.map((r) => r.id));
   return [...first, ...current.filter((r) => !inFirst.has(r.id))];
 }
+
+/** A request's state as the one chip of docs/design-pass.md §3 (Part B): Waiting and Changed amber, Approved green, the rest grey. */
+export function requestStateChip(status: string | undefined): { key: string; tone: 'green' | 'amber' | 'muted' } {
+  const known = ['waiting', 'changed', 'approved', 'declined', 'cancelled', 'expired'];
+  const key = `office.requests.status_${known.includes(status ?? '') ? status : 'waiting'}`;
+  return { key, tone: status === 'waiting' || status === 'changed' ? 'amber' : status === 'approved' ? 'green' : 'muted' };
+}
