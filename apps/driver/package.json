@@ -132,7 +132,8 @@
     "test:trip-close": "tsx scripts/test-trip-close.ts",
     "test:fuel-card": "tsx scripts/test-fuel-card.ts",
     "test:passengers": "tsx scripts/test-passengers.ts",
-    "test:holders": "tsx scripts/test-holders.ts"
+    "test:holders": "tsx scripts/test-holders.ts",
+    "test:perperson": "tsx scripts/test-perperson.ts"
   },
   "private": true,
   "expo": {

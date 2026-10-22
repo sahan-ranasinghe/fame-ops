@@ -1019,7 +1019,9 @@
       "search": "Find a screen",
       "noMatch": "Nothing called “{text}”",
       "activity": "Activity log",
-      "activityLine": "Who changed what, and when"
+      "activityLine": "Who changed what, and when",
+      "retention": "Data retention",
+      "retentionLine": "How long data is kept, Run now"
     },
     "trips": {
       "backBy": "back by",
@@ -2351,7 +2353,11 @@
       "one": "Question to drivers",
       "answers": "Answers",
       "openTask": "Open the task →",
-      "openRequest": "Open the request →"
+      "openRequest": "Open the request →",
+      "whose": "Whose questions",
+      "mine": "Mine",
+      "everyone": "Everyone's",
+      "everyoneLastDays": "Everyone's · the last 7 days"
     },
     "history": {
       "wholeRoute": "Whole route ›",
@@ -3315,6 +3321,91 @@
       "st_assigned": "Planned",
       "st_in_progress": "On the way",
       "st_completed": "Done"
+    },
+    "retention": {
+      "title": "Data retention",
+      "subtitle": "Runs every night at {time}",
+      "intro": "How long each kind of data is kept. Anything older is removed every night at {time}. Business records are never removed.",
+      "kept": "Kept for",
+      "days": "{n} days",
+      "oneDay": "1 day",
+      "months": "{n} months",
+      "atLeast": "At least {n} days",
+      "daysLabel": "Days kept",
+      "daysUnit": "days",
+      "savedDays": "{what}: kept {days}",
+      "fuel": "Fuel videos",
+      "fuelNote": "The video files; the fuel entries stay",
+      "fuelWhen": "Checked once a month, the oldest first.",
+      "neverTitle": "Never removed",
+      "runTitle": "Run now",
+      "runBody": "The job runs every night at {time}. Run now first shows what it would remove; nothing goes until you press Remove.",
+      "runCheck": "Run now",
+      "wouldRemove": "Would remove now (nothing is removed yet):",
+      "countOf": "{n} {what}",
+      "olderThan": "older than {days}",
+      "total": "{n} in all",
+      "remove": "Remove {n} now",
+      "close": "Close",
+      "nothing": "Nothing is old enough to remove.",
+      "removed": "Removed:",
+      "removedNone": "Nothing was old enough to remove.",
+      "removedSnack": "Old data removed",
+      "summarised": "{n} driver days kept as summaries",
+      "what": {
+        "inbox_read_days": "Read notifications",
+        "inbox_unread_days": "Unread notifications",
+        "delivery_days": "Notification and push delivery records",
+        "audit_routine_days": "Activity log: routine entries",
+        "audit_changes_days": "Activity log: changes",
+        "issues_resolved_days": "Resolved or dismissed issues",
+        "location_days": "Location points",
+        "heartbeats_days": "Phone heartbeats",
+        "counters_days": "Usage counters",
+        "drafts_days": "Unsent trip drafts",
+        "app_errors_days": "App errors"
+      },
+      "note": {
+        "audit_routine_days": "Reads and everyday actions",
+        "issues_resolved_days": "With their history",
+        "location_days": "Each driver's day stays as a summary: km, driving time, stops",
+        "counters_days": "Google, routing and map search",
+        "drafts_days": "On each phone and browser, when opened"
+      },
+      "rule": {
+        "inbox_read": "read notifications",
+        "inbox_unread": "unread notifications",
+        "delivery": "notification delivery records",
+        "push_log": "driver push records",
+        "audit_routine": "routine activity-log entries",
+        "audit_changes": "activity-log changes",
+        "issue_events": "resolved issues' history",
+        "issues_resolved": "resolved or dismissed issues",
+        "location_points": "location points (each day kept as a summary)",
+        "heartbeats": "phone heartbeats",
+        "google_calls": "Google usage counters",
+        "routing_calls": "routing usage counters",
+        "api_minute_calls": "map search counters",
+        "app_errors": "app errors"
+      },
+      "never": {
+        "tasks": "tasks and their stops",
+        "requests": "requests",
+        "logs": "odometer and fuel logs and their photos",
+        "reports": "vehicle reports",
+        "documents": "vehicle documents",
+        "employees": "employees",
+        "vehicles": "vehicles",
+        "places": "places",
+        "projects": "projects",
+        "duty": "duty sessions (attendance)"
+      },
+      "err": {
+        "empty": "Type a number of days.",
+        "whole": "Whole days only.",
+        "min": "At least {n} days.",
+        "max": "At most {n} days."
+      }
     }
   },
   "patterns": {
@@ -3424,6 +3515,12 @@
       "town": "Town",
       "pin": "Pin",
       "link": "Link"
+    },
+    "group": {
+      "saved": "Saved",
+      "recent": "Recent",
+      "for": "{name}'s recent",
+      "forSomeone": "Their recent"
     }
   },
   "geofence": {
