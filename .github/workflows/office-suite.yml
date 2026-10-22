@@ -172,6 +172,8 @@ jobs:
           cp -r apps/office/test-results "$OUT/" 2>/dev/null || true
           # The mobile website's screenshot baselines (a missing one is written by the run: commit it from here).
           cp -r apps/office/e2e/screens "$OUT/screen-baselines" 2>/dev/null || true
+          # Round 4–7, item 12: each screen built to the approved mockups beside its mockup (e2e/mockups.spec.ts).
+          cp -r apps/office/mockups-report "$OUT/mockups-report" 2>/dev/null || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
