@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import {
   actionWords, answeredAsk, answeredLabel, askArgs, askChip, askedSnack, askMeta, askSentence, asksEmptyKey, asksFor, asksTab, asksTabs, askTitle, barOf,
   bookingTime, bookingTone, busyWords, byLine, canAnswer, conflictResource, firstName, forgetAnswers, holderAsksRoute, holderOf, holderTitle, hourTicks,
-  hhmmOf, inboxRoute, isMe, mayAsk, nowAt, reachOf, rememberAnswer, roleWords, rowLine, timelineOrder, wantedOfWindow, wantedWords, windowWords,
+  hhmmOf, inboxRoute, isMe, mayAsk, nowAt, reachOf, rememberAnswer, requesterReach, roleWords, rowLine, timelineOrder, wantedOfWindow, wantedWords, windowWords,
 } from '../src/office/holderLogic';
 import { moreFor, MORE_SECTION, routeForUrl } from '../src/office/nav';
 import { PRESETS } from '../src/office/permissions';
@@ -91,6 +91,16 @@ console.log('== The holder (Google Calendar\'s room booking) ==');
   check(mayAsk(anoja, ['ask_for_it'], 'Kamal') && !mayAsk(anoja, ['task_board'], 'Kamal') && !mayAsk(anoja, ['ask_for_it'], 'Anoja Perera') && !mayAsk({ name: 'X' }, ['ask_for_it'], 'Kamal'), 'Ask for it only with the tool, never to oneself, only with the trip');
   check(same(reachOf(anoja, 'Kamal'), { call: anoja.call, whatsapp: anoja.whatsapp }) && same(reachOf(anoja, 'Anoja Perera'), {}) && same(reachOf({ name: 'N' }, 'K'), {}), 'Call and WhatsApp for someone else only, and only when the server gave them');
   check(holderOf({ holder: anoja }) === anoja && holderOf({}) === undefined && holderOf(null) === undefined && holderOf({ holder: { name: 'x' } }) === undefined, 'a row\'s holder only when the server sent one (holder_contact off: none)');
+  // Sahan's removals (22 October 2026): the holder IS the conflict's requester: the holder line's pair only.
+  const asker = { name: 'Anoja Perera', call: anoja.call, whatsapp: anoja.whatsapp };
+  check(same(requesterReach({ holder: anoja, requester: asker }, true, 'Kamal'), {}), 'the holder is the requester: no second Call / WhatsApp');
+  check(same(requesterReach({ holder: { ...anoja, name: 'A. Perera' }, requester: asker }, true, 'Kamal'), {}), 'the same person by their number (a name written another way)');
+  check(same(requesterReach({ holder: { ...anoja, whatsapp: undefined }, requester: asker }, true, 'Kamal'), { whatsapp: asker.whatsapp }), 'per button: a WhatsApp the holder line lacks stays');
+  check(same(requesterReach({ holder: { ...anoja, name: 'Palitha', call: 'tel:+94771111111', whatsapp: 'https://wa.me/94771111111' }, requester: asker }, true, 'Kamal'), { call: asker.call, whatsapp: asker.whatsapp }),
+    'another holder: the requester\'s own pair stays');
+  check(same(requesterReach({ holder: anoja, requester: asker }, false, 'Kamal'), { call: asker.call, whatsapp: asker.whatsapp }) && same(requesterReach({ requester: asker }, true, 'Kamal'), { call: asker.call, whatsapp: asker.whatsapp }),
+    'no holder line (holder_contact off, or none sent): the requester\'s pair stays');
+  check(same(requesterReach({ holder: anoja }, true, 'Kamal'), {}), 'no requester: nothing');
 }
 
 console.log('\n== Ask for it ==');
@@ -207,7 +217,10 @@ console.log('\n== The screens as text: the holder parts, and every action kept =
   check(/c\.holder && resource \? <HolderLine/.test(parts) && /office\.trip\.openThatTask/.test(parts), 'ConflictCard: its sentence, the holder only when sent, Open that task');
 
   const review = read('app/office/trip/review.tsx');
-  check(/office\.trip\.openThatTask/.test(review) && /reach\(c\.requester\)/.test(review) && /reach\(c\.driver\)/.test(review) && /office\.trip\.callName/.test(review) && /office\.trip\.whatsappName/.test(review) && /office\.trip\.pickAnotherDriver/.test(review) && /office\.trip\.pickAnotherVehicle/.test(review), 'Review\'s conflict card keeps Open that task, Call / WhatsApp the requester and the driver, Pick another driver / vehicle');
+  // Sahan's removals (22 October 2026): the requester's pair through requesterReach (none again when the holder line is theirs).
+  check(/const holderShown = holdersOn && !!c\.holder && !!conflictResource\(c\);/.test(review) && /requesterReach\(c, holderShown, me\.name\)/.test(review) && /useSwitch\('holder_contact'\)/.test(review),
+    'Review\'s conflict card: the requester\'s Call / WhatsApp not again when the holder line (shown) is theirs');
+  check(/office\.trip\.openThatTask/.test(review) && /reach\(asker\)/.test(review) && /reach\(c\.driver\)/.test(review) && /office\.trip\.callName/.test(review) && /office\.trip\.whatsappName/.test(review) && /office\.trip\.pickAnotherDriver/.test(review) && /office\.trip\.pickAnotherVehicle/.test(review), 'Review\'s conflict card keeps Open that task, Call / WhatsApp the requester and the driver, Pick another driver / vehicle');
   check(/c\.holder && conflictResource\(c\) \? <HolderLine holder=\{c\.holder\}/.test(review) && /wanted=\{tripWanted\(\)\}/.test(review), 'Review\'s conflict card adds the holder (only when sent) with Ask for it for this trip\'s day and times');
   check(/setSavedNotice\(s\.noticeKey, notice, undefined, o\.conflicts\)/.test(review), 'Review: the save\'s conflicts wait on the screen landed on, with their holders');
 

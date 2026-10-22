@@ -18,6 +18,8 @@
 // conflict cards and warnings; the people card (the driver with the plate, "✓ Checked" when today's vehicle check is in,
 // Change; who drives with no app; who rides with their avatars and Edit; the projects; the contact; the note); Back and the
 // one primary button in the bottom bar.
+// Sahan's removals (22 October 2026): the vehicle-used line only when its reason says more than the plate on the row (not for
+// "chosen"); a conflict's requester buttons not again when the holder line is theirs.
 
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
@@ -38,12 +40,12 @@ import { whatsappLink } from '@/lib/contacts';
 import { durationText, shortDate } from '@/lib/durations';
 import { colomboDate } from '@/lib/time';
 import { phoneLocal } from '@/lib/profile';
-import { conflictResource } from '@/office/holderLogic';
+import { conflictResource, requesterReach } from '@/office/holderLogic';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { validateAssign } from '@/office/trip/assignLogic';
 import { requestFieldsOf, setDraft, type TripMode, updateDraft, useTripDraft } from '@/office/trip/draft';
-import { bookOutcome, conflictActions, driverMessage, leaveNote, type Outcome, requestOutcome, taskOutcome, whatsappWithText } from '@/office/trip/formsLogic';
+import { bookOutcome, conflictActions, driverMessage, leaveNote, type Outcome, requestOutcome, taskOutcome, vehicleUsedShown, whatsappWithText } from '@/office/trip/formsLogic';
 import { requestIdOf, successOf } from '@/office/trip/successLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { showSnackbar } from '@/components/patterns/Snackbar';
@@ -54,7 +56,7 @@ import { useTrip } from '@/office/trip/useTrip';
 import { ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
 import { emptyWho } from '@/office/trip/whoDrivesLogic';
 import { passengersOn, ridersLine } from '@/office/trip/passengersLogic';
-import { switchOn } from '@/office/switches';
+import { switchOn, useSwitch } from '@/office/switches';
 import { whoOfDraft } from '@/office/trip/whoWords';
 import { legTextT, reasonLines, reasonText } from '@/office/trip/words';
 import { planNotes, planRows } from '@/office/stepperRows';
@@ -92,9 +94,15 @@ export default function TripReview() {
     const leaveAt = trip.preview?.timeline?.items.find((x) => x.kind === 'leave');
     return { date: d?.fields.date, from: leaveAt?.kind === 'leave' ? leaveAt.at : d?.fields.leaveBy, until: trip.preview?.timeline?.totals.ends };
   };
+  // The holder line shows only with holder_contact on (HolderLine reads the same switch).
+  const holdersOn = useSwitch('holder_contact');
   const conflictWhat = (c: Conflict) => (c.kind === 'driver' ? d?.driverName || d?.fields.driver : d?.fields.vehicle && d.fields.vehicle !== ON_THE_DAY && !/^any /.test(d.fields.vehicle) ? d.fields.vehicle : undefined) || undefined;
   const conflictCard = (c: Conflict, i: number, picks: boolean) => {
     const a = conflictActions(c, opensTasks);
+    // Sahan's removals (22 October 2026): when the holder line is the requester's own, its Call / WhatsApp are theirs; the
+    // requester's pair is not drawn again (holderLogic.ts requesterReach). With no holder line the requester's pair stays.
+    const holderShown = holdersOn && !!c.holder && !!conflictResource(c);
+    const asker = c.requester ? { name: c.requester.name, ...requesterReach(c, holderShown, me.name) } : undefined;
     const reach = (who: Conflict['requester'] | Conflict['driver']) => who && (who.call || who.whatsapp) ? (
       <>
         {who.call ? <Button kind="outline" label={t('office.trip.callName', { name: who.name.split(' ')[0] })} onPress={() => open(who.call!)} style={styles.smallBtn} /> : null}
@@ -111,7 +119,7 @@ export default function TripReview() {
         {c.holder && conflictResource(c) ? <HolderLine holder={c.holder} resource={conflictResource(c)!} what={conflictWhat(c)} wanted={tripWanted()} testID={`conflict-holder-${i}`} /> : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {a.openTask ? <Button kind="outline" label={t('office.trip.openThatTask')} onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: a.openTask! } })} style={styles.smallBtn} /> : null}
-          {reach(c.requester)}
+          {reach(asker)}
           {reach(c.driver)}
           {picks && mode === 'task' ? <Button kind="dark" label={t(a.pick === 'driver' ? 'office.trip.pickAnotherDriver' : 'office.trip.pickAnotherVehicle')} onPress={() => { updateDraft((x) => ({ ...x, step: 'who' })); router.back(); }} style={styles.smallBtn} /> : null}
         </View>
@@ -244,6 +252,8 @@ export default function TripReview() {
   // A fact's row opens the Who step to change it (Change stops has no Who step: there the rows are facts).
   const toWho = d.mode === 'stops' ? undefined : () => { updateDraft((x) => ({ ...x, step: 'who' })); router.back(); };
   const showsDriver = (d.mode === 'task' || books) && !!f.driver && !noAppTrip;
+  // The plate a row shows: the driver's, or who drives' (no app) when the trip takes a vehicle.
+  const plateOnRow = plate && (showsDriver || (noAppTrip && (d.mode === 'task' || books))) ? plate : '';
   const projects = d.mode === 'task' ? d.rows.filter((r) => r.project.trim()) : d.req.project ? [{ project: d.req.project, percent: '' }] : [];
 
   return (
@@ -320,7 +330,8 @@ export default function TripReview() {
                 testID="who-chip"
               />
             ) : null}
-            {p?.vehicle_used && (d.mode === 'task' || books) ? <Txt variant="small" style={styles.insetText} testID="vehicle-used">{t('office.trip.vehicleUsedLine', { text: `${p.vehicle_used.reg_no}${p.vehicle_used.why && p.vehicle_used.why !== 'chosen' ? ` · ${p.vehicle_used.why}` : ''}` })}</Txt> : null}
+            {/* Sahan's removals (22 October 2026): no line for a "chosen" vehicle (its plate is on the row above); another reason keeps it. */}
+            {p?.vehicle_used && (d.mode === 'task' || books) && vehicleUsedShown(p.vehicle_used, plateOnRow) ? <Txt variant="small" style={styles.insetText} testID="vehicle-used">{t('office.trip.vehicleUsedLine', { text: `${p.vehicle_used.reg_no}${p.vehicle_used.why && p.vehicle_used.why !== 'chosen' ? ` · ${p.vehicle_used.why}` : ''}` })}</Txt> : null}
             {people > 0 && (
               <>
                 {(showsDriver || noAppTrip) && <Divider soft />}

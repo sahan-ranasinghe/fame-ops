@@ -9,6 +9,8 @@
 // Round 4–7 (item 8, the list audit): a row's chip only when neither its section nor its line says it: no "Done" in DONE,
 // no "Under way" in On the way, no Sent / Seen / Accepted beside the same sentence, no Self-drive beside "Drives
 // themselves"; Late, Not confirmed stay (office/lists2Logic.ts taskChipShown; statusWords.ts unchanged).
+// Sahan's removals (22 October 2026): no "Waiting" on every Waiting for approval row (the section says it); a late one (its
+// leave-by passed, not decided) says "Late" in words (lists2Logic.ts waitingChip), red as before.
 
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -26,7 +28,7 @@ import { useOffice, useTool } from '@/office/state';
 import { addColumnPage, BOARD_LIMIT, type BoardColumn, columnArgs, type ColumnMore, columnView } from '@/office/taskHistoryLogic';
 import type { Board, BoardCard, FleetError } from '@/office/types';
 import { chipText, sentenceText, taskChip, taskRowLine } from '@/office/statusWords';
-import { taskChipShown } from '@/office/lists2Logic';
+import { taskChipShown, waitingChip } from '@/office/lists2Logic';
 import { DarkHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -147,7 +149,9 @@ export default function TasksTab() {
                   time={w.time}
                   title={w.title}
                   line={[w.driver, w.vehicle || w.vehicle_text, w.status].filter(Boolean).join(' · ')}
-                  chip={{ text: t('office.chip.waiting'), tone: w.late ? 'red' : 'amber' }}
+                  // Sahan's removals (22 October 2026): the section says Waiting for approval; the row's chip is only "Late"
+                  // (its leave-by passed, still not decided), in words as well as red.
+                  chip={waitingChip(w) ? { text: t('office.chip.lateWord'), tone: 'red' } : null}
                   onPress={canApprove ? () => router.push({ pathname: '/office/request/[id]', params: { id: w.request_id } }) : undefined}
                 />
               </View>

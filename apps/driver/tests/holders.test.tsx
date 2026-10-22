@@ -1,7 +1,8 @@
 // Round 4–7, feature 7 (Sahan, 22 October 2026): someone else has that driver or vehicle, Office mode through the router
 // with the fake office. Per changed screen, the key actions are still there and the new ones work:
 //   - Review's conflict card: Open that task, Call / WhatsApp the requester, Pick another driver (as before), plus the
-//     holder with Call, WhatsApp and Ask for it (ask_for_it once, the snackbar);
+//     holder with Call, WhatsApp and Ask for it (ask_for_it once, the snackbar); the requester's own pair not again when the
+//     holder is the requester (Sahan, 22 October 2026);
 //   - a saved notice's conflict card (Give it a driver, Change the task, Approve, Book now land on it): the lines and OK as
 //     before, the holder card with Call, WhatsApp, Ask for it and Open that task;
 //   - Who's available and the vehicle groups: a row still picks; a busy one names its holder with Ask (the wanted window);
@@ -119,7 +120,7 @@ async function askThroughSheet(askButton: string, note = 'site visit') {
 }
 
 describe('Review: the conflict card', () => {
-  it('keeps Open that task, Call / WhatsApp and Pick another driver, and adds the holder with Ask for it for this trip', async () => {
+  it('keeps Open that task and Pick another driver, and adds the holder with Call, WhatsApp and Ask for it for this trip', async () => {
     answers.plan_task = () => ({ ...FIX('create_task'), conflicts: [vehicleConflict] });
     const d = newDraft('task');
     setDraft({ ...d, step: 'review', driverName: 'Driver A', fields: { ...d.fields, date: '2026-10-24', stops: [{ ...newStop('pickup'), place: 'Fixture office', picked: true, lat: 6.9, lng: 79.86 }, { ...newStop('drop'), place: 'Fixture site', picked: true, lat: 7.48, lng: 80.36, arriveBy: '11:00' }], driver: 'fixa', vehicle: 'FX 1', title: 'Team drop', leaveBy: '08:00' } });
@@ -127,9 +128,11 @@ describe('Review: the conflict card', () => {
     await screen.findByText(vehicleConflict.text, {}, { timeout: 6000 });
     // As before.
     expect(screen.getByText(t('office.trip.openThatTask'))).toBeTruthy();
-    expect(screen.getByText(t('office.trip.callName', { name: 'Anoja' }))).toBeTruthy();
-    expect(screen.getByText(t('office.trip.whatsappName', { name: 'Anoja' }))).toBeTruthy();
     expect(screen.getByText(t('office.trip.pickAnotherVehicle'))).toBeTruthy();
+    // Sahan's removals (22 October 2026): the holder IS the requester, so the requester's own Call / WhatsApp Anoja are not
+    // drawn again beside the holder line's (tests/removals.test.tsx: another holder or no holder line keeps them).
+    expect(screen.queryByText(t('office.trip.callName', { name: 'Anoja' }))).toBeNull();
+    expect(screen.queryByText(t('office.trip.whatsappName', { name: 'Anoja' }))).toBeNull();
     // The holder.
     expect(screen.getByText('Anoja Perera · Fleet admin')).toBeTruthy();
     expect(screen.getByText('Asked for it · 08:00–11:00')).toBeTruthy();

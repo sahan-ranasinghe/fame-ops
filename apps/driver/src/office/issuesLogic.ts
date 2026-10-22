@@ -192,6 +192,18 @@ export function appendPage(list: IssuesList, page: IssuesList): IssuesList {
 export const activeCount = (list: Pick<IssuesList, 'open' | 'in_progress'> | null | undefined): number => (list?.open ?? 0) + (list?.in_progress ?? 0);
 
 export const severityTone = (severity?: string): Tone => (severity === 'critical' ? 'red' : severity === 'warning' ? 'amber' : 'muted');
+
+/**
+ * A row's severity chip (Sahan, 22 October 2026): each group heading says its severity with an icon (and the word for the
+ * screen reader), so a row under it no longer repeats Warning or Info. Critical keeps its chip on every row; a flat list (a
+ * search, a kind's list: no heading, `group` absent) keeps every chip; and a row whose severity is not its group's (a group
+ * takes its worst row's) keeps its own, since the heading does not say it.
+ */
+export const severityChipShown = (severity: string, group?: string | null): boolean => severity === 'critical' || !group || severity !== group;
+
+/** The icon of a severity on a group's heading (never colour alone): critical an octagon, warning a triangle, info a circle. */
+export type SeverityIcon = 'octagon' | 'triangle' | 'info';
+export const severityIcon = (severity?: string): SeverityIcon => (severity === 'critical' ? 'octagon' : severity === 'warning' ? 'triangle' : 'info');
 export const statusTone = (status?: string): Tone => (status === 'open' ? 'red' : status === 'in_progress' ? 'amber' : status === 'resolved' ? 'green' : 'muted');
 
 /** The kind's name in the phone's language (office.issues.kind.<kind>), else the server's words, else the kind itself. */

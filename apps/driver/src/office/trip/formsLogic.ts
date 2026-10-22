@@ -87,6 +87,20 @@ export function leaveNote(p: Pick<PlanPreview, 'timeline' | 'plan'> | null | und
   return { source: leave.source === 'plan' ? 'plan' : 'typed', estimate };
 }
 
+/** A plate as compared (spaces and dashes do not matter, as the server's). */
+const plateKey = (p: string | undefined | null): string => String(p ?? '').replace(/[\s-]/g, '').toUpperCase();
+
+/**
+ * Review's "Vehicle used" line (Sahan, 22 October 2026): with the reason "chosen" it only repeats the plate the driver's (or
+ * who drives') row already shows, so it goes; another reason (their vehicle today, their regular one, swapped) keeps its
+ * line, and so does a chosen plate no row shows.
+ */
+export function vehicleUsedShown(used: { reg_no: string; why?: string } | null | undefined, plateOnRow: string): boolean {
+  if (!used) return false;
+  if (used.why !== 'chosen') return true;
+  return !plateOnRow || plateKey(used.reg_no) !== plateKey(plateOnRow);
+}
+
 /** What a conflict card offers: Open that task (only to who may open tasks), Call / WhatsApp, Pick another vehicle / driver. */
 export function conflictActions(c: Conflict, opensTasks: boolean): { openTask?: string; pick: 'vehicle' | 'driver' | null } {
   return {

@@ -14,7 +14,7 @@ import { changeFieldsOf, changeTaskInput } from '../src/office/taskExtrasLogic';
 import { newStop } from '../src/office/trip/stopsLogic';
 import {
   addProjectRow, bookOutcome, conflictActions, driverMessage, driverOptions, groupRows, leaveNote, projectMatch, removeProjectRow, requestOutcome, setProjectRow, splitEqually, splitRows, splitState,
-  taskOutcome, vehicleLine, whatsappWithText,
+  taskOutcome, vehicleLine, vehicleUsedShown, whatsappWithText,
 } from '../src/office/trip/formsLogic';
 import { validateAssign } from '../src/office/trip/assignLogic';
 import { whoArgs } from '../src/office/trip/whoLogic';
@@ -85,6 +85,12 @@ console.log('\nThe outcome after sending');
   check(sent.kind === 'sent' && sent.taskId === 't1' && sent.leaveBy === '07:24' && sent.vehicle === "WP CAB-4521 · Kamal's vehicle today" && sent.warnings.length === 1, 'sent to the driver: Leave by, the vehicle used and why, the warnings');
   check(taskOutcome({ title: 'T', waiting_for_approval: true, request_id: 'r1', next: 'Waiting…' }).kind === 'waiting' && taskOutcome({ title: 'T', request_id: 'r1' }).kind === 'waiting', 'waiting for the fleet admin\'s OK (no task yet)');
   check(taskOutcome({ task_id: 't1', title: 'T', vehicle_used: { reg_no: 'WP X-1', why: 'chosen' } }).vehicle === 'WP X-1' && taskOutcome({ task_id: 't1', title: 'T', vehicle_changed: 'WP Y-2 instead of WP X-1' }).vehicle === 'WP Y-2 instead of WP X-1', 'a chosen vehicle shows its plate; a changed one the server\'s sentence');
+  // Sahan's removals (22 October 2026): Review's vehicle-used line goes for "chosen" (the plate is on the driver's row).
+  check(!vehicleUsedShown({ reg_no: 'WP CAB-4521', why: 'chosen' }, 'WP CAB-4521') && !vehicleUsedShown({ reg_no: 'WP CAB-4521', why: 'chosen' }, 'wp cab4521'), 'Review: no "Vehicle used" line for a chosen vehicle its row already shows');
+  check(vehicleUsedShown({ reg_no: 'WP CAB-4521', why: "Kamal's vehicle today" }, 'WP CAB-4521') && vehicleUsedShown({ reg_no: 'WP CAB-4521', why: "Kamal's regular vehicle" }, 'WP CAB-4521'),
+    'another reason (held today, the regular one) keeps its line');
+  check(vehicleUsedShown({ reg_no: 'WP CAB-4521', why: 'chosen' }, '') && vehicleUsedShown({ reg_no: 'WP CAB-4521', why: 'chosen' }, 'WP X-1') && !vehicleUsedShown(undefined, 'WP X-1'),
+    'a chosen plate no row shows keeps its line; none sent, none shown');
   const booked = bookOutcome({ task_id: 't2', request_id: 'r2', leave_by: '08:00', vehicle: 'WP A-1', warnings: [] });
   check(booked.kind === 'booked' && booked.taskId === 't2' && booked.vehicle === 'WP A-1', 'booked: the task and the vehicle');
   check(requestOutcome('request_sent', { next: 'Sent to the fleet admin' }).next === 'Sent to the fleet admin' && requestOutcome('saved', {}).kind === 'saved', 'a request sent, changes saved');
@@ -147,6 +153,8 @@ console.log('\nThe screens as text: every field reaches its input');
   check(who.includes("byDriver && !f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : whoWhy ? reasonText(t, whoWhy) : byDriver && known && !def && !f.vehicle && !dayDefault ? t('office.trip.needVehicle') : null") && who.includes('whoReason(whoNow, { needsPlate: isTask, plate: f.vehicle })') && who.includes('disabled={!!problem} problem={problem}'), 'Who: the button disabled until the step is valid (the driver, the title, the split, someone else\'s name and phone, the plate with no app, a vehicle when the driver holds none), with the reason under it');
   check(review.includes("bookInput(rf, { vehicle, driver: f.driver, defaultVehicle: d.book?.defaultVehicle }, trip.base)") && review.includes("secondary={books ? { label: t('office.trip.saveWaiting'), onPress: () => void send('send'), disabled: 'error' in planned } : undefined}"), 'Review: Book now as the primary with Save as waiting beside it (book_vehicle), else Send request');
   check(review.includes("testID=\"plan-updating\"") && review.includes('testID="leave-note"') && review.includes('testID="vehicle-used"') && review.includes('testID="conflict-card"') && !review.includes('testID="outcome-card"'), 'Review: Updating plan…, the Leave by note, the vehicle used, the conflict cards (Hotfix O2-H2: no outcome card)');
+  check(review.includes("&& vehicleUsedShown(p.vehicle_used, plateOnRow) ? <Txt") && review.includes("const plateOnRow = plate && (showsDriver || (noAppTrip && (d.mode === 'task' || books))) ? plate : '';"),
+    'Review: the vehicle-used line by the rule, against the plate the driver\'s (or who drives\') row shows');
   check(review.includes("t('office.trip.openThatTask')") && review.includes("t('office.trip.callName'") && review.includes("t('office.trip.whatsappName'") && review.includes("'office.trip.pickAnotherDriver' : 'office.trip.pickAnotherVehicle'"), 'the conflict cards: Open that task, Call / WhatsApp, Pick another vehicle / driver');
   check(review.includes("const o: Outcome = chosen.tool === 'create_task' ? taskOutcome(out)") && review.includes('successOf(') && review.includes("setSavedNotice(s.noticeKey, notice, undefined, o.conflicts)") && review.includes("showSnackbar({") && review.includes("t('office.saved.whatsapp')") && review.indexOf('showSnackbar({') < review.indexOf('setDraft(null);'), 'Hotfix O2-H2: after the save the item opens (successOf), a snackbar with WhatsApp the driver, the warnings on the item; the draft goes last');
   check(review.indexOf('if (outcome) {') < review.indexOf("if (!d) return <View") && review.includes('mode: d!.mode') && review.includes('lastKind.current = kind;') && review.includes('onRetry={() => void send(lastKind.current)}'), 'the outcome shows before the draft guard (the draft is gone by then); Try again sends the same call');

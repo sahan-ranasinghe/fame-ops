@@ -199,11 +199,13 @@ export function Screen({ children, refreshing, onRefresh, bottom = 24, style, sc
  * A section card (design 03): "NEEDS A DRIVER · 1" with a link on the right, then the rows. Round 4–7 (item 8): a group
  * of a list may collapse (`onToggle`: the heading is the button, a chevron says open or closed) and carry its severity
  * as a dot (`dot`, its words in `dotLabel` for the screen reader); `head` adds a control before the link (Select all).
+ * Sahan's removals (22 October 2026): `dotIcon` beside the dot says the severity by its shape too (never colour alone:
+ * Issues' critical octagon, warning triangle, info circle); the icon then carries `dotLabel` for the screen reader.
  * Round 4–7, item 12: `look="list"` is the approved mockups' section: the title outside the card (the count beside it, a
  * red count chip for a red section), the link at the right, then one card whose rows run edge to edge with a divider
  * (rows take `inset`); `look="group"` one kind of a group of cards under one heading (Home's "Needs you now").
  */
-export function Section({ title, count, link, onLink, tone, children, open, onToggle, dot, dotLabel, head, look: kind = 'card', testID }: {
+export function Section({ title, count, link, onLink, tone, children, open, onToggle, dot, dotLabel, dotIcon: DotIcon, head, look: kind = 'card', testID }: {
   title: string;
   count?: number;
   link?: string;
@@ -215,6 +217,8 @@ export function Section({ title, count, link, onLink, tone, children, open, onTo
   onToggle?: () => void;
   dot?: Tone;
   dotLabel?: string;
+  /** The severity's icon beside the dot (its shape says it; it carries `dotLabel`). */
+  dotIcon?: LucideIcon;
   head?: ReactNode;
   testID?: string;
 }) {
@@ -263,7 +267,12 @@ export function Section({ title, count, link, onLink, tone, children, open, onTo
   const label = (
     <>
       {onToggle ? (open === false ? <ChevronRight size={18} color={colors.muted} /> : <ChevronDown size={18} color={colors.muted} />) : null}
-      {dot ? <View style={[styles.dot, { backgroundColor: TONES[dot].ink }]} accessibilityLabel={dotLabel} /> : null}
+      {dot ? <View style={[styles.dot, { backgroundColor: TONES[dot].ink }]} accessibilityLabel={DotIcon ? undefined : dotLabel} /> : null}
+      {dot && DotIcon ? (
+        <View accessible accessibilityRole="image" accessibilityLabel={dotLabel} testID={testID ? `${testID}-severity` : undefined}>
+          <DotIcon size={16} color={TONES[dot].ink} strokeWidth={2.4} />
+        </View>
+      ) : null}
       <Txt variant="label" color={tone === 'red' ? colors.red : colors.muted} numberOfLines={1} style={{ flexShrink: 1 }}>{title.toUpperCase()}</Txt>
       {count !== undefined && <Mono size={13} bold color={tone === 'red' ? colors.red : colors.muted}>{`· ${count}`}</Mono>}
     </>

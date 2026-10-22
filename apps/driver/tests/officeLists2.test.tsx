@@ -394,16 +394,21 @@ describe('Office mode: Task history and Activity log (item 8)', () => {
     await waitFor(() => expect(r.getPathname()).toBe('/office/task/00000000-0000-4000-8000-000000000001'));
   });
 
-  it('Activity log: the header says it, the section says Changes; the outcome chip and Load more kept', async () => {
+  it('Activity log: the header says it, the section says Changes; the outcome chip (not "Done": Sahan, 22 October 2026) and Load more kept', async () => {
     answers.activity_log = () => ({
-      from: '2026-10-15', to: '2026-10-22', count: 1, total: 2, next: '1',
-      entries: [{ id: 1, at: '2026-10-22 09:00', person: 'Sahan', channel: 'Website or app', action: 'Approved a request', outcome: 'done' }],
+      from: '2026-10-15', to: '2026-10-22', count: 2, total: 3, next: '2',
+      entries: [
+        { id: 1, at: '2026-10-22 09:00', person: 'Sahan', channel: 'Website or app', action: 'Approved a request', outcome: 'done' },
+        { id: 2, at: '2026-10-22 09:05', person: 'Sahan', channel: 'Website or app', action: 'Cancelled a task', outcome: 'refused' },
+      ],
     });
     renderRouter(routes(), { initialUrl: '/office/people/activity' });
     await screen.findByText('Approved a request');
     expect(screen.getAllByText(t('office.activity.title'))).toHaveLength(1);
     expect(screen.getByText(t('office.lists2.activity.section').toUpperCase())).toBeTruthy();
-    expect(screen.getByText(t('office.activity.done'))).toBeTruthy();
+    // A done row says nothing more; a refused one keeps its chip.
+    expect(screen.queryByText(t('office.activity.done'))).toBeNull();
+    expect(screen.getByText(t('office.activity.refused'))).toBeTruthy();
     expect(screen.getByText(t('patterns.loadMore'))).toBeTruthy();
   });
 });

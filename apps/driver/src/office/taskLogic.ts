@@ -6,7 +6,11 @@ import type { AvailableDriver, Availability, Stop, TaskDetail } from './types';
 
 type Task = TaskDetail['task'];
 
-/** The five steps of design 14 with a time each ("~10:38" = planned, "—" = not yet). */
+/**
+ * The five steps of design 14 with a time each ("~10:38" = planned, "—" = not yet). Sahan's removals (22 October 2026): the
+ * task page no longer draws them as a card (its facts are on the page: dispatchParts below, the stops, the banner); the
+ * rule stays for its test until the steps' words (office.task.step_*) go with the next strings merge.
+ */
 export interface Step {
   key: 'approved' | 'accepted' | 'on_the_way' | 'arrived' | 'done';
   time: string;
@@ -27,6 +31,37 @@ export function steps(t: Pick<Task, 'approved_by' | 'sent' | 'accepted' | 'start
     { key: 'arrived', time: arrived ?? (running && arrivedPlanned ? `~${arrivedPlanned}` : '—'), state: arrived ? (done ? 'done' : 'now') : 'todo' },
     { key: 'done', time: t.completed ?? '—', state: done ? 'done' : 'todo' },
   ];
+}
+
+/** One fact of the task's dispatch on its timeline: the words' key and the time ("2026-10-21 07:24", said with shortWhen). */
+export interface DispatchPart {
+  key: 'office.task.sentAt' | 'office.task.seenAt' | 'office.line.accepted' | 'office.timeline.left';
+  time: string;
+}
+
+/**
+ * Sahan's removals (22 October 2026): the five-steps card is gone; what it said goes on the task's timeline, its first lines.
+ * The approval (by whom, when) with the plan version, as the card's line had them, then "Sent 12:08 · Seen 12:10 · Accepted
+ * 12:15" (each only when it happened; the server's "not opened yet" is no time: the banner says it), and "Left 07:31" when
+ * no start row on the timeline says it (a task with no start place, or no leave-by on it). Arriving is on each stop's row,
+ * done on the banner (the server's "Done 11:40 · 42 km logged").
+ */
+export function dispatchParts(t: Pick<Task, 'sent' | 'seen' | 'accepted' | 'started'>, startShown: boolean): DispatchPart[] {
+  const at = (x: string | undefined): x is string => !!x && /\d{2}:\d{2}$/.test(x);
+  const out: DispatchPart[] = [];
+  if (at(t.sent)) out.push({ key: 'office.task.sentAt', time: t.sent });
+  if (at(t.seen)) out.push({ key: 'office.task.seenAt', time: t.seen });
+  if (at(t.accepted)) out.push({ key: 'office.line.accepted', time: t.accepted });
+  if (!startShown && at(t.started)) out.push({ key: 'office.timeline.left', time: t.started });
+  return out;
+}
+
+/** The line above it: "Approved by Palitha · 16:40 · plan v3" (the card's own line, word for word). */
+export function approvedParts(t: Pick<Task, 'approved_by' | 'plan_version'>): { approvedBy?: { name: string; at: string }; planVersion?: number } {
+  return {
+    ...(t.approved_by ? { approvedBy: { name: t.approved_by.name, at: t.approved_by.at } } : {}),
+    ...(t.plan_version !== undefined ? { planVersion: t.plan_version } : {}),
+  };
 }
 
 /** The status pill: the task's status, with "needs a driver" and "missed" as the board says them. */
