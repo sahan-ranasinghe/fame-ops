@@ -5,6 +5,9 @@
 // whose link has no screen in O1 is only marked read and shows no Open pill: no button that does nothing. Round 4–7 (7): an
 // item with buttons (an Ask for it's Yes / No) shows them under it: a tap calls the tool as the server gave it, the item is
 // read, and the buttons become "You said Yes"; a holder.* item the person cannot open as a task opens the Asks page.
+// Round 4–7 (item 8, the list audit): a row that opens a screen shows the chevron alone (no "Open ›" pill on nearly every
+// row; "Open" is the screen reader's hint); Unread is asked of the server (my_inbox `unread`), so Load more pages only
+// the unread ones.
 
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -20,6 +23,7 @@ import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
 import { appendInbox, filterInbox, groupByDay, inboxArgs, inboxHistory, inboxChoice, inboxFilterDefs, inboxLine, kindTone, markRead, unreadAfter } from '@/office/inboxLogic';
 import { holderAsksRoute } from '@/office/holderLogic';
+import { inboxWithUnread } from '@/office/lists2Logic';
 import { routeForUrl } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, Inbox, InboxItem } from '@/office/types';
@@ -54,7 +58,8 @@ export default function AlertsTab() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<FleetError | null>(null);
   const archived = inboxHistory(values);
-  const q = useTool<Inbox>('my_inbox', inboxArgs(LIMIT, search, archived), { every: 60_000 });
+  // Round 4–7 (item 8): Unread is asked of the server (my_inbox `unread`), so Load more pages the unread ones only.
+  const q = useTool<Inbox>('my_inbox', inboxWithUnread(inboxArgs(LIMIT, search, archived), filter), { every: 60_000 });
   // O3 row 7: the next 50 (older pages, and the archived ones when History asks for them).
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
   async function loadMore() {
@@ -63,7 +68,7 @@ export default function AlertsTab() {
     if (!q.data?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
-      const page = await api.call<Inbox>('my_inbox', inboxArgs(LIMIT, search, archived, q.data.next));
+      const page = await api.call<Inbox>('my_inbox', inboxWithUnread(inboxArgs(LIMIT, search, archived, q.data.next), filter));
       q.patch((p) => appendInbox(p, page), k, true);
       setMore({ busy: false, error: null });
     } catch (e) {
@@ -145,6 +150,7 @@ export default function AlertsTab() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityState={{ selected: !item.read }}
+                    accessibilityHint={route ? t('office.alerts.open') : undefined}
                     onPress={() => open(item)}
                     style={({ pressed }) => [styles.card, !item.read && styles.unreadCard, pressed && { opacity: 0.8 }]}
                   >
@@ -156,12 +162,9 @@ export default function AlertsTab() {
                       {item.body ? <Txt variant="muted" size={15}>{item.body}</Txt> : null}
                       <View style={styles.foot}>
                         <Txt variant="small" style={{ flex: 1 }} numberOfLines={1}>{inboxLine({ ...item, ago: whenWords(t, item.ago) }, today, names)}</Txt>
-                        {route && (
-                          <View style={styles.open}>
-                            <Txt variant="strong" size={14}>{t('office.alerts.open')}</Txt>
-                            <ChevronRight size={16} color={colors.ink} strokeWidth={2.4} />
-                          </View>
-                        )}
+                        {/* Round 4–7 (item 8): the chevron alone (Gmail's and Slack's rows), "Open" said to the screen reader;
+                            an item with no screen shows none, as before. */}
+                        {route && <View testID="alert-chevron"><ChevronRight size={20} color={colors.muted} strokeWidth={2.4} /></View>}
                       </View>
                     </View>
                   </Pressable>
@@ -185,5 +188,4 @@ const styles = StyleSheet.create({
   unreadCard: { borderLeftWidth: 4, borderLeftColor: colors.amber },
   tile: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   foot: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, minHeight: 32 },
-  open: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.amber, borderRadius: 10, paddingLeft: 12, paddingRight: 8, height: 32 },
 });

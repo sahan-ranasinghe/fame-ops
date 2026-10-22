@@ -284,7 +284,8 @@ Branch `r47-lists` (22 October 2026), from `docs/phase8-plan.md` §33.7 and the 
 rebuild; remove nothing; every item mapped to its place; a test per reworked screen). Surfaces: **S** = the website
 (`apps/office`), **O** = Office mode in the app, which is also **/m/** (its web build: the same screens). Status: **done**
 (this branch), **described** (the file is another agent's in this round: the fix is written here for them), **later** (a
-proposal, not built).
+proposal, not built). Part 2 (branch `r47-lists2` from `9e5f240`, 22 October 2026) built every row that was described or
+later; **proposed** = kept as it is, its removal proposed (below).
 
 ### The audit
 
@@ -299,26 +300,26 @@ proposal, not built).
 | Home / Overview "Needs attention" | O | the server's attention groups | — | by kind | 5 rows | Snooze a group | the count is needs_action (as the Issues header and the site's badge) | done |
 | Overview | S | sections of 5 (3 on a phone) + View all; tiles | Reminders tile = every active issue | by kind | View all | Snooze / Dismiss a group | the Reminders tile counts service and document reminders | done |
 | Task history | S | when / task + tags / driver / plate / route / status pill + times / km | the status pill = the Status filter | none | 25 a page | none | the pill only when the filter does not say it | done |
-| Task history | O | time + day / title / driver · plate · route / label · times · km / chip | the chip = the Status filter; "Task history" in the header and the section | none | 25, Load more | none | the chip only when the filter does not say it | done (the title: later) |
+| Task history | O | time + day / title / driver · plate · route / label · times · km / chip | the chip = the Status filter; "Task history" in the header and the section | none | 25, Load more | none | the chip only when the filter does not say it; the section titled "Tasks" under the header's "Task history" (part 2) | done |
 | Activity log | S | when / action · about / person · channel / reason / outcome pill | "Done" on nearly every row | none | **bug: 25 only on a desktop** (no page numbers) | none | page numbers on a desktop | done; hiding "Done" is a proposed removal |
-| Activity log | O | time / action · about / day · person · channel / reason / chip | "Done" on nearly every row; the title twice | none | 50, Load more | none | — | proposed removal ("Done") |
+| Activity log | O | time / action · about / day · person · channel / reason / chip | "Done" on nearly every row; the title twice | none | 50, Load more | none | the section titled "Changes" (the site's word) under the header's "Activity log" (part 2); hiding "Done" stays a proposed removal | done (the title); proposed ("Done") |
 | Notification inbox | S | dot / who · title / body / "ago · unread" | "· unread" on every unread row (the dot says it) | none (the tray: Today / Yesterday / Earlier) | 25 a page | Mark all read | "· unread" for the screen reader only (the dot shows it) | done |
-| Alerts (the inbox) | O | tile / title / body / time / "Open ›" | "Open ›" on nearly every row | Today / Yesterday / Earlier | 50, Load more | Mark all read | later: the chevron alone (an item with no screen shows none, as today); the Unread filter asked of the server (my_inbox `unread`) | later |
-| Requests | S | requester / project / when / route / need / status + steps / Review | the status pill = the filter (Waiting) | none | 25 a page | none | later: the pill only when the filter holds one status (RequestStatusPill is shared with the request page) | later |
-| Approve (requests) | O | avatar / title / requester · when · need · proposed / reviewing / chips | the requester up to three times; the chip = the section | none | 25, Load more | none | later: the title never the requester's name when the avatar and the line carry it | later |
-| Fuel | S (`Fuel.tsx`, another agent) | when / plate / driver / litres / LKR / odometer / video pill + "Video 0:47 · 16 MB" | "Video" twice | none | 25 a page | none | the video pill only for a fill without its video (missing / on the phone); "0:47 · 16 MB" alone for an uploaded one | described |
+| Alerts (the inbox) | O | tile / title / body / time / "Open ›" | "Open ›" on nearly every row | Today / Yesterday / Earlier | 50, Load more | Mark all read | the chevron alone ("Open" the screen reader's hint; an item with no screen shows none, as before); the Unread filter asked of the server (my_inbox `unread`: Load more pages the unread ones) (part 2) | done |
+| Requests | S | requester / project / when / route / need / status + steps / Review | the status pill = the filter (Waiting) | none | 25 a page | none | the pill only when the filter does not say it (every row under All; under Waiting a Changed one; RequestStatusPill itself unchanged, its use in the list only); the step under it without the status word ("10:42 by Palitha") (part 2) | done |
+| Approve (requests) | O | avatar / title / requester · when · need · proposed / reviewing / chips | the requester up to three times; the chip = the section | none | 25, Load more | none | the title is the trip, the requester once in the line (a request with no trip words: the name as the title, the line without it); the chip only when the section does not say it (Changed under Waiting) (part 2) | done |
+| Fuel | S (`Fuel.tsx`, another agent) | when / plate / driver / litres / LKR / odometer / video pill + "Video 0:47 · 16 MB" | "Video" twice | none | 25 a page | none | an uploaded video: the video icon ("Video uploaded" to the screen reader) with "0:47 · 16 MB"; the pill only for a fill without its video (on the phone, uploading, failed, none, pruned) (part 2) | done |
 | Fuel | O (reports) | date + plate + Video / driver · litres · LKR · km · length / Watch video | — | none | 25, Load more | none | — | fine |
 | Mileage | S | five tables (by vehicle, allowance, gaps, unlogged, checks) | — | by table | 25 local per table | none | — | fine |
-| Mileage | O (reports) | the same five sections | — | by section | all at once | none | later: 5 rows per section with See all (Load more 25) | later |
+| Mileage | O (reports) | the same five sections | — | by section | all at once | none | 5 rows per section, "Show all N" in its header (25), then Load more 25 at a time (one answer, nothing asked again) (part 2) | done |
 | Duty log | S | driver / clock in (with the day) / out / hours / vehicles / tasks / km | — | none | 25 a page, totals row | none | — | fine |
 | Duty log | O (reports) | driver + day / clock in (with the day again) → out / vehicles · tasks · km | the day twice | none | 25, Load more | none | the day once (in words), the clock-in its time | done |
-| Drivers | S | avatar · name / code / username / phone / licence / vehicle / status / "N accepted · 0 declined" / Manage | "· 0 declined" on most rows | none | 25 a page | none | later: "· 0 declined" off (a proposed removal) | later |
-| Drivers board | S | avatar / name / status pill + vehicle / last seen / Next / New task, Call | the pill echoes the Show filter | Attendance groups | all at once | Ask drivers (sheet) | later: the pill only when the filter holds more than one state | later |
-| Drivers (tab) | O | avatar + dot / name / vehicle / status sentence / Next · last seen / Call | the state twice (dot and sentence) | Attendance groups | all at once | Ask drivers (sheet) | later | later |
+| Drivers | S | avatar · name / code / username / phone / licence / vehicle / status / "N accepted · 0 declined" / Manage | "· 0 declined" on most rows | none | 25 a page | none | "· 0 declined" kept (it is the only place the zero is said; its removal stays proposed) | proposed |
+| Drivers board | S | avatar / name / status pill + vehicle / last seen / Next / New task, Call | the pill echoes the Show filter | Attendance groups | all at once | Ask drivers (sheet) | under On a task, Off duty or Not available the chip says only what it adds ("Until ~15:40", "Since 07:40", "Back 13:00"; none for a plain "Off duty"); All and Free now keep the whole status (part 2) | done |
+| Drivers (tab) | O | avatar + dot / name / vehicle / status sentence / Next · last seen / Call | the state twice (dot and sentence) | Attendance groups | all at once | Ask drivers (sheet) | the Not available pill (Call's place, as before) unless the Show filter says it; beside it, or under On a task / Off duty / Not available, the first line says only what the state adds ("Back 13:00", "Since 07:40 · usually starts 07:30"); the dot (presence colour) kept (part 2) | done |
 | Drivers (People) | O | avatar / name / code · phone / on duty · plate / "active" + licence chips | "active" on every row (the filter's default) | none | 25, Load more | none | "active" only off the default (a switched-off driver keeps its chip) | done |
-| Vehicles | S (`Vehicles.tsx`, another agent) | thumb + plate / make · seats / rented / regular driver / assigned / km bar / next service / Lic Ins Emi / status + availability | Lic / Ins / Emi on every row; the status pill and the availability line say the same; the status = the filter | none | 25 a page | none | one status (the availability line, the pill only for In garage); the document chips only when not ok (Maintenance holds every date) | described |
-| Vehicles | O (`vehicles/**`, another agent) | plate / make · seats / availability · holder · km / status pill + Lic / Ins / Emi | the status twice, the chips on every row, the plate twice without a make | none | 25, Load more | none | the same as S; the second line without the plate | described |
-| Places | S | name / address / kind pill / site id / district / "Pinned" or "no pin" | "Pinned" on nearly every row; the kind pill = the filter | none | 25 a page | none | Pin: a check named Pinned, the words for "no pin"; the kind pill: later | done (the kind pill: later) |
+| Vehicles | S (`Vehicles.tsx`, another agent) | thumb + plate / make · seats / rented / regular driver / assigned / km bar / next service / Lic Ins Emi / status + availability | Lic / Ins / Emi on every row; the status pill and the availability line say the same; the status = the filter | none | 25 a page | none | one status (the availability line, the pill only for In garage); the document chips kept, a valid one quiet (a tick and its name, "valid" to the screen reader; expiring, expired, not set coloured as before) (part 2) | done |
+| Vehicles | O (`vehicles/**`, another agent) | plate / make · seats / availability · holder · km / status pill + Lic / Ins / Emi | the status twice, the chips on every row, the plate twice without a make | none | 25, Load more | none | the same as S (the pill only for In garage or Returned; a valid document quiet); the title never the plate (no make: the type in words, else "Make not set") (part 2) | done |
+| Places | S | name / address / kind pill / site id / district / "Pinned" or "no pin" | "Pinned" on nearly every row; the kind pill = the filter | none | 25 a page | none | Pin: a check named Pinned, the words for "no pin"; no Kind column under Dialog sites / Mobitel sites (part 2) | done |
 | Places | O | name / site · address · district / removed / "No pin" or operator | the operator = the section ("Dialog sites") | by section | 50, Load more | none | the operator only outside its own section | done |
 | Projects | S | a search page (find_project), not a list | — | — | — | — | — | fine |
 | Projects | O | none (the pickers in Who and Purpose) | — | — | — | — | — | n/a |
@@ -326,10 +327,10 @@ proposal, not built).
 | Office users | O | avatar / name / e-mail · phone / permissions / "active" | "active" on every row | none | 25, Load more | none | "active" only off the default | done |
 | Questions (Asks) | S | question / day time · by · counts / note / open pill | — | none | 25 a page | none | — | fine |
 | Questions (Asks) | O | question / name · time (no day) / counts with "N yes" / "N yes" pill | "N yes" twice; no day | none | 20, Load more | none | the day with the time in words; "N yes" once (the pill) | done |
-| My trips | S (`MyTrips.tsx`, another agent) | when / trip / status pill + live text + approved by / driver | "Approved" up to three times; "Task I created" under that filter | none | 25 a page | none | the live text OR the pill (never both with the same word); the decision line only when it adds who and when | described |
-| My trips | O (`(tabs)/trips.tsx`, another agent) | cards in Waiting / Coming up / Done / Expired | the chip = the group | by state | 100 at once | none | the chip only when it differs from the group; 25 with Load more | described |
-| Tasks board | S | columns with cards (status sentence) | the sentence echoes the column | by column | 25 per column | none | later | later |
-| Tasks (tab) | O | sections with rows (line + chip) | "Done" three times in DONE; the line and the chip say the same | by section | 50 per column | none | later (`office/statusWords.ts` is shared with Home and the task page) | later |
+| My trips | S (`MyTrips.tsx`, another agent) | when / trip / status pill + live text + approved by / driver | "Approved" up to three times; "Task I created" under that filter | none | 25 a page | none | the pill, what the live text adds ("14:20" after Done) and the decision with the pill's verb beside it ("[Approved] by Palitha · 10:42", the verb read to the screen reader); a decline's reason once; "Task I created" only under All; Passenger always (part 2) | done |
+| My trips | O (`(tabs)/trips.tsx`, another agent) | cards in Waiting / Coming up / Done / Expired | the chip = the group | by state | 100 at once | none | the chip only when it differs from the section and the "Approved by" line; 25 with Load more (part 2) | done |
+| Tasks board | S | columns with cards (status sentence) | the sentence echoes the column | by column | 25 per column | none | "Not confirmed" (not "Completed · not confirmed") in the Completed column; the sentence keeps its verb (its time needs it) (part 2) | done |
+| Tasks (tab) | O | sections with rows (line + chip) | "Done" three times in DONE; the line and the chip say the same | by section | 50 per column | none | no Done chip in DONE, no Under way in On the way, no Sent / Seen / Accepted / Self-drive / Someone else beside the line that says it; Late, Not confirmed kept (`office/lists2Logic.ts` taskChipShown; `statusWords.ts` unchanged) (part 2) | done |
 | Today | driver app | next task, later today (3), All tasks | — | — | — | — | — | done (another agent, §33.6) |
 | Fuel / Mileage / Report | driver app | summary, Recent 5, See all (by month, 20 at a time) | — | by month | Load more | — | — | done (another agent, §33.6) |
 
@@ -413,3 +414,201 @@ proposal, not built).
 
 - S: `issuesLogic.test.ts` and `issuesPages.test.tsx` kept (4 assertions updated where the default view or the row legitimately changed: the first call is the groups', the row's grey line, the taker as the avatar, the paging tests on a kind's list); `issuesGroups.test.tsx` (groups, tabs, bulk, every action still there), `vehicleCare.test.tsx` (the rules, Maintenance's cards and actions, Reminders' cards), `listAudit.test.tsx`; `overviewOpen.test.tsx`'s two Reminders expectations updated; the e2e's issue row text and the L7 list (now a search) updated (CI runs them).
 - O: `test:issues`, `test:maintenance`, `test:overview`, `test:office` keep every check and add the new ones; `tests/officeLists.test.tsx` (7).
+
+### Part 2 (branch `r47-lists2`): inventory of every reworked list (from the code at 9e5f240)
+
+The rules: the site's `screens/lists2Logic.ts`, Office mode's `office/lists2Logic.ts` (`office/statusWords.ts` unchanged:
+it is shared with Home and the task page). A word the filter, the section or the row's own line already says is left
+out; a fact the row alone carries (a time, a size, who decided, an action) always stays.
+
+**Fuel (S, `screens/Fuel.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Date range (this week by default), Vehicle / Driver filter, the month line, the four tiles (Fills, Fuel, Videos, Without a video) | top | unchanged |
+| Row: when, plate, driver, fuel, litres, LKR ("–" when none), odometer | the row | unchanged |
+| Row: an uploaded video — the green "Video" pill (or "Video · interrupted") and "Video 0:47 · 16 MB · interrupted, 2 pieces" under it | Video cell | the video icon (green) with "0:47 · 16 MB · interrupted, 2 pieces"; "Video uploaded" to the screen reader and on hover; "Uploaded" when the answer has neither length nor size |
+| Row: a fill without its video — On the phone, Uploading, Upload failed, No video, Pruned pills | Video cell | unchanged |
+| A row opens the fill beside the list (`/fuel/:id`, the filters kept) | row | unchanged |
+| Loading, "Adding up the fills…", the error, "Couldn't refresh", the empty line in words, Updating… | the list | unchanged |
+| 25 a page (page numbers on a desktop, Load more on a phone), the count in the header | the list | unchanged |
+
+**Vehicles (S, `screens/Vehicles.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Register vehicle (register_vehicle); the search (plate, make, driver, custodian, holder); the Show filter with the fleet's counts (?filter=) | top | unchanged |
+| Row: photo + plate, make · seats · fuel, "Fuel type: not set · Set it" (update_vehicle) | Vehicle | unchanged |
+| Row: rented from, until; regular driver; Assigned to with the note, Call, WhatsApp (or Pool); km this month with its bar or "no km allowance set"; next service (toned) | the row | unchanged |
+| Row: Lic / Ins / Emi chips (green ok, orange, red, dashed not set) with the expiry on hover; "no document" and what is missing | Documents | the same chips; a valid one quiet (a tick and its name, no fill; "valid" to the screen reader; the expiry on hover); expiring, expired, not set and "no document" coloured as before |
+| Row: the status pill (Available / On a task / In garage) and the availability line under it | Status | ONE status: the availability line ("Free", "On a task · back ~14:30 (live)", "Booked later today · 15:00") in its tone; the pill only for In garage (then no line saying it again); an answer without the line keeps the pill |
+| The legend under the board | bottom | unchanged, plus "A tick = valid" |
+| A row opens the vehicle beside the list (the filter kept); 25 a page, the count; loading, empty, error, Couldn't refresh | the list | unchanged |
+
+**My trips (S, `screens/MyTrips.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| New request (create_request); All · Requests · Tasks I created; the date range; the Status filter; the search; the totals line | top | unchanged |
+| Request row: when, back by; Task pill and title on a proposal; the route (a link); N stops; for X; the project | When, Trip | unchanged |
+| Status: the live pill (or the Expired badge) | Status, first line | unchanged (the first thing in the status line) |
+| Status: the live text ("Approved", "Completed · 14:20", "Driver accepted · 10:42") | its own line | beside the pill, only what it adds ("14:20", "10:42", "Its leave time has passed"); left out when it is the pill's word or a decision line carries it (a decline's reason) |
+| Status: "Approved by Palitha · 10:42", "Declined by … · reason", "Cancelled by … · reason" | lines under | beside the pill when its verb is the pill's ("[Approved] by Palitha · 10:42", the verb read to the screen reader); a line of its own otherwise ("Approved by …" under On the way) |
+| Call fleet admin, Request again (expired), the trip's action (Vehicle check / Trip finished? / Enter the odometer) | Status | unchanged |
+| Driver and vehicle (photo, chip, thumbnail, make), Call driver / "Not assigned yet" | Driver | unchanged |
+| Created task row: "Task I created" pill | Trip | only under All (under "Tasks I created" every row is one); Passenger always |
+| Created task row: title (link), route, stops, label; status as above; the approver's line; the driver; opens the task (a passenger's: its view) | the row | unchanged (the status said once as above) |
+| Call office card; loading, the error with Try again / Open permissions, the empty line in words; Load more / page numbers, 25 | the page | unchanged |
+
+**Requests (S, `screens/Requests.tsx`; RequestStatusPill unchanged, its use in the list only)**
+
+| Item | Old place | New place |
+|---|---|---|
+| New request (desktop, phone); the Status filter (Waiting by default; Changed, Approved, Declined, Cancelled, Expired, All); the search | top | unchanged |
+| Row: requester with avatar · for X, or Task pill + title + "proposed by" / the proposal line; asked; project; when, back by; route, stops; need or passengers; who drives | the row | unchanged |
+| Row: the status pill | Status | only when the filter does not say it: every row under All; under Waiting (which holds the changed ones) a Changed one; none under a one-status filter |
+| Row: "Leave-by passed" pill; "X is reviewing" | Status | unchanged |
+| Row: the step line ("Approved · 10:42 by Palitha", "Seen by the office · …", "sent 2 h ago", "booked directly") | under the pill | a step that is the row's status says only what it adds ("10:42 by Palitha", "Needs re-approval · 11:05"); the others unchanged |
+| Review (decide_request, waiting / changed) or Task → (canOpenTask) | right | unchanged |
+| A row opens the request beside the list; 25 a page; loading, error, Couldn't refresh, empty in words | the list | unchanged |
+
+**Drivers board (S, `screens/DriversBoard.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Ask drivers (sheet), Questions; the search; the Show filter with counts; Now · Attendance · Week; the ask's status line with All answers → | top | unchanged |
+| Row: photo, name, licence pill, the status chip, the vehicle chip, not available, last seen · usual start, Next, the answer line, Call / WhatsApp, New task or Assign → | the row | unchanged, except: under On a task, Off duty or Not available the status chip says only what the filter does not ("Until ~15:40", "Since 07:40", "Back 13:00"; no chip for a plain "Off duty"); All and Free now keep the whole status |
+| Attendance groups and Week (‹ ›, This week, "+", an entry to change or remove, one driver at a time on a phone) | views | unchanged |
+
+**Tasks board (S, `screens/Tasks.tsx`)**: the needs-a-driver block, History, Assign a task, the week strip, the waiting-
+approval column, each column with its count and Load more, the card (time, label, title, tags, route, leave by, ETA, late,
+the driver's late word, the driver card, the status sentence, "Approved by …") and a card opening its task — unchanged.
+The finish flag chip in the Completed column → "Not confirmed" (was "Completed · not confirmed"; its words on hover as
+before); "Completed early" and the chip in any other column unchanged. The status sentence keeps "Done 11:40 · 42 km
+logged": its verb tells its time from the card's own time at the top.
+
+**Places (S, `screens/Places.tsx`)**: Import sites, the search, the Places filter (Our places, Dialog sites, Mobitel
+sites, Removed places), Without a pin, the count, rows opening the place, Restore on removed ones, the empty lines —
+unchanged. The Kind column (its header and its pill) is left out under Dialog sites and Mobitel sites (every row said
+"Site · Dialog" / "Site · Mobitel"); kept under Our places (Office / Saved / Site differ) and Removed places.
+
+**My trips (O, `app/office/(tabs)/trips.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Request a vehicle (create_request); the search; the Filter (All, Waiting, Coming up, Done, Expired, with the counts of the trips loaded); "Request withdrawn." | top | unchanged |
+| Sections Waiting · Coming up · Done · Expired | the list | unchanged |
+| Card: Passenger tag; title; the line (when · back by · need · driver · who drives · plate); "Changed by the office …" | the card | unchanged |
+| Card: the state chip (with the calendar icon when expired) | right of the title | only when it says something the section and the "Approved by" line do not: no Waiting in WAITING, Done in DONE, Expired in EXPIRED, Approved beside "Approved by …"; Accepted, On the way, Arrived, Sent, Changed, Declined, Cancelled, Missed stay |
+| "Approved by Palitha · Sun 16:40" with Call; the trip's action; Edit; the expired line; Request again; Withdraw (the reasons sheet, its error with Try again) | the card | unchanged |
+| A card opens the request (a passenger trip: its view) | card | unchanged |
+| 100 trips at once | the list | 25 at a time with Load more (my_trips' cursor; the error with Try again; "No trips under this filter" only when nothing more is to load) |
+| Skeleton, the error with Try again, Couldn't refresh, the empty states with their actions, pull to refresh | the screen | unchanged |
+
+**Approve (O, `app/office/(tabs)/approve.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| "N new requests ↑" (the quiet look every minute); the search; the Filter (Waiting, Approved, Declined, Cancelled, Expired, All); ?status= from Home | top | unchanged |
+| Row: avatar (the requester), title (the trip, else the requester), line (requester · when in words · need · proposal) | the row | the title is the trip (title, route or project); the requester once: in the line, or as the title when the request has no trip words (the line then without the name) |
+| Row: "X is reviewing" / "Leave-by passed" / the asker's licence line | line 2 | unchanged |
+| Row: New chip; the status chip (expired with its icon); asked in words | right | New and asked unchanged; the status chip only when the section does not say it (a Changed one under Waiting; every chip under All) |
+| A row opens the request; Load more with its error; skeleton, error, empty | the list | unchanged |
+
+**Alerts (O, `app/office/(tabs)/alerts.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Mark all read (with its error and Try again); the search; the Filter (All / Unread with the count; Last 30 days / Older) | top | unchanged; Unread is asked of the server (my_inbox `unread`), so Load more pages only the unread ones (before: the 50 loaded, filtered on the phone) |
+| Today / Yesterday / Earlier | groups | unchanged |
+| Row: the kind's tile, title (bold while unread, the amber edge), body, "08:14 · 48 min ago" | the row | unchanged |
+| Row: "Open ›" (an amber pill) on a row that opens a screen | foot | the chevron alone (grey); "Open" is the row's screen reader hint; a row with no screen shows none, as before |
+| A tap: marked read at once (put back if refused), the screen opened | row | unchanged |
+| An item's Yes / No (InboxActions, Round 4–7 feature 7) | under the row | unchanged |
+| Load more, skeleton, error, Couldn't refresh, the empty states | the list | unchanged |
+
+**Mileage (O, `app/office/reports/index.tsx`)**: Mileage · Fuel · Duty log, the date range, the Filter (vehicle, driver),
+the tiles, personal km, the notes under each section's title, the empty lines — unchanged. Each section (By vehicle, the
+month's allowance, Biggest gaps, Unlogged km, Odometer checks): its first 5 rows; "Show all N" in its header shows 25,
+then Load more 25 at a time with "25 of N" (before: every row at once). One answer: nothing is asked again; another range
+or filter starts each section again at 5; a pull to refresh keeps what was opened. Fuel and Duty log unchanged.
+
+**Drivers (O, `app/office/(tabs)/drivers.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Now · Attendance · Week; the search; the Filter (All, Free now, On a task, Off duty, Not available with the counts); Ask drivers (the bar and its sheet) | top / bottom | unchanged |
+| Row: avatar with the state's dot; name; the vehicle chip | the row | unchanged (the dot is the presence colour, as Slack's and Teams') |
+| Row: line 1, the status sentence ("Not available, back 13:00", "On a task until ~15:40 (live)"), an off-duty driver's usual start | line 1 | beside the Not available pill, or under the filter of the same state, only what it adds ("Back 13:00", "Until ~15:40 (live)", "Since 07:40 · usually starts 07:30"; nothing for a plain "Off duty"); otherwise unchanged |
+| Row: line 2 (next, last seen, starts) | line 2 | unchanged |
+| Row: the Not available pill in Call's place; Call | right | the pill unless the filter is Not available (then nothing, as there was no Call); Call unchanged |
+| Attendance rows (their own line, the pill) and Week (cells, + Not available, Remove with its confirmation) | views | unchanged |
+
+**Tasks (O, `app/office/(tabs)/tasks.tsx`)**: History, the week strip, Assign a task, Needs a driver with Give a driver,
+the sections with their counts and Load more, Waiting for approval, a row opening its task, the line (driver · the
+sentence), the driver's late word — unchanged. The chip: none where the section or the line says it (Done in DONE, Under
+way in On the way, Sent / Seen / Accepted beside the same sentence, Self-drive / Someone else beside the line that names
+who drives); Late N min, Not confirmed and a chip the line does not say stay.
+
+**Vehicles (O, `app/office/vehicles/index.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Register vehicle; the search; the Filter with the fleet's counts (?filter= from Home); the count in the header | top | unchanged |
+| Row: the plate | left | unchanged |
+| Row: title make · seats, else the plate again | title | make · seats, else the type in words ("Van"), else "Make not set" (never the plate twice) |
+| Row: line (availability · with X now / assigned to X · km of allowance); line 2 the fuel ("Fuel type: not set" amber) | lines | unchanged, except the availability left out when it is "In garage" (the pill says it) |
+| Row: the status pill (Available / On a task / In garage / Returned) | right | only In garage (amber) and Returned; an answer without the availability line keeps the status pill |
+| Row: Lic / Ins / Emi pills | under the row | a valid one quiet (a green tick and its name, "Lic valid" to the screen reader); expiring, expired and not set as before |
+| A row opens the vehicle; Load more; skeleton, error, empty with Register | the list | unchanged |
+
+**Task history and Activity log (O)**: the header keeps the title ("Task history", "Activity log"); the section under it
+names what it holds ("Tasks", "Changes": the site's list headers), with its count. Everything else unchanged.
+
+### Part 2: behaviour changes (with the reason)
+
+- My trips (O) loads 25 at a time with Load more (my_trips' cursor; before 100 at once): the audit's paging rule. The
+  Filter's counts stay those of the trips loaded (as before); "No trips under this filter" waits until nothing more is
+  to load.
+- Alerts (O): Unread is asked of the server (my_inbox `unread`), so Load more pages the unread ones (before, the filter
+  hid the read ones among the 50 loaded and Load more brought read ones too).
+- Mileage (O): 5 rows a section, Show all, Load more (the audit's "the summary first, the recent N, See all").
+- The Drivers tab (O) under the Not available filter shows no Not available pill (the filter says it); the row's right
+  side is then empty, as before (no Call for a driver who is not available).
+- A word the filter, the section or the row's line already says is shown once (the status pills and chips listed above,
+  "Video", "Approved", "Task I created", the Kind column, the plate, the section titles). Each such word stays where it
+  carries something (a time, who, a tone where the row has nothing else) and is read to the screen reader where the
+  picture says it (the video icon, a valid document, the approval's verb).
+- The Tasks tab's Sent section loses its Sent / Seen / Accepted chips (the line says the same with its time): the
+  green / amber colour of those chips is gone there; the words are kept.
+
+### Part 2: proposed removals (kept for now)
+
+- Drivers (S): "· 0 declined" in the Last 30 days column (kept: the zero is said only there).
+- Activity log (S, O): the "Done" pill / chip on every done row (from part 1; kept).
+- The Tasks tab (O): the Waiting chip on every row of "Waiting for approval" (the section says it; kept because its red
+  colour is the only sign of a late one there: removing it needs a "late" word first).
+- Vehicles (S, O): the document chips of a vehicle whose three documents are valid could become one "Documents valid"
+  line (kept as three quiet chips, so each document's state and expiry stay on the row).
+
+### Part 2: tests
+
+- S: `screens/lists2.test.tsx` (14): the rules, and per list its key actions with the new rows (Fuel: rows, date range,
+  Filter, pages, a row opening; Vehicles: Register, search, Filter, Call / WhatsApp the custodian, a row opening, the one
+  status, quiet valid documents; Requests: Review, Task →, New request, search, Filter, pages; My trips: New request,
+  Show, date range, Filter, search, Call, a row opening, Passenger; Drivers board: New task, Call, Ask drivers,
+  Questions, search, Filter; Tasks: Assign a task, History, the day strip, a card opening; Places: search, Filter, a row
+  opening, Restore). `MyTrips.test.tsx`: two expectations of the status line updated (the words shown: "On the way
+  09:30", "Declined by Palitha · …" without "Declined · no vehicle that day" again; the created task's "On the way
+  08:10"). Every other site test unchanged; the e2e's Fuel check ("Video", "0:41") and My trips checks ("Waiting",
+  "Approved", "Approved by E2E HF2 One") hold as written (the words are in the cells, the verb for the screen reader).
+- O: `tests/officeLists2.test.tsx` (9 through the router: My trips' chips and Load more with Passenger, Call, Withdraw,
+  Request a vehicle; Approve's requester and chips, All, a row opening; Alerts' chevron, Unread asked of the server,
+  Mark all read, a tap opening and marking read; Mileage's 5 / Show all / Load more; Drivers' state once under each
+  filter, Call, Ask drivers, a row opening; Tasks' chips, Assign a task, History, a row opening; Vehicles' one status,
+  quiet documents, Register, Filter, Load more, a row opening; Task history's and Activity log's titles, Load more);
+  `scripts/test-lists2.ts` (53 checks: the rules in both languages, the strings, the screens' source; the lead adds
+  `"test:lists2": "tsx scripts/test-lists2.ts"` to package.json). `scripts/test-inbox.ts`: the Alerts source check now
+  reads `inboxWithUnread(inboxArgs(LIMIT, search, archived), filter)` (the Unread filter asked of the server).
+- The strings: `apps/driver/src/i18n/parts/lists2.json` (13 keys under `office.lists2`, English and Sinhala), for the
+  lead's merge into en.json / si.json.

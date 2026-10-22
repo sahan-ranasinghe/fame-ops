@@ -6,6 +6,9 @@
 // Stage 1 (O3 item 3): History in the header (Tasks → History, list_tasks) and Load more at the end of a column that has
 // more cards than its first page (task_board with the column and its cursor; the pages loaded stay while the board is read
 // again every minute, and go when the day changes).
+// Round 4–7 (item 8, the list audit): a row's chip only when neither its section nor its line says it: no "Done" in DONE,
+// no "Under way" in On the way, no Sent / Seen / Accepted beside the same sentence, no Self-drive beside "Drives
+// themselves"; Late, Not confirmed stay (office/lists2Logic.ts taskChipShown; statusWords.ts unchanged).
 
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -23,6 +26,7 @@ import { useOffice, useTool } from '@/office/state';
 import { addColumnPage, BOARD_LIMIT, type BoardColumn, columnArgs, type ColumnMore, columnView } from '@/office/taskHistoryLogic';
 import type { Board, BoardCard, FleetError } from '@/office/types';
 import { chipText, sentenceText, taskChip, taskRowLine } from '@/office/statusWords';
+import { taskChipShown } from '@/office/lists2Logic';
 import { DarkHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -69,7 +73,8 @@ export default function TasksTab() {
       title={c.title}
       line={taskRowLine(t, c)}
       line2={c.late_report ? sentenceText(t, c.late_report.text) : undefined}
-      chip={(() => { const k = taskChip(column, c); return { text: chipText(t, k), tone: k.tone }; })()}
+      // Round 4–7 (item 8): the chip only when neither the section nor the line says it ("Done" was three times in DONE).
+      chip={(() => { const k = taskChip(column, c); return taskChipShown(column, k.key, c) ? { text: chipText(t, k), tone: k.tone } : null; })()}
       onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: c.id } })}
     />
   );
