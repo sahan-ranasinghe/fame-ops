@@ -59,6 +59,7 @@ export { default as Briefcase } from 'lucide-react-native/icons/briefcase';
 export { default as UserX } from 'lucide-react-native/icons/user-x';
 export { default as File } from 'lucide-react-native/icons/file';
 export { default as ArrowLeftRight } from 'lucide-react-native/icons/arrow-left-right';
+export { default as Send } from 'lucide-react-native/icons/send';
 // Office mode (Phase 8, O2): management under More.
 export { default as ChartColumn } from 'lucide-react-native/icons/chart-column';
 export { default as SlidersHorizontal } from 'lucide-react-native/icons/sliders-horizontal';

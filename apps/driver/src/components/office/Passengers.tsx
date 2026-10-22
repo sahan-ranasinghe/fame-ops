@@ -11,10 +11,13 @@
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { MessageCircle, Phone, X } from '@/components/icons';
+import { Check, Clock, MessageCircle, Navigation, Phone, X } from '@/components/icons';
+import { RouteStepper, type StepperRow } from '@/components/patterns/RouteStepper';
+import { StatusBanner } from '@/components/patterns/StatusBanner';
 import { TaskDriverCard } from '@/components/office/DriverRows';
 import { SearchBox } from '@/components/office/PeopleParts';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { look } from '@/components/patterns/look';
 import { SelectableRow } from '@/components/patterns/Select';
 import { Sheet } from '@/components/patterns/Sheet';
 import { Button, Field, Mono, Plate, Txt } from '@/components/ui';
@@ -198,41 +201,52 @@ const STOP_KEY: Record<string, string> = { pickup: 'office.trip.type_pickup', dr
 /**
  * A trip the person rides in (my_trip's passenger view), view only: the Passenger tag and where it is now (read every
  * minute by the page), the plate with the leave and back-by times, the driver with Call / WhatsApp, the stops as they go.
+ * Round 4–7, item 12 (the approved mockup 4, the passenger's view: the same page without the office's actions): the state
+ * as the one status banner with the Passenger chip, the driver card, the stops on the route stepper.
  */
 export function PassengerTripCard({ trip }: { trip: PassengerTrip }) {
   const { t } = useApp();
   const live = liveWords(trip.live_text);
+  const tone = passengerTone(trip.status);
+  const rows: StepperRow[] = trip.stops.map((s) => {
+    const w = stopWords(s);
+    return {
+      key: String(s.n),
+      mark: String(s.n),
+      kind: 'stop',
+      state: s.status === 'done' ? 'done' : s.status === 'skipped' ? 'skipped' : s.status === 'arrived' ? 'current' : 'todo',
+      time: s.arrived ?? s.planned,
+      timeTone: s.status === 'arrived' ? 'blue' : 'ink',
+      title: s.place,
+      titleLines: 2,
+      meta: [
+        ...(STOP_KEY[s.type] ? [{ text: t(STOP_KEY[s.type]) }] : []),
+        ...(w ? [{ text: t(w.key, w.vars), tone: s.status === 'skipped' ? ('amber' as const) : undefined }] : []),
+      ],
+      testID: 'passenger-stop',
+    };
+  });
   return (
-    <View style={styles.card} testID="passenger-trip">
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-        <Pill text={t('office.passengers.tag')} tone="blue" size={13} />
-        <Pill text={'key' in live ? t(live.key, live.vars) : live.text} tone={passengerTone(trip.status)} size={13} />
+    <View style={{ gap: 12 }} testID="passenger-trip">
+      <StatusBanner
+        tone={tone}
+        icon={trip.status === 'in_progress' ? Navigation : trip.status === 'completed' ? Check : trip.status === 'cancelled' ? X : Clock}
+        title={'key' in live ? t(live.key, live.vars) : live.text}
+        line={trip.back_by ? t('office.myTrip.leaveBack', { leave: trip.leave_at, back: trip.back_by }) : t('office.myTrip.leave', { leave: trip.leave_at })}
+        chip={{ text: t('office.passengers.tag'), tone: 'blue' }}
+        testID="passenger-banner"
+      />
+      <View style={styles.card}>
+        <TaskDriverCard name={trip.driver ?? undefined} plate={trip.vehicle ?? undefined} call={trip.call} whatsapp={trip.whatsapp} emptyName={t('office.passengers.driverNone')} />
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        {trip.vehicle ? <Plate regNo={trip.vehicle} /> : null}
-        <Mono size={15} color={colors.muted}>{trip.back_by ? t('office.myTrip.leaveBack', { leave: trip.leave_at, back: trip.back_by }) : t('office.myTrip.leave', { leave: trip.leave_at })}</Mono>
-      </View>
-      <TaskDriverCard name={trip.driver ?? undefined} call={trip.call} whatsapp={trip.whatsapp} emptyName={t('office.passengers.driverNone')} />
-      {trip.stops.length > 0 && (
-        <View style={{ gap: 6 }}>
-          {trip.stops.map((s) => {
-            const w = stopWords(s);
-            return (
-              <View key={s.n} testID="passenger-stop">
-                <Txt variant="body" size={15} numberOfLines={2}>{`${s.n} · ${STOP_KEY[s.type] ? t(STOP_KEY[s.type]) : ''} · ${s.place}`}</Txt>
-                {w ? <Txt variant="small" color={s.status === 'skipped' ? colors.amberText : colors.muted}>{t(w.key, w.vars)}</Txt> : null}
-              </View>
-            );
-          })}
-        </View>
-      )}
+      {rows.length > 0 && <RouteStepper rows={rows} live={trip.status === 'in_progress'} testID="passenger-stepper" />}
       <Txt variant="small" testID="passenger-note">{t('office.passengers.viewNote', { time: trip.seen_at })}</Txt>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
+  card: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, padding: 14, gap: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingLeft: 6, paddingRight: 4, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, maxWidth: '100%' },
   x: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },

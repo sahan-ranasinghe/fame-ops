@@ -16,7 +16,9 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MessageCircle, Phone } from '@/components/icons';
 import { HolderStrip } from '@/components/office/HolderParts';
+import { RowPlate } from '@/components/patterns/ListRow';
 import { ChoiceRow } from '@/components/patterns/Select';
+import { RoundButton } from '@/components/patterns/TopBar';
 import { Plate, Txt } from '@/components/ui';
 import { driverParts, driverPill, presenceLine, rankedDrivers, type VehicleChip, vehicleChip, vehicleChipText } from '@/office/approveLogic';
 import { holderOf, wantedOfWindow } from '@/office/holderLogic';
@@ -176,26 +178,28 @@ export function TaskDriverCard({ name, photo, drivenBy, plate, vehicleText, deta
 }) {
   const { t } = useApp();
   const word = drivenByKey(drivenBy);
+  // Round 4–7, item 12 (the approved mockup 4): the avatar, the name with who drives, the plate chip with the model on one
+  // line, and Call (blue) and WhatsApp (green) as round buttons.
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }} testID="task-driver-card">
-      {name ? <Avatar name={name} size={52} photo={drivenBy === 'other' ? undefined : photo} /> : null}
-      <View style={{ flex: 1, gap: 4 }}>
+      {name ? <Avatar name={name} size={44} photo={drivenBy === 'other' ? undefined : photo} /> : null}
+      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <Txt variant="strong" size={18}>{name ?? emptyName}</Txt>
+          <Txt variant="strong" size={16}>{name ?? emptyName}</Txt>
           {word ? <Pill text={t(word)} tone="muted" size={13} /> : null}
         </View>
-        {plate ? <View style={styles.chipRow}><Plate regNo={plate} /></View> : vehicleText ? <View style={styles.chipRow}><Pill text={vehicleText} tone="muted" size={13} /></View> : null}
-        {details ? <Txt variant="muted" size={15}>{details}</Txt> : null}
+        {plate || vehicleText || details ? (
+          <View style={styles.chipRow}>
+            {plate ? <RowPlate regNo={plate} /> : vehicleText ? <Pill text={vehicleText} tone="muted" size={13} /> : null}
+            {details ? <Txt variant="small" style={{ flexShrink: 1 }}>{details}</Txt> : null}
+          </View>
+        ) : null}
       </View>
       {call ? (
-        <Pressable accessibilityRole="button" accessibilityLabel={`${t('office.common.call')} ${name ?? ''}`.trim()} onPress={() => open(call)} style={styles.iconBtn} testID="task-driver-call">
-          <Phone size={22} color={colors.ink} strokeWidth={2.4} />
-        </Pressable>
+        <RoundButton icon={<Phone size={20} color={colors.blue} strokeWidth={2} />} label={`${t('office.common.call')} ${name ?? ''}`.trim()} onPress={() => open(call)} testID="task-driver-call" />
       ) : null}
       {whatsapp ? (
-        <Pressable accessibilityRole="button" accessibilityLabel={`${t('office.common.whatsapp')} ${name ?? ''}`.trim()} onPress={() => open(whatsapp)} style={styles.iconBtn} testID="task-driver-whatsapp">
-          <MessageCircle size={22} color={colors.ink} strokeWidth={2.4} />
-        </Pressable>
+        <RoundButton icon={<MessageCircle size={20} color={colors.green} strokeWidth={2} />} label={`${t('office.common.whatsapp')} ${name ?? ''}`.trim()} onPress={() => open(whatsapp)} testID="task-driver-whatsapp" />
       ) : null}
     </View>
   );

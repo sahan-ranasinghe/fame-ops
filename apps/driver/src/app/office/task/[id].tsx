@@ -14,12 +14,31 @@
 // themselves ("Drives themselves") or someone not in Fame Fleet ("Someone else": their initials, name, Call / WhatsApp);
 // the server's sentences (Running late, the status line, the warnings saved past) in the person's language.
 // Round 4–7 (4): the vehicle check lines (with the photos) and Completed · not confirmed (grey).
+// Round 4–7, item 12 (the approved mockup 4): restyled, nothing removed. While on the way the map comes first (the plan and
+// the driver's position from live_drivers; Google → the free map → "Map not available" as TaskMap does) with a floating
+// back button, the page as a sheet over it; ONE status banner ("On the way to <stop>" · arrives about · back about, the
+// late chip, a tap opens Live with the driver); the driver card with Call and WhatsApp; the five steps; the stops on the
+// route stepper (start, the live timeline, back at base); who rides (their avatars, then a row each); the trip's holder
+// (task_detail.task.holder: asked by / assigned by, Call, WhatsApp); the fuel card; the vehicle check; the rest as before.
+// The bar: the two actions used most (office/detailBanner.ts taskActions: Give a driver when it needs one, Change the task,
+// Reassign driver, Change stops, Swap vehicle, Reopen), the rest and Show the driven route and Cancel task under ⋯ More.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MapPin } from '@/components/icons';
+import { Briefcase, CalendarX, Check, ChevronLeft, Clock, Flag, Fuel, type LucideIcon, MessageCircle, Navigation, Phone, Send, UserCog, Users, UserX, X } from '@/components/icons';
+import { AvatarStack } from '@/components/office/Passengers';
+import { BarMore, BarRow, barSecondary } from '@/components/patterns/BottomActionBar';
+import { RowIcon } from '@/components/patterns/ListRow';
+import { look, TINT } from '@/components/patterns/look';
+import { Sheet } from '@/components/patterns/Sheet';
+import { StatusBanner } from '@/components/patterns/StatusBanner';
+import { RoundButton } from '@/components/patterns/TopBar';
+import { TaskMap } from '@/components/TaskMap';
+import { type BannerIcon, lateMinutes, type TaskAction, taskActions, taskBanner } from '@/office/detailBanner';
+import { holderTitle, reachOf, windowWords } from '@/office/holderLogic';
 import { TaskDriverCard } from '@/components/office/DriverRows';
 import { TaskAsksLink } from '@/components/office/HolderParts';
 import { TaskCheckLines } from '@/components/office/VehicleChecks';
@@ -33,14 +52,13 @@ import { SavedNotice } from '@/components/office/SavedNotice';
 import { Button, Mono, Txt } from '@/components/ui';
 import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
-import { DETAIL_LINKS_FRESH_MS, fuelCardParts, type LinkKey, linkOf } from '@/office/taskDetailLogic';
+import { DETAIL_LINKS_FRESH_MS, detailTask, fuelCardParts, type LinkKey, linkOf, planDrawable } from '@/office/taskDetailLogic';
 import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
 import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStatusKey } from '@/office/taskLogic';
-import type { FleetError, FuelCard, TaskDetail } from '@/office/types';
+import type { FleetError, FuelCard, LiveDrivers, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
-import { BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
+import { BackHeader, ErrorNotice, ListFailed, Pill, Row, Screen, Section, StickyActions } from '@/office/ui';
 import { sentenceText } from '@/office/statusWords';
-import { statusTone } from '@/office/homeLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { dateWords, shortWhen } from '@/lib/dateWords';
@@ -158,169 +176,261 @@ export default function TaskDetailScreen() {
   const extras = task ? extrasFor(task, me.tools) : { time: false, stops: false, swap: false, reopen: false };
   const statusKey = task ? taskStatusKey(task) : '';
 
+  // Round 4–7, item 12 (the approved mockup 4): while the trip is on the way the map comes first with the driver's position
+  // (live_drivers, as Live reads it), then ONE status banner, the people, the route stepper, the rest; the office's actions
+  // in the bottom bar (two) and under ⋯ More (office/detailBanner.ts taskActions).
+  const banner = task ? taskBanner(task) : null;
+  const late = task ? lateMinutes(task) : null;
+  const showMap = !!p && !!task && task.status === 'in_progress' && planDrawable(p);
+  const live = useTool<LiveDrivers>('live_drivers', {}, { enabled: showMap && me.tools.includes('live_drivers'), every: 30_000 });
+  const here = live.data?.drivers?.find((d) => d.driver === task?.driver && typeof d.lat === 'number' && typeof d.lng === 'number');
+  const mapTask = useMemo(() => (p && showMap ? detailTask(p) : null), [p, showMap]);
+  const insets = useSafeAreaInsets();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const plan = taskActions({
+    reassign: actions.reassign,
+    time: extras.time,
+    stops: extras.stops,
+    swap: extras.swap,
+    reopen: extras.reopen,
+    cancel: actions.cancel,
+    route: !!task && (task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route'),
+  }, !!task?.needs_driver);
+  const holder = task?.holder;
+  const holderReach = holder ? reachOf(holder, me.name) : {};
+  const openLive = task ? () => router.navigate({ pathname: '/office/(tabs)/live', params: { driver: task.driver ?? '' } }) : undefined;
+
+  // One action as a button: on the bar (outlined, half the width) or in the ⋯ sheet (full width). Each opens its own screen
+  // or sheet as before; Cancel and Reopen keep their spinner on the button pressed.
+  const action = (a: TaskAction, inSheet: boolean): ReactNode => {
+    if (!task) return null;
+    const style = inSheet ? styles.sheetBtn : [barSecondary, { flex: 1 }];
+    const from = (fn: () => void) => () => { setMoreOpen(false); fn(); };
+    switch (a) {
+      case 'giveDriver':
+      case 'reassign':
+        return actions.reassign && <Button key={a} kind={a === 'giveDriver' && !inSheet ? 'primary' : 'outline'} icon={UserCog} label={task.needs_driver ? t('office.home.giveDriver') : t('office.task.reassign')} onPress={from(() => router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } }))} disabled={busy !== null} style={style} testID="task-reassign" />;
+      case 'time':
+        return extras.time && <Button key={a} kind="outline" icon={Clock} label={t('office.task.changeTime')} onPress={from(() => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } }))} disabled={busy !== null} style={style} testID="task-change-time" />;
+      case 'stops':
+        return extras.stops && <Button key={a} kind="outline" label={t('office.task.changeStops')} onPress={from(() => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } }))} disabled={busy !== null} style={style} testID="task-change-stops" />;
+      case 'swap':
+        return extras.swap && <Button key={a} kind="outline" label={t('office.task.swapVehicle')} onPress={from(() => router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } }))} disabled={busy !== null} style={style} testID="task-swap" />;
+      case 'reopen':
+        return extras.reopen && <Button key={a} kind="outline" label={t('office.task.reopen')} onPress={from(() => setReopening(true))} busy={busy === 'reopen'} disabled={busy !== null} style={style} testID="task-reopen" />;
+      case 'cancel':
+        return actions.cancel && <Button key={a} kind="danger-text" label={t('office.task.cancel')} onPress={from(() => setCancelling(true))} busy={busy === 'cancel'} disabled={busy !== null} style={[style, styles.cancelBtn]} testID="task-cancel" />;
+      case 'route':
+        return <Button key={a} kind="outline" label={t('office.history.showDrivenRoute')} onPress={from(() => router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } }))} style={style} testID="task-route" />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <BackHeader
-        title={task?.title ?? t('office.task.title')}
-        subtitle={task ? [t('office.task.task'), task.start, p?.from_request ? t('office.task.askedBy', { name: p.from_request.requested_by }) : task.created_by ? t('office.task.madeBy', { name: task.created_by }) : ''].filter(Boolean).join(' · ') : undefined}
-      />
-      <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} bottom={16}>
-        {!p && !q.error && <SkeletonRows rows={4} lines={2} />}
-        {q.error && <ListFailed stale={!!p} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {q.data && !task && <ListEmpty text={t('office.task.notFound')} />}
-        <SavedNotice noticeKey={`task:${id}`} />
-        {task && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Pill text={t(`office.status.${statusKey}`)} tone={statusTone(statusKey)} size={15} />
-            {task.late_report && <Pill text={sentenceText(t, task.late_report.text)} tone="amber" size={15} />}
-            {!task.late_report && task.status === 'in_progress' && task.eta?.late_min ? <Pill text={t('office.status.late', { min: task.eta.late_min })} tone="amber" size={15} /> : null}
-            {task.label && <Pill text={task.label} tone="muted" size={15} />}
-            {task.kind === 'self' && <Pill text={t('office.task.driverStarted')} tone="muted" size={15} />}
-            {/* Round 4–7 (4b): a trip nobody drives with the app closed without its odometer: Completed · not confirmed, grey. */}
-            {task.finish_flag && (task.finish_flag.kind === 'not_confirmed'
-              ? <Pill text={t('office.checks.notConfirmed')} tone="muted" size={15} />
-              : <Pill text={task.finish_flag.text} tone="amber" size={15} />)}
+      {!showMap && (
+        <BackHeader
+          title={task?.title ?? t('office.task.title')}
+          subtitle={task ? [t('office.task.task'), task.start, p?.from_request ? t('office.task.askedBy', { name: p.from_request.requested_by }) : task.created_by ? t('office.task.madeBy', { name: task.created_by }) : ''].filter(Boolean).join(' · ') : undefined}
+        />
+      )}
+      <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} bottom={16} style={{ padding: 0, gap: 0 }}>
+        {showMap && mapTask && (
+          <View style={styles.map} testID="task-map">
+            <TaskMap report={false} mapPackage={me.map?.package} task={mapTask} me={here ? { lat: here.lat as number, lng: here.lng as number } : null} googleNoteFor="current" />
           </View>
         )}
-        {task && task.needs_driver && (
-          <View style={styles.needs}>
-            <Txt variant="strong" color={colors.red}>{[t('office.task.needsDriverSince', { since: dateWords(t, task.needs_driver.since) }), task.needs_driver.reason === 'declined' ? t('office.task.declinedWhy', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '' }) : t('office.task.notAccepted', { name: task.driver ?? '' })].join(' · ')}</Txt>
-          </View>
-        )}
-        {task && task.status === 'cancelled' && task.cancelled_reason && <Txt variant="muted">{t('office.task.cancelledWhy', { why: task.cancelled_reason })}</Txt>}
-        {/* Round 3: a missed task says so ("Missed · not started (leave by 08:30)"), never "Cancelled:". */}
-        {task && task.status === 'missed' && task.status_line ? <Txt variant="muted" testID="missed-line">{sentenceText(t, task.status_line)}</Txt> : null}
-        {p && task && <TaskWarnings p={p} />}
-        {/* Round 4–7 (7): the asks for this trip's driver or vehicle, when there are any. */}
-        {task && <TaskAsksLink taskId={task.id} />}
-        {task && (
-          <View style={styles.card}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              {steps(task, stops).map((s) => (
-                <View key={s.key} style={{ alignItems: 'center', flex: 1, gap: 4 }}>
-                  <View style={[styles.dot, s.state === 'done' && { backgroundColor: colors.blue, borderColor: colors.blue }, s.state === 'now' && { borderColor: colors.amber, borderWidth: 3 }]} />
-                  <Txt variant={s.state === 'todo' ? 'small' : 'strong'} size={13} style={{ textAlign: 'center' }} numberOfLines={1}>{t(`office.task.step_${s.key}`)}</Txt>
-                  {/* The step's time: alone today, else with its day in words (Round 3 A4, lib/dateWords.ts shortWhen). */}
-                  <Mono size={13} color={s.state === 'todo' ? colors.muted : colors.ink} style={{ textAlign: 'center' }}>{shortWhen(t, s.time)}</Mono>
-                </View>
-              ))}
+        <View style={[styles.sheet, showMap && styles.sheetOverMap]}>
+          {showMap && <View style={styles.grab} />}
+          {!p && !q.error && <SkeletonRows rows={4} lines={2} />}
+          {q.error && <ListFailed stale={!!p} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+          {q.data && !task && <ListEmpty text={t('office.task.notFound')} />}
+          <SavedNotice noticeKey={`task:${id}`} />
+          {task && banner && (
+            <StatusBanner
+              tone={banner.tone}
+              icon={BANNER_ICON[banner.icon]}
+              title={banner.title === 'onTheWay'
+                ? (task.eta?.next_stop ? t('office.ui3.onTheWayTo', { place: task.eta.next_stop }) : t('office.task.onTheWayNow'))
+                : banner.title === 'needsDriver' && task.needs_driver ? t('office.task.needsDriverSince', { since: dateWords(t, task.needs_driver.since) })
+                : cap(t(`office.status.${statusKey}`))}
+              chip={task.late_report ? { text: sentenceText(t, task.late_report.text), tone: 'amber' } : late ? { text: t('office.task.minLate', { min: late }), tone: 'amber' } : null}
+              onPress={task.status === 'in_progress' ? openLive : undefined}
+              testID="task-banner"
+            >
+              <Txt variant="body" size={14} color={TINT[banner.tone].sub} testID="task-banner-line">
+                {banner.title === 'onTheWay'
+                  ? ([task.eta?.next ? t('office.ui3.arrivesAbout', { time: task.eta.next }) : '', task.eta?.final ? t('office.task.backAbout', { time: task.eta.final }) : ''].filter(Boolean).join(' · ') || sentenceText(t, task.status_line) || t('office.task.onTheWayNow'))
+                  : banner.title === 'needsDriver' && task.needs_driver ? (task.needs_driver.reason === 'declined' ? t('office.task.declinedWhy', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '' }) : t('office.task.notAccepted', { name: task.driver ?? '' }))
+                  : task.status === 'cancelled' && task.cancelled_reason ? t('office.task.cancelledWhy', { why: task.cancelled_reason })
+                  : sentenceText(t, task.status_line) || task.start}
+              </Txt>
+              {task.status === 'in_progress' && <Txt variant="strong" size={14} color={colors.blue}>{t('office.home.liveMap')}</Txt>}
+            </StatusBanner>
+          )}
+          {task && (task.label || task.kind === 'self' || task.finish_flag) && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {task.label && <Pill text={task.label} tone="muted" size={14} />}
+              {task.kind === 'self' && <Pill text={t('office.task.driverStarted')} tone="muted" size={14} />}
+              {/* Round 4–7 (4b): a trip nobody drives with the app closed without its odometer: Completed · not confirmed, grey. */}
+              {task.finish_flag && (task.finish_flag.kind === 'not_confirmed'
+                ? <Pill text={t('office.checks.notConfirmed')} tone="muted" size={14} />
+                : <Pill text={task.finish_flag.text} tone="amber" size={14} />)}
             </View>
-            {(task.approved_by || task.plan_version !== undefined) && (
-              <Txt variant="small">{[task.approved_by ? t('office.request.approvedBy', { name: task.approved_by.name, at: task.approved_by.at }) : '', task.plan_version !== undefined ? t('office.task.planVersion', { v: task.plan_version }) : ''].filter(Boolean).join(' · ')}</Txt>
-            )}
-          </View>
-        )}
-        {task && (task.driver || task.vehicle || task.vehicle_text) && (
-          <View style={styles.card}>
-            <TaskDriverCard
-              name={task.driver}
-              photo={task.driver_photo_url}
-              drivenBy={task.driven_by}
-              plate={task.vehicle ? plateOf(task.vehicle) : undefined}
-              vehicleText={task.vehicle_text}
-              details={[task.vehicle?.split(' · ').slice(1).join(' · '), task.start_odometer_km != null ? t('office.task.startOdo', { km: task.start_odometer_km.toLocaleString('en-US') }) : ''].filter(Boolean).join(' · ')}
-              call={task.driver_phone?.call}
-              whatsapp={task.driver_phone?.whatsapp}
-              emptyName={t('office.task.noDriver')}
-            />
-            {task.status === 'in_progress' && (
-              <Pressable accessibilityRole="button" onPress={() => router.navigate({ pathname: '/office/(tabs)/live', params: { driver: task.driver ?? '' } })} style={styles.now}>
-                <MapPin size={22} color={colors.blue} />
-                <Txt variant="body" size={15} style={{ flex: 1 }}>{[task.eta?.next_stop ? t('office.task.nextStop', { place: task.eta.next_stop }) : '', task.eta?.next ? t('office.request.about', { time: task.eta.next }) : '', task.eta?.final ? t('office.task.backAbout', { time: task.eta.final }) : ''].filter(Boolean).join(' · ') || sentenceText(t, task.status_line) || t('office.task.onTheWayNow')}</Txt>
-                <Txt variant="strong" size={16} color={colors.blue}>{t('office.home.liveMap')}</Txt>
-              </Pressable>
-            )}
-            {task.vehicle_taken && <Txt variant="small">{task.vehicle_taken}</Txt>}
-            {task.vehicle_changed && <Txt variant="small">{task.vehicle_changed}</Txt>}
-          </View>
-        )}
-        {/* Round 4–7 (4): the vehicle check of the task's day by its person, with the photos. */}
-        {task?.vehicle_checks?.length ? <Section title={t('office.checks.title')}><TaskCheckLines checks={task.vehicle_checks} /></Section> : null}
-        {/* Round 4–7 (6): the passengers (the count never under the names), a row each; Share trip for someone without an account. */}
-        {task && (task.passengers || task.passengers_list?.length) ? (
-          <Section title={t('office.trip.passengers')} count={countWithNames(task.passengers, task.passengers_list?.length ?? 0) ?? undefined}>
-            {task.passengers_list?.length ? <PassengerRows list={task.passengers_list} /> : null}
-            {(task.passengers ?? 0) > (task.passengers_list?.length ?? 0) && task.passengers_list?.length
-              ? <Txt variant="small" testID="passengers-unnamed">{t('office.passengers.unnamed', { n: (task.passengers ?? 0) - task.passengers_list.length })}</Txt>
-              : null}
-          </Section>
-        ) : null}
-        {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none). */}
-        {task?.fuel_card ? <FuelCardSection card={task.fuel_card} started={!!task.started || task.status === 'in_progress' || task.status === 'completed'} /> : null}
-        {p && task && <TripPurposeCard p={p} />}
-        {p && stops.length > 0 && (
-          <Section title={t('office.task.stops')}>
-            <View style={{ gap: 12, paddingTop: 4 }}>
-              {task?.start_place && !stops.some((s) => s.is_start) && (
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={[styles.mark, { backgroundColor: colors.amber }]}><Mono size={14} bold>S</Mono></View>
-                  <View style={{ flex: 1 }}>
-                    <Txt variant="strong">{task.start_place}</Txt>
-                    {task.leave_by && <Txt variant="muted" size={15}>{t('office.task.planned', { time: task.leave_by })}{task.started ? ` · ${t('office.task.left', { time: shortWhen(t, task.started) })}` : ''}</Txt>}
+          )}
+          {/* Round 3: a missed task says so ("Missed · not started (leave by 08:30)"), never "Cancelled:". */}
+          {task && task.status === 'missed' && task.status_line ? <Txt variant="muted" testID="missed-line">{sentenceText(t, task.status_line)}</Txt> : null}
+          {p && task && <TaskWarnings p={p} />}
+          {/* Round 4–7 (7): the asks for this trip's driver or vehicle, when there are any. */}
+          {task && <TaskAsksLink taskId={task.id} />}
+          {task && (task.driver || task.vehicle || task.vehicle_text) && (
+            <View style={styles.card}>
+              <TaskDriverCard
+                name={task.driver}
+                photo={task.driver_photo_url}
+                drivenBy={task.driven_by}
+                plate={task.vehicle ? plateOf(task.vehicle) : undefined}
+                vehicleText={task.vehicle_text}
+                details={[task.vehicle?.split(' · ').slice(1).join(' · '), task.start_odometer_km != null ? t('office.task.startOdo', { km: task.start_odometer_km.toLocaleString('en-US') }) : ''].filter(Boolean).join(' · ')}
+                call={task.driver_phone?.call}
+                whatsapp={task.driver_phone?.whatsapp}
+                emptyName={t('office.task.noDriver')}
+              />
+              {task.vehicle_taken && <Txt variant="small">{task.vehicle_taken}</Txt>}
+              {task.vehicle_changed && <Txt variant="small">{task.vehicle_changed}</Txt>}
+            </View>
+          )}
+          {task && (
+            <View style={styles.card}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }} testID="task-steps">
+                {steps(task, stops).map((s) => (
+                  <View key={s.key} style={{ alignItems: 'center', flex: 1, gap: 4 }}>
+                    <View style={[styles.dot, s.state === 'done' && { backgroundColor: colors.blue, borderColor: colors.blue }, s.state === 'now' && { borderColor: colors.blue, borderWidth: 3, backgroundColor: colors.card }]} />
+                    <Txt variant={s.state === 'todo' ? 'small' : 'strong'} size={12} style={{ textAlign: 'center' }} numberOfLines={1}>{t(`office.task.step_${s.key}`)}</Txt>
+                    {/* The step's time: alone today, else with its day in words (Round 3 A4, lib/dateWords.ts shortWhen). */}
+                    <Mono size={12} color={s.state === 'todo' ? colors.muted : colors.ink} style={{ textAlign: 'center' }}>{shortWhen(t, s.time)}</Mono>
                   </View>
-                </View>
-              )}
-              {/* Round 2: the live timeline (planned, arrived, left, late or early, the stops to come re-estimated). */}
-              <StopTimeline stops={stops} extra={(s) => <StopArrival stop={s} onSaved={q.reload} />} />
-              {task?.return_to_base && task.start_place && (
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={[styles.mark, { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.ink }]}><Mono size={14} bold>B</Mono></View>
-                  <View style={{ flex: 1 }}>
-                    <Txt variant="strong">{t('office.request.backAt', { place: task.start_place })}</Txt>
-                    <Txt variant="muted" size={15}>{[p.timeline?.totals.ends ? t('office.request.about', { time: p.timeline.totals.ends }) : '', task.end_by ? t('office.request.backBy', { time: task.end_by }) : ''].filter(Boolean).join(' · ')}</Txt>
-                  </View>
-                </View>
+                ))}
+              </View>
+              {(task.approved_by || task.plan_version !== undefined) && (
+                <Txt variant="small">{[task.approved_by ? t('office.request.approvedBy', { name: task.approved_by.name, at: task.approved_by.at }) : '', task.plan_version !== undefined ? t('office.task.planVersion', { v: task.plan_version }) : ''].filter(Boolean).join(' · ')}</Txt>
               )}
             </View>
-            {task?.notes ? <Txt variant="muted" size={15} style={{ marginTop: 8 }}>{t('office.request.notes', { note: task.notes })}</Txt> : null}
-          </Section>
-        )}
-        {task && (task.km != null || task.gps_km != null) && (
-          <Txt variant="muted" size={15}>{[task.km != null ? t('office.task.taskKm', { km: task.km }) : '', task.gps_km != null ? t('office.task.gpsKm', { km: task.gps_km }) : ''].filter(Boolean).join(' · ')}</Txt>
-        )}
-        {p && task && <SwapSegments p={p} onSaved={q.reload} />}
-        {task && (task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route') && (
-          <Button kind="outline" label={t('office.history.showDrivenRoute')} onPress={() => router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } })}
-            style={{ minHeight: 56 }} />
-        )}
-        {task && (actions.reassign || actions.cancel) && (
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {actions.reassign && <Button kind="outline" label={task.needs_driver ? t('office.home.giveDriver') : t('office.task.reassign')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } })} style={{ flex: 1, minHeight: 56 }} />}
-            {actions.cancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => setCancelling(true)} busy={busy === 'cancel'} disabled={busy !== null} style={{ flex: 1, minHeight: 56, borderColor: colors.red }} />}
-          </View>
-        )}
-        {task && (extras.time || extras.stops) && (
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {extras.time && <Button kind="outline" label={t('office.task.changeTime')} onPress={() => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } })} disabled={busy !== null} style={{ flex: 1, minHeight: 56 }} />}
-            {extras.stops && <Button kind="outline" label={t('office.task.changeStops')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } })} disabled={busy !== null} style={{ flex: 1, minHeight: 56 }} />}
-          </View>
-        )}
-        {task && extras.swap && (
-          <Button kind="outline" label={t('office.task.swapVehicle')} onPress={() => router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } })} disabled={busy !== null} style={{ minHeight: 56 }} />
-        )}
-        {task && extras.reopen && (
-          <View style={styles.card}>
-            <Txt variant="strong">{t('office.task.reopenTitle')}</Txt>
-            <Txt variant="muted" size={15}>{t('office.task.reopenIntro')}</Txt>
-            <Button kind="outline" label={t('office.task.reopen')} onPress={() => setReopening(true)} busy={busy === 'reopen'} disabled={busy !== null} style={{ minHeight: 56 }} />
-          </View>
-        )}
-        {task && (task.contact?.name || p?.from_request) && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Txt variant="small">{t('office.task.requesterPush', { name: p?.from_request?.requested_by ?? task.contact?.name ?? '' })}</Txt>
-            {task.contact?.call && (
-              <Pressable accessibilityRole="button" onPress={() => open(task.contact!.call!)} hitSlop={10}>
-                <Txt variant="strong" size={15} color={colors.blue}>{t('office.request.callRequester', { name: task.contact.name ?? '' })}</Txt>
-              </Pressable>
-            )}
-          </View>
-        )}
-        {p && task && (
-          <TaskMoreDetails p={p} openLink={openLink} linkNote={linkNote}
-            onPlan={p.plan ? () => router.push({ pathname: '/office/task/[id]/plan', params: { id: task.id } }) : undefined} />
-        )}
-        {problem && <ErrorNotice error={problem} onRetry={() => void q.reload()} />}
+          )}
+          {p && stops.length > 0 && (
+            <View style={styles.card} testID="task-stops">
+              {/* Round 2: the live timeline (planned, arrived, left, late or early, the stops to come re-estimated), on the
+                  route stepper with the start and back at base. */}
+              <StopTimeline
+                stops={stops}
+                live={task?.status === 'in_progress'}
+                extra={(s) => <StopArrival stop={s} onSaved={q.reload} />}
+                before={task?.start_place && !stops.some((s) => s.is_start) ? {
+                  key: 'start',
+                  mark: 'S',
+                  kind: 'start',
+                  state: task.started ? 'done' : 'todo',
+                  time: task.leave_by && /\d{2}:\d{2}$/.test(task.leave_by) ? task.leave_by.slice(-5) : undefined,
+                  title: task.start_place,
+                  meta: task.leave_by ? [{ text: `${t('office.task.planned', { time: task.leave_by })}${task.started ? ` · ${t('office.task.left', { time: shortWhen(t, task.started) })}` : ''}` }] : undefined,
+                } : null}
+                after={task?.return_to_base && task.start_place ? {
+                  key: 'back',
+                  mark: 'B',
+                  kind: 'back',
+                  time: p.timeline?.totals.ends,
+                  title: t('office.request.backAt', { place: task.start_place }),
+                  meta: [p.timeline?.totals.ends ? t('office.request.about', { time: p.timeline.totals.ends }) : '', task.end_by ? t('office.request.backBy', { time: task.end_by }) : ''].filter(Boolean).map((text) => ({ text })),
+                } : null}
+              />
+              {task?.notes ? <Txt variant="muted" size={15} style={{ marginTop: 8 }}>{t('office.request.notes', { note: task.notes })}</Txt> : null}
+            </View>
+          )}
+          {/* Round 4–7 (6): the passengers (the count never under the names), a row each; Share trip for someone without an account. */}
+          {task && (task.passengers || task.passengers_list?.length) ? (
+            <View style={styles.list} testID="task-passengers">
+              <View style={styles.summary}>
+                {task.passengers_list?.length ? <AvatarStack people={task.passengers_list} /> : <RowIcon icon={Users} tone="quiet" />}
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Txt variant="strong" size={16} numberOfLines={1}>{t('office.task.passengers', { n: countWithNames(task.passengers, task.passengers_list?.length ?? 0) ?? task.passengers_list?.length ?? 0 })}</Txt>
+                  {task.passengers_list?.length ? <Txt variant="muted" size={14} numberOfLines={1}>{task.passengers_list.map((x) => x.name).join(', ')}</Txt> : null}
+                </View>
+              </View>
+              {task.passengers_list?.length ? <View style={styles.inner}><PassengerRows list={task.passengers_list} /></View> : null}
+              {(task.passengers ?? 0) > (task.passengers_list?.length ?? 0) && task.passengers_list?.length
+                ? <Txt variant="small" style={styles.innerText} testID="passengers-unnamed">{t('office.passengers.unnamed', { n: (task.passengers ?? 0) - task.passengers_list.length })}</Txt>
+                : null}
+            </View>
+          ) : null}
+          {/* Round 4–7, item 12: the trip's holder (feature 7: the requester, else who assigned it), with Call and WhatsApp. */}
+          {task && (holder || task.label || p?.from_request) ? (
+            <View style={styles.list} testID="task-holder">
+              <Row
+                inset
+                left={<RowIcon icon={Briefcase} tone="quiet" />}
+                title={task.label || p?.from_request?.project || task.title}
+                line={holder ? [t(holder.by === 'asked' ? 'office.ui3.askedBy' : 'office.ui3.assignedBy', { name: holderTitle(holder, me.name, t) }), windowWords(holder, t)].filter(Boolean).join(' · ') : p?.from_request ? t('office.ui3.askedBy', { name: p.from_request.requested_by }) : undefined}
+                onPress={p?.from_request && me.permissions.includes('approve') ? () => router.push({ pathname: '/office/request/[id]', params: { id: p.from_request!.id } }) : undefined}
+                right={(
+                  <>
+                    {holderReach.call ? <RoundButton icon={<Phone size={18} color={colors.blue} strokeWidth={2} />} label={`${t('office.common.call')} ${holder?.name ?? ''}`} onPress={() => open(holderReach.call!)} size={40} testID="task-holder-call" /> : null}
+                    {holderReach.whatsapp ? <RoundButton icon={<MessageCircle size={18} color={colors.green} strokeWidth={2} />} label={`${t('office.common.whatsapp')} ${holder?.name ?? ''}`} onPress={() => open(holderReach.whatsapp!)} size={40} testID="task-holder-whatsapp" /> : null}
+                  </>
+                )}
+              />
+            </View>
+          ) : null}
+          {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none). */}
+          {task?.fuel_card ? <FuelCardSection card={task.fuel_card} started={!!task.started || task.status === 'in_progress' || task.status === 'completed'} /> : null}
+          {/* Round 4–7 (4): the vehicle check of the task's day by its person, with the photos. */}
+          {task?.vehicle_checks?.length ? <Section look="list" title={t('office.checks.title')}><View style={styles.inner}><TaskCheckLines checks={task.vehicle_checks} /></View></Section> : null}
+          {p && task && <TripPurposeCard p={p} />}
+          {task && (task.km != null || task.gps_km != null) && (
+            <Txt variant="muted" size={15}>{[task.km != null ? t('office.task.taskKm', { km: task.km }) : '', task.gps_km != null ? t('office.task.gpsKm', { km: task.gps_km }) : ''].filter(Boolean).join(' · ')}</Txt>
+          )}
+          {p && task && <SwapSegments p={p} onSaved={q.reload} />}
+          {task && extras.reopen && (
+            <View style={styles.card} testID="reopen-card">
+              <Txt variant="strong">{t('office.task.reopenTitle')}</Txt>
+              <Txt variant="muted" size={15}>{t('office.task.reopenIntro')}</Txt>
+            </View>
+          )}
+          {task && (task.contact?.name || p?.from_request) && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Txt variant="small">{t('office.task.requesterPush', { name: p?.from_request?.requested_by ?? task.contact?.name ?? '' })}</Txt>
+              {task.contact?.call && (
+                <Pressable accessibilityRole="button" onPress={() => open(task.contact!.call!)} hitSlop={10}>
+                  <Txt variant="strong" size={15} color={colors.blue}>{t('office.request.callRequester', { name: task.contact.name ?? '' })}</Txt>
+                </Pressable>
+              )}
+            </View>
+          )}
+          {p && task && (
+            <TaskMoreDetails p={p} openLink={openLink} linkNote={linkNote}
+              onPlan={p.plan ? () => router.push({ pathname: '/office/task/[id]/plan', params: { id: task.id } }) : undefined} />
+          )}
+          {problem && <ErrorNotice error={problem} onRetry={() => void q.reload()} />}
+        </View>
       </Screen>
+      {showMap && (
+        <View style={[styles.floatBack, { top: insets.top + 12 }]}>
+          <RoundButton icon={<ChevronLeft size={22} color={colors.ink} strokeWidth={2.4} />} label={t('common.back')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/office'))} testID="task-back" />
+        </View>
+      )}
+      {task && (plan.bar.length > 0 || plan.more.length > 0) && (
+        <StickyActions>
+          <BarRow>
+            {plan.bar.map((a) => action(a, false))}
+            {plan.more.length > 0 && <BarMore label={t('office.common.more')} onPress={() => setMoreOpen(true)} testID="task-more" />}
+          </BarRow>
+        </StickyActions>
+      )}
+      <Sheet visible={moreOpen} title={t('office.common.more')} onClose={() => setMoreOpen(false)} testID="task-more-sheet">
+        <View style={{ gap: 10 }}>
+          {plan.more.map((a) => action(a, true))}
+        </View>
+      </Sheet>
       <ReasonSheet<CancelReasonKey>
         visible={cancelling}
         title="office.task.cancelTitle"
@@ -358,23 +468,39 @@ function FuelCardSection({ card, started }: { card: FuelCard; started: boolean }
   const { t } = useApp();
   const w = fuelCardParts(card, started, t);
   if (!w.answer && !w.estimate) return null;
+  // Round 4–7, item 12: one list row (a fuel pump, the answer, the estimate under it).
   return (
-    <Section title={t('office.fuel.label')}>
-      <View style={{ gap: 2 }} testID="fuel-card">
+    <View style={[styles.list, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 }]} testID="fuel-card">
+      <RowIcon icon={Fuel} tone={w.tone === 'amber' ? 'amber' : 'quiet'} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Txt variant="small" size={13}>{t('office.fuel.label')}</Txt>
         {w.answer
           ? <Txt variant="strong" color={w.tone === 'amber' ? colors.amberText : w.tone === 'muted' ? colors.muted : colors.ink}>{w.answer}</Txt>
           : <Txt variant="muted" size={15}>{t('office.fuel.askedAtStart')}</Txt>}
         {w.estimate ? <Txt variant="small">{w.estimate}</Txt> : null}
       </View>
-    </Section>
+    </View>
   );
 }
 
+/** "on the way" → "On the way" (English only; Sinhala has no capitals). */
+const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : x);
+
+/** The banner's icon by its name (office/detailBanner.ts). */
+const BANNER_ICON: Record<BannerIcon, LucideIcon> = { clock: Clock, check: Check, x: X, calendarX: CalendarX, navigation: Navigation, userX: UserX, send: Send, flag: Flag };
+
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
-  dot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#ebe9e3', borderWidth: 2, borderColor: '#ebe9e3' },
-  iconBtn: { width: 52, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  now: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#ebe9e3', borderRadius: 12, padding: 12, minHeight: 56 },
-  mark: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  needs: { backgroundColor: colors.redChip, borderRadius: 12, padding: 12 },
+  card: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, padding: 14, gap: 12 },
+  list: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, overflow: 'hidden' },
+  inner: { paddingHorizontal: 14, paddingBottom: 8 },
+  innerText: { paddingHorizontal: 14, paddingBottom: 12 },
+  dot: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#ebe9e3', borderWidth: 2, borderColor: '#ebe9e3' },
+  map: { height: 300, backgroundColor: colors.mapLand },
+  sheet: { padding: 16, gap: 12, backgroundColor: colors.page },
+  sheetOverMap: { marginTop: -24, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10 },
+  grab: { width: 40, height: 4, borderRadius: 2, backgroundColor: look.rail, alignSelf: 'center' },
+  floatBack: { position: 'absolute', left: 16 },
+  sheetBtn: { minHeight: 56 },
+  summary: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4 },
+  cancelBtn: { borderWidth: 1.5, borderColor: '#e3b8b4', backgroundColor: colors.card },
 });

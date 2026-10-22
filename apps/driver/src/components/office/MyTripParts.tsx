@@ -9,6 +9,8 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { TaskDriverCard } from '@/components/office/DriverRows';
 import { PhotoPick } from '@/components/office/PhotoPick';
+import { look } from '@/components/patterns/look';
+import { RouteStepper } from '@/components/patterns/RouteStepper';
 import { Mono, Notice, Plate, Txt } from '@/components/ui';
 import { whatsappLink } from '@/lib/contacts';
 import { type Shot } from '@/office/media';
@@ -47,11 +49,10 @@ export function TripCard({ trip }: { trip: MyTrip }) {
         whatsapp={trip.driven_by === 'other' ? whatsappLink(trip.driver_phone) ?? undefined : undefined}
         emptyName={t('office.who.someoneElse')}
       />
+      {/* Round 4–7, item 12: the stops on the route stepper (the type under the place), the planned km under them. */}
       {trip.stops.length > 0 && (
         <View style={{ gap: 4 }}>
-          {trip.stops.map((s) => (
-            <Txt key={s.n} variant="body" size={15} numberOfLines={2}>{`${s.n} · ${STOP_KEY[s.type] ? t(STOP_KEY[s.type]) : ''} · ${s.place}`}</Txt>
-          ))}
+          <RouteStepper framed={false} compact testID="my-trip-stepper" rows={trip.stops.map((s) => ({ key: String(s.n), mark: String(s.n), kind: 'stop' as const, title: s.place, titleLines: 2 as const, meta: STOP_KEY[s.type] ? [{ text: t(STOP_KEY[s.type]) }] : undefined }))} />
           {trip.planned_km ? <Txt variant="small">{t('office.myTrip.plannedKm', { km: trip.planned_km })}</Txt> : null}
         </View>
       )}
@@ -115,7 +116,7 @@ export function TripPhotoPick({ label, onShot, disabled, testID }: { label: stri
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
+  card: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, padding: 14, gap: 12 },
   tile: { width: 100, gap: 4, alignItems: 'flex-start' },
   emptyTile: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.line, borderRadius: 10, padding: 4 },
   tileImage: { width: 92, height: 69, borderRadius: 8, backgroundColor: colors.mapLand },

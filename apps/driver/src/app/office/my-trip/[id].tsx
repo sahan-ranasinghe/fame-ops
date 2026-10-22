@@ -12,6 +12,8 @@
 // The rules: office/myTripLogic.ts; the strings: office.myTrip.*.
 // Round 4–7 (6): a trip the person rides in (my_trip's viewer passenger) shows the passenger's view instead, view only
 // (components/office/Passengers.tsx PassengerTripCard; the passenger notifications link here too).
+// Round 4–7, item 12 (the approved mockup 4 without the office's actions): the passenger's view as the status banner, the
+// driver card and the route stepper; the trip's own card has its stops on the stepper; the cards in the mockups' look.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
@@ -20,6 +22,7 @@ import { TripCard } from '@/components/office/MyTripParts';
 import { PassengerTripCard } from '@/components/office/Passengers';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { look } from '@/components/patterns/look';
 import { Button, Notice, Txt } from '@/components/ui';
 import { dateWords } from '@/lib/dateWords';
 import { colomboDate } from '@/lib/time';
@@ -105,5 +108,5 @@ export default function MyTripScreen() {
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
+  card: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, padding: 14, gap: 12 },
 });

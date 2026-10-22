@@ -34,13 +34,14 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { CalendarX, Check, Clock, type LucideIcon, MessageCircle, Phone, Road, RotateCcw, Undo2, Users, X } from '@/components/icons';
 import { PlanStepper, planWords } from '@/components/office/PlanStepper';
 import { BarMore, BarRow, barButton, barDanger } from '@/components/patterns/BottomActionBar';
-import { look, type ToneName } from '@/components/patterns/look';
+import { look } from '@/components/patterns/look';
 import { Sheet } from '@/components/patterns/Sheet';
 import { StatsRow } from '@/components/patterns/StatsRow';
 import { BannerLine, StatusBanner } from '@/components/patterns/StatusBanner';
 import { RoundButton } from '@/components/patterns/TopBar';
 import { whatsappLink } from '@/lib/contacts';
 import { planRows, requestRows } from '@/office/stepperRows';
+import { type BannerIcon, requestBanner } from '@/office/detailBanner';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ChoiceRow } from '@/components/patterns/Select';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
@@ -257,7 +258,7 @@ export default function ApproveRequest() {
   // Round 4–7, item 12 (the approved mockup 3): one status banner, the requester with Call / WhatsApp, the facts row, the trip
   // as the route stepper, who drives and who rides, the best match (the rest one tap away), and Decline · Approve · ⋯ in the
   // bottom bar (Change time and Ask drivers under ⋯).
-  const banner = card ? requestBanner(card, open, decider) : null;
+  const banner = card ? requestBanner(isExpired(card) ? { status: 'expired' } : card, open, decider) : null;
   const planned = card?.trip?.timeline?.items.length ? card.trip.timeline : null;
   const backAt = card?.trip?.return_to_base && card.trip.start
     ? { time: planned?.totals.ends, place: card.trip.start.name, meta: (card.fields?.back_by ?? card.back_by) ? t('office.request.backBy', { time: (card.fields?.back_by ?? card.back_by) as string }) : undefined }
@@ -283,7 +284,7 @@ export default function ApproveRequest() {
         {card && banner && (
           <StatusBanner
             tone={banner.tone}
-            icon={banner.icon}
+            icon={BANNER_ICON[banner.icon]}
             title={banner.title === 'waiting' ? cap(t('office.request.waitingYourOk')) : banner.title === 'changed' ? cap(t('office.request.changedByRequester')) : t(`office.requests.status_${card.status}`)}
             line={(
               <BannerLine tone={banner.tone} testID="request-banner-line">
@@ -599,17 +600,8 @@ export default function ApproveRequest() {
 /** "waiting for your OK" → "Waiting for your OK" (English only; Sinhala has no capitals). */
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
-/** The one status banner's tone, icon and title (the approved mockup 3): waiting amber, approved green, declined red, the
- *  rest grey. */
-function requestBanner(card: RequestCard, open: boolean, decider: boolean): { tone: ToneName; icon: LucideIcon; title: 'waiting' | 'changed' | 'status' } {
-  if (open && card.status === 'changed') return { tone: 'amber', icon: Clock, title: 'changed' };
-  if (open || (card.status === 'waiting' && decider)) return { tone: 'amber', icon: Clock, title: 'waiting' };
-  if (card.status === 'waiting' || card.status === 'changed') return { tone: 'amber', icon: Clock, title: 'status' };
-  if (card.status === 'approved') return { tone: 'green', icon: Check, title: 'status' };
-  if (card.status === 'declined') return { tone: 'red', icon: X, title: 'status' };
-  if (isExpired(card)) return { tone: 'muted', icon: CalendarX, title: 'status' };
-  return { tone: 'muted', icon: X, title: 'status' };
-}
+/** The banner's icon by its name (office/detailBanner.ts). */
+const BANNER_ICON: Record<BannerIcon, LucideIcon> = { clock: Clock, check: Check, x: X, calendarX: CalendarX, navigation: Clock, userX: X, send: Clock, flag: Clock };
 
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, padding: 14 },

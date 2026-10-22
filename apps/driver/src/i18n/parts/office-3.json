@@ -14,7 +14,11 @@
         "checked": "Checked",
         "checkProblem": "Check: problem",
         "leaves": "Leaves {time}",
-        "chooseAnother": "Choose another · {n}"
+        "chooseAnother": "Choose another · {n}",
+        "onTheWayTo": "On the way to {place}",
+        "arrivesAbout": "Arrives about {time}",
+        "askedBy": "Asked by {name}",
+        "assignedBy": "Assigned by {name}"
       }
     }
   },
@@ -33,7 +37,11 @@
         "checked": "පරීක්ෂා කළා",
         "checkProblem": "ගැටලුවක්",
         "leaves": "{time} ට පිටත් වේ",
-        "chooseAnother": "වෙනත් අයෙක් තෝරන්න · {n}"
+        "chooseAnother": "වෙනත් අයෙක් තෝරන්න · {n}",
+        "onTheWayTo": "{place} වෙත යමින්",
+        "arrivesAbout": "{time} පමණ ළඟා වේ",
+        "askedBy": "ඉල්ලුවේ {name}",
+        "assignedBy": "පැවරුවේ {name}"
       }
     }
   }
