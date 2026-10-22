@@ -17,6 +17,12 @@
 // may still give a driver instead (two pick-one rows: as asked · give a driver). The drivers are the driver-first cards
 // (components/office/DriverRows.tsx: the photo, the vehicle chip under the name); the button is disabled with the reason
 // under it until the approval is complete.
+// Round 4–7, item 12 (the approved mockup 3): restyled, nothing removed. The thin top bar ("Request · Fri 23 Oct" over the
+// route), ONE status banner (waiting for your OK amber with the leave time and when it was asked; approved / declined /
+// cancelled with who and when), the requester with Call and WhatsApp, the facts row, the trip as the route stepper, the
+// note, who drives, who rides, the best match first with "Choose another" opening the rest in place, the timeline; Decline,
+// Approve and ⋯ (Change time, Ask drivers, Cancel booking of a changed booking) in the bottom bar; Cancel booking of an
+// approved one, and the asker's Edit and Withdraw, in the bottom bar too.
 // Round 3 Part A: a self-drive request says the asker's licence on the trip's day (A5: "Self-drive · licence on file ✓" /
 // "no licence on file" / "licence expired", amber for the last two, never a block); an expired request (A6) has its badge
 // with the icon, the line "Expired · nobody decided it in time" and, for the person who asked, Request again.
@@ -25,7 +31,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { CalendarX, Phone, RotateCcw } from '@/components/icons';
+import { CalendarX, Check, Clock, type LucideIcon, MessageCircle, Phone, Road, RotateCcw, Undo2, Users, X } from '@/components/icons';
+import { PlanStepper, planWords } from '@/components/office/PlanStepper';
+import { BarMore, BarRow, barButton, barDanger } from '@/components/patterns/BottomActionBar';
+import { look } from '@/components/patterns/look';
+import { Sheet } from '@/components/patterns/Sheet';
+import { StatsRow } from '@/components/patterns/StatsRow';
+import { BannerLine, StatusBanner } from '@/components/patterns/StatusBanner';
+import { RoundButton } from '@/components/patterns/TopBar';
+import { whatsappLink } from '@/lib/contacts';
+import { planRows, requestRows } from '@/office/stepperRows';
+import { type BannerIcon, requestBanner } from '@/office/detailBanner';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ChoiceRow } from '@/components/patterns/Select';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
@@ -57,7 +73,7 @@ import { groupRows } from '@/office/trip/formsLogic';
 import { askedKey, asksNoDriver } from '@/office/trip/whoWords';
 import type { Availability, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList, SettingsResult } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
-import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
+import { Avatar, BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { PassengerRows } from '@/components/office/Passengers';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -239,98 +255,105 @@ export default function ApproveRequest() {
     .map((g) => ({ ...g, rows: card?.driven_by === 'custodian' || (card && !card.driven_by && card.driver_required === false) ? g.rows.filter((v) => !!v.assigned_to) : g.rows }))
     .filter((g) => g.rows.length > 0);
 
+  // Round 4–7, item 12 (the approved mockup 3): one status banner, the requester with Call / WhatsApp, the facts row, the trip
+  // as the route stepper, who drives and who rides, the best match (the rest one tap away), and Decline · Approve · ⋯ in the
+  // bottom bar (Change time and Ask drivers under ⋯).
+  const banner = card ? requestBanner(isExpired(card) ? { status: 'expired' } : card, open, decider) : null;
+  const planned = card?.trip?.timeline?.items.length ? card.trip.timeline : null;
+  const backAt = card?.trip?.return_to_base && card.trip.start
+    ? { time: planned?.totals.ends, place: card.trip.start.name, meta: (card.fields?.back_by ?? card.back_by) ? t('office.request.backBy', { time: (card.fields?.back_by ?? card.back_by) as string }) : undefined }
+    : null;
+  const stepRows = card && planned ? planRows(planned.items, { startName: card.trip?.start?.name, back: backAt }, planWords(t)) : trip ? requestRows(trip.rows) : [];
+  const pax = card ? Math.max(card.fields?.pax ?? 0, card.passengers_list?.length ?? 0) : 0;
+  const waLink = card?.requester_phone ? whatsappLink(card.requester_phone) : null;
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [allDrivers, setAllDrivers] = useState(false);
+  const shownDrivers = allDrivers || !pick ? drivers : drivers.filter((d) => d.username === pick);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader
+        above={card ? [card.kind === 'task' ? t('office.request.proposedTask') : t('office.request.request'), trip?.date ? shortDate(names, `${trip.date}T06:00:00Z`) : ''].filter(Boolean).join(' · ') : undefined}
         title={card ? requestTitle(card) : t('office.request.title')}
-        subtitle={card ? [card.kind === 'task' ? t('office.request.proposedTask') : t('office.request.request'), card.requested_by, whenWords(t, card.asked)].filter(Boolean).join(' · ') : undefined}
       />
-      <Screen refreshing={q.refreshing} onRefresh={refresh} bottom={16}>
+      <Screen refreshing={q.refreshing} onRefresh={refresh} bottom={16} style={{ paddingTop: 4, gap: 12 }}>
         {!q.data && !q.error && <SkeletonRows rows={3} lines={2} />}
         {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         <SavedNotice noticeKey={`request:${id}`} />
         {q.data && !card && <ListEmpty text={t('office.request.notFound')} />}
-        {card && (
+        {card && banner && (
+          <StatusBanner
+            tone={banner.tone}
+            icon={BANNER_ICON[banner.icon]}
+            title={banner.title === 'waiting' ? cap(t('office.request.waitingYourOk')) : banner.title === 'changed' ? cap(t('office.request.changedByRequester')) : t(`office.requests.status_${card.status}`)}
+            line={(
+              <BannerLine tone={banner.tone} testID="request-banner-line">
+                {open || card.status === 'waiting'
+                  ? [trip?.leaveBy ? t('office.ui3.leaves', { time: trip.leaveBy }) : whenWords(t, card.when), whenWords(t, card.asked)].filter(Boolean).join(' · ')
+                  : card.approved_by ? t('office.request.approvedBy', { name: card.approved_by.name, at: card.approved_by.at })
+                  : card.declined_by ? t('office.request.declinedBy', { name: card.declined_by.name, at: card.declined_by.at, reason: card.declined_by.reason ?? card.decline_reason ?? '' })
+                  : card.cancelled_by ? t('office.request.cancelledBy', { name: card.cancelled_by?.name ?? '', at: card.cancelled_by?.at ?? '', reason: card.cancelled_by?.reason ?? card.cancel_reason ?? '' })
+                  : whenWords(t, card.when)}
+              </BannerLine>
+            )}
+            testID="request-banner"
+          />
+        )}
+        {card && (others.length > 0 || card.late) && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Pill text={card.status === 'waiting' ? t('office.request.waitingYourOk') : card.status === 'changed' ? t('office.request.changedByRequester') : t(`office.requests.status_${card.status}`)} tone={open ? 'amber' : card.status === 'approved' ? 'green' : isExpired(card) ? 'muted' : 'red'} size={15} icon={isExpired(card) ? CalendarX : undefined} />
-            {others.length > 0 && <Pill text={t('office.request.alsoLooking', { name: others.join(', ') })} tone="muted" size={15} />}
-            {card.late && <Pill text={t('office.approve.late')} tone="red" size={15} />}
+            {others.length > 0 && <Pill text={t('office.request.alsoLooking', { name: others.join(', ') })} tone="muted" size={14} />}
+            {card.late && <Pill text={t('office.approve.late')} tone="red" size={14} />}
           </View>
         )}
         {/* Round 3 (A6): nobody decided it before its day was over; the person who asked may request it again. */}
         {card && isExpired(card) && (
-          <Section title={t('office.requests.status_expired')}>
+          <View style={styles.card}>
             <Txt variant="strong" testID="request-expired-line">{expiredText(card, t, (at) => dateWords(t, at))}</Txt>
             {canRequestAgain(card, me.tools, !decider || card.requested_by === me.name) && (
               <Button kind="outline" icon={RotateCcw} label={t('office.requests.requestAgain')} onPress={requestAgain} style={{ minHeight: 52, marginTop: 10 }} testID="request-again" />
             )}
-          </Section>
-        )}
-        {card && !open && (card.approved_by || card.declined_by || card.cancelled_by) && (
-          <Section title={t('office.request.decided')}>
-            <Txt variant="strong">
-              {card.approved_by ? t('office.request.approvedBy', { name: card.approved_by.name, at: card.approved_by.at })
-                : card.declined_by ? t('office.request.declinedBy', { name: card.declined_by.name, at: card.declined_by.at, reason: card.declined_by.reason ?? card.decline_reason ?? '' })
-                : t('office.request.cancelledBy', { name: card.cancelled_by?.name ?? '', at: card.cancelled_by?.at ?? '', reason: card.cancelled_by?.reason ?? card.cancel_reason ?? '' })}
-            </Txt>
-          </Section>
-        )}
-        {card && trip && (
-          <View style={styles.tripCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} testID="request-asker">
-              <Avatar name={card.requested_by} size={40} photo={card.requested_by_photo_url} />
-              <Txt variant="body" size={15} style={{ flex: 1 }}>{[t('office.task.askedBy', { name: card.requested_by }), whenWords(t, card.asked)].filter(Boolean).join(' · ')}</Txt>
-            </View>
-            {trip.date && <Txt variant="label" color={colors.muted}>{shortDate(names, `${trip.date}T06:00:00Z`).toUpperCase()}</Txt>}
-            {trip.leaveBy && (
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                <Txt variant="heading" size={28}>{t('office.request.leaveBy')}</Txt>
-                <Mono size={28} bold>{trip.leaveBy}</Mono>
-              </View>
-            )}
-            {!trip.leaveBy && card.when && <Txt variant="heading" size={22}>{whenWords(t, card.when)}</Txt>}
-            <View style={{ gap: 12, marginTop: 4 }}>
-              {trip.rows.map((r, i) => (
-                <View key={`${r.mark}-${i}`} style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-                  <View style={[styles.mark, r.kind === 'start' && { backgroundColor: colors.amber }, r.kind === 'back' && { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.ink }]}>
-                    <Mono size={14} bold color={r.kind === 'stop' ? '#ffffff' : colors.ink}>{r.mark}</Mono>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Txt variant="strong">{r.place}</Txt>
-                    {r.parts.length > 0 && <Txt variant="muted" size={15}>{r.parts.join(' · ')}</Txt>}
-                  </View>
-                </View>
-              ))}
-            </View>
-            <Txt variant="muted" size={15}>
-              {[
-                trip.totals ? `${trip.totals.km} km · ${durationText(t, trip.totals.driveMin)}` : '',
-                card.need ? t('office.request.needs', { need: card.need }) : '',
-                card.note ? t('office.request.notes', { note: card.note }) : '',
-                card.proposed?.notes ? t('office.request.notes', { note: card.proposed.notes }) : '',
-              ].filter(Boolean).join(' · ')}
-            </Txt>
-            {card.on_behalf_of && <Txt variant="small">{t('office.request.onBehalfOf', { name: card.on_behalf_of })}</Txt>}
-            {callLink && (
-              <Button kind="outline" icon={Phone} label={t('office.request.callRequester', { name: card.requested_by })} onPress={() => void Linking.openURL(callLink)} style={{ minHeight: 56 }} />
-            )}
           </View>
         )}
-        {card && open && !outcome && shown && (
-          <View style={{ gap: 8 }}>
-            {changed && (
-              <View style={styles.changed} testID="decide-changed">
-                <Txt variant="strong" size={15} style={{ flex: 1 }} color={colors.blue}>
-                  {t('office.decide.newTime', { day: shortDate(names, `${shown.date}T06:00:00Z`), leave: shown.leaveBy || '—', back: shown.back || '—' })}
-                </Txt>
-                <Pressable accessibilityRole="button" onPress={() => decideStore.set(id, null)} style={{ minHeight: 44, justifyContent: 'center' }} testID="decide-undo">
-                  <Txt variant="strong" size={15} color={colors.blue}>{t('office.decide.undo')}</Txt>
-                </Pressable>
-              </View>
-            )}
-            {me.tools.includes(card.status === 'changed' ? 'redecide_request' : 'decide_request') && (
-              <Button kind="outline" label={t('office.decide.changeTime')} onPress={() => router.push({ pathname: '/office/request/[id]/time', params: { id } })} style={{ minHeight: 52 }} testID="decide-change-time" />
-            )}
+        {card && (
+          <View style={[styles.card, styles.asker]} testID="request-asker">
+            <Avatar name={card.requested_by} size={40} photo={card.requested_by_photo_url} />
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <Txt variant="strong" size={16} numberOfLines={1}>{card.requested_by}</Txt>
+              <Txt variant="small" numberOfLines={2}>{[card.need ? t('office.request.needs', { need: card.need }) : '', card.project ?? '', card.on_behalf_of ? t('office.request.onBehalfOf', { name: card.on_behalf_of }) : ''].filter(Boolean).join(' · ') || t('office.task.askedBy', { name: card.requested_by })}</Txt>
+            </View>
+            {callLink ? <RoundButton icon={<Phone size={20} color={colors.blue} strokeWidth={2} />} label={t('office.request.callRequester', { name: card.requested_by })} onPress={() => void Linking.openURL(callLink)} testID="request-call" /> : null}
+            {waLink ? <RoundButton icon={<MessageCircle size={20} color={colors.green} strokeWidth={2} />} label={`${t('office.common.whatsapp')} ${card.requested_by}`} onPress={() => void Linking.openURL(waLink)} testID="request-whatsapp" /> : null}
+          </View>
+        )}
+        {card && trip?.totals && (
+          <StatsRow variant="facts" testID="request-facts" items={[
+            { key: 'km', icon: Road, value: `${trip.totals.km} km`, label: t('office.ui3.factDistance') },
+            { key: 'drive', icon: Clock, value: durationText(t, trip.totals.driveMin), label: t('office.ui3.factDriving') },
+            ...(trip.totals.ends ? [{ key: 'ends', icon: Undo2, value: trip.totals.ends, label: t(card.trip?.return_to_base ? 'office.ui3.factBack' : 'office.ui3.factEnds') }] : []),
+            ...(pax > 0 ? [{ key: 'people', icon: Users, value: String(pax), label: t('office.ui3.factPeople') }] : []),
+          ]} />
+        )}
+        {card && !trip?.totals && trip?.leaveBy && (
+          <View style={styles.card}>
+            <Txt variant="small" size={13}>{t('office.request.leaveBy')}</Txt>
+            <Mono size={28} bold>{trip.leaveBy}</Mono>
+          </View>
+        )}
+        {card && stepRows.length > 0 && <PlanStepper rows={stepRows} testID="request-stepper" />}
+        {card && (card.note || card.proposed?.notes) ? (
+          <View style={[styles.card, styles.noteRow]} testID="request-note">
+            <MessageCircle size={20} color={colors.muted} strokeWidth={2} />
+            <Txt variant="body" size={15} style={{ flex: 1 }}>{[card.note, card.proposed?.notes].filter(Boolean).join(' · ')}</Txt>
+          </View>
+        ) : null}
+        {card && open && !outcome && shown && changed && (
+          <View style={styles.changed} testID="decide-changed">
+            <Txt variant="strong" size={15} style={{ flex: 1 }} color={colors.blue}>
+              {t('office.decide.newTime', { day: shortDate(names, `${shown.date}T06:00:00Z`), leave: shown.leaveBy || '—', back: shown.back || '—' })}
+            </Txt>
+            <Pressable accessibilityRole="button" onPress={() => decideStore.set(id, null)} style={{ minHeight: 44, justifyContent: 'center' }} testID="decide-undo">
+              <Txt variant="strong" size={15} color={colors.blue}>{t('office.decide.undo')}</Txt>
+            </Pressable>
           </View>
         )}
         {card && decider && (outcome || !open) && <TellRequester key={`${card.id}-${card.version ?? 0}-${card.status}`} q={card} onSaved={() => void q.reload()} />}
@@ -343,121 +366,125 @@ export default function ApproveRequest() {
           </View>
         )}
         {card && (whoAsked || card.assigned) && (
-          <Section title={t('office.who.title')}>
-            {whoAsked && <Txt variant="strong" testID="request-who-asked">{t(whoAsked.key, whoAsked.vars)}</Txt>}
-            {/* Round 3 (A5, Zipcar for Business): the asker's driving licence on the trip's day; amber when missing or
-                expired, never a block. */}
-            {selfLicence && <Txt variant="strong" size={15} color={selfLicence.warn ? colors.amberText : colors.green} style={{ marginTop: 4 }} testID="request-self-licence">{t(selfLicence.key)}</Txt>}
-            {/* Round 3: the outcome, once approved: who drives (the driver, the asker, someone else), the vehicle, Call / WhatsApp. */}
-            {card.assigned && (
-              <View style={{ marginTop: whoAsked ? 10 : 0 }} testID="request-assigned">
-                <TaskDriverCard
-                  name={card.assigned.driver || undefined}
-                  photo={card.assigned.photo_url}
-                  drivenBy={card.assigned.driven_by}
-                  plate={card.assigned.vehicle || undefined}
-                  vehicleText={card.assigned.vehicle_text}
-                  details={card.assigned.make_model}
-                  call={card.assigned.call ?? undefined}
-                  whatsapp={card.assigned.whatsapp ?? undefined}
-                  emptyName={t('office.task.noDriver')}
-                />
-              </View>
-            )}
-            {whoAsked && open && !outcome && selfDriveOff && <Txt variant="small" color={colors.amberText} style={{ marginTop: 6 }} testID="approve-self-drive-off">{t('office.who.selfDriveOff')}</Txt>}
-            {whoAsked && open && !outcome && !selfDriveOff && (
-              <View accessibilityRole="radiogroup" style={{ gap: 8, marginTop: 10 }}>
-                <ChoiceRow selected={!giveDriver} onPress={() => setGiveDriver(false)} accessibilityLabel={t('office.who.approveAsAsked')} testID="approve-as-asked">
-                  <Txt variant="strong" size={16}>{t('office.who.approveAsAsked')}</Txt>
-                  <Txt variant="small">{t('office.who.approveAsAskedHint')}</Txt>
-                </ChoiceRow>
-                <ChoiceRow selected={giveDriver} onPress={() => setGiveDriver(true)} accessibilityLabel={t('office.who.giveDriverInstead')} testID="approve-give-driver">
-                  <Txt variant="strong" size={16}>{t('office.who.giveDriverInstead')}</Txt>
-                </ChoiceRow>
-              </View>
-            )}
+          <Section look="list" title={t('office.who.title')}>
+            <View style={styles.inner}>
+              {whoAsked && <Txt variant="strong" testID="request-who-asked">{t(whoAsked.key, whoAsked.vars)}</Txt>}
+              {/* Round 3 (A5, Zipcar for Business): the asker's driving licence on the trip's day; amber when missing or
+                  expired, never a block. */}
+              {selfLicence && <Txt variant="strong" size={15} color={selfLicence.warn ? colors.amberText : colors.green} style={{ marginTop: 4 }} testID="request-self-licence">{t(selfLicence.key)}</Txt>}
+              {/* Round 3: the outcome, once approved: who drives (the driver, the asker, someone else), the vehicle, Call / WhatsApp. */}
+              {card.assigned && (
+                <View style={{ marginTop: whoAsked ? 10 : 0 }} testID="request-assigned">
+                  <TaskDriverCard
+                    name={card.assigned.driver || undefined}
+                    photo={card.assigned.photo_url}
+                    drivenBy={card.assigned.driven_by}
+                    plate={card.assigned.vehicle || undefined}
+                    vehicleText={card.assigned.vehicle_text}
+                    details={card.assigned.make_model}
+                    call={card.assigned.call ?? undefined}
+                    whatsapp={card.assigned.whatsapp ?? undefined}
+                    emptyName={t('office.task.noDriver')}
+                  />
+                </View>
+              )}
+              {whoAsked && open && !outcome && selfDriveOff && <Txt variant="small" color={colors.amberText} style={{ marginTop: 6 }} testID="approve-self-drive-off">{t('office.who.selfDriveOff')}</Txt>}
+              {whoAsked && open && !outcome && !selfDriveOff && (
+                <View accessibilityRole="radiogroup" style={{ gap: 8, marginTop: 10 }}>
+                  <ChoiceRow selected={!giveDriver} onPress={() => setGiveDriver(false)} accessibilityLabel={t('office.who.approveAsAsked')} testID="approve-as-asked">
+                    <Txt variant="strong" size={16}>{t('office.who.approveAsAsked')}</Txt>
+                    <Txt variant="small">{t('office.who.approveAsAskedHint')}</Txt>
+                  </ChoiceRow>
+                  <ChoiceRow selected={giveDriver} onPress={() => setGiveDriver(true)} accessibilityLabel={t('office.who.giveDriverInstead')} testID="approve-give-driver">
+                    <Txt variant="strong" size={16}>{t('office.who.giveDriverInstead')}</Txt>
+                  </ChoiceRow>
+                </View>
+              )}
+            </View>
           </Section>
         )}
         {/* Round 4–7 (6): who rides by name (a registered person with their photo; someone without an account with Call / WhatsApp). */}
         {card?.passengers_list?.length ? (
-          <Section title={t('office.passengers.title')} count={card.passengers_list.length}>
-            <PassengerRows list={card.passengers_list} />
+          <Section look="list" title={t('office.passengers.title')} count={card.passengers_list.length}>
+            <View style={styles.inner}>
+              <PassengerRows list={card.passengers_list} />
+            </View>
           </Section>
         ) : null}
         {card && open && !outcome && asAsked && (
-          <Section title={t('office.trip.vehicle')}>
-            {card.kind === 'task' && card.proposed?.vehicle ? <Txt variant="small">{t('office.who.proposedVehicle', { plate: card.proposed.vehicle })}</Txt> : <Txt variant="small">{t('office.who.plateNeeded')}</Txt>}
-            {!availArgs && <ListEmpty text={t('office.request.noTime')} />}
-            {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
-            {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-            {avail.data && <VehicleGroups rows={vehicleRows} picked={vehicle} onPick={setVehiclePick} empty={t('office.trip.noFreeVehicles')} testID="approve-vehicles" wanted={wantedOfWindow(avail.data.window)} ignoreTask={card.task_id ?? undefined} />}
+          <Section look="list" title={t('office.trip.vehicle')}>
+            <View style={styles.inner}>
+              {card.kind === 'task' && card.proposed?.vehicle ? <Txt variant="small">{t('office.who.proposedVehicle', { plate: card.proposed.vehicle })}</Txt> : <Txt variant="small">{t('office.who.plateNeeded')}</Txt>}
+              {!availArgs && <ListEmpty text={t('office.request.noTime')} />}
+              {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
+              {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+              {avail.data && <VehicleGroups rows={vehicleRows} picked={vehicle} onPick={setVehiclePick} empty={t('office.trip.noFreeVehicles')} testID="approve-vehicles" wanted={wantedOfWindow(avail.data.window)} ignoreTask={card.task_id ?? undefined} />}
+            </View>
           </Section>
         )}
         {card && open && !outcome && !asAsked && (
           <Section
-            title={t('office.request.whosAvailable')}
+            look="list"
+            title={pick && !allDrivers && pick === bestUsername ? cap(t('office.request.bestMatch')) : t('office.request.whosAvailable')}
             count={avail.data ? avail.data.counts.free : undefined}
             link={mayAsk && drivers.length > 0 ? t('office.ask.open') : undefined}
             onLink={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined}
           >
-            {!availArgs && <ListEmpty text={t('office.request.noTime')} />}
-            {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
-            {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-            {avail.data && drivers.length === 0 && <ListEmpty text={t('office.request.nobody')} />}
-            <View style={{ gap: 8 }}>
-              {drivers.map((d) => {
-                const pillKey = driverPill(d, bestUsername);
-                // Round 4–7 (7): a busy driver's holder under the row, with Ask for it for this request's time.
-                const holder = holderOf(d);
-                return (
-                  <View key={d.username ?? d.name} style={{ gap: 2 }}>
-                    <DriverChoiceRow
-                      d={d}
-                      card={false}
-                      selected={d.username === pick && !!d.username}
-                      onPress={() => setPicked(d.username ?? '')}
-                      onDay={onDay}
-                      lines={driverParts(d, t)}
-                      best={pillKey === 'best'}
-                      bestWhy={avail.data?.best?.why ? sentenceText(t, avail.data.best.why) : undefined}
-                      pill={pillKey && pillKey !== 'best' ? { text: t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : 'muted' } : null}
-                      disabled={!d.username}
-                      disabledReason={d.username ? undefined : t('office.ask.noAccount')}
-                      presence={presenceLine(d, t)}
-                      testID={`approve-row-${d.username ?? d.name}`}
-                    />
-                    {holder && !d.free && holder.task_id !== card.task_id ? <HolderStrip holder={holder} resource="driver" what={d.name} wanted={wantedOfWindow(avail.data?.window)} testID={`approve-holder-${d.username ?? d.name}`} /> : null}
-                  </View>
-                );
-              })}
+            <View style={styles.inner}>
+              {!availArgs && <ListEmpty text={t('office.request.noTime')} />}
+              {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
+              {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+              {avail.data && drivers.length === 0 && <ListEmpty text={t('office.request.nobody')} />}
+              <View style={{ gap: 8 }}>
+                {shownDrivers.map((d) => {
+                  const pillKey = driverPill(d, bestUsername);
+                  // Round 4–7 (7): a busy driver's holder under the row, with Ask for it for this request's time.
+                  const holder = holderOf(d);
+                  return (
+                    <View key={d.username ?? d.name} style={{ gap: 2 }}>
+                      <DriverChoiceRow
+                        d={d}
+                        card={false}
+                        selected={d.username === pick && !!d.username}
+                        onPress={() => setPicked(d.username ?? '')}
+                        onDay={onDay}
+                        lines={driverParts(d, t)}
+                        best={pillKey === 'best'}
+                        bestWhy={avail.data?.best?.why ? sentenceText(t, avail.data.best.why) : undefined}
+                        pill={pillKey && pillKey !== 'best' ? { text: t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : 'muted' } : null}
+                        disabled={!d.username}
+                        disabledReason={d.username ? undefined : t('office.ask.noAccount')}
+                        presence={presenceLine(d, t)}
+                        testID={`approve-row-${d.username ?? d.name}`}
+                      />
+                      {holder && !d.free && holder.task_id !== card.task_id ? <HolderStrip holder={holder} resource="driver" what={d.name} wanted={wantedOfWindow(avail.data?.window)} testID={`approve-holder-${d.username ?? d.name}`} /> : null}
+                    </View>
+                  );
+                })}
+              </View>
+              {/* The best match first (the approved mockup 3); every other driver one tap away, in place. */}
+              {!allDrivers && pick && drivers.length > shownDrivers.length && (
+                <Pressable accessibilityRole="button" onPress={() => setAllDrivers(true)} style={styles.chooseAnother} testID="choose-another">
+                  <Txt variant="strong" size={15} color={colors.blue}>{t('office.ui3.chooseAnother', { n: drivers.length - shownDrivers.length })}</Txt>
+                </Pressable>
+              )}
             </View>
           </Section>
         )}
         {card && (card.events?.length ?? 0) > 0 && (
-          <Section title={t('office.requests.timeline')} count={card.events!.length}>
-            {card.events!.map((e, i) => (
-              <View key={`${e.at}-${e.action}-${i}`} style={styles.event} testID="request-event">
-                <Mono size={13} color={colors.muted} style={{ width: 92 }}>{dateWords(t, e.at)}</Mono>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Txt variant="strong" size={15}>{eventLine(e, t)}</Txt>
-                  {e.note ? <Txt variant="small">{e.note}</Txt> : null}
+          <Section look="list" title={t('office.requests.timeline')} count={card.events!.length}>
+            <View style={styles.inner}>
+              {card.events!.map((e, i) => (
+                <View key={`${e.at}-${e.action}-${i}`} style={styles.event} testID="request-event">
+                  <Mono size={13} color={colors.muted} style={{ width: 92 }}>{dateWords(t, e.at)}</Mono>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Txt variant="strong" size={15}>{eventLine(e, t)}</Txt>
+                    {e.note ? <Txt variant="small">{e.note}</Txt> : null}
+                  </View>
                 </View>
-              </View>
-            ))}
+              ))}
+            </View>
           </Section>
-        )}
-        {card && !outcome && canCancelBooking(card, me.permissions, me.tools) && card.status !== 'waiting' && (
-          <Button kind="danger-text" label={t('office.requests.cancelBooking')} busy={cancelBusy} onPress={() => setCancelling(true)} style={{ minHeight: 52 }} testID="cancel-booking" />
-        )}
-        {card && !outcome && !decider && (
-          <View style={{ gap: 8 }}>
-            {canEditTrip(card) && me.tools.includes('update_request') && (
-              <Button kind="outline" label={t('office.trip.edit')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'edit', id: card.id } })} style={{ minHeight: 52 }} />
-            )}
-            {canWithdrawOwn(card, me.permissions, me.tools) && (
-              <Button kind="danger-text" label={t('office.trips.withdraw')} busy={cancelBusy} onPress={() => setCancelling(true)} style={{ minHeight: 52 }} testID="withdraw-request" />
-            )}
-          </View>
         )}
         {problem && <ErrorNotice error={problem} onRetry={lastCancel ? () => void cancel(lastCancel) : refresh} />}
       </Screen>
@@ -468,16 +495,57 @@ export default function ApproveRequest() {
       )}
       {card && open && !outcome && (
         <StickyActions>
-          <Button
-            label={asAsked ? (vehicle ? t('office.who.approveVehicle', { plate: vehicle }) : t('office.request.approve')) : pickedDriver ? t('office.request.approveSend', { name: pickedDriver.name }) : t('office.request.approve')}
-            onPress={() => void decide('approve')}
-            disabled={!!approveReason || busy === 'decline'}
-            busy={busy === 'approve'}
-            testID="approve-button"
-          />
+          <BarRow>
+            <Button kind="danger-text" label={t('office.request.decline')} onPress={() => setDeclining(true)} disabled={busy !== null} style={barDanger} testID="decline-button" compact />
+            <Button
+              label={asAsked ? (vehicle ? t('office.who.approveVehicle', { plate: vehicle }) : t('office.request.approve')) : pickedDriver ? t('office.request.approveSend', { name: pickedDriver.name }) : t('office.request.approve')}
+              icon={busy === 'approve' ? undefined : Check}
+              onPress={() => void decide('approve')}
+              disabled={!!approveReason || busy === 'decline'}
+              busy={busy === 'approve'}
+              testID="approve-button"
+              style={[barButton, { flex: 1 }]}
+              compact
+            />
+            {(me.tools.includes(card.status === 'changed' ? 'redecide_request' : 'decide_request') || mayAsk || (canCancelBooking(card, me.permissions, me.tools) && card.status !== 'waiting')) && (
+              <BarMore label={t('office.common.more')} onPress={() => setMoreOpen(true)} testID="request-more" />
+            )}
+          </BarRow>
           {approveReason ? <Txt variant="small" style={{ textAlign: 'center' }} testID="approve-reason">{t(approveReason)}</Txt> : null}
-          <Button kind="outline" label={t('office.request.decline')} onPress={() => setDeclining(true)} disabled={busy !== null} style={{ borderColor: colors.red, minHeight: 56 }} />
         </StickyActions>
+      )}
+      {card && !outcome && !open && canCancelBooking(card, me.permissions, me.tools) && card.status !== 'waiting' && (
+        <StickyActions>
+          <Button kind="danger-text" label={t('office.requests.cancelBooking')} busy={cancelBusy} onPress={() => setCancelling(true)} style={barDanger} testID="cancel-booking" compact />
+        </StickyActions>
+      )}
+      {card && !outcome && !decider && ((canEditTrip(card) && me.tools.includes('update_request')) || canWithdrawOwn(card, me.permissions, me.tools)) && (
+        <StickyActions>
+          <BarRow>
+            {canWithdrawOwn(card, me.permissions, me.tools) && (
+              <Button kind="danger-text" label={t('office.trips.withdraw')} busy={cancelBusy} onPress={() => setCancelling(true)} style={barDanger} testID="withdraw-request" compact />
+            )}
+            {canEditTrip(card) && me.tools.includes('update_request') && (
+              <Button kind="outline" label={t('office.trip.edit')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'edit', id: card.id } })} style={[barButton, { flex: 1 }]} testID="edit-request" compact />
+            )}
+          </BarRow>
+        </StickyActions>
+      )}
+      {card && open && (
+        <Sheet visible={moreOpen} title={t('office.common.more')} onClose={() => setMoreOpen(false)} testID="request-more-sheet">
+          <View style={{ gap: 10 }}>
+            {me.tools.includes(card.status === 'changed' ? 'redecide_request' : 'decide_request') && (
+              <Button kind="outline" label={t('office.decide.changeTime')} onPress={() => { setMoreOpen(false); router.push({ pathname: '/office/request/[id]/time', params: { id } }); }} style={{ minHeight: 56 }} testID="decide-change-time" />
+            )}
+            {mayAsk && drivers.length > 0 && !asAsked && (
+              <Button kind="outline" label={t('office.ask.open')} onPress={() => { setMoreOpen(false); setAsking(true); }} style={{ minHeight: 56 }} testID="request-ask-drivers" />
+            )}
+            {/* A changed booking (still open): Cancel booking stays one tap away, under ⋯. */}
+            {canCancelBooking(card, me.permissions, me.tools) && card.status !== 'waiting' && (
+              <Button kind="danger-text" label={t('office.requests.cancelBooking')} busy={cancelBusy} onPress={() => { setMoreOpen(false); setCancelling(true); }} style={{ minHeight: 56 }} testID="cancel-booking" />
+            )}
+          </View>
+        </Sheet>
       )}
       {mayAsk && card && open && (
         <AskDriversSheet
@@ -530,9 +598,18 @@ export default function ApproveRequest() {
   );
 }
 
+/** "waiting for your OK" → "Waiting for your OK" (English only; Sinhala has no capitals). */
+const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+/** The banner's icon by its name (office/detailBanner.ts). */
+const BANNER_ICON: Record<BannerIcon, LucideIcon> = { clock: Clock, check: Check, x: X, calendarX: CalendarX, navigation: Clock, userX: X, send: Clock, flag: Clock };
+
 const styles = StyleSheet.create({
-  tripCard: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 18, gap: 10 },
-  mark: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  card: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, padding: 14 },
+  asker: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  inner: { padding: 14, gap: 4 },
+  chooseAnother: { minHeight: 44, justifyContent: 'center', marginTop: 4 },
   changed: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.blueChip, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6 },
   event: { flexDirection: 'row', gap: 10, paddingVertical: 8, minHeight: 44 },
 });

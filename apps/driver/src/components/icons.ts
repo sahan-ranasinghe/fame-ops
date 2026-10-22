@@ -51,6 +51,15 @@ export { default as Eye } from 'lucide-react-native/icons/eye';
 export { default as EyeOff } from 'lucide-react-native/icons/eye-off';
 export { default as ChevronUp } from 'lucide-react-native/icons/chevron-up';
 export { default as GripVertical } from 'lucide-react-native/icons/grip-vertical';
+// Round 4–7, item 12 (the approved mockups): the facts row, the route stepper's meta, the rows' icons.
+export { default as Undo2 } from 'lucide-react-native/icons/undo-2';
+export { default as Info } from 'lucide-react-native/icons/info';
+export { default as Flag } from 'lucide-react-native/icons/flag';
+export { default as Briefcase } from 'lucide-react-native/icons/briefcase';
+export { default as UserX } from 'lucide-react-native/icons/user-x';
+export { default as File } from 'lucide-react-native/icons/file';
+export { default as ArrowLeftRight } from 'lucide-react-native/icons/arrow-left-right';
+export { default as Send } from 'lucide-react-native/icons/send';
 // Office mode (Phase 8, O2): management under More.
 export { default as ChartColumn } from 'lucide-react-native/icons/chart-column';
 export { default as SlidersHorizontal } from 'lucide-react-native/icons/sliders-horizontal';

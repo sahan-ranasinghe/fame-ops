@@ -612,3 +612,125 @@ names what it holds ("Tasks", "Changes": the site's list headers), with its coun
   reads `inboxWithUnread(inboxArgs(LIMIT, search, archived), filter)` (the Unread filter asked of the server).
 - The strings: `apps/driver/src/i18n/parts/lists2.json` (13 keys under `office.lists2`, English and Sinhala), for the
   lead's merge into en.json / si.json.
+
+## Round 4–7, item 12: the screens built to the approved mockups (22 October 2026)
+
+`design/mockups/2026-10-22` (mockups 1–4: Office mode's Home, Review, the request to approve, the trip on the way; the
+site at a desktop's width). Restyled in place, nothing removed (§33.13). No row of the table above changes its status: every
+function is where it was or one tap away (⋯ More). The rows that moved, and what is new:
+
+| Area | Function on the site | Office mode before | Office mode now |
+|---|---|---|---|
+| Requests | Decide: Change time (Trip decide's day and times) | a button above the decision | ⋯ More in the bottom bar (Decline · Approve · ⋯) |
+| Requests | Ask drivers (from Who's available) | the section's link | the section's link and ⋯ More |
+| Requests | Cancel a changed booking | a button at the end | ⋯ More (an approved booking: the bottom bar) |
+| Requests | Edit / Withdraw (the person who asked) | buttons at the end | the bottom bar |
+| Requests | Who's available | every driver listed, the best match picked | the best match first, Choose another opens the rest in place |
+| Requests | Call the requester | a button in the trip card | Call and (new) WhatsApp beside their name |
+| Tasks | Change the task, Change stops, Swap vehicle, Reassign / Give it a driver, Reopen, Cancel task, Show the driven route | buttons at the end of the page | the bottom bar: the two used most for the task's state (office/detailBanner.ts `taskActions`), the rest under ⋯ More |
+| Tasks | Live map of the running task | a row with Live map | the status banner (a tap opens Live) and (new) the map at the top with the driver's position (`live_drivers`) |
+| Tasks | The trip's holder (`task_detail.task.holder`) | not shown | the trip's row: asked by / assigned by, Call, WhatsApp (website: the task page's "Asked for by" card) |
+| Trip editor | Review's driver, who drives, passengers, project, contact | chips | rows; a tap (or Change / Edit) opens the Who step |
+
+### Inventory: every item of the four screens and its place
+
+**Home (Office mode and /m/, `app/office/(tabs)/index.tsx`; the site's Overview)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Greeting, date | top bar: greeting, the date under it | thin top bar: the date small above, the greeting in the heading font |
+| Bell with the unread count (→ Alerts) | top bar | top bar, round with the red badge |
+| My profile | More | More, and (new) the avatar in the top bar |
+| Saved notice (after a save) | top of the page | unchanged |
+| Tiles On the road / Free / In garage (each to its list; In garage with vehicles or issues) | a strip of tiles | the stats row with icons (blue, green, grey), the same links |
+| The overview's error (Try again, Sign in again) | under the tiles | unchanged |
+| Needs you now | a heading | the heading with the total (requests waiting + needs a driver + needs attention) |
+| Requests to approve: 5 rows (photo, title, who · when · need · proposal, asked), each to its request; View all → Approve; skeleton, error, empty | a section card | a card under Needs you now; the row's tile (the photo, else the clipboard); "asked" in the meta line |
+| Needs a driver: rows (title, when · line), Give a driver (assign_tasks) or the time pill; View all → Tasks (assign_tasks) | a red section card | a card under Needs you now; the red tile; the same button and pill |
+| Needs attention: the server's groups (expand in place, each item to its issue), the severity chip, Snooze (tomorrow / a week, Undo in the snackbar), the count `needs_action`, View all → Issues | a section card | a card under Needs you now; a tile per group (a document or an alert; a chevron for a group) |
+| Reminders (service and document) → Reminders | a row | a card row with the bell tile |
+| Today's tasks: 5 rows (time, title, line, chip), Board, All today's tasks (N), empty with Assign a task | a section card before On the road | a list-look section after On the road (the mockup's order) |
+| On the road: 5 rows (avatar, driver · plate, task · near, chip), each to Live with the driver; Live map | a section card | a list-look section; the plate as a chip beside the name |
+| My trips: 5 rows, View all, empty with Request a vehicle | a section card | a list-look section |
+| Pull to refresh, the 60 s reads, skeletons | | unchanged |
+| New trip (Assign a task, Request a vehicle; a sheet with both) | the floating button | the floating button in the mockup's look |
+| Site: the six tiles with their panels (?open=…) and the full pages on a phone | the "At a glance" tiles | one stats row with icons, the same links, panels and order (Hotfix 3: action first) |
+| Site: a requester's "Need a vehicle?" | a notice | the status banner |
+
+**Review (`app/office/trip/review.tsx`; the site: the plan of every trip form)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Back (one step), "New trip · step 4 of 4", the step bars | dark header | thin top bar; Back also (new) beside the primary in the bottom bar |
+| The plan on the map (both engines) | full width, 300 px | a rounded card, 200 px |
+| Re-approval notice, Planning…, Updating plan… | top | unchanged |
+| The plan's reasons (what is missing) | amber lines | amber strips with an alert icon |
+| The leave time when there is none (the clock) | a field | a card with the field |
+| Leave by HH:MM, its note (planned / as typed · estimated) | a block | "Leave by · <day>" with the big time and its note |
+| km · driving · ends / back at | a line beside the leave time | the facts row (distance, driving, back or ends, people) |
+| The timeline: each stop's times, the arrive-by pill (on time / late), the legs with their source, rush hour, the expressway, back at base | rows | the route stepper (one meta line: the stay, the leave time, by; the chip; the leg under the stop, via the expressway kept); each leg in full with its source and the rush hour under ⓘ "How this was planned" |
+| Conflict cards: the sentence, the holder (Call, WhatsApp, Ask for it), Open that task, Call / WhatsApp the requester and the driver, Pick another driver / vehicle | red cards | the same in the card look with an alert icon |
+| The plan's notes | small lines | unchanged |
+| Driver + plate | a chip | the driver row (avatar, plate chip, "Driver", ✓ Checked from today's vehicle check, Change → Who) |
+| Who drives with no app | a chip | a row (→ Who) |
+| Contact, notes, passengers, riders | chips | rows: the contact (→ Who), the note, who rides with their avatars (Edit → Who); (new) the task's projects (→ Who) |
+| Vehicle: the plate · why | a line | under the driver row |
+| Send request / Book now + Save as waiting / Send to <driver> / Send for approval / Save changes / Save trip, disabled with the reason, the spinner, Try again after a dropped send, the approval note | footer | the bottom bar (the reason under the buttons, in red) |
+| Site: the plan (PlanTimeline) on Assign a task, a request, Book now, the edits, Approve | rows | on the stepper's rail (a mark per stop), the words unchanged |
+
+**The request page (`app/office/request/[id].tsx`; the site: RequestDecide, TripDecide, the request's panel)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Title (the route), "Request / Proposed task · who · asked" | header | thin top bar: "Request · <day>" above the route |
+| Status: waiting for your OK / changed · decide again / the status words / expired with its icon | a pill | the status banner (amber, green, red, grey) |
+| Leave by HH:MM, asked when | the trip card | the banner's line ("Leaves 09:29 · 1 h ago") |
+| Decided by / declined by / cancelled by with when and why | a section | the banner's line |
+| Also looking, Leave-by passed | pills | pills under the banner |
+| Expired · nobody decided it, Request again | a section | a card under the banner |
+| Asked by (photo), need, project, on behalf of | the trip card | the requester card |
+| Call the requester | a button | a round Call; (new) WhatsApp |
+| The trip's stops, the totals | the trip card | the facts row and the route stepper (the plan's timeline when planned, else the stops as asked) |
+| Notes (the request's, the proposal's) | a line | a note card |
+| The new time with Undo (Change time) | above the decision | under the stepper |
+| Change time | a button | ⋯ More |
+| Tell requester | after a decision | unchanged |
+| The proposal's conflicts with their holders | cards | unchanged |
+| Who drives (asked, licence, the assigned driver with Call / WhatsApp, as asked · give a driver) | a section | a list-look section |
+| Who rides | a section | a list-look section |
+| The vehicle (approved as asked) | a section | a list-look section |
+| Who's available: the drivers (best match, pills, presence, holders with Ask), Ask drivers | a section, every driver | "Best match" with the pick first, Choose another · N opens the rest; Ask drivers the section's link and ⋯ |
+| The timeline (request_events) | a section | a list-look section |
+| Approve (label by the pick, disabled with the reason, spinner), Decline… (the reason sheet) | sticky, stacked | the bottom bar: Decline · Approve · ⋯ |
+| Cancel booking… | a button | the bottom bar (approved); ⋯ (changed) |
+| Edit, Withdraw (the person who asked) | buttons | the bottom bar |
+| Done (after a decision) | sticky | unchanged |
+| Site: the decide pages | the page top | (new) the status banner "Waiting for your OK" with when it leaves and Call / WhatsApp the person who asked; Approve amber |
+
+**The trip on the way (`app/office/task/[id].tsx`, `my-trip/[id].tsx`; the site: TaskDetail, PassengerTrip, MyTripPage)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Title, Task · start · asked by / made by | header | header, or (on the way) the map with a floating back button, the title in the trip's row |
+| Status, late (the driver's report or the ETA), label, driver-started, completed early / not confirmed | pills | the status banner (on the way to <stop> · arrives about · back about, the late chip; needs a driver; the state in words) and the pills for the label, driver-started, the finish flag |
+| Needs a driver since … · declined / not accepted | a red box | the banner (red) |
+| Cancelled because, Missed · … | lines | the banner's line; the missed line unchanged |
+| Warnings saved past, unlogged km, Asks about this trip | | unchanged |
+| The five steps with their times, approved by, plan version | a card | unchanged (compact) |
+| The driver (photo, who drives, plate, model, start odo), Call, WhatsApp | a card | the card with round Call (blue) and WhatsApp (green) |
+| Where the driver is now (next stop, about, back about), Live map | a row | the banner (a tap opens Live, "Live map" in it) and (new) the map at the top |
+| Vehicle taken / changed | lines | unchanged |
+| The vehicle check (with the photos) | a section | a list-look section |
+| Passengers (the count never under the names, a row each with Call / WhatsApp / Share trip) | a section | a card: their avatars and names, then the rows |
+| The fuel card | a section | a row with the fuel pump |
+| The trip's holder | — | (new) the trip's row: asked by / assigned by, Call, WhatsApp; a tap opens the request (approve) |
+| Trip purpose (Change) | a card | unchanged |
+| The stops: the start, the live timeline (planned / arrived / left, late or early, the estimate, confirmed later), the arrival point and Save as our place, back at base, the notes | a section | the route stepper (live rail), the same words and parts |
+| Task km, GPS km; the vehicle swap's stretches and Type the reading | lines | unchanged |
+| Change the task, Change stops, Swap vehicle, Reassign / Give a driver, Reopen (with its explanation card), Cancel task…, Show the driven route | buttons | the bottom bar (two by the task's state) and ⋯ More (the rest); Reopen's explanation stays as a card |
+| Requester told of every change, Call the requester | a line | unchanged |
+| More details (charged to, odometer and fuel with photos and videos, problems, history, Show the plan on the map) | the fold | unchanged |
+| Passenger's view: Passenger, the live words, plate, leave · back by, the driver with Call / WhatsApp, the stops as they go, the note | a card of pills and lines | the status banner (the live words, the Passenger chip, leave · back by), the driver card, the route stepper, the note |
+| No-app trip: its stops | lines | the compact stepper |
+| Site task page | | (new) the banner on the way (a link to Live) or needing a driver (Find a driver); (new) the holder card; the map and the stops left, the people and the rest right when the page is wide (≥ 1360 px the panel takes more room); the rest unchanged |
+| Site passenger's trip | a notice with the live pill | the status banner; the stops on the rail |

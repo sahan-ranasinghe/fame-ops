@@ -221,7 +221,8 @@ console.log('\nThe design pages (src/design)');
     check(/designLanguage\(params\.lang\)/.test(s) && /setLanguage\(language\)/.test(s), `${page}: ?lang=si sets the language`);
   }
   check(/<TodayScreen \/>/.test(readFileSync(join(src, 'design', 'DriverToday.tsx'), 'utf8')) && /<TaskView id="t-sample-1" design=\{design\} \/>/.test(readFileSync(join(src, 'design', 'DriverTask.tsx'), 'utf8')), 'the real screens, not copies');
-  check(readdirSync(join(src, 'design')).filter((n) => n.endsWith('.tsx')).length === 2, 'two pages (sampleDriver.ts is not one: only .tsx become routes)');
+  // Round 4–7, item 12: the office's four design pages (Office*.tsx) sit beside the driver's two.
+  check(readdirSync(join(src, 'design')).filter((n) => /^Driver.*\.tsx$/.test(n)).length === 2 && !readdirSync(join(src, 'design')).includes('sampleDriver.tsx'), 'two pages (sampleDriver.ts is not one: only .tsx become routes)');
   // The browser's import graph (a .web file wins, as Metro picks it): never the queue, lib/photos, lib/location or the
   // phone's state.
   const exts = ['.web.tsx', '.web.ts', '.tsx', '.ts', '/index.web.tsx', '/index.web.ts', '/index.tsx', '/index.ts'];

@@ -243,7 +243,7 @@ export function MyTripPage({ id, fallback }: { id: string; fallback?: ReactNode 
         {t.stops.length > 0 && (
           <div style={{ gridColumn: "1/-1" }}>
             <dt>Stops</dt>
-            <dd style={{ fontWeight: 400 }}>{t.stops.map((s) => <div key={s.n}>{s.n}. {STOP_TYPE[s.type] ?? s.type} · {s.place}</div>)}</dd>
+            <dd style={{ fontWeight: 400 }} className="pt-mini">{t.stops.map((s) => <div key={s.n} data-mark={s.n}>{s.n}. {STOP_TYPE[s.type] ?? s.type} · {s.place}</div>)}</dd>
           </div>
         )}
       </dl>

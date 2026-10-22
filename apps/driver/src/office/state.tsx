@@ -13,7 +13,7 @@ import { refreshOfficeMe, signOutOffice } from './auth';
 import { useOfficeMe } from './store';
 import type { FleetError, Inbox, Me } from './types';
 
-interface OfficeValue {
+export interface OfficeValue {
   me: Me;
   api: typeof officeApi;
   /** Who this is, again (after the profile changed). */
@@ -32,6 +32,14 @@ export function useOffice(): OfficeValue {
   const v = useContext(Ctx);
   if (!v) throw new Error('OfficeProvider is missing');
   return v;
+}
+
+/**
+ * Round 4–7, item 12: the office context with a value given (the design pages of src/design: the real screens drawn with
+ * sample answers, no network). The app's screens use OfficeProvider.
+ */
+export function OfficeValueProvider({ value, children }: { value: OfficeValue; children: ReactNode }) {
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 const UNREAD_EVERY_MS = 60_000;

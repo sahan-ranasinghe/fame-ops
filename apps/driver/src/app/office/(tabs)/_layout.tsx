@@ -31,7 +31,8 @@ const ROUTE: Record<TabKey, string> = { home: 'index', approve: 'approve', tasks
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
-function TabBar({ state, navigation }: TabBarProps) {
+/** The tab bar (exported for the design pages of src/design, which draw it under a screen with sample data). */
+export function TabBar({ state, navigation }: TabBarProps) {
   const { t } = useApp();
   const { me, unread } = useOffice();
   const insets = useSafeAreaInsets();

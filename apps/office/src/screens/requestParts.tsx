@@ -18,6 +18,7 @@ import { Icon } from "../ui/icons";
 import { HolderStrip } from "../ui/Holder";
 import type { Wanted } from "../ui/holderLogic";
 import { askedOf, selfDriveLicenceLine } from "../ui/whoDrivesLogic";
+import { StatusBanner } from "../ui/patterns";
 import { LATE_TEXT, proposalLine } from "./approvalLogic";
 import { againFields, diffLines, timelineSteps } from "./requestLogic";
 
@@ -130,6 +131,22 @@ export function RequestHead({ q, proposal }: { q: RequestCard; proposal: boolean
         )}
       <div className="sub">{joinDots([q.project, datesInWords(q.asked), q.one_step ? "booked directly by the office" : ""])}</div>
     </>
+  );
+}
+
+/**
+ * Round 4–7, item 12 (the approved mockup 3): the decide page's ONE status banner: "Waiting for your OK" (a changed booking:
+ * "Changed · decide again"), when it leaves, and Call / WhatsApp the person who asked when their number is known.
+ */
+export function DecideBanner({ q }: { q: RequestCard }) {
+  const leave = q.trip?.leave_by ?? q.fields?.time;
+  const phone = linksOf(q.requester_phone);
+  return (
+    <StatusBanner tone="warn" icon="clock" testId="decide-banner"
+      title={q.status === "changed" ? "Changed · decide again" : "Waiting for your OK"}
+      line={leave ? `Leaves ${leave}${q.fields?.date ? ` · ${datesInWords(q.when)}` : ""}` : q.when}>
+      {phone ? <span><ContactButtons phone={phone} label={`Call ${firstName(q.requested_by)}`} testId="requester-contact" /></span> : null}
+    </StatusBanner>
   );
 }
 

@@ -40,7 +40,7 @@ import { checkDeparture, departurePlan } from "./departureLogic";
 import { DecidedBy, refreshRequest, ReviewingLine, useReviewing } from "./approvers";
 import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
 import { RequestDetailCard } from "./RequestDetailCard";
-import { LateNotice, RequestStatusPill } from "./requestParts";
+import { DecideBanner, LateNotice, RequestStatusPill } from "./requestParts";
 import { TripSection, useTripLine } from "./RequestTrip";
 import { isChoice, knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 import { TripDayPicker } from "../ui/DayPicker";
@@ -201,6 +201,8 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   return (
     <section className="view" data-testid="request-decide-trip">
       <PageTop title={title} sub={sub} backTo={`/requests/${id}`} />
+      {/* Round 4–7, item 12 (the approved mockup 3): the one status banner, Call / WhatsApp the person who asked. */}
+      <DecideBanner q={q} />
       <ReviewingLine list={reviewers} block />
       <DraftBanner draft={draft} />
       <div className="page-form">
@@ -265,7 +267,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
           {msg && <div><Notice tone={msg.tone}>{msg.text}</Notice>{msg.warnings && <WarningsNote warnings={msg.warnings} />}</div>}
           <StickyActions>
             <button type="button" className="btn" disabled={busy} onClick={() => void decide("decline")}>Decline</button>
-            <button type="button" className="btn dark" disabled={busy || !!plateWhy} data-testid="decide-send" onClick={() => void decide("approve")}>
+            <button type="button" className="btn primary" disabled={busy || !!plateWhy} data-testid="decide-send" onClick={() => void decide("approve")}>
               {decideLabel({ proposal: !!proposed?.username, asProposed: pick.asProposed, custodianDrives: custodianDrives || !!plateWhy })}
             </button>
             {plateWhy && <p className="hint btn-why" data-testid="approve-why">{plateWhy}</p>}
