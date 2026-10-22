@@ -30,11 +30,11 @@ import DataRetention from '@/app/office/people/retention';
 import { hideSnackbar, shownSnackbar } from '@/components/patterns/Snackbar';
 import { translate } from '@/i18n';
 import { OfficeProvider } from '@/office/state';
-import type { OfficeMe } from '@/office/types';
+import type { Me as OfficeMe } from '@/office/types';
 
 const RUN_TOOLS = ['get_settings', 'update_settings', 'retention_preview', 'run_retention'];
 const base = FIX('me') as OfficeMe;
-const ME: OfficeMe = { ...base, tools: [...base.tools.filter((x) => !RUN_TOOLS.includes(x)), ...RUN_TOOLS] };
+const ME: OfficeMe = { ...base, tools: [...base.tools.filter((x: string) => !RUN_TOOLS.includes(x)), ...RUN_TOOLS] };
 
 const PERIODS = {
   inbox_read_days: 30, inbox_unread_days: 90, delivery_days: 14, audit_routine_days: 30, audit_changes_days: 730,
@@ -113,7 +113,7 @@ describe('Data retention (Office mode)', () => {
   });
 
   it('without update_settings the rows only read; without the run tools there is no Run now', async () => {
-    open({ ...ME, tools: ME.tools.filter((x) => x !== 'update_settings' && x !== 'run_retention') });
+    open({ ...ME, tools: ME.tools.filter((x: string) => x !== 'update_settings' && x !== 'run_retention') });
     await screen.findByTestId('retention-row-location_days', {}, { timeout: 6000 });
     expect(screen.queryByTestId('retention-run')).toBeNull();
     fireEvent.press(screen.getByTestId('retention-row-location_days'));
