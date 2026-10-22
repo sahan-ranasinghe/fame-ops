@@ -55,6 +55,7 @@ import {
   redecideRequest,
   reviewing,
   suggestVehicles,
+  requestEditGuard,
   updateRequest,
 } from "./tools/requests.ts";
 import { issueHistory, listIssues, updateIssue, updateIssues } from "./tools/issues.ts";
@@ -83,6 +84,7 @@ import {
   reopenTask,
   taskBoard,
   taskDetail,
+  taskEditGuard,
   updateTask,
   updateTaskStops,
 } from "./tools/tasks.ts";
@@ -165,12 +167,13 @@ export const TOOLS: AnyTool[] = [
   registerWebPush,
   removeWebPush,
   availability,
-  withPassengerList(updateRequest, { count: "pax", ids: ["request_id", "version"], targets: requestTargets }),
+  withPassengerList(updateRequest, { count: "pax", ids: ["request_id", "version"], guard: requestEditGuard, targets: requestTargets }),
   redecideRequest,
   withConflicts(
     withPassengerList(updateTask, {
       count: "passengers",
       ids: ["task_id", "plan_version"],
+      guard: taskEditGuard,
       targets: (a) => [taskTarget(a.task_id as string)],
     }),
     (a) => a.task_id as string,

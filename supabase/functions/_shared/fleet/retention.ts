@@ -1,13 +1,15 @@
 // Round 4–7, item 9 (Sahan, 22 October 2026): data retention (Slack / Google Workspace / Samsara retention policies). The
 // nightly job (fleet-jobs "retention", pg_cron 02:45 Colombo) and the admin's Run now (run_retention) both call runRetention:
-// first each driver's day is kept as a summary (the route builder's own rules), then every rule removes what is older than
-// its period in batches (retention_batch: only its tables), and one activity-log row says what went. A preview (dry) only
-// counts. Business records are never removed; the list is said in NEVER for the page and Claude.
+// every rule removes what is older than its period in batches (retention_batch: only its tables; location points only for a
+// day that has its summary), one activity-log row says what went, then a couple of driver-days are summarised. The day
+// summaries are mostly made by their own job (fleet-jobs "summaries", every 15 minutes, a few days a run: an Edge Function
+// has about 2 s of CPU and one busy day costs a few hundred ms), so the rules never wait behind a backlog. A preview (dry)
+// only counts. Business records are never removed; the list is said in NEVER for the page and Claude.
 
 import { type Db, fetchAll, unwrap } from "./db.ts";
 import { buildRoute, type RouteFix } from "./route.ts";
 import { loadSettings, type Retention } from "./settings.ts";
-import { addDays, colomboDate, dayRange } from "./time.ts";
+import { colomboDate, dayRange } from "./time.ts";
 
 export interface Rule {
   key: string;
@@ -27,6 +29,7 @@ export const RULES: readonly Rule[] = [
   { key: "issue_events", what: "resolved issues' history", period: "issues_resolved_days" },
   { key: "issues_resolved", what: "resolved or dismissed issues", period: "issues_resolved_days" },
   { key: "location_points", what: "location points (each day kept as a summary)", period: "location_days" },
+  { key: "route_matched", what: "road-snapped route lines", period: "location_days" },
   { key: "heartbeats", what: "phone heartbeats", period: "heartbeats_days" },
   { key: "google_calls", what: "Google usage counters", period: "counters_days" },
   { key: "routing_calls", what: "routing usage counters", period: "counters_days" },
@@ -49,8 +52,9 @@ export const NEVER = [
 ] as const;
 
 const BATCH = 5000;
-/** Days summarised a run: yesterday for everyone, then older days still without a summary, oldest first. */
-const SUMMARY_BACKFILL = 300;
+/** Driver-days a summaries run makes at most, and the wall time it may spend (the CPU limit is the real bound). */
+export const SUMMARY_DAYS = 3;
+const SUMMARY_BUDGET_MS = 25_000;
 
 export interface RuleCount {
   key: string;
@@ -78,7 +82,16 @@ export async function summariseDay(db: Db, employeeId: string, day: string): Pro
     "location points",
     40000,
   );
-  if (!rows.length) return false;
+  if (!rows.length) {
+    // On duty with no point stored (the phone off, no signal all day): an empty summary, so the day is not asked again.
+    unwrap(
+      await db.from("driver_day_summaries").upsert({ employee_id: employeeId, day, points: 0, computed_at: new Date().toISOString() }, {
+        onConflict: "employee_id,day",
+      }),
+      "day summary",
+    );
+    return false;
+  }
   const beats = await fetchAll(
     (a, b) => db.from("driver_heartbeats").select("at").eq("employee_id", employeeId).gte("at", span.from).lt("at", span.to).range(a, b),
     "heartbeats",
@@ -111,13 +124,21 @@ export async function summariseDay(db: Db, employeeId: string, day: string): Pro
   return true;
 }
 
-/** The driver-days with points but no summary: yesterday first, then the oldest (they are the next to lose their points). */
-async function daysToSummarise(db: Db, now: Date): Promise<{ employee_id: string; day: string }[]> {
-  const yesterday = addDays(colomboDate(now), -1);
-  const { data, error } = await db.rpc("days_without_summary", { p_before: dayRange(colomboDate(now)).from, p_limit: SUMMARY_BACKFILL });
+/**
+ * A few driver-days kept as summaries (days_without_summary: yesterday first, then the oldest, the next to lose its points;
+ * a recent day once more after 03:00 for late uploads), stopping at `maxDays` or the time budget. Returns how many days had
+ * points.
+ */
+export async function summariseSome(db: Db, now: Date, maxDays = SUMMARY_DAYS, budgetMs = SUMMARY_BUDGET_MS): Promise<number> {
+  const started = Date.now();
+  const { data, error } = await db.rpc("days_without_summary", { p_now: now.toISOString(), p_limit: maxDays });
   if (error) throw new Error(`days without a summary: ${error.message}`);
-  const days = (data ?? []) as { employee_id: string; day: string }[];
-  return [...days.filter((d) => d.day === yesterday), ...days.filter((d) => d.day !== yesterday)];
+  let done = 0;
+  for (const d of (data ?? []) as { employee_id: string; day: string }[]) {
+    if (Date.now() - started > budgetMs) break;
+    if (await summariseDay(db, d.employee_id, d.day)) done += 1;
+  }
+  return done;
 }
 
 export interface RetentionRun {
@@ -128,8 +149,9 @@ export interface RetentionRun {
 }
 
 /**
- * One run: the summaries first (never on a preview), then each rule in batches. `routine`: the activity log's routine tools
- * (reads and routine writes). `by`: who ran it ("System" at night, the admin for Run now): the one activity-log row.
+ * One run: each rule in batches, the one activity-log row, then a couple of driver-days summarised (never on a preview).
+ * `routine`: the activity log's routine tools (reads and routine writes). `by`: who ran it ("System" at night, the admin
+ * for Run now).
  */
 export async function runRetention(
   db: Db,
@@ -137,10 +159,6 @@ export async function runRetention(
   opts: { dry: boolean; routine: readonly string[]; by: string; byEmployee?: string | null },
 ): Promise<RetentionRun> {
   const settings = await loadSettings(db);
-  let summarised = 0;
-  if (!opts.dry) {
-    for (const d of await daysToSummarise(db, now)) if (await summariseDay(db, d.employee_id, d.day)) summarised += 1;
-  }
   const counts: RuleCount[] = [];
   for (const rule of RULES) {
     const days = settings.retention[rule.period];
@@ -186,5 +204,7 @@ export async function runRetention(
       "activity log",
     );
   }
+  // After the rules, so they never wait behind the summaries' backlog (their own job does most of them).
+  const summarised = opts.dry ? 0 : await summariseSome(db, now, 2, 10_000);
   return { dry: opts.dry, counts, summarised, line };
 }

@@ -649,6 +649,19 @@ async function requestCardOf(db: Db, row: VehicleRequest, now: Date, withLine = 
   return (await requestCards(db, [row], now, withLine, viewer))[0];
 }
 
+/**
+ * Round 4–7 (6): update_request's own first checks, for a call that changes only who rides (withPassengerList never runs
+ * the tool then): the request is the caller's (or they approve), the version they loaded, a state an edit may change.
+ */
+export async function requestEditGuard(args: Record<string, unknown>, { db, actor }: { db: Db; actor: Actor }): Promise<void> {
+  const request = await getRequest(db, args.request_id as string);
+  if (!actor.permissions.includes("approve") && request.requested_by_employee_id !== actor.employeeId) {
+    throw new ToolError("This request is not yours to change.");
+  }
+  checkVersion(request.version, args.version as number);
+  statusAfterEdit(request.status);
+}
+
 async function getRequest(db: Db, id: string): Promise<VehicleRequest> {
   const request = unwrapMaybe(await db.from("vehicle_requests").select("*").eq("id", id).maybeSingle(), "vehicle request");
   if (!request) throw new ToolError(`No vehicle request has the id ${id}. Use list_requests to find it.`);

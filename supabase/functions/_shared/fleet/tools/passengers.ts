@@ -166,6 +166,8 @@ export function withPassengerList<T extends AnyTool>(
     count: "passengers" | "pax";
     /** An edit's own ids: with nothing else sent, only the names change (the tool itself would say "Nothing to change"). */
     ids?: readonly string[];
+    /** With `ids`: the tool's own first checks (whose trip, the version loaded, its state), run before names alone are kept. */
+    guard?: (args: Record<string, unknown>, ctx: Ctx) => Promise<void>;
     targets: (args: Record<string, unknown>, result: Record<string, unknown>, db: Db) => Promise<Target[]> | Target[];
   },
 ): T {
@@ -179,6 +181,9 @@ export function withPassengerList<T extends AnyTool>(
       const checked = passengerRows(passenger_list, await officePeople(ctx.db));
       if ("error" in checked) throw new ToolError(checked.error);
       const onlyNames = !!opts.ids && Object.entries(rest).every(([k, v]) => opts.ids!.includes(k) || v === undefined);
+      // Names alone never skip the tool's checks: an edit tool without its guard always runs.
+      if (onlyNames && !opts.guard) throw new ToolError("Nothing to change.");
+      if (onlyNames) await opts.guard!(rest, ctx);
       const count = countWith(rest[opts.count] as number | null | undefined, checked.rows.length);
       const out = onlyNames
         ? { result: Object.fromEntries(opts.ids!.map((k) => [k, rest[k]])), summary: `passengers of ${opts.ids!.map((k) => rest[k]).join(" ")}` }

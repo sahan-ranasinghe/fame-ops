@@ -3,9 +3,10 @@
 //   POST { "job": "sync", "task_id"?, "report_id"?, "request_id"?, "vehicle_id"? }
 //   POST { "job": "prune_fuel_videos" }   (pg_cron fuel-videos-prune, monthly: the files older
 //                                          than 12 months go, the rows are marked pruned)
-//   POST { "job": "retention" }           (pg_cron retention, nightly 02:45 Colombo, Round 4–7 item 9: each driver's
-//                                          day kept as a summary, then what is past its period removed in batches,
-//                                          one activity-log row)
+//   POST { "job": "retention" }           (pg_cron retention, nightly 02:45 Colombo, Round 4–7 item 9: what is past its
+//                                          period removed in batches, one activity-log row, a couple of days summarised)
+//   POST { "job": "summaries" }           (pg_cron day-summaries, every 15 minutes: a few driver-days kept as summaries
+//                                          before their points may go; yesterday first, then the oldest)
 //   POST { "job": "google_content" }      (pg_cron google-content, nightly: the Google pins of stops
 //                                          still to be driven fetched again at 23 days, then every
 //                                          Google detail over 30 days old removed)
@@ -20,7 +21,7 @@ import { adminClient } from "../_shared/fleet/db.ts";
 import { syncIssues, type SyncScope } from "../_shared/fleet/issues.ts";
 import { pruneFuelVideos } from "../_shared/fleet/videos.ts";
 import { googleContentJob } from "../_shared/fleet/googlePlaces.ts";
-import { runRetention } from "../_shared/fleet/retention.ts";
+import { runRetention, summariseSome } from "../_shared/fleet/retention.ts";
 import { routineToolNames } from "../_shared/fleet/tools/activity.ts";
 // The tool list registers itself with the activity log (its reads are the log's routine entries).
 import "../_shared/fleet/index.ts";
@@ -79,6 +80,16 @@ Deno.serve(async (request) => {
     } catch (error) {
       console.error("fleet-jobs retention failed", error);
       return json(500, { error: "retention_failed", message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  if (body.job === "summaries") {
+    const started = Date.now();
+    try {
+      const summarised = await summariseSome(adminClient(), new Date());
+      return json(200, { job: "summaries", summarised, ms: Date.now() - started });
+    } catch (error) {
+      console.error("fleet-jobs summaries failed", error);
+      return json(500, { error: "summaries_failed", message: error instanceof Error ? error.message : String(error) });
     }
   }
   if (body.job !== "sync") return json(400, { error: "unknown_job" });

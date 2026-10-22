@@ -1769,7 +1769,7 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: string
                            },
 "days_without_summary":
-{ Args: { "p_before": string,"p_limit": number }; Returns: {
+{ Args: { "p_limit": number,"p_now": string }; Returns: {
               "day": string,"employee_id": string
             }[]
                            },

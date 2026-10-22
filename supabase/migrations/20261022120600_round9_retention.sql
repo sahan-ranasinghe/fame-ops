@@ -4,8 +4,9 @@
 -- fleet_settings, minimums that cannot be lowered: GPS 30 days, activity-log changes 6 months). Business records are NEVER
 -- removed automatically: tasks, stops, requests, odometer and fuel logs, their photos, vehicle reports, documents,
 -- employees, vehicles, places, projects, duty sessions. retention_batch knows only the tables below.
---   - location points 6 months, each driver's day kept forever as a summary (driver_day_summaries: km, driving and stopped
---     time, stops, first and last point); a point goes only once its day has its summary.
+--   - location points 6 months (their road-snapped lines with them), each driver's day kept forever as a summary
+--     (driver_day_summaries: km, driving and stopped time, stops, first and last point; made every 15 minutes, a few days a
+--     run); a point goes only once its day has its summary.
 --   - notifications read 30 days / unread 90; delivery records 14; the activity log's routine entries 30 days, changes 2
 --     years; resolved and dismissed issues 12 months (their events with them); heartbeats and the usage counters 90 days;
 --     app errors 90 days (as before).
@@ -31,26 +32,40 @@ comment on table public.driver_day_summaries is
 alter table public.driver_day_summaries enable row level security;
 -- The office reads through the tools (service role).
 
--- The driver-days to summarise before their points may go: yesterday's again (late uploads), then every older day with
--- points and no summary, the oldest first after yesterday.
-create function public.days_without_summary(p_before timestamptz, p_limit integer)
+-- The driver-days to summarise before their points may go (fleet-jobs "summaries", every 15 minutes, a few days a run: an
+-- Edge Function has about 2 s of CPU, and one busy day is a few hundred ms). Found from the duty sessions (points are
+-- recorded only on duty), never by scanning the points. A day with no summary yet, yesterday first, then the oldest (the
+-- next to lose its points); a recent day summarised before 03:00 the morning after is done once more then (late uploads).
+create function public.days_without_summary(p_now timestamptz, p_limit integer)
 returns table (employee_id uuid, day date)
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  with days as (
-    select distinct p.employee_id, (p.recorded_at at time zone 'Asia/Colombo')::date as day
-    from public.location_points p
-    where p.recorded_at < p_before
+  with today as (select (p_now at time zone 'Asia/Colombo')::date as d),
+  days as (
+    select distinct s.employee_id, g.day::date as day
+    from public.duty_sessions s
+    cross join lateral generate_series(
+      (s.started_at at time zone 'Asia/Colombo')::date,
+      (least(coalesce(s.ended_at, p_now), p_now) at time zone 'Asia/Colombo')::date,
+      interval '1 day') as g(day)
+    where s.started_at < p_now
   )
   select d.employee_id, d.day
   from days d
-  where d.day = (p_before at time zone 'Asia/Colombo')::date - 1
-     or not exists (select 1 from public.driver_day_summaries s where s.employee_id = d.employee_id and s.day = d.day)
-  order by (d.day = (p_before at time zone 'Asia/Colombo')::date - 1) desc, d.day
-  limit greatest(1, least(coalesce(p_limit, 300), 5000))
+  cross join today
+  left join lateral (
+    select x.computed_at from public.driver_day_summaries x where x.employee_id = d.employee_id and x.day = d.day
+  ) done on true
+  where d.day < today.d
+    and (done.computed_at is null
+         or (d.day >= today.d - 2
+             and done.computed_at < ((d.day + 1)::timestamp + interval '3 hours') at time zone 'Asia/Colombo'
+             and p_now >= ((d.day + 1)::timestamp + interval '3 hours') at time zone 'Asia/Colombo'))
+  order by (d.day = today.d - 1) desc, d.day
+  limit greatest(1, least(coalesce(p_limit, 3), 500))
 $$;
 revoke all on function public.days_without_summary(timestamptz, integer) from public, anon, authenticated;
 grant execute on function public.days_without_summary(timestamptz, integer) to service_role;
@@ -88,6 +103,7 @@ begin
     ('location_points', 'location_points',
        'recorded_at < $1 and exists (select 1 from public.driver_day_summaries d where d.employee_id = location_points.employee_id '
        'and d.day = (location_points.recorded_at at time zone ''Asia/Colombo'')::date)'),
+    ('route_matched', 'route_matched', 'date < ($1 at time zone ''Asia/Colombo'')::date'),
     ('heartbeats', 'driver_heartbeats', 'at < $1'),
     ('google_calls', 'google_calls', 'day < ($1 at time zone ''Asia/Colombo'')::date'),
     ('routing_calls', 'routing_calls', 'day < ($1 at time zone ''Asia/Colombo'')::date'),
@@ -113,8 +129,10 @@ $$;
 revoke all on function public.retention_batch(text, timestamptz, integer, boolean, text[]) from public, anon, authenticated;
 grant execute on function public.retention_batch(text, timestamptz, integer, boolean, text[]) to service_role;
 
--- The old nightly prunes give way to the one job (its periods are the settings'); route matches keep their 90 days in it.
+-- The old nightly prunes give way to the one job (its periods are the settings'; route matches follow the points' period).
+-- The day summaries run on their own, every 15 minutes, a few days at a time (fleet-jobs "summaries").
 select cron.unschedule('prune-location-points');
 select cron.unschedule('prune-office-inbox');
 select cron.unschedule('prune-app-errors');
 select cron.schedule('retention', '15 21 * * *', $$select public.call_edge_function('fleet-jobs', '{"job": "retention"}'::jsonb)$$);
+select cron.schedule('day-summaries', '*/15 * * * *', $$select public.call_edge_function('fleet-jobs', '{"job": "summaries"}'::jsonb)$$);

@@ -217,6 +217,17 @@ async function ownPhotos(db: Db, employeeId: string, ids: readonly string[], kin
   if (ok.length !== new Set(ids).size) throw new ToolError("A photo is not yours, not uploaded yet, or already used. Take it again.");
 }
 
+/** The vehicle's logged reading nearest before (or after) a moment, with its time. */
+async function readingAt(db: Db, vehicleId: string, at: string, side: "before" | "after") {
+  const q = db.from("odometer_logs").select("reading_km, logged_at").eq("vehicle_id", vehicleId);
+  const rows = unwrap(
+    await (side === "before" ? q.lt("logged_at", at).order("logged_at", { ascending: false }) : q.gt("logged_at", at).order("logged_at"))
+      .limit(1),
+    "odometer logs",
+  );
+  return rows[0] ?? null;
+}
+
 async function tripStops(db: Db, taskId: string) {
   const stops = unwrap(
     await db.from("task_stops").select("seq, type, place_name, status").eq("task_id", taskId).neq("status", "removed").order("seq"),
@@ -500,7 +511,15 @@ export const finishMyTrip = tool({
     const state = noAppState(t);
     if (state === "done") throw new ToolError("This trip is already finished.");
     if (state === "cancelled" || state === "other") throw new ToolError(`This trip is ${t.status}: nothing to finish.`);
-    const last = await lastReading(db, t.vehicle_id!);
+    const notConfirmed = state === "not_confirmed";
+    // A trip closed as not confirmed and confirmed days later: the vehicle may have been driven since. Its readings go in at
+    // the trip's own times (the vehicle's odometer only moves for the newest one), the start defaults to the reading before
+    // the trip, and the end can never be over a reading logged after it.
+    const tripFrom = t.started_at ?? t.start_at;
+    const tripTo = notConfirmed ? t.completed_at ?? now.toISOString() : now.toISOString();
+    const before = notConfirmed ? await readingAt(db, t.vehicle_id!, tripFrom, "before") : null;
+    const after = notConfirmed ? await readingAt(db, t.vehicle_id!, tripTo, "after") : null;
+    const last = notConfirmed ? before?.reading_km ?? null : await lastReading(db, t.vehicle_id!);
     const start = t.start_odometer_km ?? args.start_odometer_km ?? last;
     if (start == null) throw new ToolError("Enter the odometer at the start too: the vehicle has no reading yet.");
     if (args.odometer_km < start) {
@@ -508,10 +527,16 @@ export const finishMyTrip = tool({
     }
     const tooFar = odometerProblem(args.odometer_km, start, "The odometer now");
     if (tooFar) throw new ToolError(tooFar);
+    if (after && args.odometer_km > after.reading_km) {
+      throw new ToolError(
+        `The odometer at the end (${args.odometer_km} km) is over a reading logged after this trip (${after.reading_km} km on ` +
+          `${colomboDate(after.logged_at)}). Check the number.`,
+      );
+    }
     if (args.fuel && args.fuel.litres == null && args.fuel.amount_lkr == null) throw new ToolError("Fuel: litres, the amount or both.");
     if (args.photo) await ownPhotos(db, me, [args.photo], "odometer");
 
-    const at = now.toISOString();
+    const at = notConfirmed ? tripTo : now.toISOString();
     const logs = unwrap(await db.from("odometer_logs").select("kind").eq("task_id", t.id), "odometer");
     if (!logs.some((l) => l.kind === "task_start")) {
       unwrap(
@@ -542,7 +567,6 @@ export const finishMyTrip = tool({
         "odometer",
       );
     }
-    const notConfirmed = state === "not_confirmed";
     unwrap(
       await db.from("tasks").update({
         status: "completed",

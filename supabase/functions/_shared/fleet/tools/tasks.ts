@@ -1091,6 +1091,20 @@ function endsOf(stops: TaskStop[]): { from?: string; to?: string } {
   return { from: ordered[0]?.place_name, to: ordered.length > 1 ? ordered[ordered.length - 1].place_name : undefined };
 }
 
+/**
+ * Round 4–7 (6): update_task's own first checks, for a call that changes only who rides (withPassengerList never runs the
+ * tool then): a task still open, the plan_version the caller loaded (as changeTask).
+ */
+export async function taskEditGuard(args: Record<string, unknown>, { db }: { db: Db }): Promise<void> {
+  const task = await getTask(db, args.task_id as string);
+  if (task.status === "completed" || task.status === "cancelled") throw new ToolError(`This task is ${task.status}; it cannot be changed.`);
+  if (task.plan_version !== args.plan_version) {
+    throw new ToolError(
+      `This task changed since you loaded it (version ${task.plan_version}, you have ${args.plan_version}). Reload it and try again.`,
+    );
+  }
+}
+
 async function getTask(db: Db, id: string): Promise<Task> {
   const task = unwrapMaybe(await db.from("tasks").select("*").eq("id", id).maybeSingle(), "task");
   if (!task) throw new ToolError(`No task has the id ${id}. Use task_board to find it.`);

@@ -39,8 +39,9 @@ export const retentionPreview = tool({
 export const runRetentionNow = tool({
   name: "run_retention",
   title: "Data retention: remove now",
-  description: "Runs the retention job now (as at night): each driver's day kept as a summary, then what is past its period " +
-    "removed in batches; one activity-log row says what went. confirm must be true (show retention_preview first).",
+  description: "Runs the retention job now (as at night): what is past its period removed in batches (a driver's location " +
+    "points only once their day is kept as a summary; the summaries are made every 15 minutes); one activity-log row says " +
+    "what went. confirm must be true (show retention_preview first).",
   readOnly: false,
   input: z.object({ confirm: z.literal(true).describe("true, after retention_preview") }),
   async run({ confirm }, { db, now, actor }) {
