@@ -179,7 +179,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   const driver = { name: `E2E Driver ${stamp}`, code: `E2E-${stamp}`, username: `e2e.${stamp}`, pin: "246810", phone: "0771234500" };
   await tool("create_driver", driver);
   const plate = `WP E2E-${stamp.slice(-4).toUpperCase()}`;
-  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
+  // Round 4–7 (5): the fuel type, which the edit form below needs before it saves.
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000, fuel_type: "diesel" });
 
   // 1. The set-password link opens the app with a recovery session. 12 characters at least.
   // The link's redirect lands on the Site URL (port 5173); the test's own server is on 5174, so

@@ -1,0 +1,70 @@
+{
+  "en": {
+    "office": {
+      "fuel": {
+        "label": "Fuel",
+        "gradeNone": "Not set",
+        "pickType": "Pick the fuel type",
+        "notSet": "Fuel type: not set",
+        "setIt": "Set it",
+        "type_petrol": "Petrol",
+        "type_diesel": "Diesel",
+        "type_hybrid": "Hybrid (petrol)",
+        "type_electric": "Electric",
+        "grade_petrol_92": "Petrol 92",
+        "grade_petrol_95": "Petrol 95",
+        "grade_auto_diesel": "Auto Diesel",
+        "grade_super_diesel": "Super Diesel",
+        "answer_enough": "Enough fuel",
+        "answer_fill_on_way": "Fills up on the way",
+        "notAnswered": "Not answered",
+        "askedAtStart": "Asked at Start task",
+        "estimate": "About {km} km · roughly {litres} L {fuel} (approx.)",
+        "estimateElectric": "About {km} km · check the battery",
+        "word_petrol": "petrol",
+        "word_diesel": "diesel",
+        "word_fuel": "fuel",
+        "withoutAmount": "{n} fills without an amount",
+        "withoutAmountOne": "1 fill without an amount"
+      },
+      "vehicles": {
+        "f_fuelType": "Fuel type",
+        "f_fuelGrade": "Grade (optional)"
+      }
+    }
+  },
+  "si": {
+    "office": {
+      "fuel": {
+        "label": "ඉන්ධන",
+        "gradeNone": "සකසා නැත",
+        "pickType": "ඉන්ධන වර්ගය තෝරන්න",
+        "notSet": "ඉන්ධන වර්ගය: සකසා නැත",
+        "setIt": "සකසන්න",
+        "type_petrol": "පෙට්‍රල්",
+        "type_diesel": "ඩීසල්",
+        "type_hybrid": "හයිබ්‍රිඩ් (පෙට්‍රල්)",
+        "type_electric": "විදුලි",
+        "grade_petrol_92": "පෙට්‍රල් 92",
+        "grade_petrol_95": "පෙට්‍රල් 95",
+        "grade_auto_diesel": "ඔටෝ ඩීසල්",
+        "grade_super_diesel": "සුපර් ඩීසල්",
+        "answer_enough": "ඉන්ධන ප්‍රමාණවත්",
+        "answer_fill_on_way": "යන අතරේ ඉන්ධන පුරවයි",
+        "notAnswered": "පිළිතුරක් නැත",
+        "askedAtStart": "කාර්යය අරඹන විට අසයි",
+        "estimate": "km {km} පමණ · {fuel} L {litres} පමණ (ආසන්න)",
+        "estimateElectric": "km {km} පමණ · බැටරිය බලන්න",
+        "word_petrol": "පෙට්‍රල්",
+        "word_diesel": "ඩීසල්",
+        "word_fuel": "ඉන්ධන",
+        "withoutAmount": "මුදල නැති පිරවීම් {n}",
+        "withoutAmountOne": "මුදල නැති පිරවීම් 1"
+      },
+      "vehicles": {
+        "f_fuelType": "ඉන්ධන වර්ගය",
+        "f_fuelGrade": "ශ්‍රේණිය (අවශ්‍ය නම්)"
+      }
+    }
+  }
+}

@@ -194,9 +194,13 @@ describe("Register vehicle", () => {
     mount(t, officer, <Routes><Route path="/vehicles/new" element={<VehicleForm />} /></Routes>, { files: { upload: vi.fn() } }, "/vehicles/new");
     expect(screen.getByTestId("documents-after-save").textContent).toContain("after Register vehicle");
     fireEvent.change(screen.getByLabelText("Number plate"), { target: { value: "wp cab 4521" } });
+    // Round 4–7 (5): the fuel type first (the button waits with the reason under it).
+    expect((screen.getByRole("button", { name: "Register vehicle" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId("save-why").textContent).toBe("Pick the fuel type");
+    fireEvent.click(screen.getByRole("button", { name: "Diesel" }));
     fireEvent.click(screen.getByRole("button", { name: "Register vehicle" }));
     expect((await screen.findByTestId("vehicle-registered")).textContent).toContain("WP CAB-4521 is registered.");
-    expect(t.argsOf("register_vehicle")[0]).toEqual({ reg_no: "wp cab 4521" });
+    expect(t.argsOf("register_vehicle")[0]).toEqual({ reg_no: "wp cab 4521", fuel_type: "diesel" });
     // Rented: the agreement is one of its papers, its date starts from the vehicle's rented-until.
     const lease = await screen.findByTestId("doc-lease");
     await waitFor(() => expect(within(lease).getByLabelText("Expires").getAttribute("data-value")).toBe("2027-01-31"));

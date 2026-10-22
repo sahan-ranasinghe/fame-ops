@@ -14,7 +14,7 @@ import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Plate } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
-import { appendVehicles, docTone, kmLine, vehicleChoice, vehicleFilterDefs, vehiclesArgs, vehiclesEmpty, vehicleTone } from '@/office/manageLogic';
+import { appendVehicles, docTone, fuelKeys, kmLine, vehicleChoice, vehicleFilterDefs, vehiclesArgs, vehiclesEmpty, vehicleTone } from '@/office/manageLogic';
 import { vehicleFilterParam } from '@/office/overviewLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleCard, VehiclesList } from '@/office/types';
@@ -101,6 +101,9 @@ export default function VehiclesScreen() {
                     left={<Plate regNo={v.reg_no} />}
                     title={[v.make_model, v.seats ? t('office.vehicles.seats', { n: v.seats }) : ''].filter(Boolean).join(' · ') || v.reg_no}
                     line={[v.availability, v.held_by ? t('office.vehicles.heldBy', { name: v.held_by }) : v.assigned_to ? t('office.vehicles.assignedTo', { name: v.assigned_to }) : '', km.allow ? t('office.vehicles.kmOf', { used: km.used.toLocaleString('en-US'), allow: km.allow.toLocaleString('en-US') }) : ''].filter(Boolean).join(' · ')}
+                    // Round 4–7 (5): the fuel ("Diesel", "Petrol 92"), amber "Fuel type: not set" until it is set (the page has Set it).
+                    line2={v.fuel_text !== undefined ? fuelKeys(v.fuel_type, v.fuel_grade).map((k) => t(k)).join(' · ') : undefined}
+                    line2Warn={v.fuel_text !== undefined && !v.fuel_type}
                     right={<Pill text={v.active === false ? t('office.vehicles.returned') : v.status ?? ''} tone={vehicleTone(v)} />}
                     onPress={() => router.push({ pathname: '/office/vehicles/[reg]', params: { reg: v.reg_no } })}
                   />

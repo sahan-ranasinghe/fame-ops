@@ -3,6 +3,8 @@
 // Phase 7 (§28): after the first save Register vehicle stays on the page with
 // the Documents section (/vehicles/new?registered=<plate>): the files need the
 // vehicle saved first.
+// Round 4–7 (5): the fuel type is required (the save button waits with "Pick the fuel type" under it; an edit starts
+// from the vehicle's own), the grade optional and only those that fit the type.
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -10,13 +12,14 @@ import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
-import { Notice } from "../ui/basics";
+import { Chips, Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { useVehicle, vehicleDates } from "./VehicleDetail";
 import { VehicleDocumentsSection } from "./VehicleDocs";
-import { emptyVehicle, type VehicleFields, vehicleInput } from "./vehicleLogic";
+import { emptyVehicle, FUEL_GRADE_TEXT, FUEL_TYPES, fuelReason, fuelShown, gradesFor, type VehicleFields, vehicleInput, withFuelGrade, withFuelType } from "./vehicleLogic";
+import type { FuelGrade, FuelType } from "../data/types";
 import { vehiclePath } from "./Vehicles";
 import { DateField } from "../ui/DayPicker";
 
@@ -32,6 +35,12 @@ export function VehicleForm() {
   const [params] = useSearchParams();
   const registered = isNew ? params.get("registered") : null;
   const [f, setF, draft] = useFormDraft<VehicleFields>(isNew ? "vehicle-new" : "vehicle-edit", plate, emptyVehicle);
+  // An edit starts from the vehicle's own fuel type and grade (undefined while it loads).
+  const { v: current, err: currentErr } = useVehicle(plate ?? "", !isNew);
+  const now = isNew ? null : current ? { fuel_type: current.fuel_type, fuel_grade: current.fuel_grade } : currentErr ? null : undefined;
+  const fuel = fuelShown(f, now);
+  const fuelWhy = fuelReason(f, isNew, now);
+  const loadingNow = !isNew && now === undefined;
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [company, setCompany] = useState<{ open: boolean; name: string; phone: string; msg: string | null }>({ open: false, name: "", phone: "", msg: null });
@@ -49,7 +58,7 @@ export function VehicleForm() {
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
-    const v = vehicleInput(f, plate);
+    const v = vehicleInput(f, plate, now);
     if ("error" in v) {
       setMsg(v.error);
       return;
@@ -109,6 +118,20 @@ export function VehicleForm() {
               </select>
             </div>
             {field("seats", "Seats", "number", { min: 1, max: 80, inputMode: "numeric" })}
+            <div className="field" style={{ gridColumn: "1/-1" }} data-testid="fuel-type">
+              <span className="lab" id="vf-fuel">Fuel type</span>
+              <div role="radiogroup" aria-labelledby="vf-fuel">
+                <Chips<FuelType | ""> options={FUEL_TYPES.map(([k, l]) => [k, l])} value={fuel.type ?? ""} onChange={(k) => { if (k) setF((x) => ({ ...x, ...withFuelType(x, k, now) })); }} />
+              </div>
+            </div>
+            {gradesFor(fuel.type).length > 0 && (
+              <div className="field" style={{ gridColumn: "1/-1" }} data-testid="fuel-grade">
+                <span className="lab" id="vf-grade">Grade (optional)</span>
+                <div role="radiogroup" aria-labelledby="vf-grade">
+                  <Chips<FuelGrade | ""> options={[["", "Not set"], ...gradesFor(fuel.type).map((g): [FuelGrade, string] => [g, FUEL_GRADE_TEXT[g]])]} value={fuel.grade ?? ""} onChange={(k) => setF((x) => ({ ...x, ...withFuelGrade(x, k, now) }))} />
+                </div>
+              </div>
+            )}
             {field("allow", "Km allowed per month", "number", { min: 0, inputMode: "numeric" })}
             {field("odo", "Odometer now (km)", "number", { min: 0, inputMode: "numeric" })}
             {field("rent", "Monthly rent (LKR)", "number", { min: 0, inputMode: "decimal" })}
@@ -171,7 +194,11 @@ export function VehicleForm() {
             <p className="muted small" style={{ margin: 0 }}>The revenue licence, insurance, emission test, CR and the rent or lease agreement are added here after Register vehicle: the files need the vehicle saved first.</p>
           </div>
         )}
-        <StickyActions><button className="btn primary" type="submit" disabled={busy}>{isNew ? "Register vehicle" : "Save changes"}</button></StickyActions>
+        <StickyActions>
+          <button className="btn primary" type="submit" disabled={busy || !!fuelWhy || loadingNow}>{isNew ? "Register vehicle" : "Save changes"}</button>
+          {/* The one reason the button waits (docs/phase8-plan.md §16): the fuel type, or the vehicle still loading. */}
+          {(fuelWhy || loadingNow) && <p className="hint btn-why" data-testid="save-why">{fuelWhy ?? "Loading the vehicle…"}</p>}
+        </StickyActions>
       </form>
     </section>
   );

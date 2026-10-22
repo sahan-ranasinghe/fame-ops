@@ -17,7 +17,7 @@ import { EmptyLine, ListHeader, SkeletonRows, usePagedList } from "../ui/ListKit
 import { ListWithDetail } from "../ui/Page";
 import { ListFooter, ListStale, ListWaiting, SearchBox, useSearchBox } from "./listLocal";
 import { filterFromWord, VEHICLE_FILTER_WORDS, VEHICLE_FILTERS as FILTERS, type VehicleFilter as Filter, withParam } from "./overviewLinks";
-import { docTone } from "./vehicleLogic";
+import { docTone, fuelLine } from "./vehicleLogic";
 import { dayWords } from "../lib/when";
 
 export function DocChip({ name, d }: { name: string; d?: { chip?: string; expiry?: string } }) {
@@ -37,6 +37,22 @@ export function MissingDocs({ v }: { v: Pick<VehicleCard, "documents_missing" | 
 }
 
 export const vehiclePath = (reg: string) => `/vehicles/${encodeURIComponent(reg)}`;
+
+/**
+ * Round 4–7 (5): the vehicle's fuel ("Petrol 92", "Diesel"), or "Fuel type: not set" in amber with Set it (the edit page)
+ * for someone who may change the vehicle. Nothing from an older answer.
+ */
+export function FuelText({ v, edit }: { v: Pick<VehicleCard, "reg_no" | "fuel_type" | "fuel_text">; edit: boolean }) {
+  const line = fuelLine(v);
+  if (!line) return null;
+  if (!line.notSet) return <span data-testid="fuel-text">{line.text}</span>;
+  return (
+    <span className="status warn" data-testid="fuel-text">
+      {line.text}
+      {edit && <> · <Link to={`${vehiclePath(v.reg_no)}/edit`} onClick={(e) => e.stopPropagation()}>Set it</Link></>}
+    </span>
+  );
+}
 
 /** The list's query key. */
 export const VEHICLES_QUERY = "vehicles";
@@ -85,6 +101,7 @@ export function Vehicles() {
   const setFilter = (f: Filter) => setParams((p) => withParam(p, "filter", VEHICLE_FILTER_WORDS[f]), { replace: true });
   const box = useSearchBox();
   const canRegister = me.tools.includes("register_vehicle");
+  const canEdit = me.tools.includes("update_vehicle");
   const list = usePagedList<VehicleCard, VehiclesList>(VEHICLES_QUERY, "list_vehicles", vehiclesArgs(filter, box.search), (d) => d.vehicles,
     { every: 60000, enabled: !noConnector });
   const q = list.query;
@@ -126,7 +143,7 @@ export function Vehicles() {
                         const st = String(v.status || "");
                         return (
                           <tr key={v.reg_no} className="click" data-testid="vehicle-row" onClick={() => navigate({ pathname: vehiclePath(v.reg_no), search: params.toString() ? `?${params}` : "" })}>
-                            <td data-label="Vehicle"><span><span className="with-photo"><VehicleThumb src={v.thumb_url} /><span className="plate">{v.reg_no}</span></span><div className="sub" style={{ marginTop: 6 }}>{joinDots([v.make_model, v.seats ? `${v.seats} seats` : "", v.type && !v.make_model ? v.type : ""])}</div></span></td>
+                            <td data-label="Vehicle"><span><span className="with-photo"><VehicleThumb src={v.thumb_url} /><span className="plate">{v.reg_no}</span></span><div className="sub" style={{ marginTop: 6 }}>{joinDots([v.make_model, v.seats ? `${v.seats} seats` : "", v.type && !v.make_model ? v.type : "", v.fuel_type ? v.fuel_text : ""])}</div>{!v.fuel_type && v.fuel_text && <div className="sub"><FuelText v={v} edit={canEdit} /></div>}</span></td>
                             <td data-label="Rented from"><span>{v.rented_from || "—"}{v.rent_until && <div className="sub">Until {dayWords(v.rent_until, { inline: true })}</div>}</span></td>
                             <td data-label="Regular driver">{v.regular_driver || "—"}</td>
                             <td data-label="Assigned to">

@@ -1,12 +1,45 @@
 import { describe, expect, it } from "vitest";
 import { emptyDriver, randomPin, validateNewDriver } from "./driverLogic";
-import { docTone, emptyVehicle, vehicleInput } from "./vehicleLogic";
+import { docTone, emptyVehicle, fuelLine, fuelReason, fuelShown, gradesFor, vehicleInput, withFuelGrade, withFuelType } from "./vehicleLogic";
 
 describe("Vehicle form", () => {
   it("needs a plate to register, and sends only what was filled in", () => {
     expect(vehicleInput(emptyVehicle(), null)).toEqual({ error: "Add the number plate." });
-    const v = vehicleInput({ ...emptyVehicle(), reg: " WP CAB-4521 ", model: "Toyota HiAce", type: "van", seats: "14", rent: "180000", until: "2027-03-31", allow: "3000" }, null);
-    expect(v).toEqual({ tool: "register_vehicle", input: { reg_no: "WP CAB-4521", make_model: "Toyota HiAce", vehicle_type: "van", seats: 14, monthly_rent_lkr: 180000, rent_until: "2027-03-31", monthly_km_allowance: 3000 } });
+    const v = vehicleInput({ ...emptyVehicle(), reg: " WP CAB-4521 ", model: "Toyota HiAce", type: "van", seats: "14", rent: "180000", until: "2027-03-31", allow: "3000", fuelType: "diesel" }, null);
+    expect(v).toEqual({ tool: "register_vehicle", input: { reg_no: "WP CAB-4521", make_model: "Toyota HiAce", vehicle_type: "van", seats: 14, monthly_rent_lkr: 180000, rent_until: "2027-03-31", monthly_km_allowance: 3000, fuel_type: "diesel" } });
+  });
+  // Round 4–7, feature 5: the fuel type is required on register and on edit; the grade optional and only one that fits.
+  it("needs the fuel type to register; the grade only when it fits the type", () => {
+    const f = { ...emptyVehicle(), reg: "WP CAB-4521" };
+    expect(vehicleInput(f, null)).toEqual({ error: "Pick the fuel type." });
+    expect(fuelReason(f, true, null)).toBe("Pick the fuel type");
+    expect(vehicleInput({ ...f, fuelType: "petrol", fuelGrade: "petrol_95" }, null)).toEqual({ tool: "register_vehicle", input: { reg_no: "WP CAB-4521", fuel_type: "petrol", fuel_grade: "petrol_95" } });
+    expect(vehicleInput({ ...f, fuelType: "electric", fuelGrade: "petrol_95" }, null)).toEqual({ tool: "register_vehicle", input: { reg_no: "WP CAB-4521", fuel_type: "electric" } });
+    expect(gradesFor("hybrid")).toEqual(["petrol_92", "petrol_95"]);
+    expect(gradesFor("diesel")).toEqual(["auto_diesel", "super_diesel"]);
+    expect(gradesFor("electric")).toEqual([]);
+  });
+  it("an edit starts from the vehicle's own fuel, sends only what changed, and waits for a type when the vehicle has none", () => {
+    const now = { fuel_type: "petrol" as const, fuel_grade: "petrol_92" as const };
+    const f = emptyVehicle();
+    expect(fuelShown(f, now)).toEqual({ type: "petrol", grade: "petrol_92" });
+    expect(vehicleInput({ ...f, seats: "9" }, "WP CAB-4521", now)).toEqual({ tool: "update_vehicle", input: { reg_no: "WP CAB-4521", seats: 9 } });
+    // A new type drops a grade that no longer fits; a grade that still fits stays.
+    const diesel = { ...f, ...withFuelType(f, "diesel", now) };
+    expect(fuelShown(diesel, now)).toEqual({ type: "diesel", grade: null });
+    expect(vehicleInput(diesel, "WP CAB-4521", now)).toEqual({ tool: "update_vehicle", input: { reg_no: "WP CAB-4521", fuel_type: "diesel", fuel_grade: null } });
+    expect(fuelShown({ ...f, ...withFuelType(f, "hybrid", now) }, now).grade).toBe("petrol_92");
+    // Not set (or the picked grade again) clears it.
+    expect(vehicleInput({ ...f, ...withFuelGrade(f, "", now) }, "WP CAB-4521", now)).toEqual({ tool: "update_vehicle", input: { reg_no: "WP CAB-4521", fuel_grade: null } });
+    // A vehicle with no fuel type: the edit waits for one (not while it loads).
+    expect(fuelReason(f, false, { fuel_type: undefined })).toBe("Pick the fuel type");
+    expect(vehicleInput({ ...f, seats: "9" }, "WP CAB-4521", { fuel_type: undefined })).toEqual({ error: "Pick the fuel type." });
+    expect(fuelReason(f, false, undefined)).toBeNull();
+  });
+  it("says the vehicle's fuel, or Fuel type: not set", () => {
+    expect(fuelLine({ fuel_type: "petrol", fuel_text: "Petrol 92" })).toEqual({ text: "Petrol 92", notSet: false });
+    expect(fuelLine({ fuel_text: "Fuel type: not set" })).toEqual({ text: "Fuel type: not set", notSet: true });
+    expect(fuelLine({})).toBeNull();
   });
   it("an update with nothing filled in is refused; booleans and dates go through as the tool expects", () => {
     expect(vehicleInput(emptyVehicle(), "WP CAB-4521")).toEqual({ error: "Nothing to change yet." });

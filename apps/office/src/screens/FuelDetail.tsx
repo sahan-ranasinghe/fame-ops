@@ -13,7 +13,7 @@ import { joinDots, num } from "../lib/format";
 import { errText } from "../transport/errors";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { PageTop } from "../ui/Page";
-import { checklistWords, clockOf, megabytes, pieceAt, videoChip, videoTone } from "./fuelLogic";
+import { amountText, checklistWords, clockOf, megabytes, pieceAt, videoChip, videoTone } from "./fuelLogic";
 import { canOpenTask } from "../transport/types";
 import { whenText } from "../lib/when";
 
@@ -121,7 +121,9 @@ export function FuelDetail() {
       <div className="card card-b">
         <dl className="kv">
           <div><dt>Litres</dt><dd className="num">{e.litres != null ? num(e.litres) : "—"}</dd></div>
-          <div><dt>Amount</dt><dd className="num">{e.lkr != null ? `LKR ${num(e.lkr)}` : "—"}</dd></div>
+          {/* Round 4–7: what was filled (when the driver said), and no amount given is "–", never LKR 0. */}
+          <div><dt>Fuel</dt><dd>{e.fuel ?? "—"}</dd></div>
+          <div><dt>Amount</dt><dd className="num">{amountText(e.lkr)}</dd></div>
           <div><dt>Odometer</dt><dd className="num">{e.odometer_km != null ? `${num(e.odometer_km)} km` : "—"}</dd></div>
           <div><dt>Receipt</dt><dd>{e.receipt && e.receipt.startsWith("http") ? <a className="btn small" href={e.receipt} target="_blank" rel="noopener">Photo</a> : e.receipt ?? "—"}</dd></div>
           <div style={{ gridColumn: "1/-1" }}><dt>Steps shown</dt><dd>{v.timeline ?? (checklistWords(v.checklist, items) || "—")}</dd></div>

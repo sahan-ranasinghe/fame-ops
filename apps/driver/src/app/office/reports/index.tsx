@@ -21,7 +21,7 @@ import { presetRange } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
 import {
   appendDuty, appendFuel, clockOut, dutyArgs, heldLine, hoursText, mileageView, outHowKey, outsideKm, rangeArgs, rangeFits, REPORT_MAX_DAYS, type ReportSection, reportSections, rowCells,
-  clockOf, linksStale, reportFilterArgs, reportFilterDefs, videoChip, videoLine, videoPieces,
+  clockOf, linksStale, reportFilterArgs, reportFilterDefs, videoChip, videoLine, videoPieces, amountsOf, amountWords, fuelTextParts,
 } from '@/office/manageLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriversList, DutyLog, FleetError, FuelList, MileageSummary, Row, VehiclesList } from '@/office/types';
@@ -167,6 +167,10 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
   const { api, signOut } = useOffice();
   const q = useTool<FuelList>('list_fuel', rangeArgs(from, to, { ...by, limit: 25 }));
   const d = q.data;
+  const amountsLine = (x: FuelList['totals']) => {
+    const a = amountsOf(x);
+    return [a.lkr === '–' ? '–' : `LKR ${a.lkr}`, a.without ? t(a.without === 1 ? 'office.fuel.withoutAmountOne' : 'office.fuel.withoutAmount', { n: a.without }) : ''].filter(Boolean).join(' · ');
+  };
   // When the first page's links were handed out: every new answer (a load, a reload) resets it; a page added by Load more
   // is fresher than the first, so it leaves the time alone (the oldest link on screen decides).
   const loadedAt = useRef(0);
@@ -220,10 +224,11 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
         <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             <Tile label={t('office.reports.fills')} value={n(d.totals.entries)} />
-            <Tile label={t('office.reports.litres')} value={n(d.totals.litres)} sub={`LKR ${n(d.totals.lkr)}`} />
+            {/* Round 4–7 (§33.6): the known amounts added up, and how many fills have none ("–", never LKR 0). */}
+            <Tile label={t('office.reports.litres')} value={n(d.totals.litres)} sub={amountsLine(d.totals)} />
             <Tile label={t('office.reports.videos')} value={n(d.totals.videos)} sub={[d.totals.videos_waiting ? t('office.reports.videosWaiting', { n: d.totals.videos_waiting }) : '', d.totals.videos_missing ? t('office.reports.videosMissing', { n: d.totals.videos_missing }) : ''].filter(Boolean).join(' · ') || undefined} tone={d.totals.videos_missing ? 'amber' : undefined} />
           </View>
-          {d.month_totals && <Txt variant="muted" size={15}>{t('office.reports.fuelMonthLine', { month: monthWords(t, d.month), n: n(d.month_totals.entries), litres: n(d.month_totals.litres), lkr: n(d.month_totals.lkr) })}</Txt>}
+          {d.month_totals && <Txt variant="muted" size={15}>{[t('office.reports.fuelMonthLine', { month: monthWords(t, d.month), n: n(d.month_totals.entries), litres: n(d.month_totals.litres), lkr: amountsOf(d.month_totals).lkr }), d.month_totals.without_amount ? t(d.month_totals.without_amount === 1 ? 'office.fuel.withoutAmountOne' : 'office.fuel.withoutAmount', { n: d.month_totals.without_amount }) : ''].filter(Boolean).join(' · ')}</Txt>}
           <Section title={t('office.reports.fuel')} count={d.total ?? d.entries.length}>
             {d.entries.length === 0 && <ListEmpty text={t('office.reports.noFills')} />}
             {d.entries.map((e, i) => {
@@ -237,7 +242,8 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
                     <View style={{ flex: 1 }} />
                     <Pill text={t(`office.reports.video_${chip.key}`)} tone={chip.tone} size={12} />
                   </View>
-                  <Txt variant="muted" size={15}>{[e.driver, e.litres != null ? `${n(e.litres)} ${t('office.reports.litres')}` : '', e.lkr != null ? `LKR ${n(e.lkr)}` : '', e.odometer_km != null ? `${n(e.odometer_km)} km` : '', videoLine(e.video)].filter(Boolean).join(' · ')}</Txt>
+                  {/* Round 4–7: what was filled (when the driver said) and the amount, "LKR –" when none was given. */}
+                  <Txt variant="muted" size={15}>{[e.driver, fuelTextParts(e.fuel).map((x) => (x.key ? t(x.key) : x.text)).join(' · '), e.litres != null ? `${n(e.litres)} ${t('office.reports.litres')}` : '', amountWords(e.lkr), e.odometer_km != null ? `${n(e.odometer_km)} km` : '', videoLine(e.video)].filter(Boolean).join(' · ')}</Txt>
                   {e.video.timeline ? <Txt variant="small">{e.video.timeline}</Txt> : null}
                   {videoPieces(e.video).length > 0 && (
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

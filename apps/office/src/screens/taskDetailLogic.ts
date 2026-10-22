@@ -113,3 +113,20 @@ export function needsDriverText(t: Pick<TaskDetail["task"], "needs_driver" | "dr
     : nd.reason_text ?? "";
   return joinDots([`Needs a driver since ${whenText(nd.since, { inline: true })}`, why]);
 }
+
+/**
+ * Round 4–7 (5): the driver's fuel card on the task page. The answer once the card was shown at Start task ("Enough fuel ·
+ * 07:42", "Fills up on the way · 07:42", or "Not answered"); before the start only the estimate ("About 180 km · roughly
+ * 13–17 L diesel (approx.)"), which the driver is shown then. `tone` warn = they fill up on the way.
+ */
+export function fuelCardWords(
+  card: NonNullable<TaskDetail["task"]["fuel_card"]>,
+  started: boolean,
+): { answer?: string; tone: "" | "warn" | "muted"; estimate?: string } {
+  const estimate = card.estimate_text || undefined;
+  if (card.answer) {
+    return { answer: joinDots([card.answer_text, card.answered_at ?? ""]), tone: card.answer === "fill_on_way" ? "warn" : "", estimate };
+  }
+  if (started) return { answer: card.answer_text || "Not answered", tone: "muted", estimate };
+  return { tone: "", estimate };
+}

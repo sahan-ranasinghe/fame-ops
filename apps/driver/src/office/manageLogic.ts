@@ -6,7 +6,7 @@
 
 import type { FilterDef, FilterValues } from '@/lib/patterns/filterLogic';
 
-import type { DutyLog, DutyPeriod, FuelList, MileageSummary, MileageTotals, Row, VehicleCard, VehiclesList, VideoCard } from './types';
+import type { DutyLog, DutyPeriod, FuelGrade, FuelList, FuelType, MileageSummary, MileageTotals, Row, VehicleCard, VehiclesList, VideoCard } from './types';
 
 // ---------------------------------------------------------------------------
 // Vehicles
@@ -17,6 +17,80 @@ export const VEHICLE_FILTERS: readonly VehicleFilter[] = ['all', 'on_task', 'ava
 export const VEHICLE_TYPES = ['car', 'van', 'double_cab', 'lorry', 'other'] as const;
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
 export const VEHICLES_LIMIT = 25;
+
+// Round 4–7, feature 5 (phase8-plan.md §33.2): the fuel type (required on register and on edit; an edit keeps the vehicle's
+// own when it has one) and the grade (optional, only one that fits the type). The site's vehicleLogic.ts has the same rules;
+// the server's fuelCard.ts the same lists. Words are keys (office.fuel.*).
+export const FUEL_TYPES: readonly FuelType[] = ['petrol', 'diesel', 'hybrid', 'electric'];
+export const FUEL_GRADES: readonly FuelGrade[] = ['petrol_92', 'petrol_95', 'auto_diesel', 'super_diesel'];
+
+/** The grades a fuel type takes: petrol and a hybrid a petrol grade, diesel a diesel one, electric (or none) none. */
+export function gradesFor(type: FuelType | '' | null | undefined): FuelGrade[] {
+  if (type === 'petrol' || type === 'hybrid') return ['petrol_92', 'petrol_95'];
+  if (type === 'diesel') return ['auto_diesel', 'super_diesel'];
+  return [];
+}
+
+/** What the vehicle has now (the edit form keeps it unless something else is picked). */
+export type FuelNow = Pick<VehicleCard, 'fuel_type' | 'fuel_grade'>;
+
+/** The fuel type and grade the form shows: what was picked, else the vehicle's own; a grade that does not fit the type is none. */
+export function fuelShown(f: Pick<VehicleFields, 'fuelType' | 'fuelGrade'>, now?: FuelNow | null): { type: FuelType | null; grade: FuelGrade | null } {
+  const type = f.fuelType || now?.fuel_type || null;
+  const picked = f.fuelGrade === 'none' ? null : f.fuelGrade || now?.fuel_grade || null;
+  return { type, grade: picked && gradesFor(type).includes(picked) ? picked : null };
+}
+
+/** A fuel type picked: a grade that no longer fits it goes ("none" on an edit, so the vehicle's own is not kept either). */
+export function withFuelType(f: Pick<VehicleFields, 'fuelType' | 'fuelGrade'>, type: FuelType, now?: FuelNow | null): Pick<VehicleFields, 'fuelType' | 'fuelGrade'> {
+  const was = fuelShown(f, now).grade;
+  return { fuelType: type, fuelGrade: was && gradesFor(type).includes(was) ? f.fuelGrade ?? '' : now?.fuel_grade ? 'none' : '' };
+}
+
+/** A grade picked, or the picked one tapped again / Not set (no grade). */
+export function withFuelGrade(f: Pick<VehicleFields, 'fuelType' | 'fuelGrade'>, grade: FuelGrade | '', now?: FuelNow | null): Pick<VehicleFields, 'fuelGrade'> {
+  if (!grade || fuelShown(f, now).grade === grade) return { fuelGrade: now?.fuel_grade ? 'none' : '' };
+  return { fuelGrade: grade };
+}
+
+/** The save waits for a fuel type (register always; an edit once the vehicle is known and it has none): true = it waits. */
+export function fuelMissing(f: Pick<VehicleFields, 'fuelType' | 'fuelGrade'>, isNew: boolean, now?: FuelNow | null): boolean {
+  if (!isNew && now === undefined) return false;
+  return !fuelShown(f, now).type;
+}
+
+const FUEL_TEXT_KEY: Record<string, string> = {
+  Petrol: 'office.fuel.type_petrol',
+  Diesel: 'office.fuel.type_diesel',
+  'Hybrid (petrol)': 'office.fuel.type_hybrid',
+  Electric: 'office.fuel.type_electric',
+  'Petrol 92': 'office.fuel.grade_petrol_92',
+  'Petrol 95': 'office.fuel.grade_petrol_95',
+  'Auto Diesel': 'office.fuel.grade_auto_diesel',
+  'Super Diesel': 'office.fuel.grade_super_diesel',
+};
+
+/** A fill's fuel as the server words it ("Petrol 92", "Hybrid (petrol) · Petrol 95"), each part a key; an unknown part as it came. */
+export function fuelTextParts(text: string | null | undefined): { key?: string; text: string }[] {
+  if (!text) return [];
+  return text.split(' · ').map((part) => (FUEL_TEXT_KEY[part] ? { key: FUEL_TEXT_KEY[part], text: part } : { text: part }));
+}
+
+/** Round 4–7 (§33.6): a fill's amount, "LKR 10,545", or "LKR –" when the driver gave none (never LKR 0). */
+export const amountWords = (lkr: number | null | undefined): string => `LKR ${lkr != null ? lkr.toLocaleString('en-US') : '–'}`;
+
+/** The money of a set of fills: the known amounts added up ("LKR 120,500", "–" when no fill has one) and how many have none. */
+export function amountsOf(t: { entries: number; lkr: number; without_amount?: number }): { lkr: string; without: number } {
+  const without = t.without_amount ?? 0;
+  return { lkr: t.entries > 0 && without === t.entries ? '–' : t.lkr.toLocaleString('en-US'), without };
+}
+
+/** The vehicle's fuel as keys to join with " · ": "Petrol 92", "Diesel", "Hybrid (petrol) · Petrol 95", "Fuel type: not set". */
+export function fuelKeys(type: FuelType | null | undefined, grade?: FuelGrade | null): string[] {
+  if (!type) return ['office.fuel.notSet'];
+  if (grade && gradesFor(type).includes(grade)) return type === 'hybrid' ? ['office.fuel.type_hybrid', `office.fuel.grade_${grade}`] : [`office.fuel.grade_${grade}`];
+  return [`office.fuel.type_${type}`];
+}
 
 /** list_vehicles' input: the filter, the search when typed, the page. */
 export function vehiclesArgs(filter: VehicleFilter, search: string, cursor?: string): Record<string, unknown> {
@@ -114,20 +188,26 @@ export interface VehicleFields {
   /** The custodian: an office person's name or e-mail; "none" clears it. */
   custodian: string;
   custodianNote: string;
+  /** Round 4–7 (5): "" = not picked (register) or the vehicle's own (edit). */
+  fuelType: FuelType | '';
+  /** "" = none picked (register) or the vehicle's own (edit); "none" = no grade. */
+  fuelGrade: FuelGrade | '' | 'none';
 }
 
 export const emptyVehicle = (): VehicleFields => ({
   reg: '', model: '', type: '', seats: '', allow: '', odo: '', rent: '', company: '', until: '', driver: '',
   svcint: '', svclast: '', svcdate: '', garage: '', lic: '', ins: '', emi: '', ingarage: '', active: '', custodian: '', custodianNote: '',
+  fuelType: '', fuelGrade: '',
 });
 
 export const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
 
 /**
  * regNo null = register a new vehicle; otherwise update that plate. Only filled-in fields go (an update keeps the rest).
- * Errors are keys: plate (no plate), date (a date not YYYY-MM-DD, with the field), nothing (an update with no field).
+ * Errors are keys: plate (no plate), fuel (no fuel type), date (a date not YYYY-MM-DD, with the field), nothing (an update
+ * with no field). `now`: the vehicle's fuel as it is (an edit; undefined = not known yet: only a picked type or grade goes).
  */
-export function vehicleInput(f: VehicleFields, regNo: string | null): { error: 'plate' | 'date' | 'number' | 'nothing'; field?: keyof VehicleFields } | { input: Record<string, unknown>; tool: 'register_vehicle' | 'update_vehicle' } {
+export function vehicleInput(f: VehicleFields, regNo: string | null, now?: FuelNow | null): { error: 'plate' | 'fuel' | 'date' | 'number' | 'nothing'; field?: keyof VehicleFields } | { input: Record<string, unknown>; tool: 'register_vehicle' | 'update_vehicle' } {
   const t = (s: string) => s.trim();
   const input: Record<string, unknown> = {};
   if (regNo === null) {
@@ -136,6 +216,8 @@ export function vehicleInput(f: VehicleFields, regNo: string | null): { error: '
   } else {
     input.reg_no = regNo;
   }
+  if (fuelMissing(f, regNo === null, now)) return { error: 'fuel' };
+  const fuel = fuelShown(f, now);
   for (const k of ['seats', 'allow', 'odo', 'svcint', 'svclast'] as const) {
     if (t(f[k]) !== '' && !/^\d+$/.test(t(f[k]).replace(/[\s,]/g, ''))) return { error: 'number', field: k };
   }
@@ -164,6 +246,16 @@ export function vehicleInput(f: VehicleFields, regNo: string | null): { error: '
   if (f.active) input.active = f.active === 'true';
   if (t(f.custodian)) input.custodian = t(f.custodian).toLowerCase() === 'none' ? null : t(f.custodian);
   if (t(f.custodianNote)) input.custodian_note = t(f.custodianNote).toLowerCase() === 'none' ? null : t(f.custodianNote);
+  if (regNo === null) {
+    input.fuel_type = fuel.type;
+    if (fuel.grade) input.fuel_grade = fuel.grade;
+  } else if (now === undefined) {
+    if (f.fuelType) input.fuel_type = f.fuelType;
+    if (f.fuelGrade) input.fuel_grade = f.fuelGrade === 'none' ? null : f.fuelGrade;
+  } else {
+    if (fuel.type && fuel.type !== (now?.fuel_type ?? null)) input.fuel_type = fuel.type;
+    if (fuel.grade !== (now?.fuel_grade ?? null)) input.fuel_grade = fuel.grade;
+  }
   if (regNo !== null && Object.keys(input).length === 1) return { error: 'nothing' };
   return { input, tool: regNo === null ? 'register_vehicle' : 'update_vehicle' };
 }

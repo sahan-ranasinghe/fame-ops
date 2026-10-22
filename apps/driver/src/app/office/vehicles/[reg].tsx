@@ -16,7 +16,7 @@ import { Image, Linking, Pressable, View } from 'react-native';
 import { PhotoPick } from '@/components/office/PhotoPick';
 import { VehicleChecksSection } from '@/components/office/VehicleChecks';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
-import { docTone, kmLine, vehicleTone } from '@/office/manageLogic';
+import { docTone, fuelKeys, kmLine, vehicleTone } from '@/office/manageLogic';
 import { uploadToTicket, type Shot } from '@/office/media';
 import { canSetVehiclePhoto, canUploadDocs, documentRows, ticketOf } from '@/office/mediaLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -120,6 +120,18 @@ export default function VehicleScreen() {
             {check ? <VehicleChecksSection plate={v.reg_no} today={v.check_today} focus={check} /> : null}
             <View style={{ backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 14 }}>
               {fact(t('office.vehicles.typeSeats'), [v.type ? t(`office.vehicles.type_${v.type}`) : '', v.seats ? t('office.vehicles.seats', { n: v.seats }) : ''].filter(Boolean).join(' · ') || null)}
+              {/* Round 4–7 (5): the fuel type and grade; amber "Fuel type: not set" with Set it (the form) for someone who may edit. */}
+              {v.fuel_text !== undefined && (
+                <View style={{ gap: 2 }} testID="vehicle-fuel">
+                  <Txt variant="label" color={colors.muted}>{t('office.fuel.label').toUpperCase()}</Txt>
+                  <Txt variant="strong" color={v.fuel_type ? colors.ink : colors.amberText}>{fuelKeys(v.fuel_type, v.fuel_grade).map((k) => t(k)).join(' · ')}</Txt>
+                  {!v.fuel_type && canEdit ? (
+                    <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/office/vehicles/form', params: { reg } })} style={{ minHeight: 44, justifyContent: 'center' }} testID="fuel-set-it">
+                      <Txt variant="strong" size={15} color={colors.blue}>{t('office.fuel.setIt')}</Txt>
+                    </Pressable>
+                  ) : null}
+                </View>
+              )}
               {fact(t('office.vehicles.rentedFrom'), v.rented_from, v.rent_until ? t('office.vehicles.until', { date: dateWords(t, v.rent_until) }) : null)}
               {fact(t('office.vehicles.monthlyRent'), v.monthly_rent_lkr != null ? `LKR ${Number(v.monthly_rent_lkr).toLocaleString('en-US')}` : null)}
               {fact(t('office.vehicles.regularDriver'), v.regular_driver)}

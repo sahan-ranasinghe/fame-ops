@@ -14,7 +14,7 @@ import { PageTop } from "../ui/Page";
 import { VehiclePhotoCard } from "./PhotoUpload";
 import { VehicleChecksSection } from "./VehicleChecks";
 import { VehicleDocumentsSection } from "./VehicleDocs";
-import { DocChip, MissingDocs, vehiclePath, VehiclesShown } from "./Vehicles";
+import { DocChip, FuelText, MissingDocs, vehiclePath, VehiclesShown } from "./Vehicles";
 import { dayWords } from "../lib/when";
 
 /**
@@ -22,10 +22,10 @@ import { dayWords } from "../lib/when";
  * list_vehicles' search (one page; the active vehicles, then the returned ones) once the board is not loading. Hotfix 3
  * (L3): the board shows a page at a time, so the whole list is never asked for one vehicle.
  */
-export function useVehicle(reg: string): { v: VehicleCard | undefined; err: string | null } {
+export function useVehicle(reg: string, enabled = true): { v: VehicleCard | undefined; err: string | null } {
   const { transport } = useFleet();
   const board = useContext(VehiclesShown);
-  const fromBoard = board?.rows.find((x) => x.reg_no === reg);
+  const fromBoard = enabled ? board?.rows.find((x) => x.reg_no === reg) : undefined;
   const [v, setV] = useState<VehicleCard | undefined>(fromBoard);
   const [err, setErr] = useState<string | null>(null);
   const boardLoading = !!board?.loading;
@@ -35,7 +35,7 @@ export function useVehicle(reg: string): { v: VehicleCard | undefined; err: stri
       setErr(null);
       return;
     }
-    if (boardLoading) return; // the board's answer arrives through fromBoard
+    if (boardLoading || !enabled) return; // the board's answer arrives through fromBoard
     let alive = true;
     const find = async (filter: "all" | "inactive") =>
       (await transport.call<VehiclesList>("list_vehicles", { filter, search: reg, limit: 25 })).vehicles.find((x) => x.reg_no === reg);
@@ -47,7 +47,7 @@ export function useVehicle(reg: string): { v: VehicleCard | undefined; err: stri
       })
       .catch((e) => { if (alive) setErr(errText(e as FleetError)[0]); });
     return () => { alive = false; };
-  }, [reg, transport, fromBoard, boardLoading]);
+  }, [reg, transport, fromBoard, boardLoading, enabled]);
   return { v, err };
 }
 
@@ -88,6 +88,8 @@ export function VehicleDetail() {
         <dl className="kv">
           <div><dt>Status</dt><dd><Pill tone={/task/i.test(String(v.status)) ? "live" : /garage/i.test(String(v.status)) ? "warn" : ""}>{v.status || "—"}</Pill>{v.availability && <div className={`sub status ${vehicleAvailabilityTone(v.availability)}`}>{v.availability}</div>}</dd></div>
           <div><dt>Type · seats</dt><dd>{joinDots([v.type, v.seats ? `${v.seats} seats` : ""]) || "—"}</dd></div>
+          {/* Round 4–7 (5): the fuel type and grade (the fuel card at Start task); amber with Set it until it is set. */}
+          {v.fuel_text !== undefined && <div><dt>Fuel</dt><dd><FuelText v={v} edit={canEdit} /></dd></div>}
           <div><dt>Rented from</dt><dd>{v.rented_from || "—"}{v.rent_until && <div className="sub">until {dayWords(v.rent_until, { inline: true })}</div>}</dd></div>
           <div><dt>Monthly rent</dt><dd>{v.monthly_rent_lkr != null ? `LKR ${num(v.monthly_rent_lkr)}` : "—"}</dd></div>
           <div><dt>Regular driver</dt><dd>{v.regular_driver || "—"}</dd></div>

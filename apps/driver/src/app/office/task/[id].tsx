@@ -30,10 +30,10 @@ import { SavedNotice } from '@/components/office/SavedNotice';
 import { Button, Mono, Txt } from '@/components/ui';
 import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
-import { DETAIL_LINKS_FRESH_MS, type LinkKey, linkOf } from '@/office/taskDetailLogic';
+import { DETAIL_LINKS_FRESH_MS, fuelCardParts, type LinkKey, linkOf } from '@/office/taskDetailLogic';
 import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
 import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStatusKey } from '@/office/taskLogic';
-import type { FleetError, TaskDetail } from '@/office/types';
+import type { FleetError, FuelCard, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { sentenceText } from '@/office/statusWords';
@@ -231,6 +231,8 @@ export default function TaskDetailScreen() {
         )}
         {/* Round 4–7 (4): the vehicle check of the task's day by its person, with the photos. */}
         {task?.vehicle_checks?.length ? <Section title={t('office.checks.title')}><TaskCheckLines checks={task.vehicle_checks} /></Section> : null}
+        {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none). */}
+        {task?.fuel_card ? <FuelCardSection card={task.fuel_card} started={!!task.started || task.status === 'in_progress' || task.status === 'completed'} /> : null}
         {p && task && <TripPurposeCard p={p} />}
         {p && stops.length > 0 && (
           <Section title={t('office.task.stops')}>
@@ -334,6 +336,23 @@ export default function TaskDetailScreen() {
         onClose={() => setReopening(false)}
       />
     </View>
+  );
+}
+
+/** Round 4–7 (5): "Enough fuel · 07:42" with the estimate under it; before the start the estimate alone. */
+function FuelCardSection({ card, started }: { card: FuelCard; started: boolean }) {
+  const { t } = useApp();
+  const w = fuelCardParts(card, started, t);
+  if (!w.answer && !w.estimate) return null;
+  return (
+    <Section title={t('office.fuel.label')}>
+      <View style={{ gap: 2 }} testID="fuel-card">
+        {w.answer
+          ? <Txt variant="strong" color={w.tone === 'amber' ? colors.amberText : w.tone === 'muted' ? colors.muted : colors.ink}>{w.answer}</Txt>
+          : <Txt variant="muted" size={15}>{t('office.fuel.askedAtStart')}</Txt>}
+        {w.estimate ? <Txt variant="small">{w.estimate}</Txt> : null}
+      </View>
+    </Section>
   );
 }
 
