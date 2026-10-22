@@ -1369,7 +1369,9 @@ a.pt-row:hover { background: var(--surface-2) }
 
 /* The task page: one column in a panel; two when it is wide (the map and the stops left, the people and the actions right). */
 .td-layout { container-type: inline-size }
-@container (min-width: 900px) {
+/* A wide desktop gives an open task more of the page (the board keeps a column), so the two columns fit beside it. */
+@media (min-width: 1360px) { .split.has-detail:has(> .split-detail .td-layout) { grid-template-columns: minmax(360px, 0.75fr) minmax(0, 1.25fr) } }
+@container (min-width: 660px) {
   .td-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "left top" "left rest"; column-gap: 18px; align-items: start }
   .td-top { grid-area: top } .td-left { grid-area: left } .td-rest { grid-area: rest }
 }
