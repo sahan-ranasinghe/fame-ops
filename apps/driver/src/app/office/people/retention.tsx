@@ -1,7 +1,7 @@
 // Office mode (Round 4–7, item 9; docs/phase8-plan.md §33.8): More → Settings → Data retention (the users permission; the
 // site's /settings/retention, Slack's and Google Workspace's retention settings, laid out for a phone). Each kind of data
 // with how long it is kept: a tap opens the one sheet with the days (the minimum shown, Save disabled with the reason until
-// valid), saved through update_settings `retention` with the whole setting and the one change; fuel videos' months on the
+// valid), saved through update_settings `retention` with only that period (the server keeps the others); fuel videos' months on the
 // same list (their own setting). "Never removed" (the preview's list) and Run now: the first press asks retention_preview
 // (the counts, nothing removed), the second ("Remove N now") runs run_retention {confirm: true}, a write never asked again by
 // itself. Without update_settings the periods are read; without the run tools there is no Run now. Rules:
@@ -68,7 +68,8 @@ export default function DataRetention() {
         const v = daysInput(editing.text, minimumOf(editing.key, minimums));
         if ('error' in v) return;
         const next: RetentionDays = withPeriod(periods, editing.key, v.days);
-        await api.call('update_settings', { key: 'retention', value: next });
+        // Only the period that changed: the server keeps the others as stored.
+        await api.call('update_settings', { key: 'retention', value: { [editing.key]: v.days } });
         settings.patch((p) => ({ ...p, settings: { ...p.settings, retention: next } }));
         showSnackbar({ text: t('office.retention.savedDays', { what: t(whatKey(editing.key)), days: days(v.days) }) });
       } else {

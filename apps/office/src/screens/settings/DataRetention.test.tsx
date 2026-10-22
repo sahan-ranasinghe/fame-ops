@@ -136,7 +136,7 @@ describe("Settings → Data retention", () => {
     expect(row("location_days").queryByRole("alert")).toBeNull();
     fireEvent.click(row("location_days").getByRole("button", { name: "Save" }));
     await waitFor(() => expect(t.of("update_settings")).toHaveLength(1));
-    expect(t.of("update_settings")[0]).toEqual({ key: "retention", value: { ...RETENTION_DEFAULTS, inbox_read_days: 60, location_days: 90 } });
+    expect(t.of("update_settings")[0]).toEqual({ key: "retention", value: { location_days: 90 } });
     await waitFor(() => expect(row("location_days").queryByRole("button", { name: "Save" })).toBeNull());
     expect((row("location_days").getByLabelText("Location points: days kept") as HTMLInputElement).value).toBe("90");
   });

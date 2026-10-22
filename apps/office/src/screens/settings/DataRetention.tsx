@@ -72,7 +72,8 @@ export default function DataRetention() {
     setBusy(key);
     setRowErr((r) => ({ ...r, [key]: undefined }));
     try {
-      await transport.call("update_settings", { key: "retention", value: next });
+      // Only the period that changed: the server keeps the others as stored (two people editing two periods both win).
+      await transport.call("update_settings", { key: "retention", value: { [key]: v.days } });
       if (!alive.current) return;
       setSaved(next);
       setTyped((t) => ({ ...t, [key]: undefined }));

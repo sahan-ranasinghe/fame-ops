@@ -134,7 +134,7 @@ console.log('\nData retention: More → Settings, the screen, the web route');
   check(existsSync(join(SRC, 'app', 'office', 'people', 'retention.tsx')) && existsSync(join(SRC, 'web-app', 'office', 'people', 'retention.tsx')), 'the screen and its /m/ route exist');
   const screen = read('app/office/people/retention.tsx');
   check(screen.includes("useTool<SettingsResult>('get_settings', {}") && screen.includes("useTool<RetentionPreview>('retention_preview', {}"), 'opening: get_settings (the periods, fuel videos) and the preview (minimums, never removed, the nightly time)');
-  check(screen.includes("api.call('update_settings', { key: 'retention', value: next })") && screen.includes('withPeriod(periods, editing.key, v.days)'), 'a period is saved as the whole setting with the one change');
+  check(screen.includes("api.call('update_settings', { key: 'retention', value: { [editing.key]: v.days } })") && screen.includes('withPeriod(periods, editing.key, v.days)'), 'a period is saved alone (the server keeps the others as stored); the screen shows the whole setting with the one change');
   check(screen.includes("api.call('update_settings', { key: 'fuel_video_keep_months', value: editing.months })"), 'fuel videos\' months on the same screen, their own setting');
   const runAt = screen.indexOf("api.call<RetentionRun>('run_retention', { confirm: true })");
   check(runAt > 0 && (screen.match(/api\.call<RetentionRun>\('run_retention'/g) ?? []).length === 1 && screen.lastIndexOf('async function', runAt) === screen.indexOf('async function remove('), 'run_retention {confirm: true} only from Remove N now (one call, in remove())');
