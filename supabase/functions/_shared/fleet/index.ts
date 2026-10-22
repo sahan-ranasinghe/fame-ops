@@ -71,6 +71,7 @@ import {
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
 import { listAppErrors } from "./tools/appErrors.ts";
 import { activityLog, setActivityTools } from "./tools/activity.ts";
+import { finishMyTrip, myTrip, myTripCheck, vehicleChecks } from "./tools/checks.ts";
 import {
   cancelTask,
   createTask,
@@ -202,6 +203,11 @@ export const TOOLS: AnyTool[] = [
   askAnswers,
   // Round 2b: who changed what and when (users).
   activityLog,
+  // Round 4–7 (4): the vehicle check before work; a no-app trip's own check and close.
+  vehicleChecks,
+  myTrip,
+  myTripCheck,
+  finishMyTrip,
 ];
 // Round 2b: the Activity log reads every tool's title and whether it writes (this list, read when it runs).
 setActivityTools(() => TOOLS);
@@ -274,6 +280,13 @@ export const INSTRUCTIONS = [
   "Drivers can start a trip themselves in the app (kind self; purpose company or personal, the setting driver_personal_trips): " +
   "task_board and task_detail show kind and purpose; set_trip_purpose switches one or attaches a project; mileage_summary counts personal km apart. " +
   "list_tasks is the task history over a range of days; mileage_summary, list_fuel and list_issues also take from and to (YYYY-MM-DD).",
+  "Vehicle checks (Round 4–7; get_settings vehicle_check): whenever a driver takes a vehicle, and before a trip someone drives " +
+  'themselves or that is booked for someone else, the person answers "Any damage or problem with <plate>?": all good, or a ' +
+  "problem (breakdown, accident, tyre, warning_light, damage, other) with photos, which becomes a pre-trip vehicle report " +
+  "and issue. vehicle_checks lists them; list_vehicles carries each vehicle's check_today. A trip nobody drives with the app " +
+  "(driven_by self or other) is checked, started and finished by its own person in the office app (my_trip, my_trip_check, " +
+  'finish_my_trip: "Trip finished? Enter the odometer"); unanswered by 09:00 the next day it closes as Completed · not ' +
+  "confirmed (an issue), and the odometer entered later still confirms it.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
   "Office accounts (users permission): create_office_user returns a one-time set-password link to send by WhatsApp; never ask for or type a password. " +
   "Each office person has permissions (view, request, approve, assign_tasks, vehicles, issues, users); update_office_user changes them.",

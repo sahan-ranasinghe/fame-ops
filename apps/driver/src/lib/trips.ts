@@ -508,6 +508,10 @@ export function localStop(fields: {
     arrival_at: null,
     arrival_accuracy_m: null,
     saved_place_id: null,
+    // The server's own (Round 2 and 2b): the deltas are computed, the push time is the job's.
+    arrive_delta_min: null,
+    leave_delta_min: null,
+    arrived_push_sent_at: null,
   };
 }
 
@@ -578,6 +582,7 @@ export function localTrip(input: {
     plan_version: 1,
     warnings: null,
     finish_flag: null,
+    finish_ask_sent_at: null,
     needs_driver_reason: null,
     needs_driver_since: null,
     vehicle_choice: null,

@@ -33,6 +33,7 @@ import { centsToLkr, contactLinks, mapsDirections, mapsPoint, phoneLinks, telLin
 import { atText } from "../requests_rules.ts";
 import { GPS_KM_NOTE, haversineKm, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
+import { checkCards } from "./checks.ts";
 import { videoCard, videoLinks } from "../videos.ts";
 import {
   legSequence,
@@ -1862,6 +1863,16 @@ export const taskDetail = tool({
     const odometer = unwrap(odoRes, "odometer logs");
     const fuel = unwrap(fuelRes, "fuel logs");
     const reports = unwrap(reportsRes, "vehicle reports");
+    // Round 4–7 (4): the vehicle check of the task's day by its person for its vehicle (the driver's at Start work or
+    // Start task, a self-driver's before the trip).
+    const checkDay = dayRange(colomboDate(task.started_at ?? task.start_at));
+    const checkRows = task.vehicle_id
+      ? unwrap(
+        await db.from("vehicle_checks").select("*").eq("vehicle_id", task.vehicle_id).eq("employee_id", task.employee_id)
+          .gte("checked_at", checkDay.from).lt("checked_at", checkDay.to).order("checked_at"),
+        "vehicle checks",
+      )
+      : [];
 
     const projectIds = split.flatMap((row) => row.project_id ? [row.project_id] : []);
     const [projectsRes, links, request, unlogged, gps, eta, videos] = await Promise.all([
@@ -1982,6 +1993,9 @@ export const taskDetail = tool({
           // Part 3b (H4): the driver's own "Running late".
           late_report: lateReportOf(task, now),
           finish_flag: finishFlagText(task.finish_flag),
+          vehicle_checks: checkRows.length
+            ? await checkCards(db, refs, checkRows, actor.permissions.includes("vehicles") || actor.permissions.includes("issues"))
+            : undefined,
           // Phase 7: the vehicle chosen against the default, the warnings saved past, and whether it needs a driver.
           vehicle_changed: vehicleChoiceText(task.vehicle_choice),
           warnings_saved: Array.isArray(task.warnings)
@@ -2542,6 +2556,8 @@ const minText = (minutes: number | null | undefined) => (minutes == null ? "?" :
 export function finishFlagText(flag: unknown): { kind: string; text: string } | undefined {
   const f = flag as { kind?: string; odometer_km?: number; planned_km?: number; minutes?: number; planned_minutes?: number } | null;
   if (!f?.kind) return undefined;
+  // Round 4–7 (4b): a no-app trip closed at 09:00 the next day without its odometer.
+  if (f.kind === "not_confirmed") return { kind: f.kind, text: "Completed · not confirmed: the odometer was never entered" };
   return {
     kind: f.kind,
     text: `Completed early: ${f.odometer_km ?? "?"} km on the odometer for a ${f.planned_km ?? "?"} km plan (${minText(f.minutes)} for ${

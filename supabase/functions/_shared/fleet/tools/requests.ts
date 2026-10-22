@@ -8,6 +8,7 @@
 // (redecide_request: keep, change, decline), every step is a request_events row
 // (the timeline), and a request can be made on behalf of someone else.
 
+import { noAppAction } from "./checks.ts";
 import { z } from "zod";
 import type { Json } from "../database.types.ts";
 import type { Db, Row } from "../db.ts";
@@ -1084,9 +1085,21 @@ export const myTrips = tool({
     const kept = all.filter((x) => (!wanted || wanted.includes(x.card.live.state)) && (!key || tripWords(x.card).includes(key)))
       .map((x) => x.card);
     const page = pageOf(kept, pageWindow(limit, cursor));
+    // Round 4–7 (4b): a trip nobody drives with the app, on the person's own account, says what it asks of them now (the
+    // row's button: check before setting off, finish, or confirm one closed without its odometer); its page is my_trip.
+    const taskIds = page.rows.flatMap((c) => (typeof c.task_id === "string" ? [c.task_id] : []));
+    const noApp = taskIds.length
+      ? unwrap(
+        await db.from("tasks").select("id, employee_id, driven_by, status, started_at, finish_flag, finish_ask_sent_at, start_at")
+          .in("id", taskIds).neq("driven_by", "driver"),
+        "tasks",
+      )
+      : [];
+    const actions = new Map(noApp.filter((t) => t.employee_id === actor.employeeId).map((t) => [t.id, noAppAction(t, now)]));
     const trips = page.rows.map((c) => {
       const { at: _at, ...card } = c as Record<string, unknown> & { at?: string };
-      return card;
+      const action = typeof card.task_id === "string" ? actions.get(card.task_id) : undefined;
+      return action ? { ...card, trip_action: action } : card;
     });
     return {
       result: { from, to, status, include, count: trips.length, total: page.total, next: page.next, trips },

@@ -1498,7 +1498,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     for (const photo of photos) queuePhoto(photo, 'vehicle_report', current.id, id);
     setReports((list) => {
       // The phone's copy for the list (demo is the server's, set from the driver; never sent).
-      const next = [{ ...row, needs_vehicle: needsVehicle, status: 'open', closed_at: null, office_note: null, demo: current.demo }, ...list];
+      const next = [{ check_id: null, ...row, needs_vehicle: needsVehicle, status: 'open', closed_at: null, office_note: null, demo: current.demo }, ...list];
       setJson(KEYS.reports, next);
       return next;
     });

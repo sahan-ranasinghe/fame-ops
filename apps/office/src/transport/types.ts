@@ -116,4 +116,6 @@ export const ALL_TOOLS = [
   "list_app_errors",
   // Round 2b: who changed what and when (Settings → Activity log).
   "activity_log",
+  // Round 4–7 (4): the vehicle checks; a no-app trip's own page, check and close.
+  "vehicle_checks", "my_trip", "my_trip_check", "finish_my_trip",
 ];

@@ -1,6 +1,7 @@
 // Vehicles: list with km / service / documents / status, register, update,
 // and rental companies.
 
+import { checksToday } from "./checks.ts";
 import { z } from "zod";
 import type { Update } from "../db.ts";
 import { ToolError, unwrap } from "../db.ts";
@@ -232,7 +233,12 @@ export const listVehicles = tool({
 
     const listed = filter === "inactive" ? refs.vehicles.filter((v) => !v.active) : active;
     // Phase 7 (§6, §28): each vehicle's photo and its document files (the current one of each kind), what is missing.
-    const [photos, docs] = await Promise.all([vehiclePhotoLinks(db, listed, now), documentsOf(db, listed.map((v) => v.id))]);
+    const [photos, docs, checks] = await Promise.all([
+      vehiclePhotoLinks(db, listed, now),
+      documentsOf(db, listed.map((v) => v.id)),
+      // Round 4–7 (4): each vehicle's latest check today.
+      checksToday(db, refs, listed.map((v) => v.id), now),
+    ]);
     const cards = listed.map((v) => {
       const card = vehicleCard(v, refs, today);
       const files = docs.get(v.id) ?? [];
@@ -249,6 +255,7 @@ export const listVehicles = tool({
         held_since: holders.has(v.id) ? colomboTime(holders.get(v.id)!.from_at) : undefined,
         photo_url: photos.get(v.id)?.photo,
         thumb_url: photos.get(v.id)?.thumb,
+        check_today: checks.get(v.id),
         document_files: files.length
           ? files.map((d) => ({ kind: d.kind, name: d.name ?? undefined, expiry: d.expiry ?? undefined, has_file: true }))
           : undefined,

@@ -75,6 +75,8 @@ export const NOTIF_GROUPS: readonly NotifGroupDef[] = [
     events: [
       { event: "issue.opened", title: "Critical issue", text: "A breakdown, an accident, an expired document", needs: ["issues"] },
       { event: "issue.assigned", title: "Issue given to you", needs: ["issues"] },
+      { event: "vehicle.check_urgent", title: "Vehicle check: breakdown, accident", text: "Found before setting off", needs: ["issues"] },
+      { event: "vehicle.check_problem", title: "Vehicle check: a problem", text: "Damage, a tyre, a warning light", needs: ["issues"] },
     ],
   },
   {
@@ -99,6 +101,7 @@ export const NOTIF_GROUPS: readonly NotifGroupDef[] = [
       { event: "request.stop_arrived", title: "Driver reached a stop", text: "Each later stop, with how late or early", needs: ["request", "assign_tasks"] },
       { event: "request.driver_changed", title: "Driver changed", needs: ["request", "assign_tasks"] },
       { event: "request.cancelled", title: "Trip cancelled", text: "By the office", needs: ["request", "assign_tasks"] },
+      { event: "trip.finish_ask", title: "Trip finished? Enter the odometer", text: "A trip you drive or booked for someone else", needs: ["request", "assign_tasks"] },
     ],
   },
 ];

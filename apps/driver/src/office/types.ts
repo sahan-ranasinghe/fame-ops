@@ -200,7 +200,8 @@ export interface BoardCard {
 
 /** Phase 7 (item 18): set at completion when the odometer km or the time is far under the plan. */
 export interface FinishFlag {
-  kind: "completed_early" | string;
+  /** Round 4–7 (4b): not_confirmed = a no-app trip closed at 09:00 the next day without its odometer. */
+  kind: "completed_early" | "not_confirmed" | string;
   text: string;
 }
 
@@ -639,6 +640,8 @@ export interface TaskDetail {
     late_report?: LateReport;
     /** Phase 7: completed early, the reopen (reopen_task: completed today), and a vehicle taken at Start task. */
     finish_flag?: FinishFlag;
+    /** Round 4–7 (4): the vehicle check of the task's day by its person for its vehicle. */
+    vehicle_checks?: VehicleCheck[];
     can_reopen?: boolean;
     /** "WP CAB-4521 taken over from Nuwan 08:40" */
     vehicle_taken?: string;
@@ -780,6 +783,8 @@ export interface RequestProposal {
 }
 
 export interface RequestCard {
+  /** Round 4–7 (4b): a trip nobody drives with the app, on the person's account: what it asks of them now (my_trip). */
+  trip_action?: TripAction;
   id: string;
   /** Phase 7 (§33): "task" = a task proposed by someone without approve; "request" = a vehicle request. */
   kind?: "request" | "task";
@@ -906,6 +911,8 @@ export interface MyTrips extends Paged {
 
 /** A task the person created directly (no request), on My trips (Hotfix 3): it opens /tasks/:id. */
 export interface CreatedTaskCard {
+  /** Round 4–7 (4b): a trip nobody drives with the app, on the person's account: what it asks of them now (my_trip). */
+  trip_action?: TripAction;
   source: "task";
   /** The task's id. */
   id: string;
@@ -1258,6 +1265,12 @@ export interface FleetSettings {
   office_phone?: string | null;
   /** Hotfix 2 (J): a task may be made with its vehicle chosen on the day or of a type (switched on after every phone has the update). */
   vehicle_on_the_day?: boolean;
+  /** Round 4–7: the feature switches (Settings → Fleet → Dispatch; absent = on). */
+  vehicle_check?: boolean;
+  trip_close_prompt?: boolean;
+  fuel_card?: boolean;
+  passengers?: boolean;
+  holder_contact?: boolean;
   /** Round 1: the trip forms suggest times in grey (absent = on). */
   planner_suggestions?: boolean;
   /** Phase 7 (§13): Start a trip in the app: allowed (Company preselected), default (Personal preselected), off; ask_first = allowed for now. */
@@ -1564,6 +1577,8 @@ export interface VehicleCard extends Vehicle {
   documents?: { lic?: DocChip; ins?: DocChip; emi?: DocChip };
   in_garage?: boolean;
   active?: boolean;
+  /** Round 4–7 (4): the vehicle's latest check today. */
+  check_today?: CheckToday;
 }
 
 export interface VehiclesList extends Paged {
@@ -1728,6 +1743,8 @@ export interface Issue {
   task_id?: string;
   request_id?: string;
   vehicle_report_id?: string;
+  /** Round 4–7 (4): a problem found by a vehicle check before work. */
+  pre_trip?: boolean;
   driver_links?: Links;
 }
 export interface IssuesList {
@@ -2227,4 +2244,89 @@ export interface ActivityLog extends Paged {
   to: string;
   count: number;
   entries: ActivityEntry[];
+}
+
+// ---- Round 4–7, feature 4 (22 October 2026): the vehicle check before work and closing a no-app trip ----
+
+/** A vehicle check's result in the server's words ("All good", "Problem: Damage"). */
+export type CheckResult = "ok" | "problem";
+export type ReportCategory = "breakdown" | "accident" | "tyre" | "warning_light" | "damage" | "other";
+
+/** One vehicle check (vehicle_checks rows; task_detail.task.vehicle_checks). Photos only for vehicles or issues. */
+export interface VehicleCheck {
+  id: string;
+  date: string;
+  at: string;
+  when: string;
+  vehicle?: string;
+  vehicle_label?: string;
+  person?: string;
+  employee_id: string;
+  result: CheckResult;
+  result_text: string;
+  odometer_km?: number;
+  how: "clock_in" | "change" | "task_start" | "vehicle_confirm" | "trip";
+  how_text: string;
+  channel: "app" | "office";
+  task?: { id: string; title?: string };
+  report?: { id: string; category: ReportCategory; category_text: string; note?: string; status: string };
+  photos?: { url: string; side?: "front" | "back" | "left" | "right" | null }[];
+}
+
+/** vehicle_checks: one day (default today) or a range, newest first. */
+export interface VehicleChecks extends Paged {
+  from: string;
+  to: string;
+  count: number;
+  problems: number;
+  checks: VehicleCheck[];
+}
+
+/** list_vehicles: the vehicle's latest check today. */
+export interface CheckToday {
+  result: CheckResult;
+  result_text: string;
+  at: string;
+  by?: string;
+  report_id?: string;
+}
+
+/** Where a no-app trip is, for its own person (my_trip). */
+export type NoAppState = "to_check" | "on_the_way" | "finish" | "done" | "not_confirmed" | "cancelled" | "other";
+/** The row's button on My trips for such a trip. */
+export type TripAction = "check" | "finish" | "confirm";
+
+/** my_trip, and the answer of my_trip_check / finish_my_trip (with started / next). */
+export interface MyTrip {
+  task_id: string;
+  title: string;
+  date: string;
+  leave_at: string;
+  back_by?: string;
+  back_by_date?: string;
+  vehicle?: string;
+  vehicle_label?: string;
+  driven_by: "self" | "other";
+  driver_name?: string;
+  driver_phone?: string;
+  stops: { n: number; type: string; place: string }[];
+  planned_km?: number;
+  state: NoAppState;
+  not_confirmed?: boolean;
+  started?: string;
+  start_odometer_km?: number;
+  end_odometer_km?: number;
+  km?: number;
+  last_odometer_km?: number;
+  /** The check starts the trip from window.opens_at on its day (2 h before the planned start). */
+  window: { opens_at: string; open: boolean; past: boolean };
+  /** The switch vehicle_check: off = no question, the odometer alone starts the trip. */
+  check_needed: boolean;
+  check?: { id: string; at: string; date: string; result: CheckResult; odometer_km?: number };
+  can: { check: boolean; finish: boolean };
+  finish_asked?: string;
+  /** my_trip_check: the check's id, whether it started the trip, and the line to show. */
+  check_id?: string;
+  started_now?: boolean;
+  next?: string;
 }

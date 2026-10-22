@@ -89,6 +89,7 @@ export const KIND_TEXT: Record<string, string> = {
   push_failed: "Push failed",
   routing_failed: "Routing failed",
   map_fallback: "Google map failed",
+  trip_not_confirmed: "Trip not confirmed",
 };
 
 /** A thing that should be an active issue now. */
@@ -110,6 +111,8 @@ export interface Wanted {
   status?: "open" | "in_progress";
   /** Keeps an active row alive but never opens a new one (odometer flags and km gaps after 7 days). */
   keep_only?: boolean;
+  /** Round 4–7 (4a): already told when it happened (a vehicle check's problem): the notifications with this tag. */
+  told_tag?: string;
 }
 
 export type ActiveRow = Pick<IssueRow, "id" | "ref_key" | "kind" | "status" | "severity" | "title" | "detail" | "due" | "sort_key">;
@@ -342,7 +345,10 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         kind: "vehicle_report",
         ref_key: `report:${r.id}`,
         severity: r.category === "breakdown" || r.category === "accident" ? "critical" : "warning",
-        title: `Vehicle problem: ${r.category.replace("_", " ")}${r.status === "in_garage" ? " (in garage)" : ""}`,
+        // Round 4–7 (4a): a problem found by a vehicle check before work is a pre-trip one; its check told the office.
+        title: `${r.check_id ? "Pre-trip check" : "Vehicle problem"}: ${r.category.replace("_", " ")}${
+          r.status === "in_garage" ? " (in garage)" : ""
+        }`,
         detail: [refs.veh.get(r.vehicle_id)?.reg_no, refs.emp.get(r.employee_id)?.name, r.note].filter(Boolean).join(" · "),
         due: `reported ${whenText(r.created_at, now)}`,
         sort_key: -2,
@@ -351,6 +357,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         task_id: r.task_id,
         vehicle_report_id: r.id,
         status: r.status === "in_garage" ? "in_progress" : "open",
+        ...(r.check_id && { told_tag: `check:${r.check_id}` }),
       });
     }
   }
@@ -538,7 +545,8 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     const openFrom = now.getTime() - ms(OPEN_DAYS);
     let laterQ = db.from("tasks").select("id, title, employee_id, vehicle_id, start_at, leave_by").eq("status", "assigned")
       .gte("start_at", dayStart).lt("start_at", dayEnd).eq("demo", false);
-    let flaggedQ = db.from("tasks").select("id, title, employee_id, vehicle_id, completed_at, finish_flag").not("finish_flag", "is", null)
+    let flaggedQ = db.from("tasks").select("id, title, employee_id, vehicle_id, completed_at, finish_flag, driven_by, driver_name")
+      .not("finish_flag", "is", null)
       .gte("completed_at", keepFrom).eq("demo", false);
     let stopsQ = db.from("task_stops").select(
       "id, task_id, seq, place_name, arrival_flag, arrival_distance_m, arrived_at, arrival_lat, arrival_lng",
@@ -590,7 +598,30 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       });
     }
     for (const t of unwrap(flaggedRes, "tasks")) {
-      const f = t.finish_flag as { odometer_km?: number; planned_km?: number; minutes?: number; planned_minutes?: number } | null;
+      const f = t.finish_flag as
+        | { kind?: string; odometer_km?: number; planned_km?: number; minutes?: number; planned_minutes?: number }
+        | null;
+      if (f?.kind === "not_confirmed") {
+        // Round 4–7 (4b): a self-drive or someone-else trip nobody closed by 09:00 the day after; the odometer entered
+        // later confirms it and this resolves by itself.
+        const plate = vehicleLabel(refs.veh.get(t.vehicle_id ?? ""));
+        const person = refs.emp.get(t.employee_id)?.name ?? "the person";
+        wanted.push({
+          kind: "trip_not_confirmed",
+          ref_key: `unconfirmed:${t.id}`,
+          severity: "warning",
+          title: `Trip not confirmed: ${t.title}`,
+          detail: [plate, t.driven_by === "other" && t.driver_name ? `${t.driver_name} drove · booked by ${person}` : `${person} drove`]
+            .filter(Boolean).join(" · "),
+          due: t.completed_at ? `ended ${colomboDayTime(t.completed_at)}` : null,
+          sort_key: -1,
+          vehicle_id: t.vehicle_id,
+          employee_id: t.employee_id,
+          task_id: t.id,
+          keep_only: !t.completed_at || new Date(t.completed_at).getTime() < openFrom,
+        });
+        continue;
+      }
       wanted.push({
         kind: "completed_early",
         ref_key: `early:${t.id}`,
@@ -836,16 +867,23 @@ export function mapAlarms<R extends MapReportRow>(rows: readonly R[], now: Date)
 
 /** The "notified" line of an issue told at its source: who got the push (the outbox) and when. */
 async function noteWhoWasTold(db: Db, issueId: string, w: Wanted, now: Date): Promise<void> {
-  const event = TOLD_EVENT[w.kind];
-  if (!event || !w.task_id) return;
-  // This time's pushes only: a vehicle request by its report's tag; a task that needs a driver from the moment it did
-  // (a task declined, given back and declined again has two rounds).
-  let query = db.from("notifications").select("recipient_employee_id, created_at").eq("event", event).eq("payload->>task_id", w.task_id);
-  if (w.kind === "vehicle_needed" && w.vehicle_report_id) query = query.eq("payload->>tag", `vehicle-needed:${w.vehicle_report_id}`);
-  else {
-    const since = unwrapMaybe(await db.from("tasks").select("needs_driver_since").eq("id", w.task_id).maybeSingle(), "task")
-      ?.needs_driver_since;
-    if (since) query = query.gte("created_at", since);
+  const told = db.from("notifications").select("recipient_employee_id, created_at");
+  let query;
+  if (w.told_tag) {
+    // Round 4–7 (4a): a vehicle check's problem, told by its own notification (urgent or normal) under the check's tag.
+    query = told.in("event", ["vehicle.check_urgent", "vehicle.check_problem"]).eq("payload->>tag", w.told_tag);
+  } else {
+    const event = TOLD_EVENT[w.kind];
+    if (!event || !w.task_id) return;
+    // This time's pushes only: a vehicle request by its report's tag; a task that needs a driver from the moment it did
+    // (a task declined, given back and declined again has two rounds).
+    query = told.eq("event", event).eq("payload->>task_id", w.task_id);
+    if (w.kind === "vehicle_needed" && w.vehicle_report_id) query = query.eq("payload->>tag", `vehicle-needed:${w.vehicle_report_id}`);
+    else {
+      const since = unwrapMaybe(await db.from("tasks").select("needs_driver_since").eq("id", w.task_id).maybeSingle(), "task")
+        ?.needs_driver_since;
+      if (since) query = query.gte("created_at", since);
+    }
   }
   const rows = unwrap(await query.order("created_at"), "notifications");
   const names = [...new Set(rows.map((r) => r.recipient_employee_id))].filter(Boolean);
@@ -963,7 +1001,7 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
     }
     await writeEvent(db, data.id, "opened", { actor: "system", to_status: w.status ?? "open", at: now });
     opened += 1;
-    if (TOLD_AT_SOURCE.has(w.kind)) {
+    if (TOLD_AT_SOURCE.has(w.kind) || w.told_tag) {
       // Phase 7 (§19): the push went out when it happened; the issue's history says who was told and when.
       await noteWhoWasTold(db, data.id, w, now);
     } else if (w.severity === "critical") critical.push({ id: data.id, title: w.title, detail: w.detail ?? null });

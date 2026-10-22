@@ -87,7 +87,7 @@ describe("Settings → Notifications in groups", () => {
     await screen.findByTestId("notif-group-mine");
     for (const g of ["requests", "tasks", "vehicles", "mine"]) expect(screen.getByTestId(`notif-group-${g}`)).toBeTruthy();
     for (const g of ["issues", "drivers"]) expect(screen.queryByTestId(`notif-group-${g}`)).toBeNull();
-    expect(screen.getByTestId("notif-group-mine").textContent).toContain("Things I asked for · 7 of 8 on");
+    expect(screen.getByTestId("notif-group-mine").textContent).toContain("Things I asked for · 8 of 9 on");
     expect(screen.getByTestId("notif-group-vehicles").textContent).toContain("All on");
     expect(screen.getByTestId("notif-group-mine").getAttribute("href")).toBe("/settings/notifications/mine");
     expect(screen.getAllByRole("switch")).toHaveLength(1); // Pause all
@@ -140,6 +140,6 @@ describe("Settings → Notifications in groups", () => {
     expect(t.saved["request.arrived"]).toBe(false);
     expect(t.saved["request.on_the_way"]).toBe(true);
     expect(localStorage.getItem(pauseStorageKey(requester))).toBeNull();
-    expect(screen.getByTestId("notif-group-mine").textContent).toContain("7 of 8 on");
+    expect(screen.getByTestId("notif-group-mine").textContent).toContain("8 of 9 on");
   });
 });

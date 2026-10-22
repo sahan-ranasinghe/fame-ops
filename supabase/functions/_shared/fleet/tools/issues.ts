@@ -38,7 +38,14 @@ export function snoozeEnd(word: "tomorrow" | "week", now: Date): string {
   return word === "tomorrow" ? utcIso(addDays(colomboDate(now), 1), "07:00") : new Date(now.getTime() + 7 * 86400_000).toISOString();
 }
 
-function issueCard(i: IssueRow, refs: Refs, who?: WhoDid, now = new Date(), photos?: Map<string, string>) {
+function issueCard(
+  i: IssueRow,
+  refs: Refs,
+  who?: WhoDid,
+  now = new Date(),
+  photos?: Map<string, string>,
+  preTrip?: ReadonlySet<string>,
+) {
   const driver = i.employee_id ? refs.emp.get(i.employee_id) : undefined;
   const assignee = i.assigned_to ? refs.emp.get(i.assigned_to) : undefined;
   const snoozed = i.snoozed_until && Date.parse(i.snoozed_until) > now.getTime();
@@ -71,8 +78,18 @@ function issueCard(i: IssueRow, refs: Refs, who?: WhoDid, now = new Date(), phot
     task_id: i.task_id ?? undefined,
     request_id: i.request_id ?? undefined,
     vehicle_report_id: i.vehicle_report_id ?? undefined,
+    // Round 4–7 (4a): a problem found by a vehicle check before work.
+    pre_trip: i.vehicle_report_id && preTrip?.has(i.vehicle_report_id) ? true : undefined,
     driver_links: driver ? contactLinks(driver.phone) : undefined,
   };
+}
+
+/** Round 4–7 (4a): which of these reports came from a vehicle check (a pre-trip problem). */
+async function preTripReports(db: Db, rows: readonly Pick<IssueRow, "vehicle_report_id">[]): Promise<Set<string>> {
+  const ids = [...new Set(rows.flatMap((i) => (i.vehicle_report_id ? [i.vehicle_report_id] : [])))];
+  if (!ids.length) return new Set();
+  const found = unwrap(await db.from("vehicle_reports").select("id").in("id", ids).not("check_id", "is", null), "vehicle reports");
+  return new Set(found.map((r) => r.id));
 }
 
 async function getIssue(db: Db, id: string, actor: Actor): Promise<IssueRow> {
@@ -195,8 +212,11 @@ export const listIssues = tool({
         issues: await (async () => {
           const assignees = [...new Set(rows.flatMap((i) => i.assigned_to ? [i.assigned_to] : []))]
             .flatMap((id) => refs.emp.get(id) ?? []);
-          const photos = assignees.length ? await driverPhotoLinks(db, assignees, now) : new Map<string, string>();
-          return rows.map((i) => issueCard(i, refs, whoOf(i.id), now, photos));
+          const [photos, preTrip] = await Promise.all([
+            assignees.length ? driverPhotoLinks(db, assignees, now) : new Map<string, string>(),
+            preTripReports(db, rows),
+          ]);
+          return rows.map((i) => issueCard(i, refs, whoOf(i.id), now, photos, preTrip));
         })(),
       },
       summary: `${rows.length} issues (${status}); ${counts.length} active`,
@@ -352,7 +372,7 @@ export const issueHistory = tool({
     };
     return {
       result: {
-        issue: issueCard(issue, refs, who),
+        issue: issueCard(issue, refs, who, undefined, undefined, report?.check_id ? new Set([report.id]) : undefined),
         events: events.map((e) => ({
           at: colomboDateTime(e.at),
           actor: e.actor ?? undefined,

@@ -43,7 +43,10 @@ export type NotifyEvent =
   | "trip.personal"
   | "task.running_late"
   | "ask.answered"
-  | "request.running_late";
+  | "request.running_late"
+  | "vehicle.check_urgent"
+  | "vehicle.check_problem"
+  | "trip.finish_ask";
 
 export interface EventInfo {
   event: NotifyEvent;
@@ -122,6 +125,27 @@ export const EVENTS: readonly EventInfo[] = [
     needs: ["issues"],
   },
   { event: "issue.assigned", label: "An issue is given to you", text: "Someone assigns an issue to you", needs: ["issues"] },
+  // Round 4–7 (4a): a vehicle check before work finds a problem: one notification per check (written in SQL by
+  // notify_check_problem); breakdown and accident urgent, the rest normal.
+  {
+    event: "vehicle.check_urgent",
+    label: "A vehicle check finds a breakdown or an accident",
+    text: "A driver or a self-driver reports it before setting off, with photos",
+    needs: ["issues"],
+  },
+  {
+    event: "vehicle.check_problem",
+    label: "A vehicle check finds a problem",
+    text: "Damage, a tyre, a warning light or another problem reported before setting off, with photos",
+    needs: ["issues"],
+  },
+  // Round 4–7 (4b): written in SQL by no_app_trips at the trip's back-by time (or the day's cut-off).
+  {
+    event: "trip.finish_ask",
+    label: "Trip finished? Enter the odometer",
+    text: "A trip you drive yourself, or booked for someone else, is over: its odometer closes it",
+    needs: ["request", "assign_tasks"],
+  },
   {
     event: "vehicle.booked",
     label: "A vehicle you look after is booked",
@@ -220,6 +244,7 @@ const INBOX_KIND: Record<NotifyEvent, InboxKind> = {
   "task.declined": "urgent",
   "task.not_accepted": "urgent",
   "task.vehicle_needed": "urgent",
+  "vehicle.check_urgent": "urgent",
   "request.decided": "alert",
   "request.redecided": "alert",
   "request.driver_changed": "alert",
@@ -230,6 +255,8 @@ const INBOX_KIND: Record<NotifyEvent, InboxKind> = {
   "issue.assigned": "alert",
   "task.running_late": "alert",
   "ask.answered": "alert",
+  "vehicle.check_problem": "alert",
+  "trip.finish_ask": "alert",
   "request.on_the_way": "soft",
   "request.running_late": "soft",
   "request.arrived": "soft",
@@ -323,7 +350,13 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
       ids = holders("assign_tasks");
       break;
     case "issue.opened":
+    case "vehicle.check_urgent":
+    case "vehicle.check_problem":
       ids = holders("issues");
+      break;
+    case "trip.finish_ask":
+      // The person the no-app trip is on (the SQL writes it).
+      ids = ctx.requester ? [ctx.requester] : [];
       break;
     case "issue.assigned":
       ids = ctx.assignee ? [ctx.assignee] : [];

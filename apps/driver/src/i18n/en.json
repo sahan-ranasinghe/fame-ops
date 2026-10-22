@@ -2768,6 +2768,18 @@
         "request_cancelled": {
           "title": "Trip cancelled",
           "text": "By the office"
+        },
+        "vehicle_check_urgent": {
+          "title": "Vehicle check: breakdown, accident",
+          "text": "Found before setting off"
+        },
+        "vehicle_check_problem": {
+          "title": "Vehicle check: a problem",
+          "text": "Damage, a tyre, a warning light"
+        },
+        "trip_finish_ask": {
+          "title": "Trip finished? Enter the odometer",
+          "text": "A trip you drive or booked for someone else"
         }
       }
     },

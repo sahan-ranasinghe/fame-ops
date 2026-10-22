@@ -220,7 +220,7 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   passengers:
     "Passengers on trips: the Passengers field when asking for or assigning a trip; registered passengers are told about the trip and see it in My trips. Off = the field is hidden and nobody is told",
   holder_contact:
-    "Who holds a busy driver or vehicle: the warning names them with Call and WhatsApp, and offers Ask for it. Off = the warning says only that it is busy
+    "Who holds a busy driver or vehicle: the warning names them with Call and WhatsApp, and offers Ask for it. Off = the warning says only that it is busy",
   driver_personal_trips:
     "Trips a driver starts in the app (Start a trip): allowed = Company work preselected and Personal offered, default = Personal preselected, off = no Personal choice; ask_first is reserved (accepted, behaves as allowed until it is built). Personal km are counted apart and never charged to a job",
   map_matching:
