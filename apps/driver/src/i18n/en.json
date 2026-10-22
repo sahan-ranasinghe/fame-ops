@@ -1792,7 +1792,78 @@
       "dueWasToLeave": "was to leave {when}",
       "dueCompleted": "completed {when}",
       "dueArrived": "arrived {when}",
-      "dueSince": "since {time}"
+      "dueSince": "since {time}",
+      "tab": {
+        "open": "Open",
+        "snoozed": "Snoozed",
+        "resolved": "Resolved"
+      },
+      "tabN": "{label} · {n}",
+      "group": {
+        "missed_task": "Missed tasks",
+        "vehicle_report": "Vehicle problems",
+        "odometer_flag": "Odometer checks",
+        "km_gap": "Km outside tasks",
+        "service_due": "Services due",
+        "document": "Vehicle documents",
+        "documents_missing": "Documents missing",
+        "licence": "Driver licences",
+        "allowance": "Km allowances",
+        "rental": "Rental agreements",
+        "garage_booked": "Garage bookings",
+        "signal": "Drivers' signal",
+        "late_start": "Late starts",
+        "running_late": "Running late",
+        "not_accepted": "Not accepted",
+        "declined": "Declined tasks",
+        "request_waiting": "Requests waiting",
+        "vehicle_conflict": "Vehicles taken",
+        "app_stopped": "App stopped",
+        "arrival_override": "Arrived away from the stop",
+        "completed_early": "Completed early",
+        "vehicle_needed": "Another vehicle needed",
+        "push_failed": "Pushes failed",
+        "routing_failed": "Routing failed",
+        "map_fallback": "Google map failed",
+        "trip_not_confirmed": "Trips not confirmed"
+      },
+      "showAll": "Show all {n}",
+      "allKinds": "All kinds",
+      "selectShown": "Select",
+      "selectAllGroup": "Select all {n} in this group",
+      "selectRow": "Select {title}",
+      "selectedN": "{n} selected",
+      "clearSelection": "Clear the selection",
+      "needsAction": "{n} need action",
+      "needsActionOne": "1 needs action",
+      "criticalN": "{n} critical",
+      "nothingNeedsAction": "Nothing needs action now.",
+      "closedAuto": "closed automatically",
+      "closedBy": "by {name}",
+      "emptyTab": {
+        "snoozed": "Nothing is snoozed. Snooze from Home's Needs attention to hide something until later."
+      },
+      "bulk": {
+        "resolve": "Resolve",
+        "dismiss": "Dismiss",
+        "titleResolve": "Resolve {n} issues",
+        "titleDismiss": "Dismiss {n} issues",
+        "titleResolveOne": "Resolve 1 issue",
+        "titleDismissOne": "Dismiss 1 issue",
+        "reason": "Reason (kept with each issue)",
+        "reasonPlaceholder": "e.g. Test data",
+        "reasonNeeded": "Write a reason first.",
+        "doneResolved": "{n} issues resolved",
+        "doneDismissed": "{n} issues dismissed",
+        "doneResolvedOne": "1 issue resolved",
+        "doneDismissedOne": "1 issue dismissed",
+        "partly": "{done} done; the rest were not: {why}"
+      },
+      "reason": {
+        "test": "Test data",
+        "handled": "Already handled",
+        "notIssue": "Not an issue"
+      }
     },
     "ask": {
       "title": "Ask drivers",
@@ -2518,7 +2589,8 @@
       "due": "Documents and services due",
       "noneDue": "Nothing is due.",
       "other": "Also counted",
-      "note": "Overdue first, then the soonest."
+      "note": "Overdue first, then the soonest.",
+      "vehicles": "Vehicles: service and documents due"
     },
     "maint": {
       "title": "Maintenance",
@@ -3406,6 +3478,63 @@
         "min": "At least {n} days.",
         "max": "At most {n} days."
       }
+    },
+    "care": {
+      "view": {
+        "service": "Service and documents",
+        "reports": "Problem reports"
+      },
+      "show": {
+        "attention": "Need attention",
+        "all": "All vehicles"
+      },
+      "title": {
+        "attention": "Need attention",
+        "all": "All vehicles"
+      },
+      "empty": {
+        "attention": "Every service and document is in order. Add the dates on each vehicle to get reminders.",
+        "all": "No vehicles yet."
+      },
+      "summaryAttention": "{n} of {total} vehicles need attention",
+      "summaryOk": "All {total} vehicles in order",
+      "sumOverdue": "Service overdue · {n}",
+      "sumSoon": "Service due soon · {n}",
+      "sumExpired": "Expired · {n}",
+      "sumExpiring": "Expiring · {n}",
+      "sumMissing": "Missing · {n}",
+      "service": "Service",
+      "serviceIn": "In {km} km",
+      "serviceOver": "{km} km over",
+      "serviceOr": "{a} or {b}",
+      "notSet": "Not set",
+      "overdue": "Overdue",
+      "dueSoon": "Due soon",
+      "garage": "Garage booked {date}",
+      "inGarage": "In garage",
+      "meter": "How near the service is",
+      "doc": {
+        "revenue_licence": "Revenue licence",
+        "insurance": "Insurance",
+        "emission": "Emission test",
+        "registration": "Registration (CR)",
+        "lease": "Lease",
+        "other": "Other",
+        "rental": "Rental"
+      },
+      "expiredOn": "{name} · expired {date}",
+      "endedOn": "{name} · ended {date}",
+      "expiresIn": "{name} · in {n} days",
+      "expiresToday": "{name} · today",
+      "expiresTomorrow": "{name} · tomorrow",
+      "missing": "{name} · missing",
+      "noDate": "{name} · no date",
+      "okOn": "{name} · {date}",
+      "issuesLine": "{n} more need attention",
+      "issuesLineOne": "1 more needs attention",
+      "issuesLineSub": "Km allowances, missed tasks, odometer checks and the rest are in Issues",
+      "openIssues": "Open Issues",
+      "openVehicle": "Open {plate}"
     }
   },
   "patterns": {

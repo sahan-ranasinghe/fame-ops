@@ -1792,7 +1792,78 @@
       "dueWasToLeave": "{when} ට පිටත් විය යුතුව තිබුණි",
       "dueCompleted": "{when} ට අවසන් කළා",
       "dueArrived": "{when} ට පැමිණියා",
-      "dueSince": "{time} සිට"
+      "dueSince": "{time} සිට",
+      "tab": {
+        "open": "විවෘත",
+        "snoozed": "කල් දැමූ",
+        "resolved": "විසඳූ"
+      },
+      "tabN": "{label} · {n}",
+      "group": {
+        "missed_task": "මඟ හැරුණු කාර්යය",
+        "vehicle_report": "වාහන ගැටලුව",
+        "odometer_flag": "ඔඩෝමීටර පරීක්ෂාව",
+        "km_gap": "කාර්යයෙන් පිට km",
+        "service_due": "සේවාව",
+        "document": "වාහන ලේඛනය",
+        "documents_missing": "ලේඛන නැත",
+        "licence": "රියදුරු බලපත්‍රය",
+        "allowance": "km සීමාව",
+        "rental": "කුලී ගිවිසුම",
+        "garage_booked": "ගරාජය වෙන් කර ඇත",
+        "signal": "රියදුරුගේ සංඥාව",
+        "late_start": "ප්‍රමාද ආරම්භය",
+        "running_late": "ප්‍රමාද වෙමින්",
+        "not_accepted": "පිළිගත්තේ නැත",
+        "declined": "ප්‍රතික්ෂේප කළා",
+        "request_waiting": "ඉල්ලීම බලා සිටී",
+        "vehicle_conflict": "වාහනය වෙනත් අයෙක් ගත්තා",
+        "app_stopped": "යෙදුම නතර වුණා",
+        "arrival_override": "නැවතුමෙන් ඈතින් පැමිණියා",
+        "completed_early": "කලින් අවසන් කළා",
+        "vehicle_needed": "වෙනත් වාහනයක් අවශ්‍යයි",
+        "push_failed": "දැනුම්දීම අසාර්ථකයි",
+        "routing_failed": "මාර්ග සැලසුම අසාර්ථකයි",
+        "map_fallback": "Google සිතියම අසාර්ථකයි",
+        "trip_not_confirmed": "ගමන තහවුරු කර නැත"
+      },
+      "showAll": "සියල්ල ({n})",
+      "allKinds": "සියලු වර්ග",
+      "selectShown": "තෝරන්න",
+      "selectAllGroup": "මෙම කාණ්ඩයේ {n} ම තෝරන්න",
+      "selectRow": "{title} තෝරන්න",
+      "selectedN": "{n} ක් තෝරා ඇත",
+      "clearSelection": "තේරීම ඉවත් කරන්න",
+      "needsAction": "{n} කට ක්‍රියාමාර්ග අවශ්‍යයි",
+      "needsActionOne": "1 කට ක්‍රියාමාර්ග අවශ්‍යයි",
+      "criticalN": "හදිසි {n}",
+      "nothingNeedsAction": "දැන් ක්‍රියාමාර්ග අවශ්‍ය කිසිවක් නැත.",
+      "closedAuto": "ස්වයංක්‍රීයව වසා දැමුණා",
+      "closedBy": "{name} විසින්",
+      "emptyTab": {
+        "snoozed": "කල් දැමූ කිසිවක් නැත. මුල් පිටුවේ අවධානය අවශ්‍ය කොටසින් කල් දමන්න."
+      },
+      "bulk": {
+        "resolve": "විසඳන්න",
+        "dismiss": "ඉවත දමන්න",
+        "titleResolve": "ගැටලු {n} ක් විසඳන්න",
+        "titleDismiss": "ගැටලු {n} ක් ඉවත දමන්න",
+        "titleResolveOne": "ගැටලුවක් විසඳන්න",
+        "titleDismissOne": "ගැටලුවක් ඉවත දමන්න",
+        "reason": "හේතුව (සෑම ගැටලුවක් සමඟම සටහන් වේ)",
+        "reasonPlaceholder": "උදා. පරීක්ෂණ දත්ත",
+        "reasonNeeded": "පළමුව හේතුවක් ලියන්න.",
+        "doneResolved": "ගැටලු {n} ක් විසඳුවා",
+        "doneDismissed": "ගැටලු {n} ක් ඉවත දැමුවා",
+        "doneResolvedOne": "ගැටලුවක් විසඳුවා",
+        "doneDismissedOne": "ගැටලුවක් ඉවත දැමුවා",
+        "partly": "{done}; ඉතිරිය නොවුණා: {why}"
+      },
+      "reason": {
+        "test": "පරීක්ෂණ දත්ත",
+        "handled": "දැනටමත් කටයුතු කළා",
+        "notIssue": "ගැටලුවක් නොවේ"
+      }
     },
     "ask": {
       "title": "රියදුරන්ගෙන් අසන්න",
@@ -2518,7 +2589,8 @@
       "due": "ලේඛන සහ සේවා කල් පිරෙන",
       "noneDue": "කිසිවක් කල් පිරී නැත.",
       "other": "තවත් ගණන් කළ ඒවා",
-      "note": "කල් ඉකුත් වූ ඒවා මුලින්, ඉන්පසු ළඟම ඒවා."
+      "note": "කල් ඉකුත් වූ ඒවා මුලින්, ඉන්පසු ළඟම ඒවා.",
+      "vehicles": "වාහන: සේවා සහ ලේඛන කල් පිරෙන"
     },
     "maint": {
       "title": "නඩත්තුව",
@@ -3406,6 +3478,63 @@
         "min": "අවම දින {n}.",
         "max": "උපරිම දින {n}."
       }
+    },
+    "care": {
+      "view": {
+        "service": "සේවා සහ ලේඛන",
+        "reports": "ගැටලු වාර්තා"
+      },
+      "show": {
+        "attention": "අවධානය අවශ්‍ය",
+        "all": "සියලු වාහන"
+      },
+      "title": {
+        "attention": "අවධානය අවශ්‍ය",
+        "all": "සියලු වාහන"
+      },
+      "empty": {
+        "attention": "සියලු සේවා සහ ලේඛන පිළිවෙළට ඇත. සිහිකැඳවීම් ලැබීමට එක් එක් වාහනයේ දින එක් කරන්න.",
+        "all": "තවම වාහන නැත."
+      },
+      "summaryAttention": "වාහන {total} න් {n} කට අවධානය අවශ්‍යයි",
+      "summaryOk": "වාහන {total} ම පිළිවෙළට ඇත",
+      "sumOverdue": "සේවාව කල් ඉකුත් · {n}",
+      "sumSoon": "සේවාව ළඟයි · {n}",
+      "sumExpired": "කල් ඉකුත් · {n}",
+      "sumExpiring": "කල් පිරෙමින් · {n}",
+      "sumMissing": "නැති · {n}",
+      "service": "සේවාව",
+      "serviceIn": "km {km} කින්",
+      "serviceOver": "km {km} ඉක්මවා",
+      "serviceOr": "{a} හෝ {b}",
+      "notSet": "සකසා නැත",
+      "overdue": "කල් ඉකුත්",
+      "dueSoon": "ළඟයි",
+      "garage": "ගරාජය වෙන් කර ඇත {date}",
+      "inGarage": "ගරාජයේ",
+      "meter": "සේවාව කොතරම් ළඟද",
+      "doc": {
+        "revenue_licence": "ආදායම් බලපත්‍රය",
+        "insurance": "රක්ෂණය",
+        "emission": "දුම් පරීක්ෂාව",
+        "registration": "ලියාපදිංචිය (CR)",
+        "lease": "කල්බදු",
+        "other": "වෙනත්",
+        "rental": "කුලිය"
+      },
+      "expiredOn": "{name} · {date} කල් ඉකුත් වුණා",
+      "endedOn": "{name} · {date} අවසන් වුණා",
+      "expiresIn": "{name} · දින {n} කින්",
+      "expiresToday": "{name} · අද",
+      "expiresTomorrow": "{name} · හෙට",
+      "missing": "{name} · නැත",
+      "noDate": "{name} · දිනයක් නැත",
+      "okOn": "{name} · {date}",
+      "issuesLine": "තවත් {n} කට අවධානය අවශ්‍යයි",
+      "issuesLineOne": "තවත් 1 කට අවධානය අවශ්‍යයි",
+      "issuesLineSub": "km සීමා, මඟ හැරුණු කාර්යය, ඔඩෝමීටර පරීක්ෂා සහ අනෙක් ඒවා ගැටලු තුළ ඇත",
+      "openIssues": "ගැටලු විවෘත කරන්න",
+      "openVehicle": "{plate} විවෘත කරන්න"
     }
   },
   "patterns": {
