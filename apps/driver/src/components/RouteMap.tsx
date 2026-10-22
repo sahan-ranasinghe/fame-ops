@@ -4,11 +4,11 @@
 //     carries the Android key, the office's map package is google and Google's map has not failed on this phone since the
 //     app opened;
 //   - the free map (OpenRouteMap.tsx: MapLibre with OpenFreeMap's tiles, no key) otherwise, with its credit line;
-//   - neither: "Map not available" with Try again; the timeline under the map keeps working.
+//   - neither: "Map not available" with Try again; the day's numbers above the map keep working.
 // Both engines draw the same content (the positions are ours, rule 10): the day's line coloured by speed band (standing
 // grey, under 20 amber, 20–60 blue, over 60 dark blue), the holes dashed grey, the estimated road over a gap dashed slate
-// (openrouteservice's: its credit shows with the map), the stops over 10 minutes as circles with the time they began, the
-// frame around the day, and the move to one timeline row when it is tapped. A Google map that has not said it loaded
+// (openrouteservice's: its credit shows with the map), the stops over 10 minutes as circles with the time they began (a tap
+// says where and how long: §33.6 item 1), the frame around the day, and the move to a tapped stop. A Google map that has not said it loaded
 // within phone_map_wait_s while online is judged failed (the phone moves to the free map; a render error or MapLibre's
 // onDidFailLoadingMap at once); the wait runs only while this screen is in front and the app on screen.
 
@@ -34,7 +34,7 @@ export const ROUTE_PADDING = { top: 40, right: 40, bottom: 40, left: 40 };
 /** The zoom for one place (a stop, a short row). */
 export const ROUTE_ZOOM = 15;
 
-/** A timeline row tapped: the map moves to its span once per tap (`nonce`: the same row tapped again moves it again). */
+/** A stop pin tapped (§33.6 item 1; a timeline row before): the map moves to it once per tap (`nonce`: tapped again moves it again). */
 export interface RouteFocus {
   frame: Frame;
   nonce: number;
@@ -48,6 +48,8 @@ export interface RouteEngineProps {
   focus: RouteFocus | null;
   /** The playback marker (O3 item 1): where the driver was at the playback clock; hollow inside a gap. None when not playing. */
   marker?: PlaybackMarker | null;
+  /** §33.6 item 1: a stop pin tapped (its key): the screen says where and how long, and moves the map to it. */
+  onStop?: (key: string) => void;
   /** The map finished loading (Google: onMapLoaded; MapLibre: onDidFinishLoadingMap). */
   onLoaded: () => void;
   /** The map said it failed (MapLibre: onDidFailLoadingMap). */
@@ -177,7 +179,7 @@ export function RouteMap({ mapPackage, ...parts }: Props) {
             <Txt variant="strong" size={15} color={colors.blue}>{t('map.tryAgain')}</Txt>
           </Pressable>
         </View>
-        <Txt variant="small">{t('office.drivers.route.mapUnavailableBody')}</Txt>
+        <Txt variant="small">{t('dayRoute.mapUnavailableBody')}</Txt>
       </View>
     );
   }

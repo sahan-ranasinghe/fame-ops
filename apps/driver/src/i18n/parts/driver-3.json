@@ -1,0 +1,22 @@
+{
+  "en": {
+    "dayRoute": {
+      "firstLast": "First–last point",
+      "noGps": "No GPS for {duration}",
+      "gaps": "{n} gaps",
+      "stopNear": "Stopped near {place} · {span} · {duration}",
+      "stopped": "Stopped · {span} · {duration}",
+      "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The day's numbers are above."
+    }
+  },
+  "si": {
+    "dayRoute": {
+      "firstLast": "පළමු–අවසන් ස්ථානය",
+      "noGps": "GPS නැති කාලය: {duration}",
+      "gaps": "හිඩැස් {n}",
+      "stopNear": "{place} අසල නැවතී සිටියා · {span} · {duration}",
+      "stopped": "නැවතී සිටියා · {span} · {duration}",
+      "mapUnavailableBody": "දැන් සිතියමක් පූරණය කළ නොහැක: අන්තර්ජාලය නැත, නැතහොත් සිතියම් සේවාව ක්‍රියා නොකරයි. දවසේ සංඛ්‍යා ඉහළින් ඇත."
+    }
+  }
+}

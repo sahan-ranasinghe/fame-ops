@@ -5,9 +5,10 @@
 import { useEffect, useRef, useState } from "react";
 import { compassShown } from "../controlsLogic";
 import { MapControls } from "../MapControls";
+import type { MapScheme } from "../scheme";
 import { attachMap, detachMap, type GoogleMapsApi, type HtmlMarker, htmlMarker } from "./googleMaps";
 
-export default function GooglePin({ lat, lng, onMove, maps }: { lat: number; lng: number; onMove?: (lat: number, lng: number) => void; maps: GoogleMapsApi }) {
+export default function GooglePin({ lat, lng, onMove, maps, scheme = "light" }: { lat: number; lng: number; onMove?: (lat: number, lng: number) => void; maps: GoogleMapsApi; scheme?: MapScheme }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const marker = useRef<HtmlMarker | null>(null);
@@ -17,7 +18,7 @@ export default function GooglePin({ lat, lng, onMove, maps }: { lat: number; lng
 
   useEffect(() => {
     if (!box.current) return;
-    const m = attachMap(box.current, maps);
+    const m = attachMap(box.current, maps, scheme);
     m.setCenter({ lat, lng });
     m.setZoom(16);
     const turned = () => {

@@ -1,4 +1,4 @@
-// The web's pin map (Part 4): OpenFreeMap Liberty tiles, one amber pin that
+// The web's pin map (Part 4): OpenFreeMap Liberty tiles (Dark in the dark theme, §33.12), one amber pin that
 // can be dragged (or a click moves it) when onMove is given. The pin follows a
 // typed "lat, lng" too. Falls back to the drawn map when the style cannot load.
 // Phase 7: no cooperative gestures (§23); zoom and the compass are the one
@@ -8,10 +8,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { compassShown } from "./controlsLogic";
 import { MapControls } from "./MapControls";
-import { STYLE_URL } from "./MapLibreMap";
+import { FREE_MAP_STYLES, type MapScheme } from "./scheme";
 import { MAP_CANVAS } from "./types";
 
-export default function MapLibrePin({ lat, lng, onMove, onFail }: { lat: number; lng: number; onMove?: (lat: number, lng: number) => void; onFail?: () => void }) {
+export default function MapLibrePin({ lat, lng, onMove, onFail, scheme = "light" }: { lat: number; lng: number; onMove?: (lat: number, lng: number) => void; onFail?: () => void; scheme?: MapScheme }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const marker = useRef<maplibregl.Marker | null>(null);
@@ -22,7 +22,7 @@ export default function MapLibrePin({ lat, lng, onMove, onFail }: { lat: number;
   useEffect(() => {
     if (!box.current) return;
     let alive = true;
-    const m = new maplibregl.Map({ container: box.current, style: STYLE_URL, center: [lng, lat], zoom: 16, attributionControl: { compact: false }, cooperativeGestures: false });
+    const m = new maplibregl.Map({ container: box.current, style: FREE_MAP_STYLES[scheme], center: [lng, lat], zoom: 16, attributionControl: { compact: false }, cooperativeGestures: false });
     m.on("error", (e) => { if (alive && !m.isStyleLoaded() && String(e.error?.message ?? "").match(/style|fetch|load/i)) onFail?.(); });
     const turned = () => {
       const bearing = Math.round(m.getBearing() * 10) / 10, pitch = Math.round(m.getPitch() * 10) / 10;

@@ -15,7 +15,8 @@ import { plainRuns } from "../DrawnMap";
 import { needsCentre, useGapOpen } from "../gapLogic";
 import { MapControls } from "../MapControls";
 import { planFitKey, planFor, planPoints } from "../planDraw";
-import { ESTIMATED_COLOR, MAP_CANVAS, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "../types";
+import type { MapScheme } from "../scheme";
+import { estimatedColor, type MapCanvas, mapCanvas, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, SPEED_COLORS, speedColors } from "../types";
 import { attachMap, detachMap, fitTo, type GoogleMapsApi, type HtmlMarker, htmlMarker } from "./googleMaps";
 
 interface Live {
@@ -34,15 +35,15 @@ interface Placed {
   key: string;
 }
 
-/** Google's road line of a plan's leg (§20): solid, dark, under the pins. */
-const PLAN_LINE_COLOR = MAP_CANVAS.ink;
+/** Google's road line of a plan's leg (§20): solid, in the map's ink (dark on the light map, light on the dark one), under the pins. */
+const planLineColor = (c: MapCanvas) => c.ink;
 
 const ll = (p: RoutePoint): google.maps.LatLngLiteral => ({ lat: p.lat, lng: p.lng });
 
 /** Runs of steps with the same speed class and confidence: one polyline each. */
-function runs(points: RoutePoint[], bySpeed: boolean): { color: string; poor: boolean; path: google.maps.LatLngLiteral[] }[] {
+function runs(points: RoutePoint[], bySpeed: boolean, colors: typeof SPEED_COLORS = SPEED_COLORS): { color: string; poor: boolean; path: google.maps.LatLngLiteral[] }[] {
   if (points.length < 2) return [];
-  if (!bySpeed) return plainRuns(points).map((run) => ({ color: SPEED_COLORS.normal, poor: false, path: run.map(ll) }));
+  if (!bySpeed) return plainRuns(points).map((run) => ({ color: colors.normal, poor: false, path: run.map(ll) }));
   const out: { color: string; poor: boolean; path: google.maps.LatLngLiteral[] }[] = [];
   let broken = false;
   for (let i = 1; i < points.length; i++) {
@@ -51,7 +52,7 @@ function runs(points: RoutePoint[], bySpeed: boolean): { color: string; poor: bo
       broken = true;
       continue;
     }
-    const color = SPEED_COLORS[speedClass(points[i].kmh ?? 0)];
+    const color = colors[speedClass(points[i].kmh ?? 0)];
     const poor = poorStep(points[i - 1], points[i]);
     const last = out[out.length - 1];
     if (last && !broken && last.color === color && last.poor === poor) last.path.push(ll(points[i]));
@@ -89,7 +90,10 @@ export default function GoogleMap({
   trailsToggle,
   height,
   maps,
-}: MapProps & { maps: GoogleMapsApi }) {
+  scheme = "light",
+}: MapProps & { maps: GoogleMapsApi; scheme?: MapScheme }) {
+  // C (§33.12): the lines and marks in the page's scheme (MapView makes this map again when the theme changes).
+  const canvas = mapCanvas(scheme);
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const live = useRef(new Map<string, Live>());
@@ -115,7 +119,7 @@ export default function GoogleMap({
 
   useEffect(() => {
     if (!box.current) return;
-    const m = attachMap(box.current, maps);
+    const m = attachMap(box.current, maps, scheme);
     map.current = m;
     // §24: the compass shows while the map is turned or tilted (on a raster map: the 45° imagery only).
     const turned = () => {
@@ -152,7 +156,7 @@ export default function GoogleMap({
       detachMap();
       map.current = null;
     };
-  }, [maps, setOpen]);
+  }, [maps, setOpen, scheme]);
 
   // Markers: add, glide, turn, restyle, remove.
   useEffect(() => {
@@ -224,15 +228,15 @@ export default function GoogleMap({
     }
     const lines: google.maps.Polyline[] = [];
     const marks: HtmlMarker[] = [];
-    for (const r of runs(route.points, !!route.bySpeed)) {
+    for (const r of runs(route.points, !!route.bySpeed, speedColors(scheme))) {
       lines.push(new maps.Polyline({ map: m, path: r.path, strokeColor: r.color, strokeWeight: r.poor ? 2.5 : 5, strokeOpacity: r.poor ? 0.45 : 0.9, clickable: false }));
     }
-    for (const h of route.holes ?? []) lines.push(dashed(maps, m, [ll(h.from), ll(h.to)], MAP_CANVAS.hole, 3, 2, "10px"));
+    for (const h of route.holes ?? []) lines.push(dashed(maps, m, [ll(h.from), ll(h.to)], canvas.hole, 3, 2, "10px"));
     for (const e of route.estimated ?? []) {
-      if (e.points.length > 1) lines.push(dashed(maps, m, e.points, ESTIMATED_COLOR, 3, 1.5, "8px"));
+      if (e.points.length > 1) lines.push(dashed(maps, m, e.points, estimatedColor(scheme), 3, 1.5, "8px"));
     }
     const start = document.createElement("div");
-    start.style.cssText = "width:14px;height:14px;border-radius:50%;background:var(--map-pin-ink);border:4px solid " + MAP_CANVAS.line + ";pointer-events:none";
+    start.style.cssText = "width:14px;height:14px;border-radius:50%;background:var(--map-pin-ink);border:4px solid " + canvas.line + ";pointer-events:none";
     const startMark = htmlMarker(maps, start, ll(route.points[0]), "center");
     startMark.setMap(m);
     marks.push(startMark);
@@ -280,9 +284,9 @@ export default function GoogleMap({
     if (!m) return;
     trailLines.current.forEach((l) => l.setMap(null));
     trailLines.current = trails.filter((t) => t.points.length > 1).map((t) =>
-      new maps.Polyline({ map: m, path: t.points.map(ll), strokeColor: MAP_CANVAS.line, strokeWeight: 3, strokeOpacity: 0.45, clickable: false })
+      new maps.Polyline({ map: m, path: t.points.map(ll), strokeColor: canvas.line, strokeWeight: 3, strokeOpacity: 0.45, clickable: false })
     );
-  }, [trails, maps]);
+  }, [trails, maps, canvas]);
 
   // A timeline row: zoom to it.
   useEffect(() => {
@@ -384,10 +388,10 @@ export default function GoogleMap({
     if (!m) return;
     planLines.current.forEach((l) => l.setMap(null));
     planLines.current = [
-      ...drawnPlan.lines.map((path) => new maps.Polyline({ map: m, path, strokeColor: PLAN_LINE_COLOR, strokeWeight: 4, strokeOpacity: 0.75, clickable: false })),
-      ...drawnPlan.links.map(([a, b]) => dashed(maps, m, [{ lat: a.lat, lng: a.lng }, { lat: b.lat, lng: b.lng }], PLAN_LINE_COLOR, 2, 2, "12px", 0.55)),
+      ...drawnPlan.lines.map((path) => new maps.Polyline({ map: m, path, strokeColor: planLineColor(canvas), strokeWeight: 4, strokeOpacity: 0.75, clickable: false })),
+      ...drawnPlan.links.map(([a, b]) => dashed(maps, m, [{ lat: a.lat, lng: a.lng }, { lat: b.lat, lng: b.lng }], planLineColor(canvas), 2, 2, "12px", 0.55)),
     ];
-  }, [drawnPlan, maps]);
+  }, [drawnPlan, maps, canvas]);
 
   const fitAll = () => {
     const m = map.current;

@@ -1,10 +1,13 @@
 // One driver: who they are, their status now, and where they went on a day:
-// the route on the map (coloured by speed, thin where the fix was poor, stops
-// and holes marked, snapped to roads by default where the server allows it,
-// "Recorded points" for the raw line), the day's numbers, the timeline beside
-// the map with the Gaps list under it (each gap a marker on the map, its words
-// on its card: §21), and playback (web build: the recorded clock at 1×–60×, the
-// marker moving smoothly along the drawn line and across the gaps: §22).
+// ONE summary card (§33.6 item 1, Round 4–7; Samsara's driver day, Google Maps
+// Timeline: the km, driving and stopped time, the stops, the first and last
+// point, "No GPS for 2 h 10 min"), the route on the map (coloured by speed,
+// thin where the fix was poor, holes dashed, snapped to roads by default where
+// the server allows it, "Recorded points" for the raw line), each stop a pin
+// and each gap a marker whose card says what it was (a tap opens the card and
+// moves the map to it: §21), and playback (web build: the recorded clock at
+// 1×–60×, the marker moving smoothly along the drawn line and across the gaps:
+// §22). The day's timeline list and the Gaps list are gone (Sahan's decision).
 // Today's line grows as the driver moves: the earlier part of the day is loaded
 // from driver_route (full resolution, refreshed every minute for the numbers),
 // and on the web every new location point lands at once through Realtime, each
@@ -15,20 +18,21 @@ import { useFleet } from "../app/FleetContext";
 import { useLists, useWatch } from "../data/hooks";
 import { useWatchDrivers } from "../data/watchDrivers";
 import { positionOf, recordedAtOf, statusLine, statusTone } from "../data/live";
-import { type Cursor, drawnLine, estimatedLegend, focusOf, insertPoint, KIND_LABEL, mapRouteOf, mergeRoute, minutesText, type Route, routeOf, snapControl, type TimelineRow } from "../data/route";
+import { type Cursor, drawnLine, estimatedLegend, insertPoint, mapRouteOf, mergeRoute, minutesText, type Route, routeOf, snapControl } from "../data/route";
 import type { DriverRoute } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { addDays, longDate, num, today, waLink } from "../lib/format";
 import { MapView } from "../map/MapView";
 import { useGoogleMap } from "../map/google/useGoogleMap";
 import { snapAllowed } from "../map/mapChoice";
-import { ESTIMATED_COLOR, type MapMarker, type RoutePoint, SPEED_COLORS } from "../map/types";
-import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, Tile, VehicleThumb } from "../ui/basics";
+import { usePageScheme } from "../map/scheme";
+import { estimatedColor, type GapMarker, type MapMarker, type RoutePoint, speedColors } from "../map/types";
+import { Avatar, Chips, ErrBox, Loading, Notice, Pill, Plate, VehicleThumb } from "../ui/basics";
 import { useDateRange } from "../ui/DateRangePicker";
 import { DayStrip } from "../ui/DayPicker";
 import { Icon } from "../ui/icons";
-import { GapsList, useGaps } from "./GapsList";
-import { TimelineIcon } from "./TimelineIcon";
+import { daySummary, stopPins } from "./dayLogic";
+import { gapMarkers, gapsOf } from "./gapsLogic";
 import { clockText, gapWindowsOf, playbackPath } from "./playbackLogic";
 import { type PlaybackSpeed, SPEEDS, usePlayback } from "./usePlayback";
 
@@ -50,8 +54,9 @@ export function DriverPage() {
   const isTodayRef = useRef(isToday);
   isTodayRef.current = isToday;
   const [route, setRoute] = useState<Route | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
   const [focus, setFocus] = useState<RoutePoint[] | null>(null);
+  // The marker or pin whose card is open (a gap or a stop), kept by its id across refreshes.
+  const [openMark, setOpenMark] = useState<string | null>(null);
   // Snap to roads only while Google's map is the one drawn, or under the open package (Part 6): never for the free map shown
   // instead of Google's, and never a Roads call for a line that is not drawn.
   const [snapWanted, setSnap] = useState(true);
@@ -74,7 +79,7 @@ export function DriverPage() {
     });
   }, [entry.data, username, date]);
   useEffect(() => {
-    setSelected(null);
+    setOpenMark(null);
     setFocus(null);
   }, [username, date]);
 
@@ -107,9 +112,29 @@ export function DriverPage() {
     ? { lat: pos.lat, lng: pos.lng, label: clockText(playback.t, pos.estimated), estimated: pos.estimated, heading: pos.heading }
     : null;
   // The line is built once per answer; during playback only the cursor changes (the line's arrays stay the same objects).
-  const baseRoute = useMemo(() => mapRouteOf(route, null, snap), [route, snap]);
+  // The stops are pins with a card (stopPins), not the line's own labelled circles.
+  const baseRoute = useMemo(() => {
+    const r = mapRouteOf(route, null, snap);
+    return r ? { ...r, stops: [] } : r;
+  }, [route, snap]);
   const mapRoute = useMemo(() => (baseRoute && cursor ? { ...baseRoute, cursor } : baseRoute), [baseRoute, cursor?.lat, cursor?.lng, cursor?.label, cursor?.estimated, cursor?.heading]); // eslint-disable-line react-hooks/exhaustive-deps
-  const gaps = useGaps(route, snap, setFocus);
+  // Each gap a marker (its words on its card, §21) and each stop a pin ("Stopped near Kurunegala · 06:56–07:15 · 19 min").
+  const gapRows = useMemo(() => gapsOf(route, snap), [route, snap]);
+  const stops = useMemo(() => stopPins(route), [route]);
+  const marks = useMemo<GapMarker[]>(() => [...gapMarkers(gapRows), ...stops], [gapRows, stops]);
+  const openShown = openMark && marks.some((m) => m.id === openMark) ? openMark : null;
+  // A tap on a marker or pin opens its card and moves the map to it (what a timeline or Gaps list row did).
+  const onMark = (id: string | null) => {
+    setOpenMark(id);
+    if (!id) return;
+    const gap = gapRows.find((g) => g.id === id);
+    const stop = stops.find((s) => s.id === id);
+    if (gap) setFocus(gap.focus);
+    else if (stop) setFocus([{ lat: stop.lat, lng: stop.lng }]);
+  };
+  const summary = daySummary(route);
+  const scheme = usePageScheme();
+  const speed = speedColors(scheme);
   const markers = useMemo<MapMarker[]>(() => {
     const pos = card && isToday ? positionOf(card) : null;
     if (!pos || !card) return [];
@@ -117,12 +142,6 @@ export function DriverPage() {
     return [{ id: card.username, label: card.vehicle ? card.vehicle.split(" · ")[0] : card.driver, title: card.driver, lat: pos.lat, lng: pos.lng, tone, selected: true, heading: card.heading ?? null, at: at ? Date.parse(at) : null }];
   }, [card, isToday, tone]);
   const snapUi = snapControl(route, snap);
-
-  function pickRow(i: number, row: TimelineRow) {
-    setSelected(i);
-    gaps.setOpen(null);
-    if (route) setFocus(focusOf(route, row));
-  }
 
   const dayLabel = isToday ? "Today" : date === addDays(today(), -1) ? "Yesterday" : longDate(date, true);
   return (
@@ -160,16 +179,23 @@ export function DriverPage() {
         </div>
 
         <div className="ph" style={{ marginBottom: 0 }}>
-          <div><div className="eyebrow">{dayLabel}{route?.first ? ` · ${route.first}–${route.last}` : ""}</div><h2 style={{ margin: 0 }}>Route</h2></div>
+          <div><div className="eyebrow">{dayLabel}</div><h2 style={{ margin: 0 }}>Route</h2></div>
         </div>
         {/* A day of history: the week strip (docs/ui-patterns.md §3); nothing is recorded after today. */}
         <DayStrip value={date} onChange={day.setDay} pastOnly label="Day" />
 
-        <div className="tiles">
-          <Tile label="Km (GPS)" value={route?.km != null ? num(route.km) : "—"} unit="km" sub={route ? `from ${num(route.count)} points` : ""} />
-          <Tile label="Driving time" value={minutesText(route?.drivingMinutes)} unit="" sub={route?.first ? `first point ${route.first}` : ""} />
-          <Tile label="Stopped time" value={minutesText(route?.stoppedMinutes)} unit="" sub={route?.gaps.length ? `${route.gaps.length} gap${route.gaps.length > 1 ? "s" : ""} with no position` : "no gaps"} tone={route?.gaps.length ? "warn" : ""} />
-          <Tile label="Stops" value={route?.stopsCount ?? "—"} unit="of 10 min or more" sub={route?.last ? `last point ${route.last}` : ""} />
+        {/* §33.6 item 1: the day in one card above the map (the day's numbers, the first and last point, the gaps in one line). */}
+        <div className="card card-b day-sum" data-testid="day-summary">
+          <dl>
+            <div><dt>Km (GPS)</dt><dd><b className="num">{summary?.km != null ? num(summary.km) : "—"}</b><small>km</small></dd><span className="sub">{summary ? `from ${num(summary.points)} points` : ""}</span></div>
+            <div><dt>Driving time</dt><dd><b>{minutesText(summary?.drivingMinutes)}</b></dd></div>
+            <div><dt>Stopped time</dt><dd><b>{minutesText(summary?.stoppedMinutes)}</b></dd></div>
+            <div><dt>Stops</dt><dd><b className="num">{summary?.stops ?? "—"}</b></dd><span className="sub">of 10 min or more</span></div>
+            <div><dt>First–last point</dt><dd><b className="num" data-testid="day-span">{summary?.first ? `${summary.first}–${summary.last ?? summary.first}` : "—"}</b></dd></div>
+          </dl>
+          {summary?.noGps && (
+            <p className="day-gaps" data-testid="day-gaps"><Icon name="alert" />{summary.noGps}{summary.gaps > 1 ? ` · ${summary.gaps} gaps` : ""}</p>
+          )}
         </div>
 
         {!entry.data && !noConnector && (entry.err || !route) && (
@@ -180,58 +206,38 @@ export function DriverPage() {
         )}
         {route?.note && <Notice tone="info">{route.note}</Notice>}
 
-        <div className="driver-layout">
-          <div className="stack">
-            <MapView markers={markers} route={mapRoute} focus={focus} onPick={() => undefined} gaps={gaps.markers} openGap={gaps.open} onGap={gaps.setOpen} />
-            <div className="legend" aria-label="Legend">
-              <span><i style={{ background: SPEED_COLORS.stopped }} />Standing</span>
-              <span><i style={{ background: SPEED_COLORS.slow }} />Under 20 km/h</span>
-              <span><i style={{ background: SPEED_COLORS.normal }} />20–60 km/h</span>
-              <span><i style={{ background: SPEED_COLORS.fast }} />Over 60 km/h</span>
-              <span><i className="thin" />Poor fix (over 30 m)</span>
-              <span><i className="dashed" />No GPS / app not running</span>
-              <span><i className="ring" />Stop</span>
+        <div className="stack">
+          <MapView markers={markers} route={mapRoute} focus={focus} onPick={() => undefined} gaps={marks} openGap={openShown} onGap={onMark} />
+          <div className="legend" aria-label="Legend">
+            <span><i style={{ background: speed.stopped }} />Standing</span>
+            <span><i style={{ background: speed.slow }} />Under 20 km/h</span>
+            <span><i style={{ background: speed.normal }} />20–60 km/h</span>
+            <span><i style={{ background: speed.fast }} />Over 60 km/h</span>
+            <span><i className="thin" />Poor fix (over 30 m)</span>
+            <span><i className="dashed" />No GPS / app not running</span>
+            <span><i className="ring" />Stop</span>
+          </div>
+          {estimatedLegend(route) && (
+            <div className="legend" data-testid="estimated-legend">
+              <span><i style={{ background: `repeating-linear-gradient(90deg, ${estimatedColor(scheme)} 0 3px, transparent 3px 8px)` }} />{estimatedLegend(route)}</span>
             </div>
-            {estimatedLegend(route) && (
-              <div className="legend" data-testid="estimated-legend">
-                <span><i style={{ background: `repeating-linear-gradient(90deg, ${ESTIMATED_COLOR} 0 3px, transparent 3px 8px)` }} />{estimatedLegend(route)}</span>
-              </div>
-            )}
-            {(snapUi.toggle || snapUi.note) && (
-              <div className="legend" data-testid="snap-legend">
-                {snapUi.toggle && <label><input type="checkbox" checked={!snap} onChange={(e) => setSnap(!e.target.checked)} /> Recorded points</label>}
-                {snapUi.note && <span>{snapUi.note}</span>}
-              </div>
-            )}
-            {webPlayback && (
-              <div className="card card-b play" data-testid="playback">
-                <button type="button" className="btn dark" onClick={playback.toggle} aria-label={playback.playing ? "Pause" : "Play"}>
-                  <Icon name={playback.playing ? "pause" : "play"} />{playback.playing ? "Pause" : "Play"}
-                </button>
-                <Chips<`${PlaybackSpeed}`> options={SPEEDS.map((s) => [`${s}`, `${s}×`] as [`${PlaybackSpeed}`, string])} value={`${playback.speed}`} onChange={(k) => playback.setSpeed(Number(k) as PlaybackSpeed)} />
-                <input type="range" aria-label="Time" min={playback.start} max={playback.end} step={1000} value={Math.round(playback.t)} onChange={(e) => playback.seek(Number(e.target.value))} />
-                <span className="mono" data-testid="playback-clock">{clockText(playback.t, !!pos?.estimated)}</span>
-              </div>
-            )}
-          </div>
-          <div className="stack" style={{ alignContent: "start" }}>
-          <div className="card timeline" data-testid="timeline">
-            {route && route.timeline.length ? route.timeline.map((row, i) => (
-              <button type="button" key={i} className={`tl-row ${row.kind}${selected === i ? " sel" : ""}`} onClick={() => pickRow(i, row)}>
-                <TimelineIcon kind={row.kind} />
-                <span className="when">{row.from}–{row.to}</span>
-                <span className="grow">
-                  <span className="what">
-                    {KIND_LABEL[row.kind]}{row.kind === "driving" && row.km != null ? ` · ${num(row.km)} km` : ""}
-                    {row.uploaded ? <span className="late"> · Offline here · uploaded {row.uploaded}</span> : null}
-                  </span>
-                  <span className="sub">{row.kind === "stopped" ? (row.near ? `near ${row.near} · ` : "") + minutesText(row.minutes) : minutesText(row.minutes)}</span>
-                </span>
+          )}
+          {(snapUi.toggle || snapUi.note) && (
+            <div className="legend" data-testid="snap-legend">
+              {snapUi.toggle && <label><input type="checkbox" checked={!snap} onChange={(e) => setSnap(!e.target.checked)} /> Recorded points</label>}
+              {snapUi.note && <span>{snapUi.note}</span>}
+            </div>
+          )}
+          {webPlayback && (
+            <div className="card card-b play" data-testid="playback">
+              <button type="button" className="btn dark" onClick={playback.toggle} aria-label={playback.playing ? "Pause" : "Play"}>
+                <Icon name={playback.playing ? "pause" : "play"} />{playback.playing ? "Pause" : "Play"}
               </button>
-            )) : <Empty>{route ? "No timeline for this day." : entry.err ? "The route could not load." : "Loading…"}</Empty>}
-          </div>
-          <GapsList rows={gaps.rows} open={gaps.open} onOpen={(g) => { setSelected(null); gaps.pick(g); }} />
-          </div>
+              <Chips<`${PlaybackSpeed}`> options={SPEEDS.map((s) => [`${s}`, `${s}×`] as [`${PlaybackSpeed}`, string])} value={`${playback.speed}`} onChange={(k) => playback.setSpeed(Number(k) as PlaybackSpeed)} />
+              <input type="range" aria-label="Time" min={playback.start} max={playback.end} step={1000} value={Math.round(playback.t)} onChange={(e) => playback.seek(Number(e.target.value))} />
+              <span className="mono" data-testid="playback-clock">{clockText(playback.t, !!pos?.estimated)}</span>
+            </div>
+          )}
         </div>
         {route?.km != null && <p className="muted small">Km from GPS, drift filtered: fixes worse than 50 m, jumps and drift while standing still are left out. The odometer is the true figure.{route.shown != null ? ` Line: ${num(route.shown)} of ${num(route.count)} points.` : ""}</p>}
       </div>

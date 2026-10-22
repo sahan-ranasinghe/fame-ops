@@ -111,7 +111,9 @@ console.log('\nA1: the day timeline (components/office/DayRoute.tsx)');
   check(segmentIcon('driving') === 'car' && segmentIcon('stopped') === 'pin' && segmentIcon('no_gps') === 'warning' && segmentIcon('no_data') === 'warning', 'a car, a pin, a warning');
   const day = read('components/office/DayRoute.tsx');
   check(!/segDot|toneColor|segmentTone/.test(day), 'no coloured bar or dot beside a row');
-  check(/<SegIcon kind=\{segmentIcon\(seg\.kind\)\} \/>/.test(day) && /Car : kind === 'pin' \? MapPin : TriangleAlert/.test(day), 'one small icon per row');
+  // §33.6 item 1 (Round 4–7, Sahan's decision): the day's timeline list is gone; its stops are pins with a card, its gaps the
+  // summary card's line (segmentIcon stays for the rules above and Live).
+  check(!/route-row|<SegIcon|data\?\.timeline/.test(day) && /onStop=\{pickStop\}/.test(day) && /testID="day-summary"/.test(day), 'no timeline rows any more: the summary card above the map, the stops as pins (§33.6 item 1)');
 }
 
 console.log('\nA2: no language switch on an office header');
@@ -123,20 +125,27 @@ console.log('\nA2: no language switch on an office header');
   check(/<LanguagePill \/>/.test(read('app/(tabs)/index.tsx')), "the driver app's Today keeps its සිංහල switch (the boss's design)");
 }
 
-console.log('\nA3: every map light');
+console.log('\nA3 → C (Round 4–7, §33.12): every map reads the one theme value (light today)');
 {
+  // Round 3's A3 kept every map light by a literal "light" on each; C replaces it with the app's one theme value
+  // (lib/appTheme.ts), light only today, so every map is still light and a dark app theme later darkens them all.
+  const theme = read('lib/appTheme.ts');
+  check(/export const APP_SCHEME: AppScheme = 'light';/.test(theme) && /export function useMapScheme\(\): AppScheme \{\s*return APP_SCHEME;/.test(theme), 'the app is light only today: one value, APP_SCHEME light, read through useMapScheme()');
+  check(/light: 'https:\/\/tiles\.openfreemap\.org\/styles\/liberty'/.test(theme) && /dark: 'https:\/\/tiles\.openfreemap\.org\/styles\/dark'/.test(theme), "the free map: OpenFreeMap's Liberty for light, its Dark style for dark");
   const googleMaps = ['components/GoogleTaskMap.tsx', 'components/GoogleDriversMap.tsx', 'components/GoogleRouteMap.tsx', 'components/office/PinAdjust.tsx'];
   for (const f of googleMaps) {
     const text = read(f);
     // Each JSX <GoogleMapView …> (not useRef<GoogleMapView>): its props up to the first callback.
     const views = text.split('<GoogleMapView').slice(1).filter((s) => /^\s/.test(s)).map((s) => s.slice(0, s.indexOf('=>')));
-    check(views.length > 0 && views.every((v) => /userInterfaceStyle="light"/.test(v)), `${f}: Google's map in the light scheme, whatever the phone's dark mode`);
+    check(views.length > 0 && views.every((v) => /userInterfaceStyle=\{scheme\}/.test(v)) && /const scheme = useMapScheme\(\);/.test(text), `${f}: Google's map in the app's theme (light today, whatever the phone's dark mode)`);
   }
   const every = [...filesUnder('components'), ...filesUnder('app')].filter((f) => /from 'react-native-maps'/.test(read(f)));
   check(same(every.sort(), [...googleMaps].sort()), 'every react-native-maps map is one of those', every);
-  check(/colorScheme: api\.ColorScheme\?\.LIGHT \?\? 'LIGHT'/.test(read('components/web/googleWeb.ts')), "the browser's Google map (/m/): colorScheme LIGHT");
-  const free = [...filesUnder('components'), ...filesUnder('lib')].filter((f) => /tiles\.openfreemap\.org\/styles\//.test(read(f)));
-  check(free.length > 0 && free.every((f) => !/styles\/(dark|fiord)/.test(read(f))), 'the free map: the light Liberty style only', free);
+  check(/colorScheme: api\.ColorScheme\?\.\[googleColorScheme\(APP_SCHEME\)\] \?\? googleColorScheme\(APP_SCHEME\)/.test(read('components/web/googleWeb.ts')), "the browser's Google map (/m/): colorScheme from the app's theme (LIGHT today)");
+  const freeMaps = ['components/OpenTaskMap.tsx', 'components/OpenDriversMap.tsx', 'components/OpenRouteMap.tsx', 'components/office/PinAdjust.tsx'];
+  check(freeMaps.every((f) => /mapStyle=\{freeMapStyle\(scheme\)\}/.test(read(f))) && /export const FREE_MAP_STYLE = freeMapStyle\(APP_SCHEME\);/.test(read('components/web/adapters.ts')), 'the free map (phone and /m/): its style from the app\'s theme');
+  const literal = [...filesUnder('components'), ...filesUnder('lib'), ...filesUnder('app')].filter((f) => f !== 'lib/appTheme.ts' && /tiles\.openfreemap\.org\/styles\//.test(read(f)));
+  check(literal.length === 0, 'no map names a style of its own (only lib/appTheme.ts)', literal);
 }
 
 console.log('\nA5: the driving licence (office/licenceLogic.ts)');

@@ -207,7 +207,8 @@ console.log('\n== Both engines draw the same task ==');
       && /FOLLOW_ZOOM/.test(src) && /onUserMove\(\)/.test(src) && /<MapCompass/.test(src),
     `the ${name} map: the same parts (stops, start, the phone, the line), its loaded signal, Follow me, a gesture ends it, the compass`);
   }
-  check(/onDidFailLoadingMap=\{onFailed\}/.test(open) && /tiles\.openfreemap\.org\/styles\/liberty/.test(open), 'the free map: OpenFreeMap, no key; its failure is said');
+  // C (Round 4–7, §33.12): the style comes from the app's one theme value (lib/appTheme.ts: Liberty while the app is light).
+  check(/onDidFailLoadingMap=\{onFailed\}/.test(open) && /mapStyle=\{freeMapStyle\(scheme\)\}/.test(open) && /light: 'https:\/\/tiles\.openfreemap\.org\/styles\/liberty'/.test(read('src/lib/appTheme.ts')), 'the free map: OpenFreeMap, no key; its failure is said');
   check(/PROVIDER_GOOGLE/.test(google) && !/googleMapId|mapId=/.test(google), "Google's map: PROVIDER_GOOGLE, no map id (free on a phone)");
   const taskMap = read('src/components/TaskMap.tsx');
   check(/import \{ GoogleTaskMap \} from '\.\/GoogleTaskMap'/.test(taskMap) && /import \{ OpenTaskMap \} from '\.\/OpenTaskMap'/.test(taskMap) && !/require\(/.test(taskMap),

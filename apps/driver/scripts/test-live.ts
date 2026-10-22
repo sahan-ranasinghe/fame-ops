@@ -189,7 +189,8 @@ console.log('\n== The screen and the two engines ==');
       && /DRIVER_ZOOM/.test(src) && /if \(!ready \|\| focused\) return;|if \(!focused\) setStop\(framed\);/.test(src) && /<MapCompass/.test(src),
     `the ${name} map: the same pins, its loaded signal, a tap selects, the move to a selected driver, the frame skipped while one is selected, the compass`);
   }
-  check(/onDidFailLoadingMap=\{onFailed\}/.test(open) && /tiles\.openfreemap\.org\/styles\/liberty/.test(open), 'the free map: OpenFreeMap, no key; its failure is said');
+  // C (Round 4–7, §33.12): the style from the app's one theme value (lib/appTheme.ts: Liberty while the app is light).
+  check(/onDidFailLoadingMap=\{onFailed\}/.test(open) && /mapStyle=\{freeMapStyle\(scheme\)\}/.test(open) && /light: 'https:\/\/tiles\.openfreemap\.org\/styles\/liberty'/.test(read('src/lib/appTheme.ts')), 'the free map: OpenFreeMap, no key; its failure is said');
   check(/PROVIDER_GOOGLE/.test(google) && !/googleMapId|mapId=/.test(google), "Google's map: PROVIDER_GOOGLE, no map id (free on a phone)");
   check(/tracksViewChanges=\{false\}/.test(google) && /key=\{`\$\{m\.username\}:\$\{m\.tone\}:\$\{m\.dim\}:\$\{m\.selected\}:\$\{m\.label \?\? ''\}:\$\{m\.initials\}`\}/.test(google),
     "Google's markers: the picture taken once, a new one for a new ring, label or letters");

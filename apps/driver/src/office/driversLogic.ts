@@ -8,6 +8,7 @@
 
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
 import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
+import { durationText } from '../lib/durations';
 import { addDays } from '../lib/time';
 import { whenWords } from '../lib/dateWords';
 import { sentenceText } from './statusWords';
@@ -322,16 +323,57 @@ export interface StopMark extends LatLng {
   key: string;
   /** "10:12": when the stop began. */
   time: string;
+  /** "10:31": when it ended (§33.6 item 1: the pin's card says both). */
+  to: string;
   minutes: number;
   near: string | null;
+  /** The pin's words for a screen reader and its card (stopLine), when the screen gives them. */
+  label?: string;
 }
 
-/** The stops over 10 minutes with a position: a circle with the time it began. */
+/** The stops over 10 minutes with a position: a circle with the time it began; a tap says where and how long. */
 export function stopMarks(route: Pick<DriverRoute, 'stops_over_10_min'>): StopMark[] {
   return (route.stops_over_10_min ?? []).flatMap((s, i): StopMark[] =>
     typeof s.lat === 'number' && typeof s.lng === 'number' && Number.isFinite(s.lat) && Number.isFinite(s.lng)
-      ? [{ key: `stop:${i}:${s.from}`, lat: s.lat, lng: s.lng, time: s.from, minutes: s.minutes, near: s.near ?? null }]
+      ? [{ key: `stop:${i}:${s.from}`, lat: s.lat, lng: s.lng, time: s.from, to: s.to ?? s.from, minutes: s.minutes, near: s.near ?? null }]
       : []);
+}
+
+/**
+ * A stop pin's card (§33.6 item 1, Round 4–7; Google Maps' visit): "Stopped near Kurunegala · 06:56–07:15 · 19 min", or
+ * "Stopped · …" with no town; the length in the person's language (dur.*).
+ */
+export function stopLine(s: Pick<StopMark, 'time' | 'to' | 'minutes' | 'near'>, t: Words): string {
+  const span = s.to && s.to !== s.time ? `${s.time}–${s.to}` : s.time;
+  const duration = durationText(t, s.minutes);
+  return s.near ? t('dayRoute.stopNear', { place: s.near, span, duration }) : t('dayRoute.stopped', { span, duration });
+}
+
+/** The day's summary card (§33.6 item 1): the first and last point ("06:12–18:40"), and the GPS gaps added up. */
+export interface DaySummary {
+  /** "06:12–18:40" (one time when they are the same), or null before any point. */
+  span: string | null;
+  /** The minutes of the day's gaps (no GPS or the app not running), 0 without any. */
+  noGpsMin: number;
+  gaps: number;
+}
+
+export function daySummary(route: Pick<DriverRoute, 'first_point' | 'last_point' | 'gaps'>): DaySummary {
+  const first = route.first_point ?? null;
+  const last = route.last_point ?? first;
+  const gaps = route.gaps ?? [];
+  return {
+    span: first ? (last && last !== first ? `${first}–${last}` : first) : null,
+    noGpsMin: gaps.reduce((sum, g) => sum + (Number.isFinite(g.minutes) && g.minutes > 0 ? g.minutes : 0), 0),
+    gaps: gaps.length,
+  };
+}
+
+/** "No GPS for 2 h 10 min" (with "· 3 gaps" when more than one), or null without a gap. */
+export function noGpsLine(summary: Pick<DaySummary, 'noGpsMin' | 'gaps'>, t: Words): string | null {
+  if (summary.gaps === 0 || summary.noGpsMin <= 0) return null;
+  const line = t('dayRoute.noGps', { duration: durationText(t, summary.noGpsMin) });
+  return summary.gaps > 1 ? `${line} · ${t('dayRoute.gaps', { n: summary.gaps })}` : line;
 }
 
 export interface RouteFit {
