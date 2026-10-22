@@ -3,6 +3,9 @@
 // pushed from a task or from Log mileage (vehicle and task filled in).
 // Phase 7 Part 2: during a task, a breakdown or an accident offers the tick "I need another vehicle"
 // (the fleet admins are told at once); it is cleared when the category changes.
+// Round 4–7 (§33.1): Damage is the sixth category (lib/vehicleCheck.ts REPORT_CATEGORIES). The vehicle check's "Yes"
+// (app/vehicle-check.tsx) uses this form for the pre-trip report: up to 6 photos (maxPhotos), and its own Send (onSend:
+// the check is recorded first and the report names it).
 
 import { Camera, X } from '@/components/icons';
 import { Checkbox, ChoiceChip } from '@/components/patterns/Select';
@@ -12,15 +15,21 @@ import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Button, Card, Notice, Plate, Txt } from '@/components/ui';
 import { discardPhoto, type LocalPhoto, takePhoto } from '@/lib/photos';
 import type { ReportCategory, Vehicle } from '@/lib/types';
+import { REPORT_CATEGORIES, REPORT_MAX_PHOTOS } from '@/lib/vehicleCheck';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
-const CATEGORIES: ReportCategory[] = ['breakdown', 'accident', 'tyre', 'warning_light', 'other'];
 /** The categories that may stop the vehicle: during a task they offer "I need another vehicle". */
 const VEHICLE_STOPPED: ReportCategory[] = ['breakdown', 'accident'];
-const MAX_PHOTOS = 3;
 
-export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
+/** What the driver filled in, handed to `onSend` (the pre-trip report). */
+export interface ReportInput {
+  category: ReportCategory;
+  note: string;
+  photos: LocalPhoto[];
+}
+
+export function ReportForm({ vehicle, taskId, onSent, onDirtyChange, maxPhotos = REPORT_MAX_PHOTOS, onSend }: {
   vehicle: Vehicle | null;
   /** The task the problem belongs to, if any. */
   taskId: string | null;
@@ -28,6 +37,10 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
   onSent: (sent: { needsVehicle: boolean }) => void;
   /** Told whenever the form gains or loses unsaved input. */
   onDirtyChange?: (dirty: boolean) => void;
+  /** At most this many photos (3; 6 on a pre-trip report). */
+  maxPhotos?: number;
+  /** Sends the report itself instead of app.sendReport (the vehicle check: its check goes first). */
+  onSend?: (report: ReportInput) => void;
 }) {
   const app = useApp();
   const { t, language } = app;
@@ -48,7 +61,7 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
   async function addPhoto() {
     const shot = await takePhoto();
     if (shot === 'denied') return setProblem(t('common.cameraDenied'));
-    if (shot) setPhotos((list) => [...list, shot].slice(0, MAX_PHOTOS));
+    if (shot) setPhotos((list) => [...list, shot].slice(0, maxPhotos));
   }
 
   function removePhoto(photo: LocalPhoto) {
@@ -61,7 +74,8 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
     if (!category) return setProblem(t('report.needCategory'));
     if (photos.length === 0) return setProblem(t('report.needPhoto'));
     const needsVehicle = canAskVehicle && needVehicle;
-    app.sendReport(category, note, photos, taskId, vehicle.id, needsVehicle);
+    if (onSend) onSend({ category, note, photos });
+    else app.sendReport(category, note, photos, taskId, vehicle.id, needsVehicle);
     setCategory(null);
     setNote('');
     setPhotos([]);
@@ -80,7 +94,7 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
       <View style={{ gap: 10 }}>
         <Txt variant="big">{t('report.what')}</Txt>
         <View accessibilityRole="radiogroup" style={styles.chips}>
-          {CATEGORIES.map((item) => {
+          {REPORT_CATEGORIES.map((item) => {
             const on = item === category;
             return (
               <ChoiceChip
@@ -125,8 +139,8 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
       </View>
 
       <View style={{ gap: 10 }}>
-        <Txt variant="strong">{t('report.photos', { n: photos.length })}</Txt>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Txt variant="strong">{t('report.photosOf', { n: photos.length, max: maxPhotos })}</Txt>
+        <View style={styles.photos}>
           {photos.map((photo) => (
             <View key={photo.id}>
               <Image source={{ uri: photo.uri }} style={styles.photo} />
@@ -135,7 +149,7 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
               </Pressable>
             </View>
           ))}
-          {photos.length < MAX_PHOTOS && (
+          {photos.length < maxPhotos && (
             <Pressable accessibilityRole="button" accessibilityLabel={t('report.addPhoto')} onPress={addPhoto} style={[styles.photo, styles.addPhoto]}>
               <Camera size={28} color={colors.ink} />
             </Pressable>
@@ -152,6 +166,8 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
 const styles = StyleSheet.create({
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  // Up to 6 photos and the add tile: they wrap onto a second row.
+  photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: { minHeight: 52, paddingHorizontal: 16, borderRadius: 12 },
   note: {
     minHeight: 96,

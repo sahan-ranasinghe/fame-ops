@@ -1,0 +1,74 @@
+{
+  "en": {
+    "vehicleCheck": {
+      "title": "Vehicle check",
+      "question": "Any damage or problem with {plate}?",
+      "hint": "Walk around it: body, glass, tyres, lights, warning lights on the dash.",
+      "required": "Answer before you drive.",
+      "allGood": "No, all good",
+      "problem": "Yes, report a problem",
+      "problemHint": "Add 1 to 6 photos. The office is told at once.",
+      "savedTitle": "All good",
+      "savedAt": "Check saved {time}",
+      "problemAt": "Problem reported {time}",
+      "addPhotos": "Add 4 photos (front, back, left, right)",
+      "photosAdded": "Photos added: {n}",
+      "continue": "Continue",
+      "photosTitle": "Add 4 photos",
+      "photosHint": "A photo of each side. Stand back so the whole side shows.",
+      "takeSide": "Take photo: {side}",
+      "retakeHint": "Tap a photo to take it again.",
+      "savePhotos": "Save photos",
+      "side": {
+        "front": "Front",
+        "back": "Back",
+        "left": "Left",
+        "right": "Right"
+      },
+      "cardTitle": "Vehicle check · {plate}",
+      "cardBody": "Check it before you drive.",
+      "checkNow": "Check now",
+      "startWaits": "Start task waits for the vehicle check."
+    },
+    "report": {
+      "damage": "Damage",
+      "photosOf": "Photos ({n} of {max})"
+    }
+  },
+  "si": {
+    "vehicleCheck": {
+      "title": "වාහන පරීක්ෂාව",
+      "question": "{plate} හි හානියක් හෝ ගැටලුවක් තිබේද?",
+      "hint": "වාහනය වටේ ඇවිද බලන්න: බඳ, වීදුරු, ටයර්, ලයිට්, ඩෑෂ්බෝඩ් එකේ අනතුරු ඇඟවීමේ ලාම්පු.",
+      "required": "පදවන්නට පෙර පිළිතුරු දෙන්න.",
+      "allGood": "නැත, සියල්ල හොඳයි",
+      "problem": "ඔව්, ගැටලුවක් වාර්තා කරන්න",
+      "problemHint": "ඡායාරූප 1 සිට 6 දක්වා එක් කරන්න. කාර්යාලයට වහාම දැනුම් දෙයි.",
+      "savedTitle": "සියල්ල හොඳයි",
+      "savedAt": "{time} ට පරීක්ෂාව සුරැකුණා",
+      "problemAt": "{time} ට ගැටලුව වාර්තා කළා",
+      "addPhotos": "ඡායාරූප 4ක් එක් කරන්න (ඉදිරිපස, පිටුපස, වම, දකුණ)",
+      "photosAdded": "එක් කළ ඡායාරූප: {n}",
+      "continue": "ඉදිරියට",
+      "photosTitle": "ඡායාරූප 4ක් එක් කරන්න",
+      "photosHint": "සෑම පැත්තකම ඡායාරූපයක්. මුළු පැත්තම පෙනෙන ලෙස ඈතින් සිටින්න.",
+      "takeSide": "ඡායාරූපය ගන්න: {side}",
+      "retakeHint": "නැවත ගැනීමට ඡායාරූපයක් තට්ටු කරන්න.",
+      "savePhotos": "ඡායාරූප සුරකින්න",
+      "side": {
+        "front": "ඉදිරිපස",
+        "back": "පිටුපස",
+        "left": "වම් පැත්ත",
+        "right": "දකුණු පැත්ත"
+      },
+      "cardTitle": "වාහන පරීක්ෂාව · {plate}",
+      "cardBody": "පදවන්නට පෙර එය පරීක්ෂා කරන්න.",
+      "checkNow": "දැන් පරීක්ෂා කරන්න",
+      "startWaits": "වාහන පරීක්ෂාවෙන් පසුව කාර්යය ආරම්භ කළ හැක."
+    },
+    "report": {
+      "damage": "හානිය",
+      "photosOf": "ඡායාරූප ({max} න් {n})"
+    }
+  }
+}

@@ -30,5 +30,8 @@ export type Vehicle = Pick<
 >;
 
 export type Language = 'en' | 'si';
-export type ReportCategory = 'breakdown' | 'accident' | 'tyre' | 'warning_light' | 'other';
-export type PhotoKind = 'odometer' | 'fuel_receipt' | 'vehicle_report' | 'profile' | 'licence';
+/** Round 4–7 (§33.1): Damage (dents, scratches, glass) is the sixth category, what a check before work finds most. */
+export type ReportCategory = 'breakdown' | 'accident' | 'tyre' | 'warning_light' | 'damage' | 'other';
+export type PhotoKind = 'odometer' | 'fuel_receipt' | 'vehicle_report' | 'profile' | 'licence' | 'vehicle_check';
+/** Round 4–7 (§33.1): the side of one of an all-good vehicle check's optional four photos. */
+export type CheckSide = 'front' | 'back' | 'left' | 'right';

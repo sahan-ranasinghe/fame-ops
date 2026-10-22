@@ -17,6 +17,8 @@
 // Part 3b: a banner while a question from the office is open and not answered (H3: "The office asked you a question ·
 // Answer", pushed app/ask/[id].tsx; refreshed with Today, by the question's push and by Realtime); on an accepted task
 // "Running late" and "Can't make it" (H4; never on a trip the driver started).
+// Round 4–7 (§33.1): on duty with a vehicle that has no check by this driver today, the "Vehicle check · WP CAB-4521" card
+// with Check now (components/VehicleCheckCard.tsx) under the duty notices, until it is answered (lib/vehicleCheck.ts).
 
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -38,6 +40,7 @@ import { swapCard, taskTitle } from '@/components/taskLines';
 import { TaskList, useMarkShown } from '@/components/TaskRows';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
+import { VehicleCheckCard } from '@/components/VehicleCheckCard';
 import { bannerAsk } from '@/lib/asks';
 import { taskCalls } from '@/lib/contacts';
 import { firstName } from '@/lib/format';
@@ -114,6 +117,8 @@ export default function TodayScreen() {
   // Part 3b (H3): the open question not answered yet that closes soonest.
   const ask = bannerAsk(app.asks, now);
   const decline = next ? declineKey(next) : null;
+  // Round 4–7: the vehicle held on duty still needs its check today (the switch on): the card asks for it.
+  const checkVehicleId = app.sharing && app.vehicle && app.checkNeeded(app.vehicle.id) ? app.vehicle.id : null;
 
   return (
     <View style={styles.page}>
@@ -140,6 +145,7 @@ export default function TodayScreen() {
         <View style={{ padding: 16, gap: 16 }}>
           {app.offline && <Notice tone="warn" text={t('common.savedOffline')} />}
           <DutyNotices />
+          {checkVehicleId && <VehicleCheckCard vehicleId={checkVehicleId} how={app.heldHow(checkVehicleId)} />}
           {app.notice && (
             <Pressable accessibilityRole="button" onPress={app.clearNotice}>
               <Notice tone="info" text={t(app.notice)} />

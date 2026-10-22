@@ -19,7 +19,9 @@
 //               report_running_late; every answer is final) and an answer to
 //               the office's question (ask_answer: answer_ask; 'ok' and
 //               'expired' are done, 'bad' and 'not_yours' refused and kept,
-//               none of them tried again by itself).
+//               none of them tried again by itself). Round 4–7 (§33.1): the vehicle check before work
+//               (vehicle_check), put in the queue before the report it made and before its photos (the report
+//               names the check; a photo names the report or the check), so the server always has what is named.
 //   points      location points. Sent in batches of up to 500, oldest first,
 //               once no op is waiting, so the sharing period they belong to is
 //               already on the server. A batch that gets no answer is sent
@@ -47,7 +49,7 @@ import type { TripsApi } from '../lib/driverApi';
 import type { LateReply, TaskLateOp } from '../lib/late';
 import { vehiclePhotoDone } from '../lib/photoRules';
 import type { TripAnswer, TripCreateOp, TripStopOp } from '../lib/trips';
-import type { Language, PhotoKind } from '../lib/types';
+import type { CheckSide, Language, PhotoKind } from '../lib/types';
 import { CHUNK_BYTES, type VideoStore } from '../lib/videoStore';
 
 export type Op =
@@ -74,10 +76,15 @@ export type Op =
     lat: number | null;
     lng: number | null;
     vehicle_report_id: string | null;
+    /** Round 4–7: one of an all-good check's four photos (absent on every other photo, and on ops queued before). */
+    vehicle_check_id?: string | null;
+    side?: CheckSide | null;
   }
   | { kind: 'odometer_log'; row: realApi.OdometerInsert }
   | { kind: 'fuel_log'; row: realApi.FuelInsert }
   | { kind: 'report'; row: realApi.ReportInsert }
+  /** Round 4–7 (§33.1): a vehicle check before work, its id made on the phone (a resend is harmless); before its report. */
+  | { kind: 'vehicle_check'; row: realApi.VehicleCheckInsert }
   | { kind: 'employee_patch'; id: string; patch: { current_vehicle_id?: string | null; language?: Language } }
   /** Phase 7: Change vehicle (null = no vehicle) at the phone's time; id = the phone's id, so a resend changes nothing. */
   | { kind: 'vehicle_change'; id: string; vehicle_id: string | null; at: string }
@@ -458,19 +465,27 @@ export function createSync(deps: SyncDeps) {
           lat: op.lat,
           lng: op.lng,
           vehicle_report_id: op.vehicle_report_id,
+          ...(op.vehicle_check_id ? { vehicle_check_id: op.vehicle_check_id } : {}),
+          ...(op.side ? { side: op.side } : {}),
         });
         deps.removeFile(op.local_uri);
         return;
       }
       case 'odometer_log':
         // The reading matters more than its photo: if the photo never made it, save the reading without it.
-        return withoutPhotoIfNeeded(op.row.photo_id != null, () => api.insertOdometerLog(client, op.row), () =>
+        return withoutLinkIfRefused(op.row.photo_id != null, () => api.insertOdometerLog(client, op.row), () =>
           api.insertOdometerLog(client, { ...op.row, photo_id: null }));
       case 'fuel_log':
-        return withoutPhotoIfNeeded(op.row.receipt_photo_id != null, () => api.insertFuelLog(client, op.row), () =>
+        return withoutLinkIfRefused(op.row.receipt_photo_id != null, () => api.insertFuelLog(client, op.row), () =>
           api.insertFuelLog(client, { ...op.row, receipt_photo_id: null }));
-      case 'report':
-        return api.insertReport(client, op.row);
+      case 'report': {
+        // A pre-trip report whose check the server refused for good (a phone clock far ahead): the problem still reaches
+        // the office, as an ordinary report.
+        const { check_id: checkId, ...plain } = op.row;
+        return withoutLinkIfRefused(checkId != null, () => api.insertReport(client, op.row), () => api.insertReport(client, plain));
+      }
+      case 'vehicle_check':
+        return api.insertVehicleCheck(client, op.row);
       case 'heartbeat': {
         const answer = await api.sendHeartbeat(client, op.row);
         deps.onHeartbeat?.({ watched: answer?.watched === true, on_duty: answer?.on_duty ?? null, duty_end: answer?.duty_end ?? null });
@@ -499,11 +514,12 @@ export function createSync(deps: SyncDeps) {
     }
   }
 
-  async function withoutPhotoIfNeeded(hasPhoto: boolean, first: () => Promise<void>, fallback: () => Promise<void>) {
+  /** A row that names another (a photo, a check) refused for good: once more without that link, so the row is not lost. */
+  async function withoutLinkIfRefused(linked: boolean, first: () => Promise<void>, fallback: () => Promise<void>) {
     try {
       await first();
     } catch (error) {
-      if (!(error instanceof ApiError) || !error.permanent || !hasPhoto) throw error;
+      if (!(error instanceof ApiError) || !error.permanent || !linked) throw error;
       await fallback();
     }
   }
