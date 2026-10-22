@@ -22,6 +22,8 @@ import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { MapPin } from '@/components/icons';
 import { TaskDriverCard } from '@/components/office/DriverRows';
 import { TaskCheckLines } from '@/components/office/VehicleChecks';
+import { PassengerRows } from '@/components/office/Passengers';
+import { countWithNames } from '@/office/trip/passengersLogic';
 import { StopTimeline } from '@/components/office/StopTimeline';
 import { StopArrival, SwapSegments, TaskMoreDetails, TaskWarnings, TripPurposeCard } from '@/components/office/TaskDetailParts';
 import { showSnackbar } from '@/components/patterns/Snackbar';
@@ -231,6 +233,15 @@ export default function TaskDetailScreen() {
         )}
         {/* Round 4–7 (4): the vehicle check of the task's day by its person, with the photos. */}
         {task?.vehicle_checks?.length ? <Section title={t('office.checks.title')}><TaskCheckLines checks={task.vehicle_checks} /></Section> : null}
+        {/* Round 4–7 (6): the passengers (the count never under the names), a row each; Share trip for someone without an account. */}
+        {task && (task.passengers || task.passengers_list?.length) ? (
+          <Section title={t('office.trip.passengers')} count={countWithNames(task.passengers, task.passengers_list?.length ?? 0) ?? undefined}>
+            {task.passengers_list?.length ? <PassengerRows list={task.passengers_list} /> : null}
+            {(task.passengers ?? 0) > (task.passengers_list?.length ?? 0) && task.passengers_list?.length
+              ? <Txt variant="small" testID="passengers-unnamed">{t('office.passengers.unnamed', { n: (task.passengers ?? 0) - task.passengers_list.length })}</Txt>
+              : null}
+          </Section>
+        ) : null}
         {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none). */}
         {task?.fuel_card ? <FuelCardSection card={task.fuel_card} started={!!task.started || task.status === 'in_progress' || task.status === 'completed'} /> : null}
         {p && task && <TripPurposeCard p={p} />}

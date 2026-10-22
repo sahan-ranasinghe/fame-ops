@@ -11,6 +11,7 @@
 // itself: the person sees the sentence and presses again, and Try again sends the same call (a booking stays a booking).
 // Round 3: who drives shows in the chips ("You drive it yourself", "Kamal Silva · someone else · 077…"); with no app
 // the task's button is "Save trip" and Book now needs the plate (the reason under the button until there is one).
+// Round 4–7 (6): who rides in the chips ("Asha, Kamal +3"); the names go as passenger_list (none with the switch off).
 
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
@@ -37,6 +38,7 @@ import { stopsInput, startInput, hasDeadline } from '@/office/trip/stopsLogic';
 import { useTrip } from '@/office/trip/useTrip';
 import { ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
 import { emptyWho } from '@/office/trip/whoDrivesLogic';
+import { passengersOn, ridersLine } from '@/office/trip/passengersLogic';
 import { whoOfDraft } from '@/office/trip/whoWords';
 import { legTextT, reasonLines, reasonText, stopTimesT } from '@/office/trip/words';
 import { sentenceText } from '@/office/statusWords';
@@ -93,6 +95,9 @@ export default function TripReview() {
   // Round 3: who drives (self-drive switched off = a driver, whatever an older draft said).
   const selfDrive = settings.data?.settings.self_drive_allowed !== false;
   const who = selfDrive ? whoOfDraft(d.req) : emptyWho();
+  // Round 4–7 (6): the passengers switch off: no names are sent (an edit leaves them as they are).
+  const riding = passengersOn(settings.data);
+  const noNames = riding ? {} : { riders: undefined };
   const noAppTrip = who.by !== 'driver';
   const driverName = noAppTrip ? (who.by === 'other' ? who.name.trim() : me.name) : d.driverName || f.driver;
   const label = d.mode === 'edit' ? (d.wasApproved ? t('office.trip.saveReapproval') : t('office.trip.saveChanges')) : d.mode === 'stops' ? t('office.trip.saveChanges') : d.mode === 'request' ? (books ? t('office.trip.bookNow') : t('office.trip.sendRequest')) : needsApproval ? t('office.trip.sendForApproval') : noAppTrip ? t('office.who.saveTrip') : t('office.trip.sendTo', { name: driverName });
@@ -101,7 +106,7 @@ export default function TripReview() {
   const call = (): { tool: string; input: Record<string, unknown> } | { error: string } => {
     if (d.mode === 'task') {
       // The driver's default vehicle from the Who step: known, known to be none (a vehicle must be picked), or not known yet.
-      const v = validateAssign({ ...f, vehicle: f.vehicle === ON_THE_DAY ? ON_THE_DAY : f.vehicle, who }, d.rows, me.name, { defaultVehicle: d.book?.defaultVehicle, base: trip.base });
+      const v = validateAssign({ ...f, vehicle: f.vehicle === ON_THE_DAY ? ON_THE_DAY : f.vehicle, who, ...noNames }, d.rows, me.name, { defaultVehicle: d.book?.defaultVehicle, base: trip.base });
       return 'error' in v ? v : { tool: 'create_task', input: v.input };
     }
     if (d.mode === 'stops') {
@@ -115,7 +120,7 @@ export default function TripReview() {
       if (!d.running && f.leaveBy.trim()) input.leave_by = f.leaveBy.trim();
       return { tool: 'update_task_stops', input };
     }
-    const rf = { ...requestFieldsOf(d), ...(selfDrive ? {} : { who: emptyWho() }) };
+    const rf = { ...requestFieldsOf(d), ...(selfDrive ? {} : { who: emptyWho() }), ...noNames };
     if (d.mode === 'edit') {
       // Only what changed since the request was loaded goes (the site's rule, with the version it was shown with).
       // An edit draft saved before the shared rules holds { choice } in was: read it as the draft's own answer is read.
@@ -129,7 +134,7 @@ export default function TripReview() {
   const planned = call();
   // Book now (the site's bookInput): the request with its trip plus the pick from the Who step.
   const bookCall = (): { input: Record<string, unknown> } | { error: string } => {
-    const rf = { ...requestFieldsOf(d), ...(selfDrive ? {} : { who: emptyWho() }) };
+    const rf = { ...requestFieldsOf(d), ...(selfDrive ? {} : { who: emptyWho() }), ...noNames };
     const vehicle = f.vehicle === ON_THE_DAY ? ON_THE_DAY : f.vehicle;
     return bookInput(rf, { vehicle, driver: f.driver, defaultVehicle: d.book?.defaultVehicle }, trip.base);
   };
@@ -279,6 +284,7 @@ export default function TripReview() {
             {(f.cname || f.cphone) && <Pill text={t('office.trip.contactChip', { who: [f.cname, f.cphone].filter(Boolean).join(' · ') })} tone="muted" size={15} />}
             {(f.notes || d.req.note) && <Pill text={t('office.request.notes', { note: f.notes || d.req.note })} tone="muted" size={15} />}
             {f.pax && <Pill text={t('office.trip.paxN', { n: f.pax })} tone="muted" size={15} />}
+            {riding && f.riders?.length ? <Pill text={ridersLine(f.riders.map((r) => r.name), parseInt(f.pax, 10) || null)} tone="muted" size={15} /> : null}
           </View>
           {p?.vehicle_used && (d.mode === 'task' || books) ? <Txt variant="small" testID="vehicle-used">{t('office.trip.vehicleUsedLine', { text: `${p.vehicle_used.reg_no}${p.vehicle_used.why && p.vehicle_used.why !== 'chosen' ? ` · ${p.vehicle_used.why}` : ''}` })}</Txt> : null}
           {typeof problem === 'string' ? <Txt variant="strong" size={15} color={colors.red}>{problem}</Txt> : problem ? <ErrorNotice error={problem} onRetry={() => void send(lastKind.current)} /> : null}

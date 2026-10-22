@@ -131,9 +131,14 @@ export function withdrawReason(reason: WithdrawReason, note: string): string {
 
 /** Where a row opens: an approver opens a request's page (O1); a created task has no page yet, nor has a requester. */
 export function tripRoute(trip: Trip, _permissions?: readonly string[]): string | null {
+  // Round 4–7 (6): a trip the person rides in opens its passenger view (my_trip, view only).
+  if (isPassengerTrip(trip)) return `/office/my-trip/${trip.task_id || trip.id}`;
   // O3 row 2: the person who asked opens their own request too (the page shows them the trip, the timeline, Edit and Withdraw).
   return !isCreatedTask(trip) ? `/office/request/${trip.id}` : null;
 }
+
+/** Round 4–7 (6): a trip the person rides in (a registered passenger), view only: tagged Passenger on My trips. */
+export const isPassengerTrip = (trip: Trip): trip is CreatedTaskCard => isCreatedTask(trip) && trip.role === 'passenger';
 
 /** O2: an own request may be changed while it waits or is approved (changed = approved and edited since): the trip editor's edit mode. */
 export function canEdit(trip: Trip): boolean {

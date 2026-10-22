@@ -4,6 +4,7 @@
 // readings at the swap; the site's MoveVehicle swap) and Reopen (reopen_task, a task completed today). Pure: no
 // react-native, no i18n; the screens turn the keys into words.
 
+import { type Rider, ridersEdit, ridersFrom } from './trip/passengersLogic';
 import type { TaskDetail, VehicleCard } from './types';
 
 type Task = TaskDetail['task'];
@@ -87,10 +88,12 @@ export interface ChangeFields extends TimeFields {
   contactName: string;
   contactPhone: string;
   notes: string;
+  /** Round 4–7 (6): who rides, by name (the shared passengersLogic); absent = not on the form (the switch off). */
+  riders?: Rider[];
 }
 
 /** The form as the task is now (the driver and vehicle empty: a pick changes them). */
-export const changeFieldsOf = (t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end_by' | 'title' | 'passengers' | 'contact' | 'notes'>): ChangeFields => ({
+export const changeFieldsOf = (t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end_by' | 'title' | 'passengers' | 'contact' | 'notes' | 'passengers_list'>): ChangeFields => ({
   ...timeFieldsOf(t),
   driver: '',
   vehicle: '',
@@ -99,6 +102,7 @@ export const changeFieldsOf = (t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end
   contactName: t.contact?.name ?? '',
   contactPhone: t.contact?.phone ?? '',
   notes: t.notes ?? '',
+  riders: ridersFrom(t.passengers_list),
 });
 
 /**
@@ -106,7 +110,7 @@ export const changeFieldsOf = (t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end
  * `endBeforeStart` as for the time alone. A running task takes the words only (the server refuses its day, leave-by,
  * end, driver and vehicle while it runs; the vehicle swap is its own screen).
  */
-export function changeTaskInput(id: string, version: number, f: ChangeFields, t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end_by' | 'title' | 'passengers' | 'contact' | 'notes' | 'status'>): { error: 'nothing' | 'endBeforeStart' } | { input: Record<string, unknown> } {
+export function changeTaskInput(id: string, version: number, f: ChangeFields, t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end_by' | 'title' | 'passengers' | 'contact' | 'notes' | 'status' | 'passengers_list'>): { error: 'nothing' | 'endBeforeStart' } | { input: Record<string, unknown> } {
   const s = (x: string) => x.trim();
   const was = changeFieldsOf(t);
   const input: Record<string, unknown> = { task_id: id, plan_version: version };
@@ -124,8 +128,10 @@ export function changeTaskInput(id: string, version: number, f: ChangeFields, t:
   if (s(f.notes) !== was.notes) input.notes = s(f.notes);
   const leave = s(f.time) || was.time;
   if (s(f.end) && leave && s(f.end) <= leave) return { error: 'endBeforeStart' };
-  if (Object.keys(input).length === 2) return { error: 'nothing' };
-  return { input };
+  // Round 4–7 (6): the names when they changed (names alone: the ids and the list; with other changes the count too).
+  const named = ridersEdit(input, f.riders, was.riders, { key: 'passengers', was: t.passengers ?? null }, ['task_id', 'plan_version']);
+  if (Object.keys(named).length === 2) return { error: 'nothing' };
+  return { input: named };
 }
 
 // ---------------------------------------------------------------------------

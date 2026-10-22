@@ -189,7 +189,7 @@ console.log('\nThe screens');
   const issues = read('app/office/issues/index.tsx') + read('app/office/issues/[id].tsx');
   const settings = read('app/office/people/settings.tsx');
   const photo = read('office/myPhoto.ts');
-  check(/useTool<MyTrip>\('my_trip', \{ task_id: id \}/.test(page) && /step\('check', 'ok'\)/.test(page) && /step\('check', 'problem'\)/.test(page) && /step\('finish'\)/.test(page), 'the page: my_trip; All good, A problem, Trip finished? open their step');
+  check(/useTool<MyTrip(?: \| PassengerTrip)?>\('my_trip', \{ task_id: id \}/.test(page) && /step\('check', 'ok'\)/.test(page) && /step\('check', 'problem'\)/.test(page) && /step\('finish'\)/.test(page), 'the page: my_trip; All good, A problem, Trip finished? open their step');
   check(/api\.call<MyTrip>\('my_trip_check', checkInput\(trip\.task_id, checkId, form\)\)/.test(step) && /Crypto\.randomUUID\(\)/.test(step), 'the check: my_trip_check with an id made on the screen (a retry never doubles it)');
   check(/up\.add\('vehicle_report'/.test(step) && /up\.add\('vehicle_check'/.test(step) && /up\.add\('odometer'/.test(fin), 'the photos of each kind: a problem\'s, the sides, the odometer');
   check(/saveMyTripPhoto\(kind, shot\.photo\.uri\)/.test(parts) && /createSignedUploadUrl\(path\)/.test(photo) && /tripPhotoPath/.test(photo), 'each photo into the person\'s own folder, its id kept');

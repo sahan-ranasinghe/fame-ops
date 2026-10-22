@@ -10,6 +10,8 @@
 // Round 4–7 (4): a trip nobody drives with the app, on the person's own account, has its button (my_trips' trip_action):
 // Vehicle check before setting off, Trip finished?, or Enter the odometer for one closed without it; it opens the trip's
 // page (office/my-trip/[id]).
+// Round 4–7 (6): a trip the person rides in (a registered passenger) is tagged Passenger and opens its view-only page
+// (office/my-trip/[id]: the time, where it is, the driver with Call, the plate, the stops).
 
 import { tripChip } from '@/office/statusWords';
 import { useRouter } from 'expo-router';
@@ -31,11 +33,11 @@ import { canRequestAgain, expiredText } from '@/office/requestsLogic';
 import { requestAgainDraft, setDraft } from '@/office/trip/draft';
 import { useOffice, useTool } from '@/office/state';
 import {
-  canEdit, canWithdraw, changedText, type Trip, tripBuckets, tripKey, tripLine, tripRoute, tripsArgs, tripsChoice, tripsFilterDefs,
+  canEdit, canWithdraw, changedText, isPassengerTrip, type Trip, tripBuckets, tripKey, tripLine, tripRoute, tripsArgs, tripsChoice, tripsFilterDefs,
   WITHDRAW_REASONS, type WithdrawReason, withdrawReason,
 } from '@/office/tripsLogic';
 import type { FleetError, MyTrips, RequestCard } from '@/office/types';
-import { DarkHeader, ErrorNotice, ListFailed, Screen, StatusChip } from '@/office/ui';
+import { DarkHeader, ErrorNotice, ListFailed, Pill, Screen, StatusChip } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -97,6 +99,7 @@ export default function TripsTab() {
     const mine = withdrawing?.id === trip.id ? withdrawing : null;
     const body = (
       <View style={styles.card}>
+        {isPassengerTrip(trip) && <View style={{ flexDirection: 'row' }}><Pill text={t('office.passengers.tag')} tone="blue" size={13} /></View>}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
           <Txt variant="strong" size={17} style={{ flex: 1 }}>{tripTitle(trip)}</Txt>
           {(() => { const k = tripChip(live.state); return <StatusChip text={t(`office.chip.${k.key}`)} tone={k.tone} icon={live.state === 'expired' ? CalendarX : undefined} testID={live.state === 'expired' ? 'trip-expired' : undefined} />; })()}

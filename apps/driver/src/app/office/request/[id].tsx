@@ -56,6 +56,7 @@ import { askedKey, asksNoDriver } from '@/office/trip/whoWords';
 import type { Availability, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList, SettingsResult } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
+import { PassengerRows } from '@/components/office/Passengers';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { whenWords } from '@/lib/dateWords';
@@ -366,6 +367,12 @@ export default function ApproveRequest() {
             )}
           </Section>
         )}
+        {/* Round 4–7 (6): who rides by name (a registered person with their photo; someone without an account with Call / WhatsApp). */}
+        {card?.passengers_list?.length ? (
+          <Section title={t('office.passengers.title')} count={card.passengers_list.length}>
+            <PassengerRows list={card.passengers_list} />
+          </Section>
+        ) : null}
         {card && open && !outcome && asAsked && (
           <Section title={t('office.trip.vehicle')}>
             {card.kind === 'task' && card.proposed?.vehicle ? <Txt variant="small">{t('office.who.proposedVehicle', { plate: card.proposed.vehicle })}</Txt> : <Txt variant="small">{t('office.who.plateNeeded')}</Txt>}

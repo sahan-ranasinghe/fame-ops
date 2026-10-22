@@ -10,11 +10,14 @@
 //   without it (Completed · not confirmed): Enter the odometer, the same step.
 // - finished, cancelled, nothing to do: says so.
 // The rules: office/myTripLogic.ts; the strings: office.myTrip.*.
+// Round 4–7 (6): a trip the person rides in (my_trip's viewer passenger) shows the passenger's view instead, view only
+// (components/office/Passengers.tsx PassengerTripCard; the passenger notifications link here too).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { TripCard } from '@/components/office/MyTripParts';
+import { PassengerTripCard } from '@/components/office/Passengers';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Notice, Txt } from '@/components/ui';
@@ -22,7 +25,8 @@ import { dateWords } from '@/lib/dateWords';
 import { colomboDate } from '@/lib/time';
 import { plateOfTrip, tripMode, windowWords } from '@/office/myTripLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { MyTrip } from '@/office/types';
+import { isPassengerView } from '@/office/passengerView';
+import type { MyTrip, PassengerTrip } from '@/office/types';
 import { BackHeader, ListFailed, Screen, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -32,8 +36,11 @@ export default function MyTripScreen() {
   const { t } = useApp();
   const { signOut } = useOffice();
   const router = useRouter();
-  const q = useTool<MyTrip>('my_trip', { task_id: id }, { every: 60_000 });
-  const trip = q.data && q.data.task_id === id ? q.data : null;
+  const q = useTool<MyTrip | PassengerTrip>('my_trip', { task_id: id }, { every: 60_000 });
+  const answer = q.data && q.data.task_id === id ? q.data : null;
+  // A trip the person rides in: the passenger's view only (no check, no finish).
+  const riding = isPassengerView(answer) ? answer : null;
+  const trip = riding ? null : (answer as MyTrip | null);
   const mode = trip ? tripMode(trip) : null;
   const opens = trip ? `${dateWords(t, trip.date)} ${trip.window.opens_at}` : '';
   const plate = trip ? plateOfTrip(trip) : '';
@@ -44,12 +51,13 @@ export default function MyTripScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <BackHeader title={trip?.title ?? t('office.myTrip.title')} subtitle={trip ? t('office.myTrip.above', { when: `${dateWords(t, trip.date)} ${trip.leave_at}` }) : undefined} />
+      <BackHeader title={trip?.title ?? riding?.title ?? t('office.myTrip.title')} subtitle={trip ? t('office.myTrip.above', { when: `${dateWords(t, trip.date)} ${trip.leave_at}` }) : riding ? t('office.passengers.above', { when: `${dateWords(t, riding.date)} ${riding.leave_at}` }) : undefined} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} bottom={16}>
         {!q.data && !q.error && <SkeletonRows rows={3} lines={2} />}
         {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         <SavedNotice noticeKey={`myTrip:${id}`} />
         {trip && <TripCard trip={trip} />}
+        {riding && <PassengerTripCard trip={riding} />}
 
         {trip && mode === 'check' && trip.check_needed && (
           <View style={styles.card} testID="my-trip-question">

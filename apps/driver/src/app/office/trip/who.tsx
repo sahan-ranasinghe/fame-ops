@@ -11,6 +11,8 @@
 // myself or Someone else (a name and a phone): no driver to pick, and on Assign a task and Book now the vehicle's plate
 // (nobody confirms one on the day), Next disabled with the reason until it is there. The drivers are the driver-first
 // cards (photo, name, state, the vehicle chip under the name), Book now's free drivers too.
+// Round 4–7 (6): Who rides (components/office/Passengers.tsx) under the passenger count on both flows: office people by
+// name with their photo, or someone without an account; hidden with the passengers switch off.
 
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -20,6 +22,8 @@ import { ChevronDown, ChevronUp, X } from '@/components/icons';
 import { DriverChoiceRow, DriverRows } from '@/components/office/DriverRows';
 import { VehicleGroups } from '@/components/office/VehicleGroups';
 import { WhoDrivesChoice } from '@/components/office/WhoDrivesChoice';
+import { PassengersField } from '@/components/office/Passengers';
+import { passengersOn } from '@/office/trip/passengersLogic';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { Chips, MoreDetails, Stepper, ToggleRow } from '@/components/office/Controls';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
@@ -112,6 +116,8 @@ function WhoStep({ d }: { d: TripDraft }) {
   const picked = drivers.find((x) => x.username === f.driver);
   const onDay = settings.data?.settings.vehicle_on_the_day === true;
   const selfDrive = settings.data?.settings.self_drive_allowed !== false;
+  // Round 4–7 (6): the passengers switch (absent = on).
+  const riding = passengersOn(settings.data);
   // Self-drive switched off: every trip needs a driver (the question is not asked; an old choice counts as a driver).
   const whoNow: WhoDrivesValue = selfDrive ? who : emptyWho();
   const byDriver = whoNow.by === 'driver';
@@ -245,6 +251,7 @@ function WhoStep({ d }: { d: TripDraft }) {
             <View style={styles.card}>
               <Field label={t('office.trip.title')} value={f.title} onChangeText={(title) => setF({ title })} placeholder={t('office.trip.titlePlaceholder')} maxLength={120} />
               <Stepper label={t('office.trip.passengers')} value={f.pax} onChange={(pax) => setF({ pax })} testID="pax-stepper" />
+              {riding && <PassengersField value={f.riders ?? []} onChange={(riders) => setF({ riders })} count={f.pax} />}
               <MoreDetails filled={!!(f.cname || f.cphone || f.notes || d.rows.length || f.whatsapp)} testID="task-details">
                 <Field label={t('office.trip.contactName')} value={f.cname} onChangeText={(cname) => setF({ cname })} maxLength={120} />
                 <Field label={t('office.trip.contactPhone')} mono value={f.cphone} onChangeText={(cphone) => setF({ cphone })} keyboardType="phone-pad" maxLength={30} />
@@ -285,6 +292,7 @@ function WhoStep({ d }: { d: TripDraft }) {
             {whoCard}
             <View style={styles.card}>
               <Stepper label={t('office.trip.passengers')} value={f.pax} onChange={(pax) => setF({ pax })} testID="pax-stepper" />
+              {riding && <PassengersField value={f.riders ?? []} onChange={(riders) => setF({ riders })} count={f.pax} />}
               <Txt variant="strong" size={16}>{t('office.trip.needType')}</Txt>
               <Chips options={[{ key: '', label: t('office.trip.anyVehicle') } as { key: string; label: string }, ...NEED_TYPES.map((type) => ({ key: type as string, label: t(`office.vehicles.type_${type}`) }))]} value={d.req.need} onChange={(need) => setReq({ need })} />
               <ToggleRow label={t('office.trip.tools')} value={d.req.tools} onChange={(tools) => setReq({ tools })} />

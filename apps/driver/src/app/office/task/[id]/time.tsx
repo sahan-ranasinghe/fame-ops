@@ -4,6 +4,8 @@
 // (Who's available, the best match marked; Ask drivers) and the vehicle (Keep, the new driver's own, On the day / Any
 // type with the setting, Choose… from the four groups). A running task keeps its day, leave-by and driver: the words,
 // the end and the vehicle only. One sticky Save, disabled until something changed, with the reason under it.
+// Round 4–7 (6): Who rides under the passengers (the names alone go as task_id, plan_version and passenger_list); hidden
+// with the passengers switch off.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -15,6 +17,8 @@ import { showSnackbar } from '@/components/patterns/Snackbar';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { MoreDetails, Stepper } from '@/components/office/Controls';
 import { DriverRows } from '@/components/office/DriverRows';
+import { PassengersField } from '@/components/office/Passengers';
+import { passengersOn } from '@/office/trip/passengersLogic';
 import { TripDayPicker } from '@/components/patterns/Calendar';
 import { TimeField } from '@/components/patterns/TimeField';
 import { DepartureNote } from '@/components/office/TripShell';
@@ -77,14 +81,17 @@ export default function ChangeTaskScreen() {
   const set = (patch: Partial<ChangeFields>) => setF((x) => (x ? { ...x, ...patch } : x));
   // A new driver brings their vehicle (the site's vehicleToSend): named in the call when it differs from the task's.
   const vehicleToSend = f?.vehicle || (picked?.vehicle && picked.vehicle.reg_no !== currentPlate ? picked.vehicle.reg_no : '');
-  const result = task && f ? changeTaskInput(task.id, task.plan_version ?? 0, { ...f, vehicle: vehicleToSend }, task) : null;
+  // Round 4–7 (6): the passengers switch off: the names are left as they are.
+  const riding = passengersOn(settings.data);
+  const noNames = riding ? {} : { riders: undefined };
+  const result = task && f ? changeTaskInput(task.id, task.plan_version ?? 0, { ...f, vehicle: vehicleToSend, ...noNames }, task) : null;
   const changed = !!result && 'input' in result;
   // The leave-by checked at once against the stops' arrive-by times (the site's TaskEdit).
   const check = !locked && p && f ? checkDeparture(f.time, departurePlan(p.timeline, p.plan?.buffer_min)) : null;
 
   async function save() {
     if (!task || !f || busy) return;
-    const r = changeTaskInput(task.id, task.plan_version ?? 0, { ...f, vehicle: vehicleToSend }, task);
+    const r = changeTaskInput(task.id, task.plan_version ?? 0, { ...f, vehicle: vehicleToSend, ...noNames }, task);
     if ('error' in r) {
       setWhy(t(r.error === 'nothing' ? 'office.task.timeNothing' : 'office.task.timeEndBeforeStart'));
       return;
@@ -149,6 +156,7 @@ export default function ChangeTaskScreen() {
                 </>
               )}
               <Stepper label={t('office.trip.passengers')} value={f.passengers} onChange={(passengers) => set({ passengers })} />
+              {riding && <PassengersField value={f.riders ?? []} onChange={(riders) => set({ riders })} count={f.passengers} />}
               <MoreDetails filled={!!(f.contactName || f.contactPhone || f.notes)} testID="change-details">
                 <Field label={t('office.trip.contactName')} value={f.contactName} onChangeText={(contactName) => set({ contactName })} maxLength={120} />
                 <Field label={t('office.trip.contactPhone')} mono value={f.contactPhone} onChangeText={(contactPhone) => set({ contactPhone })} keyboardType="phone-pad" maxLength={30} />
