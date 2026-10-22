@@ -11,6 +11,8 @@
 // the trip editor's (§34). Someone without the approve permission, while new
 // tasks need the fleet admin's OK, proposes the task instead: it waits in the
 // approval queue and nothing goes to the driver yet (§33).
+// Round 4–7 (6): Who rides (ui/PassengersField) beside the passenger count, sent as passenger_list on create_task; hidden
+// with the passengers switch off.
 // Round 3: "Who drives?" (ui/WhoDrives): a driver (picked from the driver cards, ui/DriverPicker), I'll drive myself, or
 // someone else (a name and a phone). The last two need a plate (the reason under the button) and send nothing.
 import { type FormEvent, useRef, useState } from "react";
@@ -28,6 +30,8 @@ import { DraftBanner } from "../ui/DraftBanner";
 import { driverOptions } from "../ui/driverPickerLogic";
 import { Icon } from "../ui/icons";
 import { WhoDrives } from "../ui/WhoDrives";
+import { PassengersField } from "../ui/PassengersField";
+import { passengersOn } from "./passengersLogic";
 import { emptyWho, plateReason } from "../ui/whoDrivesLogic";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
@@ -78,6 +82,8 @@ export function NewTask() {
   const proposes = settings.data?.settings.tasks_need_approval !== false && !me.permissions.includes("approve");
   // Round 3: who drives (always a driver while self-drive is off); the person or someone else = no app, a plate.
   const selfDrive = settings.data?.settings.self_drive_allowed !== false;
+  // Round 4–7 (6): the passengers switch off: no Who rides field, and no names sent.
+  const riding = passengersOn(settings.data);
   const who = selfDrive ? assignWho(f) : emptyWho();
   const noApp = who.by !== "driver";
 
@@ -140,7 +146,7 @@ export function NewTask() {
     // The driver's vehicle: known (Who's available, else the driver list), known to be none, or not known yet (the server decides).
     const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
     // "on the day" is named when it is the default (Hotfix 2, J): never held up for a vehicle.
-    const v = validateAssign({ ...f, who, vehicle: noApp ? f.vehicle : vehicleArg(f.vehicle, dflt) }, rows, me.name, { defaultVehicle: known, base });
+    const v = validateAssign({ ...f, who, vehicle: noApp ? f.vehicle : vehicleArg(f.vehicle, dflt), ...(riding ? {} : { riders: undefined }) }, rows, me.name, { defaultVehicle: known, base });
     if ("error" in v) {
       setMsg({ tone: "bad", text: v.error });
       return;
@@ -179,7 +185,7 @@ export function NewTask() {
           </>
         ),
       });
-      setState({ f: { ...f, title: "", notes: "", cname: "", cphone: "", pax: "", end: "", leaveBy: "", startPax: false, startWhat: "", startNote: "", startDwell: "", stops: defaultStops() }, rows: [] });
+      setState({ f: { ...f, title: "", notes: "", cname: "", cphone: "", pax: "", riders: [], end: "", leaveBy: "", startPax: false, startWhat: "", startNote: "", startDwell: "", stops: defaultStops() }, rows: [] });
       toast(out.toast);
       void store.invalidate();
     } catch (e) {
@@ -238,6 +244,7 @@ export function NewTask() {
             <BackByField trip={trip} id="af-end" label="Vehicle free by" />
             <div className="field"><label htmlFor="af-pax">Passengers</label><input type="number" id="af-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
           </div>
+          {riding && <PassengersField id="af" value={f.riders ?? []} onChange={(r) => set("riders", r)} count={f.pax} />}
           <div className="grid2">
             <div className="field"><label htmlFor="af-cname">Contact name</label><input id="af-cname" maxLength={120} value={f.cname} onChange={(e) => set("cname", e.target.value)} /></div>
             <div className="field"><label htmlFor="af-cphone">Contact phone</label><input id="af-cphone" maxLength={30} inputMode="tel" value={f.cphone} onChange={(e) => set("cphone", e.target.value)} /></div>

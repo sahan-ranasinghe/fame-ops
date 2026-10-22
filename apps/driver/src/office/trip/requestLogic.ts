@@ -8,8 +8,9 @@
 // (§34): the day, the leave-by time (typed, or planned from the stops'
 // arrive-by times), the back-by time, Start from with "Passengers get in here"
 // and the stops with their times there (the trip editor's fields).
-import type { AskedDriver, FieldChanges, RequestEditFields, RequestEvent, RequestTimeline, RequestTrip } from "../types";
+import type { AskedDriver, FieldChanges, Passenger, RequestEditFields, RequestEvent, RequestTimeline, RequestTrip } from "../types";
 import { emptyWho, plateReason, whoFromRequest, type WhoDrivesValue, whoInput } from "./whoDrivesLogic";
+import { type Rider, ridersEdit, ridersFrom, ridersInput } from "./passengersLogic";
 import { parseDwell } from "./stopsLogic";
 import { isChoice } from "./vehicleChoiceLogic";
 import { type Base, emptyTrip, type TripFields, tripChanges, tripFromRequest, tripRequestInput, type TripStartStop, tripTitle } from "./tripLogic";
@@ -30,6 +31,8 @@ export interface RequestFields extends TripFields {
   who?: WhoDrivesValue;
   /** Phase 7 (§4): the phone of the person it is for when they have no office account (approvers fill it): Tell requester. */
   requesterPhone?: string;
+  /** Round 4–7 (6): who rides, by name (passenger_list); absent = the field is not on the form (switched off, an older draft). */
+  riders?: Rider[];
 }
 
 export const emptyRequest = (date: string): RequestFields => ({
@@ -55,6 +58,8 @@ function askInput(f: RequestFields): Record<string, unknown> {
   if (f.tools) input.tools = true;
   if (t(f.note)) input.note = t(f.note);
   if (t(f.requesterPhone ?? "")) input.requester_phone = t(f.requesterPhone ?? "");
+  // Round 4–7 (6): who rides by name (the count above stays; the server keeps it never under the names).
+  Object.assign(input, ridersInput(f.riders));
   return input;
 }
 
@@ -227,7 +232,7 @@ export function timelineSteps(q: { status: string; decided?: string; decline_rea
  * The edit form's fields, from the card: the trip from its stops and start (the start stop's what, note and time
  * there from the card's trip), or an older request's From and To as two stops; then what it asks for.
  */
-export function editFields(q: { fields?: RequestEditFields; note?: string; requester_phone?: string; trip?: { stops: (TripStartStop & { is_start?: boolean })[] } }): RequestFields {
+export function editFields(q: { fields?: RequestEditFields; note?: string; requester_phone?: string; trip?: { stops: (TripStartStop & { is_start?: boolean })[] }; passengers_list?: Passenger[] }): RequestFields {
   const f = q.fields;
   return {
     ...(q.requester_phone ? { requesterPhone: q.requester_phone } : {}),
@@ -239,6 +244,8 @@ export function editFields(q: { fields?: RequestEditFields; note?: string; reque
     tools: !!f?.tools,
     note: f?.note ?? q.note ?? "",
     who: whoFromRequest(f ?? {}),
+    // Round 4–7 (6): who rides, as the card names them.
+    riders: ridersFrom(q.passengers_list),
   };
 }
 
@@ -293,8 +300,10 @@ export function updateRequestInput(id: string, version: number, f: RequestFields
   if (t(f.behalf) !== t(was.behalf)) input.on_behalf_of = t(f.behalf) || null;
   // Undefined = not on the form (someone who does not approve, or a draft from before the field): left as it is.
   if (f.requesterPhone !== undefined && t(f.requesterPhone) !== t(was.requesterPhone ?? "")) input.requester_phone = t(f.requesterPhone) || null;
-  if (Object.keys(input).length === 2) return { error: "Nothing changed." };
-  return { input };
+  // Round 4–7 (6): the names when they changed (with other changes, the count as it was too).
+  const named = ridersEdit(input, f.riders, was.riders, { key: "pax", was: t(was.pax) === "" ? null : paxOf(was.pax) }, ["request_id", "version"]);
+  if (Object.keys(named).length === 2) return { error: "Nothing changed." };
+  return { input: named };
 }
 
 export type Redecision = "keep" | "change" | "decline";

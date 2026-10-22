@@ -10,13 +10,14 @@
 //   start), the start when there is none (the vehicle's last reading by default), and under More details the fuel added
 //   (litres and / or LKR) and an odometer photo. A trip closed at 09:00 the next day (Completed · not confirmed) is
 //   confirmed with the same form.
+// Round 4–7 (6): a trip the person rides in (my_trip's viewer passenger) is the passenger's view instead (PassengerTrip.tsx).
 // One sticky button, disabled with its reason under it; a save goes back to My trips with the outcome in the toast. Photos
 // go up as they are picked, into the person's own folder (FleetContext tripPhoto: the web build only; the artifact says
 // photos need the web app). The rules: myTripLogic.ts.
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import type { MyTrip, ReportCategory } from "../data/types";
+import type { MyTrip, PassengerTrip, ReportCategory } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { dayWords } from "../lib/when";
 import { asFleetError, errText } from "../transport/errors";
@@ -34,6 +35,7 @@ import {
 import { TRIPS_PATH, useTripCard } from "./myTripsQuery";
 import { FilePick } from "./PhotoUpload";
 import { RequestDetail } from "./RequestDetail";
+import { isPassengerTrip, PassengerTripView } from "./PassengerTrip";
 
 type Shot = { id: string; url?: string };
 type PhotoKind = "vehicle_report" | "vehicle_check" | "odometer";
@@ -105,7 +107,7 @@ export function MyTripPage({ id, fallback }: { id: string; fallback?: ReactNode 
   const afterSave = useAfterSave();
   const { search } = useLocation();
   const home = TRIPS_PATH + search;
-  const q = useQuery<MyTrip>("myTrip", "my_trip", { task_id: id }, { every: 60_000 });
+  const q = useQuery<MyTrip | PassengerTrip>("myTrip", "my_trip", { task_id: id }, { every: 60_000 });
   const canPhoto = !!tripPhoto && transport.kind === "api";
 
   const [finishing, setFinishing] = useState(false);
@@ -125,7 +127,10 @@ export function MyTripPage({ id, fallback }: { id: string; fallback?: ReactNode 
   const made = useRef<string[]>([]);
   useEffect(() => () => { for (const u of made.current) URL.revokeObjectURL(u); }, []);
 
-  const t = q.data && q.data.task_id === id ? q.data : undefined;
+  const answer = q.data && q.data.task_id === id ? q.data : undefined;
+  // A trip the person rides in: the passenger's view (view only).
+  if (isPassengerTrip(answer)) return <PassengerTripView trip={answer} home={home} />;
+  const t = answer as MyTrip | undefined;
   // A request's id (an older link, or a trip outside the list's dates): its own page.
   if (!t && q.err && /not one of your trips/i.test(q.err.message ?? "") && fallback) return <>{fallback}</>;
   if (!t) {

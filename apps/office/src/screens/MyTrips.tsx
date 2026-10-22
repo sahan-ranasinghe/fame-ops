@@ -10,6 +10,8 @@
 // created directly is a row with its title, when, route, live state and the driver with Call, and opens the task
 // (/tasks/:id). L3: 25 at a time ("Load more" on a phone, page numbers on a desktop), the count in the header, a search
 // box (?q=), an empty line that says what the filters mean.
+// Round 4–7 (6): a trip the person rides in (role passenger) is tagged Passenger and opens its view only page beside the
+// list (/my-trips/<task>: the time, the stops, the driver with Call / WhatsApp, the plate, where it is now).
 import type { MouseEvent, ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -33,6 +35,7 @@ import {
   driverPhone,
   emptyText,
   isCreatedTask,
+  isPassengerCard,
   isRequestTrip,
   liveOf,
   liveTone, liveWord,
@@ -131,16 +134,17 @@ function RequestRow({ t, search }: { t: RequestCard; search: string }) {
 /** A task the person created directly: its title, when, route, live state and driver; it opens the task. */
 function CreatedTaskRow({ t, search }: { t: CreatedTaskCard; search: string }) {
   const navigate = useNavigate();
-  const to = createdTaskLink(t);
+  const riding = isPassengerCard(t);
+  const to = createdTaskLink(t, search);
   const live = createdLive(t);
   return (
-    <tr className="click" onClick={() => navigate(to)} data-testid="trip-row" data-kind="task" data-source="task">
+    <tr className="click" onClick={() => navigate(to)} data-testid="trip-row" data-kind="task" data-source="task" data-role={riding ? "passenger" : undefined}>
       <td data-label="When">
         <div><span className="mono">{t.when}</span>{t.back_by && <div className="sub">back by {t.back_by}</div>}</div>
       </td>
       <td data-label="Trip">
         <div>
-          <div className="name"><Pill tone="">Task I created</Pill><Link to={to} onClick={(e) => e.stopPropagation()}>{t.title}</Link></div>
+          <div className="name">{riding ? <Pill tone="live">Passenger</Pill> : <Pill tone="">Task I created</Pill>}<Link to={to} onClick={(e) => e.stopPropagation()}>{t.title}</Link></div>
           {t.route && <div className="sub">{t.route}</div>}
           {t.stops_count && t.stops_count > 2 ? <div className="sub">{t.stops_count} stops</div> : null}
           {t.label && <div className="sub">{t.label}</div>}

@@ -164,8 +164,12 @@ export const isRequestTrip = (t: RequestCard | CreatedTaskCard): t is RequestCar
 /** Hotfix 3: a task the person created directly (no request): its row opens the task. */
 export const isCreatedTask = (t: RequestCard | CreatedTaskCard): t is CreatedTaskCard => (t as CreatedTaskCard).source === "task";
 
-/** The task page a created task's row opens (beside the board). */
-export const createdTaskLink = (t: Pick<CreatedTaskCard, "id" | "task_id">): string => `/tasks/${t.task_id || t.id}`;
+/** Round 4–7 (6): a trip the person rides in (a registered passenger), view only. */
+export const isPassengerCard = (t: Pick<CreatedTaskCard, "role">): boolean => t.role === "passenger";
+
+/** The task page a created task's row opens (beside the board); a trip the person rides in opens its passenger view. */
+export const createdTaskLink = (t: Pick<CreatedTaskCard, "id" | "task_id" | "role">, search = ""): string =>
+  isPassengerCard(t) ? `/my-trips/${t.task_id || t.id}${search}` : `/tasks/${t.task_id || t.id}`;
 
 /** A created task's live state: the server's, else one from the task's status. */
 export function createdLive(t: Pick<CreatedTaskCard, "live" | "status">): TripLive {

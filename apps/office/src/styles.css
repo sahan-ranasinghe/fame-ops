@@ -514,6 +514,17 @@ button.avail-row:focus-visible { outline: 3px solid var(--ink); outline-offset: 
 .ls-ic svg { width: 100%; height: 100% }
 .ls-more { padding: 8px 10px }
 .ls-confirm { margin-top: 8px; display: grid; gap: 10px }
+
+/* Round 4–7 (6): the Passengers field's chips (Google Calendar's guests) and a trip's passenger rows */
+.pchips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none }
+.pchip { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface) }
+.pchip .avatar.sm { width: 28px; height: 28px; font-size: 11px }
+.pchip-name { font-weight: 600 }
+.pchip-x { width: 32px; height: 32px; border-radius: 50%; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px }
+.pchip-x:hover { background: var(--surface-2); color: var(--ink) }
+.prow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0 }
+.prow + .prow { border-top: 1px solid var(--line) }
+.prow .grow { min-width: 140px }
 .pinmap { height: 220px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line) }
 .pinmap.drawn .mapbox { height: 220px }
 .progress { position: relative; height: 22px; border-radius: 8px; background: var(--surface-2); overflow: hidden; display: flex; align-items: center }

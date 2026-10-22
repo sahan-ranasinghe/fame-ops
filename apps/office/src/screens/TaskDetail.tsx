@@ -47,6 +47,8 @@ import { duration } from "@fleet/durations";
 import { datesInWords, whenText } from "../lib/when";
 import { finishChip } from "./myTripLogic";
 import { TaskCheckLines } from "./VehicleChecks";
+import { PassengerList } from "./PassengerList";
+import { countWithNames, ridersLine } from "./passengersLogic";
 
 /** Round 4–7 (5): "Fuel: Enough fuel · 07:42" with the estimate under it; before the start the estimate alone. */
 function FuelCardLine({ card, started }: { card: NonNullable<TaskDetailData["task"]["fuel_card"]>; started: boolean }) {
@@ -227,7 +229,15 @@ export function TaskDetail() {
               <dd><LateReportLine late={t.late_report} /></dd>
             </div>
           )}
-          <div><dt>Passengers</dt><dd>{t.passengers ?? "—"}</dd></div>
+          {/* Round 4–7 (6): the count (never under the names) and who rides by name, with Share trip for someone without an account. */}
+          <div style={t.passengers_list?.length ? { gridColumn: "1/-1" } : undefined} data-testid="task-passengers">
+            <dt>Passengers</dt>
+            <dd>
+              <span className="num">{countWithNames(t.passengers, t.passengers_list?.length ?? 0) ?? "—"}</span>
+              {t.passengers_list?.length ? <span className="muted" style={{ fontWeight: 400 }}> · {ridersLine(t.passengers_list.map((x) => x.name), t.passengers)}</span> : null}
+              {t.passengers_list?.length ? <div style={{ fontWeight: 400 }}><PassengerList list={t.passengers_list} /></div> : null}
+            </dd>
+          </div>
           <div>
             <dt>Contact</dt>
             <dd>

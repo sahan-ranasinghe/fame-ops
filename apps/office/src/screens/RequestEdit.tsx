@@ -7,6 +7,8 @@
 // waiting request stays waiting; an approved booking becomes "changed" and
 // needs re-approval (the approvers are told). Kept as a draft for this request.
 // Phase 7 (§4): an approver may give or change the requester's phone.
+// Round 4–7 (6): Who rides (ui/PassengersField) beside the passenger count: changed names go as passenger_list (names alone
+// need no re-approval on the server); hidden with the passengers switch off.
 // Round 3: "Who drives?" (ui/WhoDrives) in place of "A driver is needed"; on someone else's request (an approver
 // changing it) the second choice is "<their first name> drives", as the server takes the asker as the one who drives.
 import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useMemo, useState } from "react";
@@ -22,6 +24,8 @@ import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { MyLicenceNote, WhoDrives } from "../ui/WhoDrives";
+import { PassengersField } from "../ui/PassengersField";
+import { passengersOn } from "./passengersLogic";
 import { selfLabel } from "../ui/whoDrivesLogic";
 import { basePlace, useFleetSettings } from "./dispatchParts";
 import { useRequest } from "./RequestDetail";
@@ -74,6 +78,7 @@ function EditForm({ id, q, f, setF, draft }: {
   const [msg, setMsg] = useState<string | null>(null);
   const settings = useFleetSettings();
   const selfDrive = settings.data?.settings.self_drive_allowed !== false;
+  const riding = passengersOn(settings.data);
   const base = basePlace(settings.data);
   const set = <K extends keyof RequestFields>(k: K, v: RequestFields[K]) => setF((x) => (x ? { ...x, [k]: v } : x));
   // The request as loaded: only what differs from it is sent.
@@ -83,7 +88,8 @@ function EditForm({ id, q, f, setF, draft }: {
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
-    const v = updateRequestInput(id, q.version ?? 0, f, was, base);
+    // The passengers switch off: the names are left as they are.
+    const v = updateRequestInput(id, q.version ?? 0, riding ? f : { ...f, riders: undefined }, was, base);
     if ("error" in v) {
       setMsg(v.error);
       return;
@@ -131,6 +137,7 @@ function EditForm({ id, q, f, setF, draft }: {
             </div>
             <div className="field"><label htmlFor="re-pax">Passengers</label><input type="number" id="re-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
           </div>
+          {riding && <PassengersField id="re" value={f.riders ?? []} onChange={(r) => set("riders", r)} count={f.pax} />}
           <div className="field" style={{ gap: 8 }}>
             <span className="check"><input type="checkbox" id="re-tools" checked={f.tools} onChange={(e) => set("tools", e.target.checked)} /> <label htmlFor="re-tools">Tools or equipment go too</label></span>
           </div>

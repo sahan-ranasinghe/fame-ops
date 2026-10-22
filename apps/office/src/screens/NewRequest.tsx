@@ -9,6 +9,8 @@
 // free vehicles for that day and time in four groups), who's available with
 // the best match, one call that makes the request and its task together with
 // the same trip. Kept as a draft; a refresh never resets a pick (§10).
+// Round 4–7 (6): Who rides (ui/PassengersField: office people by name with their photo, or someone without an account with a
+// phone) beside the passenger count, sent as passenger_list on create_request and book_vehicle; hidden with the switch off.
 // Round 3: "Who drives?" (ui/WhoDrives, the booking forms' "Who's driving?") in place of "A driver is needed": a driver,
 // I'll drive myself, or someone else (a name and a phone); Book now then needs a plate (the reason under the button), and
 // the driver is picked from the driver cards (ui/DriverPicker).
@@ -28,6 +30,8 @@ import { DraftBanner } from "../ui/DraftBanner";
 import { DriverPicker } from "../ui/DriverPicker";
 import { driverOptions } from "../ui/driverPickerLogic";
 import { MyLicenceNote, WhoDrives } from "../ui/WhoDrives";
+import { PassengersField } from "../ui/PassengersField";
+import { passengersOn } from "./passengersLogic";
 import { emptyWho, plateReason } from "../ui/whoDrivesLogic";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
@@ -73,7 +77,9 @@ export function NewRequest() {
   const base = basePlace(settings.data);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
   const who = whoOf(f, selfDrive);
-  const fields: Form = selfDrive ? f : { ...f, who: emptyWho() };
+  // The passengers switch off: no Who rides field, and no names sent.
+  const riding = passengersOn(settings.data);
+  const fields: Form = { ...(selfDrive ? f : { ...f, who: emptyWho() }), ...(riding ? {} : { riders: undefined }) };
   // Round 3: the person or someone else drives: no driver of ours, a plate picked by hand.
   const noApp = who.by !== "driver";
 
@@ -215,6 +221,7 @@ export function NewRequest() {
             </div>
             <div className="field"><label htmlFor="nr-pax">Passengers</label><input type="number" id="nr-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
           </div>
+          {riding && <PassengersField id="nr" value={f.riders ?? []} onChange={(r) => set("riders", r)} count={f.pax} />}
           <div className="field" style={{ gap: 8 }}>
             <span className="check"><input type="checkbox" id="nr-tools" checked={f.tools} onChange={(e) => set("tools", e.target.checked)} /> <label htmlFor="nr-tools">Tools or equipment go too</label></span>
           </div>

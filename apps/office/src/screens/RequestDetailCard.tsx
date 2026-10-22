@@ -8,6 +8,8 @@ import { joinDots } from "../lib/format";
 import { requestView } from "./approvalLogic";
 import { whenText } from "../lib/when";
 import { AskedWho, ChangesList, LateNotice, RequestHead, SelfDriveLicence, Timeline } from "./requestParts";
+import { PassengerList } from "./PassengerList";
+import { ridersLine } from "./passengersLogic";
 
 export function RequestDetailCard({ q, compact, hideLate }: { q: RequestCard; compact?: boolean; hideLate?: boolean }) {
   const { me } = useFleet();
@@ -30,6 +32,16 @@ export function RequestDetailCard({ q, compact, hideLate }: { q: RequestCard; co
         {q.kind === "task"
           ? <div><dt>Passengers</dt><dd>{p?.passengers ?? "—"}</dd></div>
           : <div><dt>Need</dt><dd>{q.need || "—"}</dd></div>}
+          {/* Round 4–7 (6): who rides by name ("Asha, Kamal +3" and a row each; Call / WhatsApp for someone without an account). */}
+          {q.passengers_list?.length ? (
+            <div style={{ gridColumn: "1/-1" }} data-testid="request-passengers">
+              <dt>Who rides</dt>
+              <dd style={{ fontWeight: 400 }}>
+                <span className="muted">{ridersLine(q.passengers_list.map((x) => x.name), q.kind === "task" ? p?.passengers : q.fields?.pax)}</span>
+                <PassengerList list={q.passengers_list} />
+              </dd>
+            </div>
+          ) : null}
           {/* Round 3: who drives, when it is not a driver of ours (the asker, someone else, the custodian). */}
           {!compact && (q.driven_by || q.driver_required === false) && !q.assigned && <div style={{ gridColumn: "1/-1" }}><dt>Who drives</dt><dd style={{ fontWeight: 400 }}><AskedWho q={q} /></dd></div>}
         {(p?.contact_name || p?.contact_phone) && <div><dt>Contact</dt><dd>{joinDots([p.contact_name, p.contact_phone])}</dd></div>}
