@@ -34,6 +34,7 @@ import { atText } from "../requests_rules.ts";
 import { GPS_KM_NOTE, haversineKm, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { checkCards } from "./checks.ts";
+import { estimateText, FUEL_ANSWER_TEXT, type FuelEstimate } from "../fuelCard.ts";
 import { videoCard, videoLinks } from "../videos.ts";
 import {
   legSequence,
@@ -1873,6 +1874,10 @@ export const taskDetail = tool({
         "vehicle checks",
       )
       : [];
+    // Round 4–7 (5): the fuel card the driver saw at Start task (the estimate is the database's) and their answer.
+    const fuelCard = task.driven_by === "driver" && task.vehicle_id
+      ? (unwrapMaybe(await db.rpc("fuel_estimate", { p_task_id: task.id }), "fuel estimate") as FuelEstimate | null)
+      : null;
 
     const projectIds = split.flatMap((row) => row.project_id ? [row.project_id] : []);
     const [projectsRes, links, request, unlogged, gps, eta, videos] = await Promise.all([
@@ -1993,6 +1998,14 @@ export const taskDetail = tool({
           // Part 3b (H4): the driver's own "Running late".
           late_report: lateReportOf(task, now),
           finish_flag: finishFlagText(task.finish_flag),
+          fuel_card: fuelCard && (fuelCard.km != null || fuelCard.answer)
+            ? {
+              ...fuelCard,
+              estimate_text: estimateText(fuelCard) ?? undefined,
+              answer_text: fuelCard.answer ? FUEL_ANSWER_TEXT[fuelCard.answer] : "Not answered",
+              answered_at: fuelCard.answered_at ? colomboTime(fuelCard.answered_at) : undefined,
+            }
+            : undefined,
           vehicle_checks: checkRows.length
             ? await checkCards(db, refs, checkRows, actor.permissions.includes("vehicles") || actor.permissions.includes("issues"))
             : undefined,

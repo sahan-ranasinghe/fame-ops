@@ -1,6 +1,7 @@
 // Vehicles: list with km / service / documents / status, register, update,
 // and rental companies.
 
+import { FUEL_GRADES, FUEL_TYPES, fuelText, gradeProblem } from "../fuelCard.ts";
 import { checksToday } from "./checks.ts";
 import { z } from "zod";
 import type { Update } from "../db.ts";
@@ -44,6 +45,9 @@ const vehicleFields = {
   emission_expiry: zDate.describe("Emission test expiry"),
   custodian: zText(120).describe("The office person who keeps this vehicle (name or e-mail): it shows as assigned to them"),
   custodian_note: zText(200).describe('A note about the custody, e.g. "Keeps it at Rajagiriya"'),
+  // Round 4–7 (5): the fuel card at Start task needs it; the forms require it, an older vehicle says "Fuel type: not set".
+  fuel_type: z.enum(FUEL_TYPES).describe("petrol, diesel, hybrid (petrol) or electric"),
+  fuel_grade: z.enum(FUEL_GRADES).describe("Optional: petrol_92 or petrol_95 (petrol, hybrid), auto_diesel or super_diesel (diesel)"),
 };
 type VehicleField = keyof typeof vehicleFields;
 
@@ -69,6 +73,8 @@ const SAME_NAME_FIELDS = [
   "insurance_expiry",
   "emission_expiry",
   "custodian_note",
+  "fuel_type",
+  "fuel_grade",
 ] as const;
 
 /** Turns the tool's fields into table columns. Only fields that were sent are included. */
@@ -158,6 +164,9 @@ function vehicleCard(v: Vehicle, refs: Refs, today: string) {
     rent_until: v.rent_until,
     monthly_rent_lkr: centsToLkr(v.monthly_rent_cents),
     regular_driver: v.regular_driver_id ? refs.emp.get(v.regular_driver_id)?.name : undefined,
+    fuel_type: v.fuel_type ?? undefined,
+    fuel_grade: v.fuel_grade ?? undefined,
+    fuel_text: fuelText(v.fuel_type, v.fuel_grade),
     assigned_to: custodian?.name,
     assigned_to_links: custodian ? contactLinks(custodian.phone) : undefined,
     custodian_note: custodian ? v.custodian_note ?? undefined : undefined,
@@ -310,7 +319,8 @@ export const listVehicles = tool({
 export const registerVehicle = tool({
   name: "register_vehicle",
   title: "Register vehicle",
-  description: "Adds a vehicle. Only the plate is required; everything else can be filled in later with update_vehicle.",
+  description: "Adds a vehicle. Only the plate is required; everything else can be filled in later with update_vehicle. Give " +
+    "the fuel type (petrol, diesel, hybrid, electric) and, if known, the grade: the driver's fuel card at Start task uses them.",
   readOnly: false,
   input: z.object(vehicleFields).partial().extend({
     reg_no: zText(20).describe('Number plate, e.g. "WP CAB-4521"'),
@@ -318,6 +328,8 @@ export const registerVehicle = tool({
   async run(args, { db, now }) {
     const refs = await loadRefs(db);
     const regNo = normalisePlate(args.reg_no);
+    const wrongGrade = gradeProblem(args.fuel_type, args.fuel_grade);
+    if (wrongGrade) throw new ToolError(wrongGrade);
     const created = unwrap(
       await db.from("vehicles").insert({ ...toColumns(args, refs), reg_no: regNo }).select("*").single(),
       "vehicle",
@@ -356,8 +368,16 @@ export const updateVehicle = tool({
       ...(garage_booked_date !== undefined && { garage_booked_date }),
       ...(active !== undefined && { active }),
     };
+    // A new fuel type drops a grade that no longer fits it, unless a grade comes with it.
+    if (fields.fuel_type !== undefined && fields.fuel_grade === undefined && vehicle.fuel_grade &&
+      gradeProblem(fields.fuel_type, vehicle.fuel_grade)) columns.fuel_grade = null;
     const changed = Object.keys(columns);
     if (changed.length === 0) throw new ToolError("Nothing to change: give at least one field.");
+    const wrongGrade = gradeProblem(
+      fields.fuel_type !== undefined ? fields.fuel_type : vehicle.fuel_type,
+      columns.fuel_grade !== undefined ? columns.fuel_grade : vehicle.fuel_grade,
+    );
+    if (wrongGrade) throw new ToolError(wrongGrade);
 
     const updated = unwrap(await db.from("vehicles").update(columns).eq("id", vehicle.id).select("*").single(), "vehicle");
     return {

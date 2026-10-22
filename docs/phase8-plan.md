@@ -1103,6 +1103,14 @@ host to contact. Never blocks.
   `answer_holder_ask(ask_id, answer)`, `holder_asks(status?)`; `day_timeline(date, kind drivers | vehicles)` (view);
   `tell_involved` on every change of driver or vehicle. With `holder_contact` off: the warning without the person or Ask.
 
+### 33.6 Three small UI items (Sahan, 22 October 2026; no switch; every surface where they exist)
+
+| Surface | Screen | Today | Round 4–7 |
+|---|---|---|---|
+| Site, /m/, Office mode | A driver's day / route page | The map, playback, the day's timeline list and the "Gaps" list | The timeline and the Gaps list removed; ONE summary card above the map (Samsara's driver day, Google Maps Timeline): km driven, driving time, stops, first–last point time, one line for GPS gaps ("No GPS for 2 h 10 min") when any; stops stay pins, a tap says "Stopped near <town> · 06:56–07:15 · 19 min". Claude's `driver_route` unchanged |
+| Driver app | Fuel tab, Mileage tab | Every entry of the month in a list | Google Pay / Revolut / PickMe's history: the summary card, the Log buttons, ONE "Recent" card with the last 5 (an icon: fuel pump / odometer gauge; litres or km; the date in words; a video mark when uploaded), "See all" → a history screen grouped by month with Load more; on Mileage the chips All · Odometer · Fuel. Today's tasks on Mileage stay |
+| Driver app, site | Fuel tab, the Fuel page, totals | A missing amount reads "LKR 0" | "–"; totals add only the known amounts and say "N fills without an amount" |
+
 ### 33.5 Also in the round
 - `docs/voice-calls-plan.md` (doc only): WebRTC through a service (LiveKit, Agora, Twilio Voice) with their current prices
   and free tiers (cited), the native modules (react-native-webrtc, CallKeep / ConnectionService, FCM high priority to

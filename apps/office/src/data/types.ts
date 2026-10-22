@@ -546,6 +546,8 @@ export interface FuelEntry {
   litres: number | null;
   lkr: number | null;
   odometer_km?: number | null;
+  /** Round 4–7 (5): what was filled ("Petrol 92", "Diesel"), when the driver said. */
+  fuel?: string;
   receipt?: string;
   video: VideoCard;
 }
@@ -555,10 +557,21 @@ export interface FuelList extends Paged {
   /** Phase 7 (§8): a range of days (list_fuel from/to); the entries and totals are those days', month_totals the month of to. */
   from?: string;
   to?: string;
-  month_totals?: { entries: number; litres: number; lkr: number };
+  /** Round 4–7 (§33.6): lkr adds only the known amounts; without_amount fills have none (shown "–", never LKR 0). */
+  month_totals?: { entries: number; litres: number; lkr: number; without_amount?: number };
   vehicle?: string;
   driver?: string;
-  totals: { entries: number; litres: number; lkr: number; videos: number; videos_waiting: number; videos_missing: number; bytes: number; interrupted?: number };
+  totals: {
+    entries: number;
+    litres: number;
+    lkr: number;
+    without_amount?: number;
+    videos: number;
+    videos_waiting: number;
+    videos_missing: number;
+    bytes: number;
+    interrupted?: number;
+  };
   entries: FuelEntry[];
   links?: string;
 }
@@ -637,6 +650,8 @@ export interface TaskDetail {
     finish_flag?: FinishFlag;
     /** Round 4–7 (4): the vehicle check of the task's day by its person for its vehicle. */
     vehicle_checks?: VehicleCheck[];
+    /** Round 4–7 (5): the fuel card the driver saw at Start task and their answer. */
+    fuel_card?: FuelCard;
     can_reopen?: boolean;
     /** "WP CAB-4521 taken over from Nuwan 08:40" */
     vehicle_taken?: string;
@@ -1572,6 +1587,10 @@ export interface VehicleCard extends Vehicle {
   active?: boolean;
   /** Round 4–7 (4): the vehicle's latest check today. */
   check_today?: CheckToday;
+  /** Round 4–7 (5): petrol | diesel | hybrid | electric (absent = not set), the grade, and the words ("Fuel type: not set"). */
+  fuel_type?: FuelType;
+  fuel_grade?: FuelGrade;
+  fuel_text?: string;
 }
 
 export interface VehiclesList extends Paged {
@@ -2261,4 +2280,28 @@ export interface MyTrip {
   check_id?: string;
   started_now?: boolean;
   next?: string;
+}
+
+// ---- Round 4–7, feature 5 (22 October 2026): the fuel card ----
+
+export type FuelType = "petrol" | "diesel" | "hybrid" | "electric";
+export type FuelGrade = "petrol_92" | "petrol_95" | "auto_diesel" | "super_diesel";
+
+/** task_detail.task.fuel_card: the estimate (the database's fuel_estimate) and the driver's answer. */
+export interface FuelCard {
+  task_id: string;
+  km?: number;
+  fuel_type?: FuelType;
+  fuel_grade?: FuelGrade;
+  electric: boolean;
+  km_per_l?: number;
+  /** history = the vehicle's last 3 fills; default = by vehicle type and fuel type. */
+  source?: "history" | "default";
+  litres_low?: number;
+  litres_high?: number;
+  /** "About 180 km · roughly 13–17 L diesel (approx.)" */
+  estimate_text?: string;
+  answer?: "enough" | "fill_on_way";
+  answer_text: string;
+  answered_at?: string;
 }

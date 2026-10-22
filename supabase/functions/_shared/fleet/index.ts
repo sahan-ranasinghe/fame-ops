@@ -287,6 +287,11 @@ export const INSTRUCTIONS = [
   "(driven_by self or other) is checked, started and finished by its own person in the office app (my_trip, my_trip_check, " +
   'finish_my_trip: "Trip finished? Enter the odometer"); unanswered by 09:00 the next day it closes as Completed · not ' +
   "confirmed (an issue), and the odometer entered later still confirms it.",
+  "Fuel (Round 4–7; get_settings fuel_card): vehicles have a fuel_type (petrol, diesel, hybrid, electric) and an optional " +
+  "fuel_grade (petrol_92, petrol_95, auto_diesel, super_diesel); give them with register_vehicle / update_vehicle (an older " +
+  'vehicle says "Fuel type: not set"). At Start task the driver sees the trip\'s km and roughly how many litres it takes (km ' +
+  'per litre from the vehicle\'s last 3 fills, else a default by type) and answers "Enough fuel?"; task_detail fuel_card ' +
+  "shows the estimate and the answer. Never blocks.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
   "Office accounts (users permission): create_office_user returns a one-time set-password link to send by WhatsApp; never ask for or type a password. " +
   "Each office person has permissions (view, request, approve, assign_tasks, vehicles, issues, users); update_office_user changes them.",

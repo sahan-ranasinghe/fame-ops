@@ -1,6 +1,7 @@
 // Fuel entries for a month with their receipts and videos (Phase 6, Part 3):
 // the office's Fuel page. Links work for 1 hour.
 
+import { fuelText } from "../fuelCard.ts";
 import { z } from "zod";
 import { fetchAll, unwrap } from "../db.ts";
 import { findDriver, findVehicle, loadRefs } from "../fleet.ts";
@@ -60,6 +61,8 @@ export const listFuel = tool({
       litres: l.litres === null ? null : Number(l.litres),
       lkr: centsToLkr(l.amount_cents),
       odometer_km: l.odometer_km,
+      // Round 4–7 (5): what was filled, when the driver said.
+      fuel: l.fuel_type ? fuelText(l.fuel_type, l.fuel_grade) : undefined,
       receipt: photoOrNote(photos, l.receipt_photo_id),
       video: videoCard(l, videos, l.video_uploaded_at ? colomboDateTime(l.video_uploaded_at) : undefined, settings.fuel_video_checklist),
     }));
@@ -67,6 +70,8 @@ export const listFuel = tool({
       entries: logs.length,
       litres: Math.round(logs.reduce((s, l) => s + (l.litres === null ? 0 : Number(l.litres)), 0) * 100) / 100,
       lkr: centsToLkr(logs.reduce((s, l) => s + (l.amount_cents ?? 0), 0)) ?? 0,
+      // Round 4–7 (§33.6): the LKR above adds only the known amounts; this many fills have none ("–", never LKR 0).
+      without_amount: logs.filter((l) => l.amount_cents == null).length,
       videos: logs.filter((l) => videoStatusOf(l) === "uploaded").length,
       interrupted: logs.filter((l) => l.video_interrupted).length,
       videos_waiting: logs.filter((l) => ["recorded", "uploading"].includes(videoStatusOf(l))).length,
@@ -74,7 +79,7 @@ export const listFuel = tool({
       bytes: logs.reduce((s, l) => s + (videoStatusOf(l) === "uploaded" ? l.video_bytes ?? 0 : 0), 0),
     };
     // The month that contains To, for the monthly figures beside a range (Phase 7, §8).
-    let monthTotals: { entries: number; litres: number; lkr: number } | undefined;
+    let monthTotals: { entries: number; litres: number; lkr: number; without_amount: number } | undefined;
     if (span) {
       const m = monthRange(which);
       const rows = await fetchAll((a, b) => {
@@ -88,6 +93,7 @@ export const listFuel = tool({
         entries: rows.length,
         litres: Math.round(rows.reduce((sum, r) => sum + Number(r.litres ?? 0), 0) * 100) / 100,
         lkr: centsToLkr(rows.reduce((sum, r) => sum + (r.amount_cents ?? 0), 0)) ?? 0,
+        without_amount: rows.filter((r) => r.amount_cents == null).length,
       };
     }
     return {

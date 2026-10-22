@@ -583,6 +583,8 @@ export function localTrip(input: {
     warnings: null,
     finish_flag: null,
     finish_ask_sent_at: null,
+    fuel_answer: null,
+    fuel_answer_at: null,
     needs_driver_reason: null,
     needs_driver_since: null,
     vehicle_choice: null,
