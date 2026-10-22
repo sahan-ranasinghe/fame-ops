@@ -2,7 +2,7 @@
 // tab's counted Google maps, the camera, the dashes, the layer order, the anchors) and how the files are wired (the same
 // names as the phones' maps, Google's content only on Google's map, the credits, nothing temporary), without a browser.
 //   npm run test:web-maps
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -19,6 +19,24 @@ function check(ok: unknown, label: string, detail?: unknown) {
   }
 }
 const read = (path: string) => readFileSync(join(__dirname, '..', path), 'utf8');
+/** The strings with the sidecars (src/i18n/parts/*.json, {en, si}) merged in while they exist. */
+function withParts(dict: Record<string, unknown>, lang: 'en' | 'si'): Record<string, unknown> {
+  const merge = (into: Record<string, unknown>, from: Record<string, unknown>) => {
+    for (const [k, v] of Object.entries(from)) {
+      const had = into[k];
+      if (v && typeof v === 'object' && had && typeof had === 'object') merge(had as Record<string, unknown>, v as Record<string, unknown>);
+      else into[k] = v;
+    }
+  };
+  const dir = join(__dirname, '..', 'src', 'i18n', 'parts');
+  if (existsSync(dir)) {
+    for (const f of readdirSync(dir).filter((n) => n.endsWith('.json')).sort()) {
+      const part = JSON.parse(readFileSync(join(dir, f), 'utf8')) as Partial<Record<'en' | 'si', Record<string, unknown>>>;
+      if (part[lang]) merge(dict, part[lang]);
+    }
+  }
+  return dict;
+}
 
 async function main() {
   console.log('\n== Which map in the browser ==');
@@ -162,7 +180,8 @@ async function main() {
 
   const adapters = read('src/components/web/adapters.ts');
   const google = read('src/components/web/googleWeb.ts');
-  check(/tiles\.openfreemap\.org\/styles\/liberty/.test(adapters) && /attributionControl: false/.test(adapters), "the free map: OpenFreeMap's Liberty style, the page's own credit line");
+  // C (Round 4–7, §33.12): the style from the app's one theme value (lib/appTheme.ts: Liberty while /m/ is light only).
+  check(/export const FREE_MAP_STYLE = freeMapStyle\(APP_SCHEME\);/.test(adapters) && /light: 'https:\/\/tiles\.openfreemap\.org\/styles\/liberty'/.test(read('src/lib/appTheme.ts')) && /export const APP_SCHEME: AppScheme = 'light';/.test(read('src/lib/appTheme.ts')) && /attributionControl: false/.test(adapters), "the free map: OpenFreeMap's Liberty style, the page's own credit line");
   check(/register_map_load/.test(google) && !/mapId/.test(google + adapters), "Google's map: each load counted by register_map_load, no map id");
   check(/gm_authFailure/.test(google) && /GOOGLE_SCRIPT_TIMEOUT_MS/.test(google), "Google refusing the key, or a script not ready in 15 s, is Google's failure");
   check(/disableDefaultUI: true/.test(google) && /gestureHandling: 'greedy'/.test(google), "none of Google's buttons; one finger moves the map");
@@ -173,8 +192,10 @@ async function main() {
 
   console.log('\n== Strings ==');
   {
-    const en = JSON.parse(read('src/i18n/en.json')) as Record<string, unknown>;
-    const si = JSON.parse(read('src/i18n/si.json')) as Record<string, unknown>;
+    // en.json / si.json, with the strings sidecars (src/i18n/parts/*.json) merged in while they exist (the lead merges and
+    // removes them).
+    const en = withParts(JSON.parse(read('src/i18n/en.json')) as Record<string, unknown>, 'en');
+    const si = withParts(JSON.parse(read('src/i18n/si.json')) as Record<string, unknown>, 'si');
     const at = (o: Record<string, unknown>, key: string): unknown => key.split('.').reduce<unknown>((v, k) => (v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined), o);
     const keys = [...new Set(Object.values(src).concat(read('src/components/web/BrowserMap.tsx'), read('src/components/web/pins.tsx')).flatMap((s) => [...s.matchAll(/\bt\('([a-zA-Z0-9_.]+)'/g)].map((m) => m[1])))];
     const missing = keys.filter((k) => typeof at(en, k) !== 'string' || typeof at(si, k) !== 'string');

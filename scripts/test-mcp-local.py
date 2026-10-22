@@ -3384,6 +3384,12 @@ check(tool("get_settings", {})["settings"]["fuel_card"] is False, "a switch goes
 tool("update_settings", {"key": "fuel_card", "value": True})
 r = tool("update_settings", {"key": "retention", "value": {"location_days": 10}}, expect_error=True)
 check("30" in r, "the location points' minimum (30 days) cannot be lowered", r)
+tool("update_settings", {"key": "retention", "value": {"inbox_read_days": 60}})
+tool("update_settings", {"key": "retention", "value": {"location_days": 90}})
+rt = tool("get_settings", {})["settings"]["retention"]
+check(rt.get("inbox_read_days") == 60 and rt.get("location_days") == 90 and rt.get("audit_changes_days") == 730,
+      "retention: a period saved alone keeps the others as stored (never back to the defaults)", json.dumps(rt))
+tool("update_settings", {"key": "retention", "value": {"inbox_read_days": 30, "location_days": 183}})
 
 # Feature 5: the fuel type and grade.
 fv = tool("register_vehicle", {"reg_no": f"WP RF{R}-4701", "make_model": "Toyota HiAce", "vehicle_type": "van", "seats": 12,

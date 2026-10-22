@@ -1,6 +1,8 @@
 // One map, two drawings (docs/office-web-plan.md, section 4): DrawnMap is the
 // artifact's SVG of Sri Lanka (no tiles can load inside Claude); MapLibreMap
 // is the real map on the web. Both take the same markers and route.
+import type { MapScheme } from "./scheme";
+
 export interface MapMarker {
   id: string;
   label: string;
@@ -51,7 +53,9 @@ export interface MapRoute {
 }
 
 /** What a gap was (Phase 7, §21): the app not running, no GPS signal, or recorded but uploaded late. */
-export type GapMarkerKind = "no_data" | "no_gps" | "late";
+/** §33.6 item 1 (Round 4–7): "stop" = a stop of 10 minutes or more on a driver's day page, a pin whose card says
+ * "Stopped near Kurunegala · 06:56–07:15 · 19 min" (the same marker, card, hover and tap as a gap's). */
+export type GapMarkerKind = "no_data" | "no_gps" | "late" | "stop";
 
 /** A gap's marker (Phase 7, §21): one small grey marker at the middle of its dashed line; its words on hover or tap. */
 export interface GapMarker {
@@ -104,12 +108,22 @@ export interface MapPlan {
 }
 
 /** The map's own colours where a CSS variable cannot reach (MapLibre's WebGL paint, Google's polylines, a marker's
- * inline style string). The tiles are light in both themes, so these are the light theme's tokens in styles.css
- * (--map-pin, --live, --accent, the white ring); DOM and SVG overlays use the CSS variables themselves. */
+ * inline style string), in the light theme: its tokens in styles.css (--ink, --live, --accent, the white ring). C (Round
+ * 4–7, §33.12): the map follows the page's theme, so the dark theme has its own set (MAP_CANVAS_DARK, the dark tokens);
+ * mapCanvas(scheme) picks one. DOM and SVG overlays use the CSS variables themselves. */
 export const MAP_CANVAS = { ink: "#15181c", line: "#1e4fa0", hole: "#8d9096", ring: "#ffffff", accent: "#f2a900" } as const;
+/** The same on the dark map: the dark theme's ink and --live, a lighter grey for holes, the dark surface as the ring. */
+export const MAP_CANVAS_DARK = { ink: "#ecebe6", line: "#8fb4f2", hole: "#9da1a8", ring: "#1a1d21", accent: "#f2a900" } as const;
 
-/** The estimated lines' colour: a quiet slate, dashed, so they never read as a driven line. */
+export type MapCanvas = { [K in keyof typeof MAP_CANVAS]: string };
+
+/** The map's own colours for the page's scheme. */
+export const mapCanvas = (scheme: MapScheme): MapCanvas => (scheme === "dark" ? MAP_CANVAS_DARK : MAP_CANVAS);
+
+/** The estimated lines' colour: a quiet slate, dashed, so they never read as a driven line (lighter on the dark map). */
 export const ESTIMATED_COLOR = "#5b6f94";
+export const ESTIMATED_COLOR_DARK = "#9fb0d0";
+export const estimatedColor = (scheme: MapScheme): string => (scheme === "dark" ? ESTIMATED_COLOR_DARK : ESTIMATED_COLOR);
 
 export interface MapProps {
   markers: MapMarker[];
@@ -134,6 +148,9 @@ export interface MapProps {
 
 /** The colours of the speed classes: standing grey, slow amber, normal blue, fast red. */
 export const SPEED_COLORS: Record<"stopped" | "slow" | "normal" | "fast", string> = { stopped: "#8d9096", slow: "#f2a900", normal: "#1e4fa0", fast: "#b3261e" };
+/** The same classes on the dark map (the dark theme's grey, --live and --bad): readable on dark tiles. */
+export const SPEED_COLORS_DARK: Record<keyof typeof SPEED_COLORS, string> = { stopped: "#9da1a8", slow: "#f2a900", normal: "#8fb4f2", fast: "#f08b84" };
+export const speedColors = (scheme: MapScheme): Record<keyof typeof SPEED_COLORS, string> => (scheme === "dark" ? SPEED_COLORS_DARK : SPEED_COLORS);
 
 /** Up to this accuracy a step is drawn as a normal line; worse (to 150 m) thin and lighter. */
 export const GOOD_ACCURACY_M = 30;

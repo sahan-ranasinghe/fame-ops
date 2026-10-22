@@ -9,6 +9,7 @@ import { StyleSheet } from 'react-native';
 import GoogleMapView, { Marker as GoogleMarker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useMapScheme } from '@/lib/appTheme';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { MapCompass } from './MapCompass';
@@ -17,6 +18,7 @@ import type { LatLng } from './taskMapLogic';
 
 export function GoogleTaskMap({ stops, lines, start, me, fit, follow, onUserMove, onLoaded }: EngineProps) {
   const { t } = useApp();
+  const scheme = useMapScheme();
   const insets = useSafeAreaInsets();
   const map = useRef<GoogleMapView>(null);
   const [ready, setReady] = useState(false);
@@ -60,9 +62,9 @@ export function GoogleTaskMap({ stops, lines, start, me, fit, follow, onUserMove
       <GoogleMapView
         ref={map}
         provider={PROVIDER_GOOGLE}
-        // Always the light map, whatever the phone's dark mode (Round 3 Part A3; read once when the map is made: Android's
-        // MapColorScheme.LIGHT through react-native-maps 1.27.2's initial props, no native change).
-        userInterfaceStyle="light"
+        // The app's theme (lib/appTheme.ts, C §33.12): light today, so the light map whatever the phone's dark mode; read
+        // once when the map is made (Android's MapColorScheme through react-native-maps 1.27.2's initial props, no native change).
+        userInterfaceStyle={scheme}
         style={StyleSheet.absoluteFill}
         initialRegion={{ latitude: SRI_LANKA.lat, longitude: SRI_LANKA.lng, latitudeDelta: 3.5, longitudeDelta: 3.5 }}
         mapPadding={{ top: 0, right: 0, bottom: SHEET_OVERLAP, left: 0 }}

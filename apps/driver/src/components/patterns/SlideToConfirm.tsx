@@ -5,15 +5,20 @@
 // one path without a drag. Disabled: greyed, no drag. Busy: a spinner on the thumb, no drag.
 // The drag uses React Native's own touch responder (the system PanResponder is built on): no native module, so the same
 // control runs on the phone and on react-native-web (/m/).
+// Round 4–7, item 12 (design/mockups/2026-10-22, mockup 6): the mockup's look: the main step on a light amber track with
+// its thin amber edge, the amber thumb with the arrow and its shadow, the words in deep amber; the dark (leave, finish)
+// and outline (the override) tones keep their colours with the same thumb and arrow. `text` is the shorter words shown
+// when the screen already names the stop ("Slide when you arrive" under the stop's name); `label` stays what a screen
+// reader says.
 
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, type GestureResponderEvent, type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 
-import { ChevronRight } from '@/components/icons';
+import { ArrowRight } from '@/components/icons';
 import { Txt } from '@/components/ui';
 import { slideOffset, slideRelease, slideTravel } from '@/lib/patterns/slideLogic';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, shadow } from '@/theme';
 
 // The drag moves the thumb from JavaScript (setValue on every move), so the spring back and the finish run there too: one
 // driver for the value, the same on the phone and the web.
@@ -22,8 +27,10 @@ const THUMB = 56;
 const PAD = 4;
 
 export interface SlideToConfirmProps {
-  /** Already in the person's language: "Slide when you arrive at Kurunegala site". */
+  /** Already in the person's language: "Slide when you arrive at Kurunegala site" (what a screen reader says). */
   label: string;
+  /** The words on the track when shorter than the label ("Slide when you arrive"); the label otherwise. */
+  text?: string;
   onConfirm: () => void;
   disabled?: boolean;
   busy?: boolean;
@@ -32,7 +39,7 @@ export interface SlideToConfirmProps {
   testID?: string;
 }
 
-export function SlideToConfirm({ label, onConfirm, disabled = false, busy = false, tone = 'primary', testID }: SlideToConfirmProps) {
+export function SlideToConfirm({ label, text: shown, onConfirm, disabled = false, busy = false, tone = 'primary', testID }: SlideToConfirmProps) {
   const { t } = useApp();
   const [travel, setTravel] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
@@ -83,10 +90,10 @@ export function SlideToConfirm({ label, onConfirm, disabled = false, busy = fals
     },
   };
 
-  const track = tone === 'primary' ? colors.amber : tone === 'dark' ? colors.ink : colors.card;
-  const text = tone === 'dark' ? '#ffffff' : colors.ink;
-  const thumbBg = tone === 'dark' ? colors.amber : colors.ink;
-  const arrow = tone === 'dark' ? colors.ink : '#ffffff';
+  const track = tone === 'primary' ? colors.amberSoft : tone === 'dark' ? colors.ink : colors.card;
+  const text = tone === 'dark' ? '#ffffff' : tone === 'primary' ? colors.amberDeep : colors.ink;
+  const thumbBg = tone === 'outline' ? colors.ink : colors.amber;
+  const arrow = tone === 'outline' ? '#ffffff' : colors.ink;
   const fade = travel > 0 ? x.interpolate({ inputRange: [0, travel * 0.6], outputRange: [1, 0], extrapolate: 'clamp' }) : 1;
 
   return (
@@ -102,17 +109,17 @@ export function SlideToConfirm({ label, onConfirm, disabled = false, busy = fals
       }}
       onLayout={onLayout}
       testID={testID}
-      style={[styles.track, { backgroundColor: track }, tone === 'outline' && styles.outline, locked && { opacity: disabled ? 0.45 : 0.8 }]}
+      style={[styles.track, { backgroundColor: track }, tone === 'primary' && styles.primaryEdge, tone === 'outline' && styles.outline, locked && { opacity: disabled ? 0.45 : 0.8 }]}
     >
       <Animated.View pointerEvents="none" style={[styles.labelWrap, { opacity: fade }]}>
-        <Txt variant="button" color={text} numberOfLines={2} style={{ textAlign: 'center' }}>{label}</Txt>
+        <Txt variant="strong" size={16} color={text} numberOfLines={2} style={{ textAlign: 'center' }}>{shown ?? label}</Txt>
       </Animated.View>
       <Animated.View
         {...responder}
         testID={testID ? `${testID}-thumb` : undefined}
-        style={[styles.thumb, { backgroundColor: thumbBg, transform: [{ translateX: x }] }]}
+        style={[styles.thumb, { backgroundColor: thumbBg, transform: [{ translateX: x }] }, shadow(3)]}
       >
-        {busy ? <ActivityIndicator color={arrow} /> : <ChevronRight size={30} color={arrow} strokeWidth={3} />}
+        {busy ? <ActivityIndicator color={arrow} /> : <ArrowRight size={22} color={arrow} strokeWidth={2.4} />}
       </Animated.View>
     </View>
   );
@@ -121,6 +128,7 @@ export function SlideToConfirm({ label, onConfirm, disabled = false, busy = fals
 const styles = StyleSheet.create({
   track: { minHeight: THUMB + 2 * PAD, borderRadius: (THUMB + 2 * PAD) / 2, padding: PAD, justifyContent: 'center', overflow: 'hidden' },
   outline: { borderWidth: 1.5, borderColor: colors.line },
+  primaryEdge: { borderWidth: 1, borderColor: colors.amberEdge },
   labelWrap: { position: 'absolute', left: THUMB + 2 * PAD, right: 16, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   thumb: { width: THUMB, height: THUMB, borderRadius: THUMB / 2, alignItems: 'center', justifyContent: 'center' },
 });

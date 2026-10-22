@@ -8,15 +8,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { freeMapStyle, useMapScheme } from '@/lib/appTheme';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { MapCompass } from './MapCompass';
 import { type EngineProps, FOLLOW_ZOOM, MePin, nextTurn, ONE_PLACE_ZOOM, PADDING, SHEET_OVERLAP, SRI_LANKA, StartPin, StopPin, type Turn } from './mapPins';
 
-const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
-
 export function OpenTaskMap({ stops, lines, start, me, fit, follow, onUserMove, onLoaded, onFailed }: EngineProps) {
   const { t } = useApp();
+  const scheme = useMapScheme();
   const insets = useSafeAreaInsets();
   const camera = useRef<CameraRef>(null);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
@@ -73,7 +73,7 @@ export function OpenTaskMap({ stops, lines, start, me, fit, follow, onUserMove, 
     <>
       <Map
         style={StyleSheet.absoluteFill}
-        mapStyle={MAP_STYLE}
+        mapStyle={freeMapStyle(scheme)}
         logo={false}
         compass={false}
         onDidFinishLoadingMap={onLoaded}

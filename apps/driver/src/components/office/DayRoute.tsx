@@ -1,28 +1,31 @@
-// Office mode (Stage 1, O3 item 1): a route on the map with everything under it, one component for a driver's day (the
-// driver page, today or a day of the last 90) and a finished task's driven route (task/[id]/route): the map on both engines
-// (RouteMap: the line by speed band, holes dashed, the estimated roads, the stops over 10 minutes with their times), the
-// legend, the one playback bar (PlaybackBar.tsx, as on Live: Play / Pause, 1× 5× 20× 60×, the time and speed, a slider;
-// the marker on the map), the numbers (GPS km, driving, stopped, stops), and the timeline; a row tapped moves the map to
-// its span; each row has one small icon (Round 3 Part A1, Google Maps Timeline: a car, a pin, a warning). The rules:
-// office/driversLogic.ts (the line, segmentIcon) and office/liveRouteLogic.ts (the playback).
+// Office mode (Stage 1, O3 item 1): a route on the map with everything around it, one component for a driver's day (the
+// driver page, today or a day of the last 90) and a finished task's driven route (task/[id]/route). §33.6 item 1 (Round
+// 4–7, Sahan's decision; Samsara's driver day, Google Maps Timeline): ONE summary card above the map (GPS km, driving,
+// stopped, stops, the first and last point, and one line "No GPS for 2 h 10 min" when the day has gaps), then the map on
+// both engines (RouteMap: the line by speed band, holes dashed, the estimated roads, the stops over 10 minutes as pins: a
+// tap says "Stopped near Kurunegala · 06:56–07:15 · 19 min" and moves the map to it), the legend and the one playback bar
+// (PlaybackBar.tsx, as on Live: Play / Pause, 1× 5× 20× 60×, the time and speed, a slider; the marker on the map). The
+// day's timeline list is gone (its driving rows are the card's km and driving time, its stops the pins, its gaps the
+// card's line and the dashed legs). The rules: office/driversLogic.ts (the line, the pins' words, the summary) and
+// office/liveRouteLogic.ts (the playback).
 
 import { useIsFocused } from 'expo-router';
 import { type ReactNode, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Car, MapPin, TriangleAlert } from '@/components/icons';
+import { MapPin, TriangleAlert, X } from '@/components/icons';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { RouteMap } from '@/components/RouteMap';
+import type { Frame } from '@/components/taskMapLogic';
 import { Mono, Txt } from '@/components/ui';
-import { pickedStyle } from '@/components/patterns/Select';
 import { durationText } from '@/lib/durations';
 import type { MapPackage } from '@/lib/mapEngine';
-import { BAND_COLORS, dayNumbers, routeFrame, routeLines, routePoints, rowFrame, segmentIcon, segmentLine, type SegmentIcon, SPEED_BANDS, stopMarks } from '@/office/driversLogic';
+import { BAND_COLORS, dayNumbers, daySummary, noGpsLine, routeFrame, routeLines, routePoints, SPEED_BANDS, stopLine, stopMarks } from '@/office/driversLogic';
 import { canPlay, cursorAt, gapWindowsOf, playbackPath, routeOf } from '@/office/liveRouteLogic';
 import type { DriverRoute, FleetError } from '@/office/types';
-import { Divider, ListFailed } from '@/office/ui';
+import { ListFailed } from '@/office/ui';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, shadow } from '@/theme';
 import { PlaybackBar, usePlayback } from './PlaybackBar';
 
 interface Props {
@@ -33,7 +36,7 @@ interface Props {
   mapPackage?: MapPackage;
   /** The sentence when the route has no points (a day with no driving, a task with no GPS). */
   emptyText: string;
-  /** Shown between the numbers and the timeline (the day's tasks). */
+  /** Shown under the map and the playback (the day's tasks). */
   children?: ReactNode;
 }
 
@@ -41,12 +44,24 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
   const { t } = useApp();
   const points = useMemo(() => (data ? routePoints(data) : []), [data]);
   const lines = useMemo(() => (data ? routeLines(data) : []), [data]);
-  const stops = useMemo(() => (data ? stopMarks(data) : []), [data]);
+  // Each stop with its words (the pin's card, and its name for a screen reader).
+  const stops = useMemo(() => (data ? stopMarks(data).map((s) => ({ ...s, label: stopLine(s, t) })) : []), [data, t]);
   const fitNow = routeFrame(lines, stops);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fit = useMemo(() => fitNow, [fitNow.key]);
-  const [focus, setFocus] = useState<{ frame: ReturnType<typeof rowFrame>; nonce: number; index: number } | null>(null);
+  // A stop pin tapped: its card on the map, and the map moved to it (what a timeline row did before §33.6).
+  const [focus, setFocus] = useState<{ frame: Frame; nonce: number } | null>(null);
+  const [stopKey, setStopKey] = useState<string | null>(null);
+  const picked = stopKey ? stops.find((s) => s.key === stopKey) ?? null : null;
+  const pickStop = (key: string) => {
+    const s = stops.find((x) => x.key === key);
+    if (!s) return;
+    setStopKey(key);
+    setFocus((f) => ({ frame: { kind: 'point', center: { lat: s.lat, lng: s.lng } }, nonce: (f?.nonce ?? 0) + 1 }));
+  };
   const numbers = data ? dayNumbers(data) : null;
+  const summary = data ? daySummary(data) : null;
+  const gapsLine = summary ? noGpsLine(summary, t) : null;
 
   // The playback (Live's rules, office/liveRouteLogic.ts): the path in time order, the gaps, the marker at the clock.
   const played = useMemo(() => (data ? routeOf(data.driver, data) : null), [data]);
@@ -57,8 +72,40 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
 
   return (
     <View>
+      {/* §33.6 item 1: the day in one card above the map. */}
+      {numbers && (
+        <View style={styles.summary} testID="day-summary">
+          <View style={styles.numbers}>
+            <Number label={t('office.drivers.route.km')} value={numbers.km === null ? '—' : String(numbers.km)} />
+            <Number label={t('office.drivers.route.driving')} value={durationText(t, numbers.drivingMin)} />
+            <Number label={t('office.drivers.route.stopped')} value={durationText(t, numbers.stoppedMin)} />
+            <Number label={t('office.drivers.route.stops')} value={String(numbers.stops)} />
+          </View>
+          {summary?.span && (
+            <View style={styles.line}>
+              <Txt variant="small" size={13}>{t('dayRoute.firstLast')}</Txt>
+              <Mono size={14} bold testID="day-span">{summary.span}</Mono>
+            </View>
+          )}
+          {gapsLine && (
+            <View style={styles.line} testID="day-gaps">
+              <TriangleAlert size={16} color={colors.amberText} strokeWidth={2.4} />
+              <Txt variant="strong" size={14} color={colors.amberText} style={{ flex: 1 }}>{gapsLine}</Txt>
+            </View>
+          )}
+        </View>
+      )}
       <View style={styles.map} testID="driver-route-map">
-        <RouteMap lines={lines} stops={stops} fit={fit} focus={focus} marker={marker} mapPackage={mapPackage} />
+        <RouteMap lines={lines} stops={stops} fit={fit} focus={focus} marker={marker} onStop={pickStop} mapPackage={mapPackage} />
+        {picked && (
+          <View style={styles.stopCard} testID="stop-card">
+            <MapPin size={18} color={colors.ink} strokeWidth={2.4} />
+            <Txt variant="strong" size={14} style={{ flex: 1 }}>{picked.label}</Txt>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={() => setStopKey(null)} hitSlop={8} style={styles.close}>
+              <X size={18} color={colors.ink} strokeWidth={2.4} />
+            </Pressable>
+          </View>
+        )}
       </View>
       <View style={styles.legend}>
         {SPEED_BANDS.map((b) => <LegendItem key={b} color={BAND_COLORS[b]} text={t(`office.drivers.route.legend.${b}`)} />)}
@@ -68,53 +115,14 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
       {!data && !error && <SkeletonRows rows={2} lines={1} />}
       {error && <ListFailed stale={!!data} error={error} onRetry={onRetry} onSignIn={onSignIn} />}
       {canPlay(path) && <View style={styles.bar}><PlaybackBar playback={playback} cursor={marker} /></View>}
-      {numbers && (
-        <View style={styles.numbers}>
-          <Number label={t('office.drivers.route.km')} value={numbers.km === null ? '—' : String(numbers.km)} />
-          <Number label={t('office.drivers.route.driving')} value={durationText(t, numbers.drivingMin)} />
-          <Number label={t('office.drivers.route.stopped')} value={durationText(t, numbers.stoppedMin)} />
-          <Number label={t('office.drivers.route.stops')} value={String(numbers.stops)} />
-        </View>
-      )}
       {data && points.length === 0 && <ListEmpty text={emptyText} />}
       {data?.km_note && <Txt variant="small">{data.km_note}</Txt>}
       {children}
-      {(data?.timeline ?? []).map((seg, i) => {
-        const on = focus?.index === i;
-        return (
-          <View key={`${seg.kind}:${seg.from_at}`}>
-            {i > 0 && <Divider />}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              onPress={() => setFocus({ frame: rowFrame(points, seg), nonce: (focus?.nonce ?? 0) + 1, index: i })}
-              style={({ pressed }) => [styles.segRow, on && pickedStyle, pressed && { opacity: 0.8 }]}
-              testID="route-row"
-            >
-              <SegIcon kind={segmentIcon(seg.kind)} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Txt variant="strong" size={15} numberOfLines={2}>{seg.text}</Txt>
-                <Txt variant="small">{segmentLine(seg, t)}</Txt>
-              </View>
-            </Pressable>
-          </View>
-        );
-      })}
       {focus && (
-        <Pressable accessibilityRole="button" onPress={() => setFocus(null)} style={{ minHeight: 44, justifyContent: 'center' }}>
+        <Pressable accessibilityRole="button" onPress={() => { setFocus(null); setStopKey(null); }} style={{ minHeight: 44, justifyContent: 'center' }}>
           <Txt variant="strong" size={15} color={colors.blue}>{t('office.history.wholeRoute')}</Txt>
         </Pressable>
       )}
-    </View>
-  );
-}
-
-/** One small icon per row (Google Maps Timeline; Round 3 Part A1): a car, a pin, a warning (amber text); no coloured bar. */
-function SegIcon({ kind }: { kind: SegmentIcon }) {
-  const Icon = kind === 'car' ? Car : kind === 'pin' ? MapPin : TriangleAlert;
-  return (
-    <View style={styles.segIcon} testID={`route-row-icon-${kind}`}>
-      <Icon size={18} color={kind === 'warning' ? colors.amberText : colors.muted} strokeWidth={2.2} />
     </View>
   );
 }
@@ -138,11 +146,16 @@ function Number({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  map: { height: 300, borderRadius: 14, overflow: 'hidden', backgroundColor: colors.mapLand, marginTop: 6 },
+  summary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, gap: 8, marginTop: 6 },
+  numbers: { flexDirection: 'row', gap: 6 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
+  map: { height: 300, borderRadius: 14, overflow: 'hidden', backgroundColor: colors.mapLand, marginTop: 8 },
+  // The tapped stop's words over the map's foot (Google Maps' place card), above the credit line.
+  stopCard: {
+    position: 'absolute', left: 10, right: 10, bottom: 28, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.card,
+    borderRadius: 12, paddingLeft: 12, paddingRight: 4, paddingVertical: 6, minHeight: 48, borderWidth: 1, borderColor: colors.line, ...shadow(4),
+  },
+  close: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 8 },
   bar: { marginBottom: 4 },
-  numbers: { flexDirection: 'row', gap: 6, paddingVertical: 8, marginTop: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.line },
-  // The row shown on the map: the tint and the 2 px border (docs/ui-patterns.md §11; no mark: nothing is being chosen).
-  segRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 6, marginHorizontal: -6, borderRadius: 10, minHeight: 56, borderWidth: 2, borderColor: 'transparent' },
-  segIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.page },
 });

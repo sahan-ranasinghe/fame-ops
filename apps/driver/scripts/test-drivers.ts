@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import {
   BAND_COLORS, boardArgs, boardChoice, boardFilterDefs, BOARD_FILTERS, boardPill, coversDay, dayNumbers, entryParts, estimatedLines, heldPlate, HOLE_MIN, PARTS, REASONS, routeFrame, routeLines, routePoints, rowFrame, rowLines,
   segmentIcon, segmentLine, SPEED_BANDS, speedBand, speedLines, stopMarks, unavailabilityInput, weekDays, weekGrid, type Words,
+  daySummary, noGpsLine, stopLine,
 } from '../src/office/driversLogic';
 import type { BoardDriver, DriverRoute, UnavailableEntry } from '../src/office/types';
 
@@ -170,6 +171,13 @@ console.log('\n== The route: the points, the legs, the stops, the frames ==');
   check(rowFrame([], route.timeline![2]).kind === 'point' && rowFrame([], { kind: 'no_data', from_at: 'x', to_at: 'y' }).kind === 'none', 'no points: the row\'s own position, else nothing');
   check(same(dayNumbers(route), { km: 14.3, drivingMin: 41, stoppedMin: 22, stops: 1 }), 'the day\'s numbers', dayNumbers(route));
   check(same(dayNumbers({}), { km: null, drivingMin: 0, stoppedMin: 0, stops: 0 }), 'nothing yet: km unknown');
+  // §33.6 item 1 (Round 4–7): the stop pin's words, the summary card's first–last and its one line for the gaps.
+  check(stops[0].to === '09:32' && stopLine(stops[0], t) === 'dayRoute.stopNear(Kadawatha,09:10–09:32,dur.minutes(22))', "a stop pin's card: where, from–to, how long", stopLine(stops[0], t));
+  check(stopLine({ ...stops[0], near: null }, t) === 'dayRoute.stopped(09:10–09:32,dur.minutes(22))' && stopLine({ ...stops[0], to: '09:10', near: null }, t) === 'dayRoute.stopped(09:10,dur.minutes(22))', 'no town: "Stopped · …"; one time when from and to are the same');
+  check(same(daySummary({ first_point: '06:12', last_point: '18:40', gaps: [{ from: '09:00', to: '10:30', minutes: 90 }, { from: '16:00', to: '16:40', minutes: 40 }] }), { span: '06:12–18:40', noGpsMin: 130, gaps: 2 }), 'the summary: the first and last point, the gaps added up');
+  check(same(daySummary({}), { span: null, noGpsMin: 0, gaps: 0 }) && daySummary({ first_point: '06:12' }).span === '06:12', 'no point yet: no span; one point: its time');
+  check(noGpsLine({ noGpsMin: 130, gaps: 2 }, t) === 'dayRoute.noGps(dur.hours(2,10)) · dayRoute.gaps(2)', '"No GPS for 2 h 10 min · 2 gaps"', noGpsLine({ noGpsMin: 130, gaps: 2 }, t));
+  check(noGpsLine({ noGpsMin: 25, gaps: 1 }, t) === 'dayRoute.noGps(dur.minutes(25))' && noGpsLine({ noGpsMin: 0, gaps: 0 }, t) === null, 'one gap: no count; none: no line');
   check(segmentIcon('driving') === 'car' && segmentIcon('stopped') === 'pin' && segmentIcon('no_gps') === 'warning' && segmentIcon('no_data') === 'warning', 'the timeline\'s icons (Part A1: a car, a pin, a warning; no coloured bar)');
   check(segmentLine(seg, t) === '09:00–09:02 · dur.minutes(2) · 0.6 common.km', 'a driving row: the span, the minutes, the km', segmentLine(seg, t));
   check(segmentLine(route.timeline![2], t) === '09:10–09:32 · dur.minutes(22) · office.drivers.uploadedLater(09:40)', 'a stop uploaded later: no km, the upload time', segmentLine(route.timeline![2], t));
@@ -209,8 +217,14 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
     'driver_route for the chosen day on its own screen (tolerance 0, 3,000 points, the estimated roads), today every minute; the profile\'s card only when the person may');
   check(/useTool<DriversBoard>\('drivers_board', \{ search: username \}, \{ enabled: mayBoard, every: 60_000 \}\)/.test(page), 'today\'s state from the board\'s row, only when the person may read the board');
   check(/<BackHeader title=\{d\?\.name \?\? username\}/.test(page), 'a stack screen with the back header (back means back)');
-  check(/<RouteMap lines=\{lines\} stops=\{stops\} fit=\{fit\} focus=\{focus\} marker=\{marker\} mapPackage=\{mapPackage\} \/>/.test(read('src/components/office/DayRoute.tsx')) && /<DayRoute\b/.test(dayPage), 'the map (components/office/DayRoute.tsx) gets the lines, the stops, the frame, the focus, the playback marker and the office\'s map package');
-  check(/setFocus\(\{ frame: rowFrame\(points, seg\), nonce: \(focus\?\.nonce \?\? 0\) \+ 1, index: i \}\)/.test(read('src/components/office/DayRoute.tsx')), 'a timeline row tapped moves the map to its span (again on a second tap)');
+  check(/<RouteMap lines=\{lines\} stops=\{stops\} fit=\{fit\} focus=\{focus\} marker=\{marker\} onStop=\{pickStop\} mapPackage=\{mapPackage\} \/>/.test(read('src/components/office/DayRoute.tsx')) && /<DayRoute\b/.test(dayPage), 'the map (components/office/DayRoute.tsx) gets the lines, the stops, the frame, the focus, the playback marker, the stop pin\'s tap and the office\'s map package');
+  // §33.6 item 1 (Round 4–7): the timeline row's move went to the stop pin: a tap moves the map to it (again on a second tap).
+  check(/setFocus\(\(f\) => \(\{ frame: \{ kind: 'point', center: \{ lat: s\.lat, lng: s\.lng \} \}, nonce: \(f\?\.nonce \?\? 0\) \+ 1 \}\)\)/.test(read('src/components/office/DayRoute.tsx')), 'a stop pin tapped moves the map to it (again on a second tap)');
+  const dayRoute = read('src/components/office/DayRoute.tsx');
+  check(/testID="day-summary"/.test(dayRoute) && dayRoute.indexOf('testID="day-summary"') < dayRoute.indexOf('<RouteMap ') && /testID="day-span"/.test(dayRoute) && /noGpsLine\(summary, t\)/.test(dayRoute) && /testID="day-gaps"/.test(dayRoute),
+    'ONE summary card above the map: the numbers, the first and last point, "No GPS for …" (§33.6 item 1)');
+  check(/testID="stop-card"/.test(dayRoute) && /\{picked\.label\}/.test(dayRoute) && /accessibilityLabel=\{t\('common\.close'\)\}/.test(dayRoute), 'a tapped stop: its words on the map, with Close');
+  check(!/route-row|<SegIcon|data\?\.timeline/.test(dayRoute), 'no timeline list under the map any more');
   check(/links\.call && <Action/.test(page) && /links\.whatsapp && <Action/.test(page) && /p\.emergency\.links\?\.call &&/.test(page), 'Call and WhatsApp only when the server gave the link');
   check(/p\?\.emergency &&/.test(page) && /p\?\.licence\?\.number/.test(page) && /p\?\.private_hidden/.test(page), 'the private part only when the answer carries it');
   check(/mayRemove && \(/.test(page) && /api\.call\('remove_unavailability', \{ id: e\.id \}\)/.test(page) && /Alert\.alert\(t\('office\.drivers\.removeTitle'\)/.test(page), 'Remove on the page too, after a confirmation, only when allowed');
@@ -233,10 +247,13 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
   }
   check(/PROVIDER_GOOGLE/.test(google) && !/googleMapId|mapId=/.test(google) && /lineDashPattern=\{l\.dashed \? \[12, 10\] : undefined\}/.test(google) && /tracksViewChanges=\{false\}/.test(google),
     "Google's map: PROVIDER_GOOGLE, no map id, the dashed legs dashed, the stop's picture taken once");
-  check(/onDidFailLoadingMap=\{onFailed\}/.test(open) && /tiles\.openfreemap\.org\/styles\/liberty/.test(open) && /'line-dasharray': \[2, 1\.5\]/.test(open) && /\['get', 'color'\]/.test(open) && /filter=\{\['==', \['get', 'dashed'\], true\]\}/.test(open),
+  check(/onDidFailLoadingMap=\{onFailed\}/.test(open) && /mapStyle=\{freeMapStyle\(scheme\)\}/.test(open) && /'line-dasharray': \[2, 1\.5\]/.test(open) && /\['get', 'color'\]/.test(open) && /filter=\{\['==', \['get', 'dashed'\], true\]\}/.test(open),
     'the free map: OpenFreeMap, no key; its failure said; a colour per leg, the dashed legs on their own layer');
   check(/if \(!ready \|\| focusedRow\) return;/.test(google) && /if \(!focusedRow\) setStop\(framed\);/.test(open), 'the frame around the day is skipped while a row is focused (both engines)');
   check(/anchor=\{\{ x: 0\.5, y: routePinAnchorY\(\) \}\}/.test(google) && /anchor="top" offset=\{\[0, -ROUTE_PIN\.circle \/ 2\]\}/.test(open), 'the stop circle\'s centre sits on the position on both maps, label or not');
+  const web = read('src/components/RouteMap.web.tsx');
+  check(/onPress=\{onStop \? \(\) => onStop\(s\.key\) : undefined\}/.test(google) && /onPress=\{\(\) => onStop\?\.\(s\.key\)\}/.test(open) && /onPress=\{onStop \? \(\) => onStop\(s\.key\) : undefined\}/.test(web),
+    'a stop pin is tapped on every engine (Google, the free map, the browser): §33.6 item 1');
   const sizes = map.match(/ROUTE_PIN = \{ circle: (\d+), gap: (\d+), label: (\d+) \}/);
   const [circle, gap, label] = sizes ? sizes.slice(1).map(Number) : [0, 0, 0];
   check(!!sizes && /return ROUTE_PIN\.circle \/ 2 \/ \(ROUTE_PIN\.circle \+ ROUTE_PIN\.gap \+ ROUTE_PIN\.label\);/.test(map) && Math.abs(circle / 2 / (circle + gap + label) - 9 / 38) < 1e-9,

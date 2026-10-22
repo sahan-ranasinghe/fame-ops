@@ -128,7 +128,15 @@ export function useStopSlides(): {
  * override slide, flagged as before), then "Slide when you leave …"; on the last stop "Slide to finish", which hands over
  * to the screen's finish (Log mileage, as Complete task does; no Undo there).
  */
-export function ArrivalButton({ stop, here, last = false, onFinish }: { stop: TaskStop; here: Here; last?: boolean; onFinish?: (stop: TaskStop) => void }) {
+export function ArrivalButton({ stop, here, last = false, onFinish, short = false }: {
+  stop: TaskStop;
+  here: Here;
+  last?: boolean;
+  onFinish?: (stop: TaskStop) => void;
+  /** Round 4–7, item 12: under the stop's own name (the running task's sheet) the track says "Slide when you arrive";
+   *  a screen reader still hears the stop. */
+  short?: boolean;
+}) {
   const { t } = useApp();
   const slides = useStopSlides();
   const check = arrivalCheck(stop, here.fix);
@@ -137,12 +145,12 @@ export function ArrivalButton({ stop, here, last = false, onFinish }: { stop: Ta
   if (canMarkDone(stop)) {
     return last && onFinish
       ? <SlideToConfirm tone="dark" label={t('task.slideFinish')} onConfirm={() => onFinish(stop)} testID="slide-finish" />
-      : <SlideToConfirm tone="dark" label={t('task.slideLeave', { stop: stop.place_name })} onConfirm={() => slides.leave(stop)} testID="slide-leave" />;
+      : <SlideToConfirm tone="dark" label={t('task.slideLeave', { stop: stop.place_name })} text={short ? t('taskSheet.slideLeave') : undefined} onConfirm={() => slides.leave(stop)} testID="slide-leave" />;
   }
 
   const arrive = () => slides.arrive(stop, check);
   const override = <SlideToConfirm tone="outline" label={t('arrive.override')} onConfirm={arrive} testID="slide-override" />;
-  const slide = <SlideToConfirm label={t('task.slideArrive', { stop: stop.place_name })} onConfirm={arrive} testID="slide-arrive" />;
+  const slide = <SlideToConfirm label={t('task.slideArrive', { stop: stop.place_name })} text={short ? t('taskSheet.slideArrive') : undefined} onConfirm={arrive} testID="slide-arrive" />;
 
   switch (check.state) {
     case 'ok':
@@ -190,5 +198,5 @@ function useWaitStart(waiting: boolean, now: number): number | null {
 
 const styles = StyleSheet.create({
   // Reads like a button, but is not one: the phone is not at the stop yet.
-  status: { minHeight: 56, borderRadius: 16, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.page, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  status: { minHeight: 56, borderRadius: 16, borderWidth: 1, borderColor: colors.cardLine, backgroundColor: colors.page, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
 });

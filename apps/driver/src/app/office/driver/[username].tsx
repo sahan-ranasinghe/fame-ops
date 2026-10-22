@@ -4,7 +4,7 @@
 // sent them, i.e. the person holds vehicles or users), today's state (the driver's row of drivers_board, when the person
 // may read the board), the days marked not available (Remove through remove_unavailability after a confirmation, when
 // allowed), and a "Today's route" card (today's km, driving time and stops) that opens the day's route on its own screen
-// (driver/[username]/route: the day strip, the map, playback, the timeline, the day's tasks; Sahan's decision 2,
+// (driver/[username]/route: the day strip, the day's summary card, the map with its stop pins, playback, the day's tasks; §33.6 item 1; Sahan's decision 2,
 // 20 October 2026, Uber's driver profile, Samsara). A link with `?date=` opens that day's route. Back means back.
 // The rules: office/driversLogic.ts and office/historyLogic.ts.
 

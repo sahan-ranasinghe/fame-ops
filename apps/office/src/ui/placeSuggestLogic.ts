@@ -16,7 +16,22 @@ export type WhereIcon = "building" | "clock";
 export interface WhereRow<T> {
   item: T;
   icon: WhereIcon;
+  /** Round 4–7 (item 10): the row's group in an empty box (a small header above its first row); none = no headers. */
+  group?: WhereGroup;
+  /** The group's header words ("Saved", "Recent", "Anoja's recent"). */
+  label?: string;
 }
+
+/**
+ * Round 4–7 (item 10; Uber's and Google Maps' empty destination box): search_places {suggest} answers each row's group:
+ * saved (the company's places), recent (the person's OWN), for (the trip's person's, when someone else's trip is edited
+ * or decided: "Anoja's recent").
+ */
+export type WhereGroup = "saved" | "recent" | "for";
+export const WHERE_GROUPS: readonly WhereGroup[] = ["saved", "recent", "for"];
+/** An empty box with groups shows at most this many ("about 5": 2 saved + 3 recent, or 2 + 2 + 2 for someone else's trip). */
+export const SUGGEST_MAX_ROWS = 7;
+const GROUP_WORDS: Record<WhereGroup, string> = { saved: "Saved", recent: "Recent", for: "Their recent" };
 
 export interface WhereLists<T> {
   top: WhereRow<T>[];
@@ -48,4 +63,51 @@ export function whereRows<T>(ours: readonly T[], recent: readonly T[], nameOf: (
 /** search_places {suggest}: our places and the recent ones; towns (and anything else) left out. */
 export function splitSuggestions<T extends { layer: string }>(results: readonly T[]): { ours: T[]; recent: T[] } {
   return { ours: results.filter((r) => r.layer === "place"), recent: results.filter((r) => r.layer === "recent") };
+}
+
+/** A row's group: the server's, else (an older answer) by its layer; towns and the rest have none. */
+export function groupOf(r: { layer: string; group?: string }): WhereGroup | null {
+  if (r.group === "saved" || r.group === "recent" || r.group === "for") return r.group;
+  return r.layer === "place" ? "saved" : r.layer === "recent" ? "recent" : null;
+}
+
+/**
+ * An empty box's rows from search_places {suggest}. With the server's groups (Round 4–7): Saved, Recent, then
+ * "<Name>'s recent", each under its header, in the server's order; a name already shown is not repeated; at most
+ * SUGGEST_MAX_ROWS, the rest under More places. An answer without groups: ours then 3 recent (whereRows), no headers.
+ */
+export function groupedWhere<T extends { layer: string; group?: string; group_label?: string }>(results: readonly T[], nameOf: (item: T) => string): WhereLists<T> {
+  if (!results.some((r) => r.group)) {
+    const { ours, recent } = splitSuggestions(results);
+    return whereRows(ours, recent, nameOf);
+  }
+  const seen = new Set<string>();
+  const rows: WhereRow<T>[] = [];
+  for (const g of WHERE_GROUPS) {
+    for (const r of results) {
+      if (groupOf(r) !== g) continue;
+      const n = norm(nameOf(r));
+      if (seen.has(n)) continue;
+      seen.add(n);
+      rows.push({ item: r, icon: g === "saved" ? "building" : "clock", group: g, label: r.group_label?.trim() || GROUP_WORDS[g] });
+    }
+  }
+  return { top: rows.slice(0, SUGGEST_MAX_ROWS), more: rows.slice(SUGGEST_MAX_ROWS, MORE_PLACES_MAX) };
+}
+
+/** Does row i start a group (its header goes above it)? Only rows with a group have headers. */
+export const startsGroup = <T>(rows: readonly WhereRow<T>[], i: number): boolean =>
+  !!rows[i]?.group && (i === 0 || rows[i - 1].group !== rows[i].group || rows[i - 1].label !== rows[i].label);
+
+/** The person (or the request) whose trip someone else edits or decides: their recent places come too. */
+export interface SuggestForWhom {
+  request?: string;
+  person?: string;
+}
+
+/** search_places {suggest}, with for_request (or for_person) for someone else's trip. */
+export function suggestArgs(forWhom?: SuggestForWhom | null): Record<string, unknown> {
+  if (forWhom?.request) return { suggest: true, for_request: forWhom.request };
+  if (forWhom?.person) return { suggest: true, for_person: forWhom.person };
+  return { suggest: true };
 }

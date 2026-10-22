@@ -15,11 +15,10 @@ import { Sheet } from '@/components/patterns/Sheet';
 import { useRouteMapEngine } from '@/components/RouteMap';
 import { OSM_CREDIT } from '@/components/taskMapLogic';
 import { Button, Mono, Txt } from '@/components/ui';
+import { freeMapStyle, useMapScheme } from '@/lib/appTheme';
 import { type MapPackage, mapSession, waitFor } from '@/lib/mapEngine';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
-
-const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
 export interface PinPoint {
   lat: number;
@@ -38,6 +37,7 @@ export function PinAdjust({ visible, pin, name, mapPackage, onUse, onClose }: {
   onClose: () => void;
 }) {
   const { t, settings } = useApp();
+  const scheme = useMapScheme();
   const chosen = useRouteMapEngine(mapPackage);
   // Google's map that has not said it is ready within phone_map_wait_s is judged failed (lib/mapEngine.ts): the free map.
   const [googleDown, setGoogleDown] = useState(false);
@@ -66,9 +66,9 @@ export function PinAdjust({ visible, pin, name, mapPackage, onUse, onClose }: {
         ) : engine === 'google' ? (
           <GoogleMapView
             provider={PROVIDER_GOOGLE}
-            // Always the light map, whatever the phone's dark mode (Round 3 Part A3; read once when the map is made: Android's
-            // MapColorScheme.LIGHT through react-native-maps 1.27.2's initial props, no native change).
-            userInterfaceStyle="light"
+            // The app's theme (lib/appTheme.ts, C §33.12): light today, so the light map whatever the phone's dark mode; read
+            // once when the map is made (Android's MapColorScheme through react-native-maps 1.27.2's initial props, no native change).
+            userInterfaceStyle={scheme}
             style={StyleSheet.absoluteFill}
             initialRegion={{ latitude: pin.lat, longitude: pin.lng, latitudeDelta: 0.004, longitudeDelta: 0.004 }}
             toolbarEnabled={false}
@@ -77,7 +77,7 @@ export function PinAdjust({ visible, pin, name, mapPackage, onUse, onClose }: {
           />
         ) : (
           <>
-            <Map style={StyleSheet.absoluteFill} mapStyle={MAP_STYLE} logo={false} compass={false}
+            <Map style={StyleSheet.absoluteFill} mapStyle={freeMapStyle(scheme)} logo={false} compass={false}
               onDidFailLoadingMap={() => setFailed(true)}
               onRegionDidChange={(e) => {
                 const c = e.nativeEvent.center as unknown as [number, number] | undefined;

@@ -4,6 +4,7 @@ import DrawnMap from "./DrawnMap";
 import { NoMap } from "./NoMap";
 import type { MapProps } from "./types";
 import { useGoogleMap } from "./google/useGoogleMap";
+import { usePageScheme } from "./scheme";
 
 // The real map is web only (tiles cannot load inside a Claude artifact) and is loaded on demand:
 // Google's under the google package (after the tab's map load is counted), else MapLibre.
@@ -17,11 +18,14 @@ const Loading = ({ height }: { height?: number }) => (
 export function MapView(props: MapProps) {
   const [failed, setFailed] = useState(false);
   const choice = useGoogleMap();
+  // C (§33.12): the map follows the page's theme; a change of theme makes the map again in the new scheme (the drawn map
+  // takes the page's colours by itself).
+  const scheme = usePageScheme();
   const loading = <Loading height={props.height} />;
   if (choice.kind === "loading") return loading;
   if (choice.kind === "google") {
     if (!GoogleMap) return <NoMap height={props.height} note="Google's map is web only" />;
-    return <Suspense fallback={loading}><GoogleMap {...props} maps={choice.maps} /></Suspense>;
+    return <Suspense fallback={loading}><GoogleMap key={scheme} {...props} maps={choice.maps} scheme={scheme} /></Suspense>;
   }
   // The open package, or Google's map refused or failed (Part 6): the free map, with no Google content on it (the pages
   // leave Google's pins, lines and snapped roads out for it: googleDrawn, snapAllowed).
@@ -31,7 +35,7 @@ export function MapView(props: MapProps) {
     <>
       {why}
       <Suspense fallback={loading}>
-        <MapLibre {...props} onFail={() => setFailed(true)} />
+        <MapLibre key={scheme} {...props} onFail={() => setFailed(true)} scheme={scheme} />
       </Suspense>
     </>
   );

@@ -2,8 +2,8 @@
 // (components/web: Google's map under the google package, its load counted; else the free map, MapLibre with OpenFreeMap).
 // The same content on both (the positions are ours, rule 10): the day's line coloured by speed band, the holes dashed grey,
 // the estimated roads dashed slate (openrouteservice's: its credit shows), the stops over 10 minutes with the time they
-// began, the playback marker, the frame around the day and the move to one timeline row when it is tapped. Neither map:
-// "Map not available" with Try again; the timeline under the map keeps working.
+// began (a tap says where and how long: §33.6 item 1), the playback marker, the frame around the day and the move to a
+// tapped stop. Neither map: "Map not available" with Try again; the day's numbers above the map keep working.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -26,7 +26,7 @@ export const ROUTE_PADDING = { top: 40, right: 40, bottom: 40, left: 40 };
 /** The zoom for one place (a stop, a short row). */
 export const ROUTE_ZOOM = 15;
 
-/** A timeline row tapped: the map moves to its span once per tap (`nonce`). */
+/** A stop pin tapped (§33.6 item 1; a timeline row before): the map moves to it once per tap (`nonce`). */
 export interface RouteFocus {
   frame: Frame;
   nonce: number;
@@ -54,10 +54,12 @@ interface Props {
   fit: RouteFit;
   focus: RouteFocus | null;
   marker?: PlaybackMarker | null;
+  /** §33.6 item 1: a stop pin tapped (its key). */
+  onStop?: (key: string) => void;
   mapPackage?: MapPackage;
 }
 
-export function RouteMap({ lines, stops, fit, focus, marker, mapPackage }: Props) {
+export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage }: Props) {
   const { t } = useApp();
   const mapMount = useMapMount(mapPackage);
   const { mount, dispatch } = mapMount;
@@ -88,7 +90,7 @@ export function RouteMap({ lines, stops, fit, focus, marker, mapPackage }: Props
   const day = useMemo(() => lines.filter((l) => l.band !== 'estimated' && l.band !== 'gap').map(spec), [lines]);
 
   if (mount.status === 'unavailable') {
-    return <UnavailableCard body={t('office.drivers.route.mapUnavailableBody')} onRetry={() => dispatch({ type: 'retry' })} testID="route-map-unavailable" />;
+    return <UnavailableCard body={t('dayRoute.mapUnavailableBody')} onRetry={() => dispatch({ type: 'retry' })} testID="route-map-unavailable" />;
   }
 
   return (
@@ -105,7 +107,8 @@ export function RouteMap({ lines, stops, fit, focus, marker, mapPackage }: Props
         <MapLines group="route-day" z={3} lines={day} />
         {stops.map((s) => (
           // The circle's centre on the position whatever the label: anchored at the top, moved up by half a circle.
-          <MapMarker key={`${s.key}:${s.time}`} at={s} anchor="top" offsetY={-ROUTE_PIN.circle / 2} z={5}>
+          // §33.6 item 1: a tap says where and how long (the screen's card) and moves the map to it.
+          <MapMarker key={`${s.key}:${s.time}`} at={s} anchor="top" offsetY={-ROUTE_PIN.circle / 2} z={5} onPress={onStop ? () => onStop(s.key) : undefined}>
             <RouteStopPin stop={s} />
           </MapMarker>
         ))}

@@ -66,5 +66,6 @@ export function GeofenceCard({ task, here, onSkip }: { task: TaskWithStops; here
 }
 
 const styles = StyleSheet.create({
-  card: { gap: 12, borderRadius: 16, borderWidth: 2, borderColor: colors.amber, backgroundColor: colors.amberChip, padding: 14 },
+  // Round 4–7, item 12: a white card with the amber edge, so the slide's light amber track shows on it.
+  card: { gap: 12, borderRadius: 16, borderWidth: 1.5, borderColor: colors.amber, backgroundColor: colors.card, padding: 14 },
 });

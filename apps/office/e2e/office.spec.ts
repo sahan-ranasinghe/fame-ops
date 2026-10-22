@@ -297,19 +297,17 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByRole("button", { name: "Today’s route" }).click();
   await expect(live).toContainText(/Today: [\d.]+ km from 3 points/);
 
-  // 4b. The driver page: status, the day's numbers, the timeline beside the map, playback; yesterday has nothing.
+  // 4b. The driver page: status, the day's summary card above the map (§33.6 item 1: no timeline list), playback; yesterday
+  // has nothing.
   await live.getByRole("link", { name: "Driver page" }).click();
   const dp = page.getByTestId("driver-page");
   await expect(dp.getByRole("heading", { name: driver.name })).toBeVisible();
   await expect(dp).toContainText("Km (GPS)");
   await expect(dp).toContainText(/Live · (now|\d+ min ago)/);
-  const timeline = page.getByTestId("timeline");
-  await expect(timeline).toContainText("Driving", { timeout: 10000 });
-  // Round 3 (A1): one small icon per row (a car beside Driving), no coloured bar.
-  await expect(timeline.locator('[data-testid="tl-icon"][data-icon="car"]').first()).toBeVisible();
-  await expect(timeline.locator(".tl-row .bar")).toHaveCount(0);
+  const daySpan = page.getByTestId("day-span");
+  await expect(daySpan).toHaveText(/^\d\d:\d\d–\d\d:\d\d$/, { timeout: 10000 });
+  await expect(page.getByTestId("timeline")).toHaveCount(0);
   await expect(page.getByTestId("playback")).toBeVisible();
-  await timeline.getByRole("button").first().click();
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
   // Stage 0: the driver's day is a week strip (yesterday's cell; the week before when today is a Monday).
@@ -317,7 +315,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(dp).toContainText("No location was shared", { timeout: 10000 });
   // The strip's Today (the menu has a section called Today too).
   await page.getByTestId("day-strip").getByRole("button", { name: "Today", exact: true }).click();
-  await expect(timeline).toContainText("Driving", { timeout: 10000 });
+  await expect(daySpan).toHaveText(/^\d\d:\d\d–\d\d:\d\d$/, { timeout: 10000 });
   await page.getByRole("link", { name: "Live locations" }).first().click();
   await expect(page.getByRole("heading", { name: "Live locations" })).toBeVisible();
   // Trails: every sharing driver's line today on the live map.
@@ -1509,7 +1507,7 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   expect(gone.results.some((r) => r.site_id === `${S}H1`)).toBe(false);
 });
 
-test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps as markers with a list; playback at 60×", async ({ page }) => {
+test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps as markers with their cards and the summary's line; playback at 60×", async ({ page }) => {
   test.setTimeout(180_000);
   const email = `e2e.maps.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Maps", email, permissions: ["view", "assign_tasks"] });
@@ -1550,15 +1548,17 @@ test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps 
   expect(await app.post("location_points", [...first, ...second])).toBe(201);
 
   await page.goto(`/drivers/${driver.username}`);
-  const timeline = page.getByTestId("timeline");
-  await expect(timeline).toContainText("Driving", { timeout: 15000 });
-  // The points went up together just now, so the stretches before the gap also show as "uploaded later" rows.
-  const gaps = page.getByTestId("gaps-list");
-  const noApp = gaps.getByTestId("gap-row").filter({ hasText: "App not running" }).first();
-  await expect(noApp).toBeVisible({ timeout: 15000 });
-  await expect(gaps.getByTestId("gap-row").filter({ hasText: "Offline here · uploaded" }).first()).toBeVisible();
+  await expect(page.getByTestId("day-span")).toHaveText(/^\d\d:\d\d–\d\d:\d\d$/, { timeout: 15000 });
+  // §33.6 item 1: no timeline and no Gaps list; the gaps are one line on the summary card and their markers on the map.
+  await expect(page.getByTestId("timeline")).toHaveCount(0);
+  await expect(page.getByTestId("gaps-list")).toHaveCount(0);
+  await expect(page.getByTestId("day-gaps")).toContainText(/No GPS for \d+ min/, { timeout: 15000 });
+  // The points went up together just now, so the stretches before the gap also have "uploaded later" markers.
+  const noApp = page.locator(".gap-mk.no_data").first();
+  await expect(noApp).toHaveAttribute("aria-label", /App not running/, { timeout: 15000 });
+  await expect(page.locator(".gap-mk.late").first()).toHaveAttribute("aria-label", /Offline here/);
   await noApp.click();
-  await expect(noApp).toHaveAttribute("aria-pressed", "true");
+  await expect(noApp).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator('.gap-mk[aria-expanded="true"]')).toHaveCount(1);
   // No map draws a gap's words permanently: they are in the marker's card only.
   await expect(page.locator(".maplibregl-canvas, svg").first()).toBeVisible();

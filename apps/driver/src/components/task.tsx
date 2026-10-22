@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { GoogleCredit } from '@/components/GoogleCredit';
-import { ChevronDown } from '@/components/icons';
+import { Check, ChevronDown } from '@/components/icons';
 import { stopLabel, stopTimeAt } from '@/components/taskLines';
-import { Txt } from '@/components/ui';
+import { Mono, Txt } from '@/components/ui';
 import { phoneDisplay } from '@/lib/contacts';
 import { durationText, relativeTime } from '@/lib/durations';
 import { cardStops, type StopChange } from '@/lib/taskPreview';
 import { colomboParts, colomboTime } from '@/lib/time';
+import { stepperRows } from '@/lib/todayCard';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -100,6 +101,64 @@ export function StopTimeline({ stops, compact = false, detailed = false, changes
   );
 }
 
+/**
+ * Round 4–7, item 12 (mockup 5): the Next task card's stops as a small stepper: S where the trip starts, each stop by its
+ * number, B "Back at base"; one line each ("Fame Global Solutions · pickup"), a stop's deadline ("by 11:00", amber) and
+ * the plan's time on the right; a thin rail joins the marks. Under way, the stops behind the driver are ticked and the one
+ * being driven to is marked. Up to four stops, then "Show all N stops" opens the rest in place (Hotfix 2). The Google
+ * credit under the list when a stop is a Google place.
+ */
+export function StopStepper({ task }: { task: TaskWithStops }) {
+  const { t } = useApp();
+  const [expanded, setExpanded] = useState(false);
+  const { rows, hidden, total } = stepperRows(task, expanded);
+  const deadline = new Map(task.task_stops.map((s) => [s.id, s.arrive_by]));
+  const typeWord: Record<string, string> = { pickup: t('todayCard.pickup'), drop: t('todayCard.drop') };
+  const lastStopIndex = rows.reduce((at, row, i) => (row.kind !== 'base' ? i : at), -1);
+  return (
+    <View style={stepper.wrap} testID="stop-stepper">
+      {rows.length > 1 && <View style={stepper.rail} />}
+      {rows.map((row, index) => {
+        const name = row.kind === 'base' ? t('todayCard.backAtBase') : `${row.name}${row.type ? ` · ${typeWord[row.type]}` : ''}`;
+        const by = row.stopId ? deadline.get(row.stopId) : null;
+        return (
+          <View key={row.key}>
+            <View style={stepper.row} accessibilityLabel={[row.kind === 'start' ? t('stop.start') : null, name, row.time].filter(Boolean).join(', ')}>
+              <View
+                style={[
+                  stepper.mark,
+                  row.kind === 'start' && { backgroundColor: colors.amber },
+                  row.kind === 'stop' && { backgroundColor: colors.ink },
+                  row.kind === 'base' && stepper.markBase,
+                  row.current && stepper.markCurrent,
+                  row.passed && { backgroundColor: colors.rail },
+                ]}
+              >
+                {row.passed
+                  ? <Check size={13} color={colors.ink} strokeWidth={3} />
+                  : <Txt variant="strong" size={11} color={row.kind === 'stop' ? '#ffffff' : colors.ink}>{row.mark}</Txt>}
+              </View>
+              <Txt variant={row.current ? 'strong' : 'body'} size={14} numberOfLines={1} color={row.passed ? colors.muted : colors.ink} style={{ flex: 1, minWidth: 0 }}>
+                {name}
+              </Txt>
+              {by && !row.passed && <Txt variant="strong" size={12} color={colors.amberText}>{t('preview.arriveBy', { time: colomboTime(by) })}</Txt>}
+              {row.time && <Mono size={13} color={colors.muted}>{row.time}</Mono>}
+            </View>
+            {/* "Show all N stops" after the fourth stop, before Back at base. */}
+            {hidden > 0 && index === lastStopIndex && (
+              <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} style={stepper.showAll} testID="stepper-show-all">
+                <View style={[stepper.mark, stepper.markBase]}><ChevronDown size={14} color={colors.ink} strokeWidth={2.6} /></View>
+                <Txt variant="strong" size={14} color={colors.blue} style={{ flex: 1 }}>{t('preview.showAll', { n: total })}</Txt>
+              </Pressable>
+            )}
+          </View>
+        );
+      })}
+      <GoogleCredit show={rows.some((row) => row.google)} />
+    </View>
+  );
+}
+
 /** "Changed", in amber: what the office changed since the driver last saw the task. */
 export function ChangedTag() {
   const { t } = useApp();
@@ -177,4 +236,15 @@ const styles = StyleSheet.create({
   rail: { width: 16, alignItems: 'center', paddingTop: 5 },
   dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: colors.ink, backgroundColor: colors.card },
   line: { flex: 1, width: 3, backgroundColor: '#cfcac0', marginVertical: 3, borderRadius: 2 },
+});
+
+const stepper = StyleSheet.create({
+  wrap: { gap: 10, paddingLeft: 4 },
+  // The thin line from the first mark to the last (the marks sit on it).
+  rail: { position: 'absolute', left: 15, top: 14, bottom: 14, width: 2, backgroundColor: colors.rail },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 24 },
+  mark: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  markBase: { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.ink },
+  markCurrent: { borderWidth: 2, borderColor: colors.blue },
+  showAll: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44, marginTop: 10 },
 });

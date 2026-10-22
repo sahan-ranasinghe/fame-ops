@@ -96,10 +96,12 @@ interface ButtonProps {
   busy?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  /** Round 4–7, item 12: the approved mockups' card button (56 high, 17 pt words) inside a card. */
+  compact?: boolean;
 }
 
 /** primary = amber (the main action of a screen), dark = ink, outline = secondary. */
-export function Button({ label, onPress, kind = 'primary', icon: Icon, disabled = false, busy = false, style, testID }: ButtonProps) {
+export function Button({ label, onPress, kind = 'primary', icon: Icon, disabled = false, busy = false, style, testID, compact = false }: ButtonProps) {
   const text = kind === 'dark' ? '#ffffff' : kind === 'danger-text' ? colors.red : colors.ink;
   return (
     <Pressable
@@ -114,14 +116,15 @@ export function Button({ label, onPress, kind = 'primary', icon: Icon, disabled 
         kind === 'dark' && { backgroundColor: colors.ink },
         kind === 'outline' && { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.line },
         kind === 'danger-text' && { minHeight: 52 },
+        compact && kind !== 'danger-text' && { minHeight: 56 },
         hoverStyle(state),
         (disabled || busy) && { opacity: 0.45 },
         state.pressed && { opacity: 0.8 },
         style,
       ]}
     >
-      {busy ? <ActivityIndicator color={text} /> : Icon ? <Icon size={22} color={text} strokeWidth={2.4} /> : null}
-      <Txt variant="button" color={text} style={{ textAlign: 'center', flexShrink: 1 }}>{label}</Txt>
+      {busy ? <ActivityIndicator color={text} /> : Icon ? <Icon size={compact ? 20 : 22} color={text} strokeWidth={2.4} /> : null}
+      <Txt variant="button" size={compact ? 17 : undefined} color={text} style={{ textAlign: 'center', flexShrink: 1 }}>{label}</Txt>
     </Pressable>
   );
 }

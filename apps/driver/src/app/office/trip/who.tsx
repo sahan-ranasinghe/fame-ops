@@ -33,6 +33,7 @@ import { SkeletonRows } from '@/components/patterns/ListState';
 import { colomboDate } from '@/lib/time';
 import { rankedDrivers } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
+import { wantedOfWindow } from '@/office/holderLogic';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import type { ProjectRow } from '@/office/trip/assignLogic';
@@ -188,7 +189,7 @@ function WhoStep({ d }: { d: TripDraft }) {
 
   // The vehicles in the site's four groups (components/office/VehicleGroups.tsx, shared with Approve): a pick closes the list.
   const vehicleGroups = (rows: ReturnType<typeof groupRows>, empty: string) => (
-    <VehicleGroups rows={rows} picked={shown} onPick={(reg) => { setF({ vehicle: reg }); setChoosing(false); }} empty={empty} />
+    <VehicleGroups rows={rows} picked={shown} onPick={(reg) => { setF({ vehicle: reg }); setChoosing(false); }} empty={empty} wanted={wantedOfWindow(avail.data?.window)} />
   );
 
   const onDayChips = onDay && (

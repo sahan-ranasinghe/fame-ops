@@ -66,7 +66,11 @@ export const updateSettings = tool({
     value: z.unknown().describe("The new value, in the key's shape (get_settings shows the current one)"),
   }),
   async run({ key, value }, { db, actor }) {
-    const checked = validateSetting(key, value);
+    // Round 4–7 (item 9): retention takes only the periods that change; the others stay as stored (never back to defaults).
+    const merged = key === "retention" && value && typeof value === "object" && !Array.isArray(value)
+      ? { ...(await loadSettings(db)).retention, ...(value as Record<string, unknown>) }
+      : value;
+    const checked = validateSetting(key, merged);
     if (key === "base_place_id" && checked) {
       const place = unwrapMaybe(await db.from("places").select("id, name, lat").eq("id", checked as string).maybeSingle(), "base place");
       if (!place) throw new ToolError("No saved place has that id. list_places shows them; add_place saves one.");

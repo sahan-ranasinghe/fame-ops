@@ -6,8 +6,9 @@
 
 import { Camera, type CameraRef, type CameraStop, GeoJSONSource, Layer, Map, Marker } from '@maplibre/maplibre-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 
+import { freeMapStyle, useMapScheme } from '@/lib/appTheme';
 import { BAND_COLORS } from '@/office/driversLogic';
 import { useApp } from '@/state/app';
 import { MapCompass } from './MapCompass';
@@ -15,16 +16,15 @@ import { nextTurn, ONE_PLACE_ZOOM, SRI_LANKA, type Turn } from './mapPins';
 import { lineWidth, PlaybackPin, ROUTE_PADDING, ROUTE_PIN, ROUTE_ZOOM, type RouteEngineProps, RouteStopPin } from './RouteMap';
 import type { Frame } from './taskMapLogic';
 
-const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
-
 function stopFor(f: Frame, zoom: number): CameraStop {
   if (f.kind === 'box') return { bounds: [f.sw.lng, f.sw.lat, f.ne.lng, f.ne.lat], padding: ROUTE_PADDING };
   if (f.kind === 'point') return { center: [f.center.lng, f.center.lat], zoom };
   return { center: [SRI_LANKA.lng, SRI_LANKA.lat], zoom: 6.4 };
 }
 
-export function OpenRouteMap({ lines, stops, fit, focus, marker, onLoaded, onFailed }: RouteEngineProps) {
+export function OpenRouteMap({ lines, stops, fit, focus, marker, onStop, onLoaded, onFailed }: RouteEngineProps) {
   const { t } = useApp();
+  const scheme = useMapScheme();
   const camera = useRef<CameraRef>(null);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
   const focusedRow = focus !== null;
@@ -81,7 +81,7 @@ export function OpenRouteMap({ lines, stops, fit, focus, marker, onLoaded, onFai
     <>
       <Map
         style={StyleSheet.absoluteFill}
-        mapStyle={MAP_STYLE}
+        mapStyle={freeMapStyle(scheme)}
         logo={false}
         compass={false}
         onDidFinishLoadingMap={onLoaded}
@@ -102,7 +102,10 @@ export function OpenRouteMap({ lines, stops, fit, focus, marker, onLoaded, onFai
         {stops.map((s) => (
           // The circle's centre on the position whatever the label: anchored at the top, moved up by half a circle.
           <Marker key={`${s.key}:${s.time}`} id={`route-stop-${s.key}`} lngLat={[s.lng, s.lat]} anchor="top" offset={[0, -ROUTE_PIN.circle / 2]}>
-            <RouteStopPin stop={s} />
+            {/* §33.6 item 1: a tap says where and how long (the screen's card) and moves the map to it. */}
+            <Pressable accessibilityRole="button" accessibilityLabel={s.label} disabled={!onStop} onPress={() => onStop?.(s.key)} hitSlop={8} testID={`route-stop-pin-${s.key}`}>
+              <RouteStopPin stop={s} />
+            </Pressable>
           </Marker>
         ))}
         {marker ? (

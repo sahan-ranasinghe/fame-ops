@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
 import type { Me, Transport, WatchEvent } from "../transport/types";
-import { LocationSearch } from "./LocationSearch";
+import { LocationSearch, SuggestFor } from "./LocationSearch";
 import type { Picked } from "./locationLogic";
 
 /** search_places answers our place and one Google result; google_place answers the pin. */
@@ -151,5 +151,54 @@ describe("LocationSearch: the empty box's Where suggestions (Round 1 item 6)", (
     expect(screen.getByText("Office")).toBeTruthy();
     expect(screen.queryByTestId("where-icon-building")).toBeNull();
     vi.useRealTimers();
+  });
+});
+
+/** Round 4–7 (item 10): the server's groups, and the requester's recent places when someone else's request is open. */
+class Grouping extends Places {
+  call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {
+    if (tool === "search_places" && args.suggest) {
+      this.calls.push({ tool, args });
+      const g = (name: string, layer: string, group: string, group_label: string) => ({ layer, badge: layer === "place" ? "Office" : "Used before", name, id: layer === "place" ? `p-${name}` : undefined, pinned: true, lat: 7, lng: 80, group, group_label });
+      const results = [g("Head office", "place", "saved", "Saved"), g("Store A", "place", "saved", "Saved"), g("Kandy depot", "recent", "recent", "Recent"), g("Galle site", "recent", "recent", "Recent")];
+      if (args.for_request) results.push(g("Matara", "recent", "for", "Anoja's recent"));
+      return Promise.resolve({ text: "", suggested: true, results } as T);
+    }
+    return super.call<T>(tool, args);
+  }
+}
+
+describe("LocationSearch: Saved, Recent and the requester's recent (Round 4–7, item 10)", () => {
+  async function open(forRequest?: string) {
+    const transport = new Grouping();
+    const me = await transport.me();
+    const picked: Picked[] = [];
+    const box = <LocationSearch id="s" label="Stop" value="" onText={() => {}} onPick={(p) => picked.push(p)} />;
+    render(
+      <FleetProvider value={{ store: new FleetStore(transport), transport, me, noConnector: false }}>
+        <MemoryRouter>{forRequest ? <SuggestFor request={forRequest}>{box}</SuggestFor> : box}</MemoryRouter>
+      </FleetProvider>,
+    );
+    fireEvent.focus(screen.getByRole("combobox"));
+    await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
+    return { transport, picked };
+  }
+
+  it("one's own trip: Saved and Recent under their headers, the rows still picked as before", async () => {
+    const { transport, picked } = await open();
+    expect(transport.calls.filter((c) => c.tool === "search_places")).toEqual([{ tool: "search_places", args: { suggest: true } }]);
+    expect(screen.getAllByTestId("where-group").map((h) => h.textContent)).toEqual(["Saved", "Recent"]);
+    expect(screen.getAllByRole("option").map((o) => o.querySelector("b")!.textContent)).toEqual(["Head office", "Store A", "Kandy depot", "Galle site"]);
+    expect(screen.getAllByTestId("where-icon-building")).toHaveLength(2);
+    expect(screen.getAllByTestId("where-icon-clock")).toHaveLength(2);
+    fireEvent.click(screen.getByText("Store A"));
+    expect(picked[0]).toMatchObject({ name: "Store A", placeId: "p-Store A" });
+  });
+
+  it("someone else's request: asks with for_request and shows \"Anoja's recent\" last", async () => {
+    const { transport } = await open("req-1");
+    expect(transport.calls.filter((c) => c.tool === "search_places").map((c) => c.args)).toEqual([{ suggest: true, for_request: "req-1" }]);
+    expect(screen.getAllByTestId("where-group").map((h) => h.textContent)).toEqual(["Saved", "Recent", "Anoja's recent"]);
+    expect(screen.getAllByRole("option").at(-1)!.querySelector("b")!.textContent).toBe("Matara");
   });
 });

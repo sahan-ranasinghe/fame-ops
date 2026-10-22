@@ -9,7 +9,7 @@ import { Image, StyleSheet, View } from 'react-native';
 import { IdCard, User, Van } from '@/components/icons';
 import { BUCKETS, fetchPhotoPath } from '@/lib/api';
 import { getJson, KEYS } from '@/lib/kv';
-import { fileExists } from '@/lib/photos';
+import { fileExists } from '@/lib/localFile';
 import { signedUrl, useSignedUrls } from '@/lib/signedUrls';
 import { supabase } from '@/lib/supabase';
 import { type KeptLicencePhotos, type KeptProfilePhoto, useApp } from '@/state/app';

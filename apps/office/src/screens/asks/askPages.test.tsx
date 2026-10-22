@@ -286,6 +286,43 @@ describe("the questions list (/drivers/asks)", () => {
   });
 });
 
+describe("the questions list: Mine · Everyone's (Round 4–7, item 10)", () => {
+  const mine = ask();
+  const theirs = ask({ id: "a9", question: "When can you be at the office?", asked_by: "Anoja" });
+  const answers = (a: Record<string, unknown>) => (a.all ? { count: 2, total: 2, asks: [mine, theirs] } : { count: 1, total: 1, mine: true, asks: [mine] });
+
+  it("an approver: Mine by default (the person's own), Everyone's asks all: true, and back; each row still opens its answers", async () => {
+    const t = new FakeTransport({ ask_answers: answers }, dispatcher);
+    mount(t, "/drivers/asks");
+    await settle();
+    expect(t.argsOf("ask_answers")[0]).toEqual({ limit: 25 });
+    const tabs = screen.getByRole("tablist", { name: "Whose questions" });
+    expect(within(tabs).getByRole("tab", { name: "Mine" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getAllByTestId("ask-list-row")).toHaveLength(1);
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Everyone's" }));
+    await settle();
+    expect(t.argsOf("ask_answers").at(-1)).toEqual({ all: true, limit: 25 });
+    expect(screen.getByTestId("where").textContent).toBe("/drivers/asks?whose=all");
+    expect(screen.getAllByTestId("ask-list-row")).toHaveLength(2);
+    expect(screen.getAllByTestId("ask-list-row")[1].getAttribute("href")).toBe("/drivers/asks/a9");
+    expect(screen.getByRole("link", { name: "Ask drivers" }).getAttribute("href")).toBe("/drivers/ask");
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Mine" }));
+    await settle();
+    expect(t.argsOf("ask_answers").at(-1)).toEqual({ limit: 25 });
+    expect(screen.getByTestId("where").textContent).toBe("/drivers/asks");
+  });
+
+  it("without approve: no switch, and never all (even from the address)", async () => {
+    const assigner: Me = { ...dispatcher, permissions: ["view", "assign_tasks"] };
+    const t = new FakeTransport({ ask_answers: answers }, assigner);
+    mount(t, "/drivers/asks?whose=all", {}, assigner);
+    await settle();
+    expect(screen.queryByRole("tablist", { name: "Whose questions" })).toBeNull();
+    expect(t.argsOf("ask_answers").every((a) => !("all" in a))).toBe(true);
+    expect(screen.getAllByTestId("ask-list-row")).toHaveLength(1);
+  });
+});
+
 describe("the routes (both builds use the same list)", () => {
   const leaf = (path: string) => matchRoutes(routes, path)?.at(-1)?.route.path;
   it("ask, asks and a question's answers are never read as a driver; the ask.answered notification's link opens the answers", () => {

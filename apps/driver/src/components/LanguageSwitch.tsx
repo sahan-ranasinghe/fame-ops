@@ -37,13 +37,16 @@ export function LanguageSwitch({ onDark = false }: { onDark?: boolean }) {
   );
 }
 
-/** The single pill on the Today header: shows the language you can switch to. */
-export function LanguagePill() {
+/**
+ * The single pill that shows the language you can switch to: on the sign-in's dark header, and (`light`, Round 4–7 item
+ * 12) at the top right of Today's thin top bar, a white round control like the mockup's.
+ */
+export function LanguagePill({ light = false }: { light?: boolean }) {
   const { language, setLanguage } = useApp();
   const other: Language = language === 'en' ? 'si' : 'en';
   return (
-    <Pressable accessibilityRole="button" onPress={() => setLanguage(other)} style={styles.pill}>
-      <Text style={{ fontFamily: NAMES[other].font, fontSize: 16, color: '#ffffff' }}>{NAMES[other].label}</Text>
+    <Pressable accessibilityRole="button" onPress={() => setLanguage(other)} style={[styles.pill, light && styles.pillLight]} testID="language-pill">
+      <Text style={{ fontFamily: NAMES[other].font, fontSize: light ? 15 : 16, color: light ? colors.ink : '#ffffff' }}>{NAMES[other].label}</Text>
     </Pressable>
   );
 }
@@ -62,4 +65,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pillLight: { borderWidth: 1, borderColor: '#e2e0da', backgroundColor: colors.card, paddingHorizontal: 14 },
 });

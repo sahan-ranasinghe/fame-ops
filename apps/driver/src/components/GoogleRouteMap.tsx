@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import GoogleMapView, { Marker as GoogleMarker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
+import { useMapScheme } from '@/lib/appTheme';
 import { BAND_COLORS } from '@/office/driversLogic';
 import { useApp } from '@/state/app';
 import { MapCompass } from './MapCompass';
@@ -15,8 +16,9 @@ import { nextTurn, ONE_PLACE_ZOOM, SRI_LANKA, type Turn } from './mapPins';
 import { lineWidth, PlaybackPin, ROUTE_PADDING, ROUTE_ZOOM, type RouteEngineProps, routePinAnchorY, RouteStopPin } from './RouteMap';
 import type { Frame, LatLng } from './taskMapLogic';
 
-export function GoogleRouteMap({ lines, stops, fit, focus, marker, onLoaded }: RouteEngineProps) {
+export function GoogleRouteMap({ lines, stops, fit, focus, marker, onStop, onLoaded }: RouteEngineProps) {
   const { t } = useApp();
+  const scheme = useMapScheme();
   const map = useRef<GoogleMapView>(null);
   const [ready, setReady] = useState(false);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
@@ -61,9 +63,9 @@ export function GoogleRouteMap({ lines, stops, fit, focus, marker, onLoaded }: R
       <GoogleMapView
         ref={map}
         provider={PROVIDER_GOOGLE}
-        // Always the light map, whatever the phone's dark mode (Round 3 Part A3; read once when the map is made: Android's
-        // MapColorScheme.LIGHT through react-native-maps 1.27.2's initial props, no native change).
-        userInterfaceStyle="light"
+        // The app's theme (lib/appTheme.ts, C §33.12): light today, so the light map whatever the phone's dark mode; read
+        // once when the map is made (Android's MapColorScheme through react-native-maps 1.27.2's initial props, no native change).
+        userInterfaceStyle={scheme}
         style={StyleSheet.absoluteFill}
         initialRegion={{ latitude: SRI_LANKA.lat, longitude: SRI_LANKA.lng, latitudeDelta: 3.5, longitudeDelta: 3.5 }}
         toolbarEnabled={false}
@@ -86,7 +88,9 @@ export function GoogleRouteMap({ lines, stops, fit, focus, marker, onLoaded }: R
         ))}
         {stops.map((s) => (
           // A marker's picture is taken once (tracksViewChanges off): a new time makes a new marker.
-          <GoogleMarker key={`${s.key}:${s.time}`} coordinate={at(s)} anchor={{ x: 0.5, y: routePinAnchorY() }} tracksViewChanges={false} zIndex={5}>
+          // §33.6 item 1: a tap says where and how long (the screen's card) and moves the map to it.
+          <GoogleMarker key={`${s.key}:${s.time}`} coordinate={at(s)} anchor={{ x: 0.5, y: routePinAnchorY() }} tracksViewChanges={false} zIndex={5}
+            onPress={onStop ? () => onStop(s.key) : undefined} accessibilityLabel={s.label}>
             <RouteStopPin stop={s} />
           </GoogleMarker>
         ))}

@@ -1,5 +1,5 @@
-// The real map (web build only): MapLibre GL with OpenFreeMap's Liberty style,
-// the driver app's tiles. A marker per driver (plate chip over a dot with an
+// The real map (web build only): MapLibre GL with OpenFreeMap's Liberty style
+// (its Dark style in the site's dark theme: C, §33.12), the driver app's tiles. A marker per driver (plate chip over a dot with an
 // arrow that turns with the heading, blue live / amber stale / red not
 // sharing), moves animated over the real time between two positions (0.3 to
 // 10 s); routes as lines coloured by speed, thin and lighter where the fix was
@@ -20,15 +20,15 @@ import { plainRuns } from "./DrawnMap";
 import { needsCentre, useGapOpen } from "./gapLogic";
 import { MapControls } from "./MapControls";
 import { planFitKey, planFor, planPoints } from "./planDraw";
-import { ESTIMATED_COLOR, MAP_CANVAS, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
+import { FREE_MAP_STYLES, type MapScheme } from "./scheme";
+import { estimatedColor, mapCanvas, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, speedColors } from "./types";
 
-export const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+/** The light style (the dark one: FREE_MAP_STYLES.dark, by the page's theme). */
+export const STYLE_URL = FREE_MAP_STYLES.light;
 const SRI_LANKA: [number, number] = [80.7, 7.8];
 
-/** The plan's connectors: thin, dashed, never read as a road (§20). */
-const PLAN_LINK_COLOR = MAP_CANVAS.ink;
-/** A plan leg's own road line (openrouteservice's on this map), as Google's map draws its lines. */
-const PLAN_LINE_COLOR = MAP_CANVAS.ink;
+// The plan's connectors (thin, dashed, never read as a road, §20) and a plan leg's own road line (openrouteservice's on
+// this map, as Google's map draws its lines): the map's ink in the page's scheme.
 
 interface Live {
   marker: maplibregl.Marker;
@@ -92,7 +92,8 @@ export default function MapLibreMap({
   trailsToggle,
   height,
   onFail,
-}: MapProps & { onFail: () => void }) {
+  scheme = "light",
+}: MapProps & { onFail: () => void; scheme?: MapScheme }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const live = useRef(new Map<string, Live>());
@@ -118,9 +119,11 @@ export default function MapLibreMap({
   useEffect(() => {
     if (!box.current) return;
     let m: maplibregl.Map;
+    // C (§33.12): the style and the lines in the page's scheme (MapView makes this map again when the theme changes).
+    const canvas = mapCanvas(scheme), speed = speedColors(scheme);
     try {
       // §23: no cooperative gestures (one finger moves the map, the wheel zooms).
-      m = new maplibregl.Map({ container: box.current, style: STYLE_URL, center: SRI_LANKA, zoom: 6.6, attributionControl: { compact: false }, cooperativeGestures: false });
+      m = new maplibregl.Map({ container: box.current, style: FREE_MAP_STYLES[scheme], center: SRI_LANKA, zoom: 6.6, attributionControl: { compact: false }, cooperativeGestures: false });
     } catch {
       onFail();
       return;
@@ -140,14 +143,14 @@ export default function MapLibreMap({
     m.on("load", () => {
       const empty = (): FeatureCollection => ({ type: "FeatureCollection", features: [] });
       m.addSource("trails", { type: "geojson", data: empty() });
-      m.addLayer({ id: "trails-line", type: "line", source: "trails", paint: { "line-color": MAP_CANVAS.line, "line-width": 3, "line-opacity": 0.45 }, layout: { "line-join": "round", "line-cap": "round" } });
+      m.addLayer({ id: "trails-line", type: "line", source: "trails", paint: { "line-color": canvas.line, "line-width": 3, "line-opacity": 0.45 }, layout: { "line-join": "round", "line-cap": "round" } });
       // Part 6: a plan leg's own road line where this map may show it (openrouteservice's, never Google's: planFor).
       m.addSource("plan-lines", { type: "geojson", data: empty() });
       m.addLayer({
         id: "plan-lines-line",
         type: "line",
         source: "plan-lines",
-        paint: { "line-color": PLAN_LINE_COLOR, "line-width": 4, "line-opacity": 0.75 },
+        paint: { "line-color": canvas.ink, "line-width": 4, "line-opacity": 0.75 },
         layout: { "line-join": "round", "line-cap": "round" },
       });
       m.addSource("plan-links", { type: "geojson", data: empty() });
@@ -155,14 +158,14 @@ export default function MapLibreMap({
         id: "plan-links-line",
         type: "line",
         source: "plan-links",
-        paint: { "line-color": PLAN_LINK_COLOR, "line-width": 2, "line-opacity": 0.55, "line-dasharray": [3, 3] },
+        paint: { "line-color": canvas.ink, "line-width": 2, "line-opacity": 0.55, "line-dasharray": [3, 3] },
         layout: { "line-cap": "round" },
       });
       // The gaps (§21): dashed lines only; their words are on the gap markers, never on the map.
       m.addSource("holes", { type: "geojson", data: empty() });
-      m.addLayer({ id: "holes-line", type: "line", source: "holes", paint: { "line-color": MAP_CANVAS.hole, "line-width": 3, "line-dasharray": [2, 2] }, layout: { "line-cap": "round" } });
+      m.addLayer({ id: "holes-line", type: "line", source: "holes", paint: { "line-color": canvas.hole, "line-width": 3, "line-dasharray": [2, 2] }, layout: { "line-cap": "round" } });
       m.addSource("estimated", { type: "geojson", data: empty() });
-      m.addLayer({ id: "estimated-line", type: "line", source: "estimated", paint: { "line-color": ESTIMATED_COLOR, "line-width": 3.5, "line-dasharray": [1, 2] }, layout: { "line-cap": "round", "line-join": "round" } });
+      m.addLayer({ id: "estimated-line", type: "line", source: "estimated", paint: { "line-color": estimatedColor(scheme), "line-width": 3.5, "line-dasharray": [1, 2] }, layout: { "line-cap": "round", "line-join": "round" } });
       m.addSource("route", { type: "geojson", data: empty() });
       m.addLayer({
         id: "route-line",
@@ -170,13 +173,13 @@ export default function MapLibreMap({
         source: "route",
         filter: ["==", "$type", "LineString"],
         paint: {
-          "line-color": ["match", ["get", "cls"], "stopped", SPEED_COLORS.stopped, "slow", SPEED_COLORS.slow, "fast", SPEED_COLORS.fast, SPEED_COLORS.normal],
+          "line-color": ["match", ["get", "cls"], "stopped", speed.stopped, "slow", speed.slow, "fast", speed.fast, speed.normal],
           "line-width": ["match", ["get", "conf"], "poor", 2.5, 5],
           "line-opacity": ["match", ["get", "conf"], "poor", 0.45, 0.9],
         },
         layout: { "line-join": "round", "line-cap": "round" },
       });
-      m.addLayer({ id: "route-start", type: "circle", source: "route", filter: ["==", "$type", "Point"], paint: { "circle-radius": 7, "circle-color": MAP_CANVAS.ring, "circle-stroke-color": MAP_CANVAS.line, "circle-stroke-width": 4 } });
+      m.addLayer({ id: "route-start", type: "circle", source: "route", filter: ["==", "$type", "Point"], paint: { "circle-radius": 7, "circle-color": canvas.ring, "circle-stroke-color": canvas.line, "circle-stroke-width": 4 } });
       setReady(true);
     });
     m.on("error", (e) => {

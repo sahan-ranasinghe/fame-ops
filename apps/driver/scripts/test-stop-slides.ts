@@ -204,7 +204,8 @@ console.log('\nThe screens');
   check(!/onPress=\{\(\) => app\.markStop(Arrived|Done)/.test(screen) && !/onPress=\{\(\) => markStop(Arrived|Done)/.test(button), 'no tap marks a stop Arrived or Left any more');
   check(/<SlideToConfirm[^>]*label=\{t\('task\.slideArrive'/.test(button) && /label=\{t\('task\.slideLeave'/.test(button) && /label=\{t\('task\.slideFinish'\)\}/.test(button) && /label=\{t\('arrive\.override'\)\}/.test(button),
     'the current stop: arrive, override, leave and finish are all slides');
-  check(/<ArrivalButton key=\{item\.id\} stop=\{item\} here=\{here\} last=\{item\.id === lastId\} onFinish=\{finishTask\} \/>/.test(screen) && /onPress=\{\(\) => finishTask\(\)\}/.test(screen),
+  // Round 4–7, item 12 (mockup 6): the current stop's slide sits on the sheet under the map (its short words), no longer in the list.
+  check(/<ArrivalButton key=\{stop\.id\} stop=\{stop\} here=\{here\} last=\{stop\.id === lastId\} onFinish=\{finishTask\} short \/>/.test(screen) && /onPress=\{\(\) => finishTask\(\)\}/.test(screen),
     'Slide to finish and Complete task share one finish (the question about open stops, then Log mileage)');
   check(/pathname: '\/log-mileage', params: \{ mode: 'finish', taskId: task\.id \}/.test(screen), 'the finish opens Log mileage as before');
   check(/slides\.leave\(item\)/.test(screen) && /slides\.arrive\(item, nearHere\)/.test(screen), 'a stop visited out of order: the same slides (with Undo)');

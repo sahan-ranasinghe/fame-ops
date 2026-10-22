@@ -1,7 +1,8 @@
 // Gap markers and the Gaps list (Phase 7, §21): no map carries text any more;
 // each gap gets one small grey marker at the middle of its dashed line, with
-// its words on hover or tap, and a list beside the map (the driver page's
-// timeline column, under a task's route, Live's card of the shown route).
+// its words on hover or tap, and a list beside the map (under a task's route,
+// Live's card of the shown route; the driver page has the markers only and its
+// summary's "No GPS for …" line since §33.6 item 1).
 // - A hole of the tool's line (no_data "App not running", no_gps "Stopped · no
 //   GPS signal"): the marker at the middle of the dashed line, the straight one
 //   between the line points around it, or its estimated road line when one
