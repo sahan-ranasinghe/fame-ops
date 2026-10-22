@@ -1200,6 +1200,8 @@ export interface SuggestedVehicle {
   whatsapp?: string;
   note?: string;
   back?: string;
+  /** Round 4–7 (7): the busy group's holder (absent while holder_contact is off). */
+  holder?: Holder;
 }
 
 export interface Suggestions {
@@ -1207,7 +1209,7 @@ export interface Suggestions {
   request?: RequestCard;
   window?: { when: string; back_by?: string; need?: string };
   vehicles: SuggestedVehicle[];
-  drivers: { name: string; username: string; availability: string }[];
+  drivers: { name: string; username: string; availability: string; holder?: Holder }[];
   groups?: { free_pool: SuggestedVehicle[]; free_assigned: SuggestedVehicle[]; busy: SuggestedVehicle[]; in_garage: SuggestedVehicle[] };
   /** Round 3: the driver-first card (the photo, the vehicle held today or the regular one). */
   drivers_free?: { name: string; username: string; photo_url?: string; vehicle?: DriverVehicleRef }[];
@@ -1230,6 +1232,8 @@ export interface BookResult {
   /** Phase 7 (§3). */
   vehicle_used?: VehicleUsed;
   vehicle_changed?: string;
+  /** Round 4–7 (7): the driver or vehicle busy then, with its holder. */
+  conflicts?: Conflict[];
 }
 
 export interface ProjectMatch {
@@ -1852,6 +1856,8 @@ export interface UpdateTaskResult {
   changes: FieldChanges;
   warnings?: string[];
   sent?: string;
+  /** Round 4–7 (7). */
+  conflicts?: Conflict[];
 }
 
 export interface UpdateRequestResult {
@@ -1889,6 +1895,8 @@ export interface AvailableDriver {
   licence: { chip: "ok" | "orange" | "red" | "not set"; expiry?: string };
   free: boolean;
   busy_with?: string;
+  /** Round 4–7 (7): who holds a busy driver (absent while holder_contact is off). */
+  holder?: Holder;
   /** Phase 7: the vehicle the driver holds today (on duty), else their regular one. */
   vehicle?: { reg_no: string; source: "on_duty" | "regular" };
   /** Phase 7 (§3): the place in the best-match ranking (1 = best). */
@@ -2410,6 +2418,14 @@ export interface AskedForIt {
   asked?: string | null;
   what: string;
   wanted: string;
+  next: string;
+}
+
+/** answer_holder_ask's answer. */
+export interface AnsweredHolderAsk {
+  ask_id: string;
+  answer: "yes" | "no";
+  said: string;
   next: string;
 }
 
