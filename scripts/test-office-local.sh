@@ -69,7 +69,7 @@ ls -la dist-artifact/index.html | awk '{print "   artifact: " $5 " bytes"}'
 # e2e's dev server under /m/ (FLEET_MOBILE_DIR). --clear: the EXPO_PUBLIC values are built in, a cached bundle keeps old ones.
 echo "   mobile website (local build)"
 (cd ../driver && [ -d node_modules ] || npm install --no-audit --no-fund) >/dev/null
-(cd ../driver && node scripts/make-web-routes.mjs >/dev/null && EXPO_PUBLIC_SUPABASE_URL="$API_URL" EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY" \
+(cd ../driver && FLEET_DESIGN=1 node scripts/make-web-routes.mjs >/dev/null && EXPO_PUBLIC_SUPABASE_URL="$API_URL" EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY" \
   FLEET_WEB=1 EXPO_NO_WEB_SETUP=1 npx expo export --platform web --output-dir dist-web-local --clear >/dev/null && node scripts/web-vendor-assets.mjs dist-web-local >/dev/null)
 export FLEET_MOBILE_DIR="$(cd ../driver && pwd)/dist-web-local"
 echo "4. End to end (Playwright)"

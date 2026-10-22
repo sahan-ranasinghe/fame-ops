@@ -39,7 +39,10 @@ export default defineConfig({
   },
   projects: [
     // A desktop: the full flows; also the contrast check at a desktop's width (e2e/contrast.spec.ts, light and dark).
-    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /(phone|mobile)\.spec\.ts/ },
+    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /(phone|mobile|mockups)\.spec\.ts/ },
+    // Round 4–7, item 12: the screens built to the approved mockups, photographed beside them (e2e/mockups.spec.ts opens its
+    // own phone and desktop windows; the pictures stay in the run's artifact).
+    { name: "mockups", use: { browserName: "chromium" }, testMatch: /mockups\.spec\.ts/ },
     // A phone (412 × 915, touch): the tab bar per role, pages and detail screens, drafts, the stops editor, pull to refresh;
     // the contrast check at a phone's width (the site's screens, light and dark).
     { name: "phone", use: { browserName: "chromium", viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }, testMatch: /(phone|contrast)\.spec\.ts/ },

@@ -25,6 +25,10 @@ cp -R ../driver/dist-web/. dist/m/
 # build's 127.0.0.1 cannot stay in it): the real project's address, never this laptop's.
 if grep -rqE "127\.0\.0\.1:54321|localhost:54321" dist/m; then echo "STOP: the mobile build points at the local stack"; exit 1; fi
 if ! grep -rq "hinurfsaxvplbyqgtozj.supabase.co" dist/m; then echo "STOP: the mobile build does not point at the real project"; exit 1; fi
+# Round 4–7, item 12: a design page (a screen with sample data, the e2e build only) never goes up: its routes exist only with
+# FLEET_DESIGN=1 (make-web-routes), and every design page renders the marker fleet-design-page.
+if [ -d ../driver/src/web-app/design ]; then echo "STOP: design pages' routes exist (apps/driver/src/web-app/design)"; exit 1; fi
+if grep -rq "fleet-design-page" dist/m; then echo "STOP: a design page is in the mobile build"; exit 1; fi
 
 echo "== 3. The routes: a /m/ page reloads on the mobile website, any other page on the desktop site"
 # Only the mobile site's own pages (its files under /m/_expo and /m/assets are served as they are). The target is /m/, not

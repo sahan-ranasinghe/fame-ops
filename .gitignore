@@ -22,3 +22,6 @@ apps/office/.wrangler/
 
 # The Sinhala review export (scripts/i18n/export-sinhala-review.py): working files, not committed.
 docs/i18n/
+
+# Round 4–7, item 12: the design pages' web routes (apps/driver/scripts/make-web-routes.mjs with FLEET_DESIGN=1; the e2e build only).
+apps/driver/src/web-app/design/
