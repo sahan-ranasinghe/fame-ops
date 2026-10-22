@@ -10,3 +10,11 @@ export async function openNotificationSettings(): Promise<void> {
     extra: { 'android.provider.extra.APP_PACKAGE': appId },
   }).catch(() => Linking.openSettings());
 }
+
+/**
+ * Android's Location settings page, else this app's settings (moved here from lib/location.ts, which re-exports it, so the
+ * tracking notice reads it without the phone's queue: the design pages of src/design draw it in a browser).
+ */
+export async function openLocationSettings(): Promise<void> {
+  await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.LOCATION_SOURCE_SETTINGS).catch(() => Linking.openSettings());
+}

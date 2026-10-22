@@ -122,7 +122,8 @@ console.log('\nA2: no language switch on an office header');
   const withSwitch = office.filter((f) => /LanguageSwitch|LanguagePill/.test(read(f)));
   check(same(withSwitch, ['app/office/profile.tsx']), 'only My profile has it (Office mode and /m/)', withSwitch);
   check(!/LanguagePill/.test(read('app/office/(tabs)/live.tsx')), 'Live: no language pill on its bar');
-  check(/<LanguagePill \/>/.test(read('app/(tabs)/index.tsx')), "the driver app's Today keeps its සිංහල switch (the boss's design)");
+  // Round 4–7, item 12: the pill keeps its place at the top right of Today, in the light top bar's style.
+  check(/<LanguagePill light \/>/.test(read('app/(tabs)/index.tsx')), "the driver app's Today keeps its සිංහල switch (the boss's design)");
 }
 
 console.log('\nA3 → C (Round 4–7, §33.12): every map reads the one theme value (light today)');

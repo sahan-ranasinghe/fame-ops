@@ -430,6 +430,14 @@ export interface AppValue {
 
 const AppContext = createContext<AppValue | null>(null);
 
+/**
+ * Round 4–7, item 12: a screen drawn with a given state, for the design pages of src/design (the mockup comparison's
+ * screenshots, the e2e build only): sample data, no phone, no network. Nothing else uses it.
+ */
+export function AppValueProvider({ value, children }: { value: AppValue; children: ReactNode }) {
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+}
+
 export function useApp(): AppValue {
   const value = useContext(AppContext);
   if (!value) throw new Error('useApp must be used inside <AppProvider>');

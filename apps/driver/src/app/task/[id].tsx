@@ -32,16 +32,28 @@
 // background arrival notification stays quiet for this task (lib/arrival.ts setTaskOnScreen).
 // Round 4–7: "Fill up on the way · Log fuel" while the driver said so at the start and no fill is logged on the task
 // (§33.2, lib/fuelCard.ts); the passengers' names with Call for those with a phone (§33.3, components/Passengers.tsx).
+// Round 4–7, item 12 (design/mockups/2026-10-22, mockup 6; the same functions, placed in the mockup's layout): under way,
+// the map takes the top half with "● In progress since 08:21" (red "Off duty" when not sharing: a tap starts work, as the
+// old pill did) beside the back button; the sheet below says "Next stop · 2 of 3", the stop's name (the task's title and
+// people under it), the grey stats box (km left by road, approx., or in a straight line; arrive about: the re-estimate,
+// else the plan; be there by), Navigate (blue), Call contact and the stops button, the current stop's slide (the short
+// words "Slide when you arrive"; the 300 m rule, the override, leave, finish and Undo unchanged), Complete task once the
+// last stop is done, "Fill up on the way · Log fuel", "Problem with the vehicle?". The arrival card, the swap card, the
+// tracking notice and a refused trip stay at the top of the sheet. The stops button opens the full list in a sheet: every
+// stop with its progress line, Skip and the out-of-order slides, Add a stop, All stops in Google Maps, the start odometer
+// and the GPS km, the passengers, every call with WhatsApp, Approved by, Running late, Complete task.
+// The design page (src/design/DriverTask.tsx) draws it with a still map and a fixed position (TaskView's `design`).
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronLeft, Fuel, MapPin, Navigation, Phone, Plus } from '@/components/icons';
-import { useEffect, useMemo, useState } from 'react';
+import { Check, ChevronLeft, Fuel, ListChecks, MapPin, Navigation, Phone, Plus, TriangleAlert } from '@/components/icons';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ArrivalButton, useHere, useStopSlides } from '@/components/ArrivalButton';
+import { ArrivalButton, type Here, useHere, useStopSlides } from '@/components/ArrivalButton';
 import { GeofenceCard } from '@/components/GeofenceCard';
+import { Sheet } from '@/components/patterns/Sheet';
 import { SlideToConfirm } from '@/components/patterns/SlideToConfirm';
 import { StopProgressLine } from '@/components/StopProgressLine';
 import { ApprovedLine, CallButtons } from '@/components/CallButtons';
@@ -65,18 +77,27 @@ import { namesLine } from '@/lib/passengers';
 import { isMissed } from '@/lib/lists';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { stopProgress } from '@/lib/stopProgress';
+import { openStop, sheetStats, stopPosition } from '@/lib/todayCard';
 import { setTaskOnScreen } from '@/lib/arrival';
 import { arrivalUndoneStops } from '@/lib/stopCorrections';
 import { canAddStop } from '@/lib/trips';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, hoverStyle, shadow } from '@/theme';
 
 export default function TaskScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return <TaskView id={id} />;
+}
+
+/**
+ * One task. `design` (the design page only, src/design/DriverTask.tsx): a still picture in place of the map and a fixed
+ * position in place of the phone's GPS; nothing else differs.
+ */
+export function TaskView({ id, design }: { id: string | undefined; design?: { here: Here; map: ReactNode } }) {
   const app = useApp();
   const { t, tasks, sharing, gpsKm } = app;
   const engine = useMapEngine();
-  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -88,11 +109,14 @@ export default function TaskScreen() {
   const task: TaskWithStops | undefined = tasks.find((item) => item.id === id && !isMissed(item, Date.now()));
   const running = task?.status === 'in_progress';
   // The phone's position while this screen is open: the map and the Arrived rule (nothing is recorded here).
-  const here = useHere(running);
+  const phoneHere = useHere(running && !design);
+  const here = design?.here ?? phoneHere;
   const hereLat = here.fix?.lat;
   const hereLng = here.fix?.lng;
   const me = useMemo((): LatLng | null => (hereLat != null && hereLng != null ? { lat: hereLat, lng: hereLng } : null), [hereLat, hereLng]);
   const [skipping, setSkipping] = useState<TaskStop | null>(null);
+  // The full stop list and everything else of the running task (the stops button).
+  const [stopsOpen, setStopsOpen] = useState(false);
   const slides = useStopSlides();
   // Who to call about the task (F, K): read when the screen opens; the copy on the phone shows meanwhile and offline.
   const { loadTaskContacts } = app;
@@ -102,10 +126,10 @@ export default function TaskScreen() {
   }, [found, id, loadTaskContacts]);
   // Round 2b: the card is on screen for this task, so no notification doubles it.
   useEffect(() => {
-    if (!running || !id) return;
+    if (!running || !id || design) return;
     setTaskOnScreen(id);
     return () => setTaskOnScreen(null);
-  }, [running, id]);
+  }, [running, id, design]);
 
   if (!app.me) return <Redirect href="/login" />;
 
@@ -139,11 +163,14 @@ export default function TaskScreen() {
   // Hotfix 2 (I): a task still to start is shown whole before it is accepted.
   if (task.status === 'assigned') return <TaskPreview task={task} />;
 
-  const stop = nextStop(task);
+  // The stop being driven to (or stood at); null once every stop is done or skipped (its slide and its stats).
+  const stop = openStop(task.task_stops);
+  // Navigate, the straight line and the list's "Now" go to that stop, else (all done) the last one, as before.
+  const target = nextStop(task);
   // Distance left by road (the plan's road km, §20); the straight line to the current stop only when the plan has none.
   const roadKm = running ? roadKmLeft(task, me) : null;
-  const km = me && stop?.lat != null && stop.lng != null ? distanceKm(me, { lat: stop.lat, lng: stop.lng }) : null;
-  const navigate = stop ? navigateLink({ lat: stop.lat, lng: stop.lng, text: stop.address ?? stop.place_name }) : null;
+  const km = me && target?.lat != null && target.lng != null ? distanceKm(me, { lat: target.lat, lng: target.lng }) : null;
+  const navigate = target ? navigateLink({ lat: target.lat, lng: target.lng, text: target.address ?? target.place_name }) : null;
   // Every stop still to do, in order, for Google Maps (the first ten; the screen says when some are left out).
   const remaining = [...task.task_stops].sort((a, b) => a.seq - b.seq).filter((s) => s.status === 'pending' || s.status === 'arrived');
   const allStops = remaining.length > 1 ? allStopsLink(remaining) : null;
@@ -180,6 +207,11 @@ export default function TaskScreen() {
   const ordered = task.task_stops.filter((s) => s.status !== 'removed').sort((a, b) => a.seq - b.seq);
   const lastId = ordered[ordered.length - 1]?.id;
   const undone = arrivalUndoneStops();
+  // The sheet's head and stats (mockup 6): "Next stop · 2 of 3", km left, arrive about (the re-estimate, else the plan), be there by.
+  const position = stopPosition(task, stop?.id);
+  const estimate = stop ? progress.get(stop.id)?.estimate?.arrive ?? null : null;
+  const stats = sheetStats(stop, roadKm, km, estimate ? colomboTime(estimate) : null, kmText);
+  const note = running ? lineNote(task, engine === 'google') : null;
 
   // Complete task (and the last stop's "Slide to finish", which closes that stop on the way): open stops left = the
   // question first; then Log mileage.
@@ -197,214 +229,286 @@ export default function TaskScreen() {
       ]);
     }
   };
+  // From the stops sheet: the sheet closes first (a screen pushed or another sheet opened goes on top of the task, not under the sheet).
+  const fromSheet = (action: () => void) => () => {
+    setStopsOpen(false);
+    action();
+  };
+  const reportProblem = () => router.push({ pathname: '/report-problem', params: { taskId: task.id, ...(task.vehicle_id ? { vehicleId: task.vehicle_id } : {}) } });
 
   const overlay = (
     <>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('common.cancel')} onPress={goBack} style={[styles.back, { top: insets.top + 12 }]}>
-        <ChevronLeft size={26} color={colors.ink} strokeWidth={2.6} />
+      <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={goBack} style={[styles.back, { top: insets.top + 12 }, shadow(4)]} testID="task-back">
+        <ChevronLeft size={24} color={colors.ink} strokeWidth={2.6} />
       </Pressable>
       {running && (
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={sharing ? `${t('task.sharingLocation')}, ${t('todayCard.inProgress')}` : t('task.notSharing')}
           onPress={() => { if (!sharing) void app.startWork(task.vehicle_id).then((r) => { if (r === 'no_permission') router.push('/permissions'); }); }}
-          style={[styles.sharingPill, { top: insets.top + 16 }]}
+          style={[styles.statusPill, { top: insets.top + 14 }, shadow(3)]}
+          testID="task-status-pill"
         >
           <View style={[styles.pillDot, { backgroundColor: sharing ? colors.blue : colors.red }]} />
-          <Txt variant="strong" size={15} color={sharing ? colors.ink : colors.red}>{t(sharing ? 'task.sharingLocation' : 'task.notSharing')}</Txt>
+          {sharing ? (
+            <>
+              <Txt variant="strong" size={13}>{t('todayCard.inProgress')}</Txt>
+              {task.started_at && <SinceTime text={t('todayCard.since', { time: '\u0001' })} time={colomboTime(task.started_at)} />}
+            </>
+          ) : (
+            <Txt variant="strong" size={13} color={colors.red}>{t('task.notSharing')}</Txt>
+          )}
         </Pressable>
       )}
     </>
   );
 
+  // The stops sheet's list: every stop, as the task screen listed them (the current one's slide is on the sheet below the map).
+  const stopList = (
+    <View style={{ gap: 8 }}>
+      {task.task_stops.map((item) => {
+        const done = item.status === 'done' || item.status === 'skipped';
+        const current = target?.id === item.id;
+        // "09:00–10:30 at Kurunegala site" when the plan has the times; else the place and "15 min there".
+        const timeAt = stopTimeAt(t, item);
+        const detail = [
+          item.arrive_by ? t('task.arriveBy', { time: colomboTime(item.arrive_by) }) : null,
+          timeAt === null && item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min, duration: duration(item.dwell_min) }) : null,
+          item.status === 'skipped' ? t('task.skipped') : null,
+        ].filter(Boolean).join(' · ');
+        // A stop further down (visited out of order): the leave slide once arrived, the arrive slide only when the phone is there.
+        const nearHere = !done && !current && !canMarkDone(item) ? arrivalCheck(item, here.fix) : null;
+        return (
+          <View key={item.id} style={[styles.stopCard, current && styles.stopRowCurrent, done && { opacity: 0.6 }]} testID={`stop-row-${item.id}`}>
+            <View style={styles.stopRow}>
+              <View style={{ flex: 1 }}>
+                <Txt variant="muted" size={14}>
+                  {current ? `${t('task.currentStop')} · ` : ''}{stopLabel(t, task, item)}
+                </Txt>
+                <Txt variant="strong">{timeAt ?? item.place_name}</Txt>
+                <GoogleCredit show={!!item.google_place_id} />
+                {item.is_start && <Txt variant="small">{t('stop.start')}</Txt>}
+                {detail !== '' && <Txt variant="small">{detail}</Txt>}
+                {item.status !== 'skipped' && <StopProgressLine progress={progress.get(item.id)} corrected={undone.includes(item.id)} />}
+                {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
+              </View>
+              {done ? (
+                <View style={styles.doneBadge}><Check size={18} color={colors.blue} strokeWidth={3} /></View>
+              ) : (
+                <View style={{ gap: 6, alignItems: 'flex-end' }}>
+                  <Pressable accessibilityRole="button" onPress={fromSheet(() => setSkipping(item))} hitSlop={8} style={styles.skip} testID={`stop-skip-${item.id}`}>
+                    <Txt variant="small" color={colors.red}>{t('task.skip')}</Txt>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+            {/* A stop further down, visited out of order: the same slides, only when they apply. */}
+            {!current && canMarkDone(item) && (
+              <SlideToConfirm tone="dark" label={t('task.slideLeave', { stop: item.place_name })} onConfirm={() => slides.leave(item)} testID={`slide-leave-${item.id}`} />
+            )}
+            {nearHere?.state === 'ok' && (
+              <SlideToConfirm label={t('task.slideArrive', { stop: item.place_name })} onConfirm={() => slides.arrive(item, nearHere)} testID={`slide-arrive-${item.id}`} />
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+
   return (
     <View style={styles.page}>
       <StatusBar style="dark" />
-      <View style={{ height: running ? Math.round(height * 0.4) : insets.top + 76, backgroundColor: colors.mapLand }}>
-        {running && (
-          <TaskMap task={task} me={me} googleNoteFor="current" />
-        )}
+      <View style={{ height: running ? Math.round(height * 0.5) : insets.top + 76, backgroundColor: colors.mapLand }}>
+        {running && (design?.map ?? <TaskMap task={task} me={me} googleNoteFor="current" />)}
         {overlay}
       </View>
 
-      <ScrollView style={styles.sheet} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 24, gap: 16 }}>
-        <View style={styles.grabber} />
-        {running && lineNote(task, engine === 'google') && (
-          <Txt variant="small" style={{ marginTop: -6 }}>{t(lineNote(task, engine === 'google') === 'googleOnly' ? 'task.lineGoogleOnly' : 'task.noRouteLine')}</Txt>
-        )}
+      {running ? (
+        <ScrollView style={[styles.sheet, shadow(8, true)]} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: insets.bottom + 20, gap: 14 }} testID="task-sheet">
+          <View style={styles.grabber} />
+          {/* A trip or stop the phone kept and the server refused (Phase 7 §13): why, until tapped. */}
+          {app.tripProblem && (
+            <Pressable accessibilityRole="button" onPress={app.clearTripProblem}>
+              <Notice tone="danger" text={t(app.tripProblem.key, { reason: app.tripProblem.reason })} />
+            </Pressable>
+          )}
+          <TrackingNotice />
+          <GeofenceCard task={task} here={here} onSkip={setSkipping} />
+          <SwapCard task={task} />
 
-        <View style={styles.topRow}>
-          <Txt variant="label" color={running ? colors.blue : colors.amberText}>
-            {t(running ? 'today.inProgress' : task.status === 'assigned' ? 'today.nextTask' : task.status === 'cancelled' ? 'task.cancelled' : task.status === 'declined' ? 'task.declined' : 'task.completed')}
-          </Txt>
-          {running && task.started_at
-            ? <Mono size={16} color={colors.muted}>{t('task.started', { time: colomboTime(task.started_at) })}</Mono>
-            : <Mono size={18} bold>{`${dateLabel(task.start_at)} ${colomboTime(leaveTime(task))}`}</Mono>}
-        </View>
+          <View style={{ gap: 4 }}>
+            <Txt variant="small" size={13} testID="task-next-stop-label">
+              {position ? t('taskSheet.nextStop', { n: position.n, total: position.total }) : t('taskSheet.allDone')}
+            </Txt>
+            <Txt variant="heading" size={22}>{stop?.place_name ?? taskTitle(t, task)}</Txt>
+            <GoogleCredit show={!!stop?.google_place_id} />
+            <Txt variant="small" size={13} numberOfLines={2}>{[taskTitle(t, task), people].filter(Boolean).join(' · ')}</Txt>
+          </View>
 
-        <View>
-          <Txt variant="title" size={28}>{running ? stop?.place_name ?? taskTitle(t, task) : taskTitle(t, task)}</Txt>
-          {running && <GoogleCredit show={!!stop?.google_place_id} />}
-          {running && <Txt variant="muted" size={18}>{[taskTitle(t, task), people].filter(Boolean).join(' · ')}</Txt>}
-        </View>
+          {stop && (
+            <View style={styles.stats} testID="task-stats">
+              <Stat value={stats.km ? `${stats.km.text} ${t('common.km')}` : '–'} label={t(stats.km?.kind === 'straight' ? 'taskSheet.leftStraight' : 'taskSheet.leftApprox')} />
+              {stats.about && <Stat value={stats.about} label={t('taskSheet.arriveAbout')} />}
+              {stats.by && <Stat value={stats.by} label={t('taskSheet.beThereBy')} />}
+            </View>
+          )}
+          {note && <Txt variant="small" size={13} style={{ marginTop: -6 }}>{t(note === 'googleOnly' ? 'task.lineGoogleOnly' : 'task.noRouteLine')}</Txt>}
 
-        {/* A trip or stop the phone kept and the server refused (Phase 7 §13): why, until tapped. */}
-        {app.tripProblem && (
-          <Pressable accessibilityRole="button" onPress={app.clearTripProblem}>
-            <Notice tone="danger" text={t(app.tripProblem.key, { reason: app.tripProblem.reason })} />
+          <View style={styles.actions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !navigate }}
+              disabled={!navigate}
+              onPress={() => navigate && Linking.openURL(navigate)}
+              style={(state) => [styles.navigate, !navigate && { opacity: 0.45 }, hoverStyle(state), state.pressed && { opacity: 0.85 }]}
+              testID="task-navigate"
+            >
+              <Navigation size={18} color="#ffffff" strokeWidth={2} />
+              <Txt variant="strong" size={16} color="#ffffff" numberOfLines={1} style={{ flexShrink: 1 }}>{t('task.navigate')}</Txt>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('task.callContact')}
+              accessibilityState={{ disabled: !call }}
+              disabled={!call}
+              onPress={() => call && Linking.openURL(call)}
+              style={(state) => [styles.square, !call && { opacity: 0.45 }, hoverStyle(state), state.pressed && { opacity: 0.8 }]}
+              testID="task-call"
+            >
+              <Phone size={20} color={colors.blue} strokeWidth={2} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('taskSheet.stopsMore')}
+              onPress={() => setStopsOpen(true)}
+              style={(state) => [styles.square, hoverStyle(state), state.pressed && { opacity: 0.8 }]}
+              testID="task-stops"
+            >
+              <ListChecks size={20} color={colors.ink} strokeWidth={2} />
+            </Pressable>
+          </View>
+
+          {/* The current stop: the arrive slide by the distance rule, then the leave slide (keyed by stop: the GPS wait
+              starts again per stop); the last stop's leave slide finishes the task. */}
+          {stop && <ArrivalButton key={stop.id} stop={stop} here={here} last={stop.id === lastId} onFinish={finishTask} short />}
+          {/* Once the last stop is done (or skipped): Complete task, the same finish. */}
+          {lastOpen === null && (
+            <Button icon={Check} label={t('task.complete')} onPress={() => finishTask()} testID="task-complete" />
+          )}
+          {/* Round 4–7 (§33.2): "I'll fill up on the way" at the start, and no fill logged on the task yet. */}
+          {app.fillOnWay(task) && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'fuel', taskId: task.id } })}
+              style={({ pressed }) => [styles.fillLine, pressed && { opacity: 0.85 }]}
+              testID="fill-on-way"
+            >
+              <Fuel size={22} color={colors.amberText} strokeWidth={2.4} />
+              <Txt variant="strong" color={colors.amberText} style={{ flex: 1 }}>{t('fuelCard.fillLine')}</Txt>
+              <Txt variant="strong" color={colors.blue}>{t('log.titleFuel')}</Txt>
+            </Pressable>
+          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('task.reportProblem')}
+            onPress={reportProblem}
+            style={(state) => [styles.problem, hoverStyle(state), state.pressed && { opacity: 0.7 }]}
+            testID="task-problem"
+          >
+            <TriangleAlert size={16} color={colors.muted} strokeWidth={2} />
+            <Txt variant="strong" size={14} color={colors.muted}>{t('taskSheet.problem')}</Txt>
           </Pressable>
-        )}
-
-        {running ? (
-          <>
-            <TrackingNotice />
-            <GeofenceCard task={task} here={here} onSkip={setSkipping} />
-            <SwapCard task={task} />
-            {/* Round 4–7 (§33.2): "I'll fill up on the way" at the start, and no fill logged on the task yet. */}
-            {app.fillOnWay(task) && (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'fuel', taskId: task.id } })}
-                style={({ pressed }) => [styles.fillLine, pressed && { opacity: 0.85 }]}
-                testID="fill-on-way"
-              >
-                <Fuel size={22} color={colors.amberText} strokeWidth={2.4} />
-                <Txt variant="strong" color={colors.amberText} style={{ flex: 1 }}>{t('fuelCard.fillLine')}</Txt>
-                <Txt variant="strong" color={colors.blue}>{t('log.titleFuel')}</Txt>
-              </Pressable>
-            )}
-            <View style={styles.stats}>
-              <View style={{ flex: 1 }}>
-                {roadKm !== null ? (
-                  <>
-                    <Txt variant="muted" size={15}>{t('task.distanceLeftRoad')}</Txt>
-                    <Txt variant="heading" size={24}>{`${kmText(roadKm)} ${t('common.km')}`}</Txt>
-                  </>
-                ) : (
-                  <>
-                    <Txt variant="muted" size={15}>{t('task.distanceLeft')}</Txt>
-                    <Txt variant="heading" size={24}>{km === null ? '–' : `≈ ${kmText(km)} ${t('common.km')}`}</Txt>
-                    {km !== null && <Txt variant="small">{t('task.straightLine')}</Txt>}
-                  </>
-                )}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Txt variant="muted" size={15}>{t('task.startOdo')}</Txt>
-                <Mono size={23} bold>{startOdo === null ? '–' : thousands(startOdo)}</Mono>
-              </View>
+        </ScrollView>
+      ) : (
+        <ScrollView style={styles.sheet} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 24, gap: 16 }}>
+          <View style={styles.grabber} />
+          <View style={styles.topRow}>
+            <Txt variant="label" color={colors.amberText}>
+              {t(task.status === 'cancelled' ? 'task.cancelled' : task.status === 'declined' ? 'task.declined' : 'task.completed')}
+            </Txt>
+            <Mono size={18} bold>{`${dateLabel(task.start_at)} ${colomboTime(leaveTime(task))}`}</Mono>
+          </View>
+          <Txt variant="title" size={28}>{taskTitle(t, task)}</Txt>
+          {/* A trip or stop the phone kept and the server refused (Phase 7 §13): why, until tapped. */}
+          {app.tripProblem && (
+            <Pressable accessibilityRole="button" onPress={app.clearTripProblem}>
+              <Notice tone="danger" text={t(app.tripProblem.key, { reason: app.tripProblem.reason })} />
+            </Pressable>
+          )}
+          <StopTimeline stops={task.task_stops} />
+          {people && <Txt variant="muted">{people}</Txt>}
+          {names && <Txt variant="muted">{names}</Txt>}
+          {task.notes && <Txt variant="body">{task.notes}</Txt>}
+          {task.status === 'completed' && finishedKm !== null && (
+            <View style={{ gap: 6 }}>
+              <Mono size={20} bold>{`${thousands(finishedKm)} ${t('common.km')}`}</Mono>
+              <Stretches task={task} />
             </View>
+          )}
+          {task.status === 'cancelled' && task.cancelled_reason && <Notice tone="warn" text={task.cancelled_reason} />}
+          {task.status === 'declined' && <Notice tone="warn" text={t('task.declinedBody')} />}
+          {(task.status === 'completed' || task.status === 'cancelled' || task.status === 'declined') && (
+            <Button label={t('task.backToToday')} onPress={goHome} style={{ marginTop: 8 }} />
+          )}
+        </ScrollView>
+      )}
+
+      {running && (
+        <Sheet visible={stopsOpen} title={t('task.stops')} onClose={() => setStopsOpen(false)} testID="task-stops-sheet">
+          {stopList}
+          {/* Phase 7 §13: a trip of the driver's own takes stops on the way (the new one comes last). */}
+          {canAddStop(task) && (
+            <Button kind="outline" icon={Plus} label={t('trip.addStop')} onPress={fromSheet(() => router.push({ pathname: '/add-stop', params: { taskId: task.id } }))} />
+          )}
+          {allStops && <Button kind="outline" icon={MapPin} label={t('task.allStops')} onPress={openAllStops} />}
+          <View style={styles.stats}>
+            <Stat value={startOdo === null ? '–' : thousands(startOdo)} label={t('task.startOdo')} />
             {gpsKm.taskId === task.id && (
-              <View style={styles.gpsLine}>
-                <Txt variant="muted" size={15}>{t('tracking.gpsKm')}</Txt>
-                <Txt variant="strong">{`≈ ${gpsKm.taskKm < 10 ? gpsKm.taskKm.toFixed(1) : Math.round(gpsKm.taskKm)} ${t('common.km')}`}</Txt>
-                <Txt variant="small">{t('tracking.approx')}</Txt>
-              </View>
+              <Stat value={`≈ ${gpsKm.taskKm < 10 ? gpsKm.taskKm.toFixed(1) : Math.round(gpsKm.taskKm)} ${t('common.km')}`} label={`${t('tracking.gpsKm')} · ${t('tracking.approx')}`} />
             )}
-
-            <View style={{ gap: 8 }}>
-              {task.task_stops.map((item) => {
-                const done = item.status === 'done' || item.status === 'skipped';
-                const current = stop?.id === item.id;
-                // "09:00–10:30 at Kurunegala site" when the plan has the times; else the place and "15 min there".
-                const timeAt = stopTimeAt(t, item);
-                const detail = [
-                  item.arrive_by ? t('task.arriveBy', { time: colomboTime(item.arrive_by) }) : null,
-                  timeAt === null && item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min, duration: duration(item.dwell_min) }) : null,
-                  item.status === 'skipped' ? t('task.skipped') : null,
-                ].filter(Boolean).join(' · ');
-                // A stop further down (visited out of order): the leave slide once arrived, the arrive slide only when the phone is there.
-                const nearHere = !done && !current && !canMarkDone(item) ? arrivalCheck(item, here.fix) : null;
-                return (
-                  <View key={item.id} style={[styles.stopCard, current && styles.stopRowCurrent, done && { opacity: 0.6 }]}>
-                    <View style={styles.stopRow}>
-                      <View style={{ flex: 1 }}>
-                        <Txt variant="muted" size={14}>
-                          {current ? `${t('task.currentStop')} · ` : ''}{stopLabel(t, task, item)}
-                        </Txt>
-                        <Txt variant="strong">{timeAt ?? item.place_name}</Txt>
-                        <GoogleCredit show={!!item.google_place_id} />
-                        {item.is_start && <Txt variant="small">{t('stop.start')}</Txt>}
-                        {detail !== '' && <Txt variant="small">{detail}</Txt>}
-                        {item.status !== 'skipped' && <StopProgressLine progress={progress.get(item.id)} corrected={undone.includes(item.id)} />}
-                        {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
-                      </View>
-                      {done ? (
-                        <View style={styles.doneBadge}><Check size={18} color={colors.blue} strokeWidth={3} /></View>
-                      ) : (
-                        <View style={{ gap: 6, alignItems: 'flex-end' }}>
-                          <Pressable accessibilityRole="button" onPress={() => setSkipping(item)} hitSlop={8} style={styles.skip}>
-                            <Txt variant="small" color={colors.red}>{t('task.skip')}</Txt>
-                          </Pressable>
-                        </View>
-                      )}
-                    </View>
-                    {/* The current stop: the arrive slide by the distance rule, then the leave slide (keyed by stop: the GPS wait
-                        starts again per stop); the last stop's leave slide finishes the task. */}
-                    {!done && current && <ArrivalButton key={item.id} stop={item} here={here} last={item.id === lastId} onFinish={finishTask} />}
-                    {/* A stop further down, visited out of order: the same slides, only when they apply. */}
-                    {!current && canMarkDone(item) && (
-                      <SlideToConfirm tone="dark" label={t('task.slideLeave', { stop: item.place_name })} onConfirm={() => slides.leave(item)} testID={`slide-leave-${item.id}`} />
-                    )}
-                    {nearHere?.state === 'ok' && (
-                      <SlideToConfirm label={t('task.slideArrive', { stop: item.place_name })} onConfirm={() => slides.arrive(item, nearHere)} testID={`slide-arrive-${item.id}`} />
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Phase 7 §13: a trip of the driver's own takes stops on the way (the new one comes last). */}
-            {canAddStop(task) && (
-              <Button kind="outline" icon={Plus} label={t('trip.addStop')} onPress={() => router.push({ pathname: '/add-stop', params: { taskId: task.id } })} />
-            )}
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Button kind="outline" icon={Navigation} label={t('task.navigate')} disabled={!navigate} onPress={() => navigate && Linking.openURL(navigate)} style={{ flex: 1 }} />
-              <Button kind="outline" icon={Phone} label={t('task.callContact')} disabled={!call} onPress={() => call && Linking.openURL(call)} style={{ flex: 1 }} />
-            </View>
-            {allStops && <Button kind="outline" icon={MapPin} label={t('task.allStops')} onPress={openAllStops} />}
-            {/* Round 4–7 (§33.3): who rides, each with Call when they have a phone. */}
-            <PassengerList task={task} />
-            {/* Hotfix 2 (F): the contact's WhatsApp (Call contact is beside Navigate), then the requester, the fleet admin, the office. */}
-            <CallButtons calls={calls} callHidden={['contact']} />
-            {/* Hotfix 2 (K): who approved the task, with Call (the office when they have no number). */}
-            {approvedText && <ApprovedLine text={approvedText} call={approved?.call ?? null} />}
-            {/* Part 3b (H4): running late during the task (not on a trip the driver started). */}
-            {canReportLate(task) && <RunningLate task={task} />}
-            {lastOpen && <Notice tone="warn" text={t('complete.needsLastStop')} />}
-            <Button
-              kind="dark"
-              icon={Check}
-              label={t('task.complete')}
-              disabled={lastOpen !== null}
-              onPress={() => finishTask()}
-            />
-            <Button
-              kind="danger-text"
-              label={t('task.reportProblem')}
-              onPress={() => router.push({ pathname: '/report-problem', params: { taskId: task.id, ...(task.vehicle_id ? { vehicleId: task.vehicle_id } : {}) } })}
-            />
-          </>
-        ) : (
-          <>
-            <StopTimeline stops={task.task_stops} />
-            {people && <Txt variant="muted">{people}</Txt>}
-            {names && <Txt variant="muted">{names}</Txt>}
-            {task.notes && <Txt variant="body">{task.notes}</Txt>}
-            {task.status === 'completed' && finishedKm !== null && (
-              <View style={{ gap: 6 }}>
-                <Mono size={20} bold>{`${thousands(finishedKm)} ${t('common.km')}`}</Mono>
-                <Stretches task={task} />
-              </View>
-            )}
-            {task.status === 'cancelled' && task.cancelled_reason && <Notice tone="warn" text={task.cancelled_reason} />}
-            {task.status === 'declined' && <Notice tone="warn" text={t('task.declinedBody')} />}
-            {(task.status === 'completed' || task.status === 'cancelled' || task.status === 'declined') && (
-              <Button label={t('task.backToToday')} onPress={goHome} style={{ marginTop: 8 }} />
-            )}
-          </>
-        )}
-      </ScrollView>
+          </View>
+          {/* Round 4–7 (§33.3): who rides, each with Call when they have a phone. */}
+          <PassengerList task={task} />
+          {/* Hotfix 2 (F): the contact's WhatsApp (Call contact is beside Navigate), then the requester, the fleet admin, the office. */}
+          <CallButtons calls={calls} callHidden={['contact']} />
+          {/* Hotfix 2 (K): who approved the task, with Call (the office when they have no number). */}
+          {approvedText && <ApprovedLine text={approvedText} call={approved?.call ?? null} />}
+          {/* Part 3b (H4): running late during the task (not on a trip the driver started). */}
+          {canReportLate(task) && <RunningLate task={task} />}
+          {lastOpen && <Notice tone="warn" text={t('complete.needsLastStop')} />}
+          <Button
+            kind="dark"
+            icon={Check}
+            label={t('task.complete')}
+            disabled={lastOpen !== null}
+            onPress={fromSheet(() => finishTask())}
+            testID="stops-complete"
+          />
+        </Sheet>
+      )}
       <SkipSheet stop={skipping} onClose={() => setSkipping(null)} />
+    </View>
+  );
+}
+
+/** One fact of the grey stats box: the number in mono, its words under it. */
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+      <Mono size={18} bold numberOfLines={1}>{value}</Mono>
+      <Txt variant="small" size={12} numberOfLines={2}>{label}</Txt>
+    </View>
+  );
+}
+
+/** "since 08:21" with the time in mono, in the order of the language ("08:21 සිට"): `text` has \u0001 where the time goes. */
+function SinceTime({ text, time }: { text: string; time: string }) {
+  const [before, after = ''] = text.split('\u0001');
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+      {before !== '' && <Txt variant="small" size={13}>{before}</Txt>}
+      <Mono size={13} color={colors.muted}>{time}</Mono>
+      {after !== '' && <Txt variant="small" size={13}>{after}</Txt>}
     </View>
   );
 }
@@ -414,33 +518,35 @@ const styles = StyleSheet.create({
   back: {
     position: 'absolute',
     left: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
   },
-  sharingPill: {
+  // The mockup's pill over the map: "● In progress since 08:21".
+  statusPill: {
     position: 'absolute',
-    right: 16,
-    height: 40,
+    left: 68,
+    minHeight: 40,
     paddingHorizontal: 14,
     borderRadius: 20,
     backgroundColor: colors.card,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    elevation: 4,
   },
-  pillDot: { width: 10, height: 10, borderRadius: 5 },
-  sheet: { flex: 1, marginTop: -22, backgroundColor: colors.card, borderTopLeftRadius: 26, borderTopRightRadius: 26 },
-  grabber: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: '#dcd9d0', marginTop: -6 },
+  pillDot: { width: 8, height: 8, borderRadius: 4 },
+  sheet: { flex: 1, marginTop: -24, backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.rail },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  stats: { backgroundColor: colors.page, borderRadius: 14, padding: 16, flexDirection: 'row', gap: 12 },
-  gpsLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingHorizontal: 4, marginTop: -6 },
-  stopCard: { gap: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 12 },
+  stats: { backgroundColor: colors.page, borderRadius: 14, padding: 12, flexDirection: 'row', gap: 8 },
+  actions: { flexDirection: 'row', gap: 10 },
+  navigate: { flex: 1, minHeight: 52, borderRadius: 14, backgroundColor: colors.blue, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12 },
+  square: { width: 52, height: 52, borderRadius: 14, borderWidth: 1, borderColor: colors.rail, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  problem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44 },
+  stopCard: { gap: 12, borderWidth: 1, borderColor: colors.cardLine, borderRadius: 12, padding: 12 },
   stopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   skip: { minHeight: 32, justifyContent: 'center' },
   stopRowCurrent: { borderColor: colors.blue, borderWidth: 2, backgroundColor: colors.blueChip },
