@@ -5,20 +5,25 @@
 // either, dashed straight lines otherwise; a Google stop is never drawn on the free map), then the plan as a timeline:
 // leave, each leg with its road time and source, each stop with its planned times, the drive back, the totals, the
 // warnings. With task_detail (assign_tasks, or the request's people).
+// Round 4–7 (one stepper): the timeline is drawn by the route stepper (components/office/PlanStepper.tsx, rows from
+// office/stepperRows.ts timelineRows): the leave time as S, each stop by its number with its chip and its times in words,
+// each leg in full under the row before it; the words as before.
 
 import { useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 
+import { PlanStepper } from '@/components/office/PlanStepper';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { TaskMap } from '@/components/TaskMap';
-import { Mono, Txt } from '@/components/ui';
+import { Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
 import { useOffice, useTool } from '@/office/state';
 import { sentenceText } from '@/office/statusWords';
+import { timelineRows } from '@/office/stepperRows';
 import { detailTask, planDrawable } from '@/office/taskDetailLogic';
 import { legTextT, stopTimesT } from '@/office/trip/words';
 import type { TaskDetail } from '@/office/types';
-import { BackHeader, ListFailed, Pill, Screen, Section } from '@/office/ui';
+import { BackHeader, ListFailed, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { dateWords } from '@/lib/dateWords';
@@ -51,32 +56,18 @@ export default function TaskPlanScreen() {
           {p && items.length > 0 && (
             <Section title={t('office.task.planTitle')}>
               <View style={{ gap: 10, paddingTop: 4 }}>
-                {items.map((x, i) => {
-                  if (x.kind === 'leave') {
-                    return (
-                      <View key={`v${i}`} style={{ flexDirection: 'row', gap: 12 }}>
-                        <Mono size={16} bold style={{ width: 54 }}>{x.at}</Mono>
-                        <Txt variant="strong" style={{ flex: 1 }}>{t('office.request.leaveBy')}</Txt>
-                      </View>
-                    );
-                  }
-                  if (x.kind === 'stop') {
-                    const late = x.late_min != null && x.late_min > 0;
-                    return (
-                      <View key={`s${i}`} style={{ flexDirection: 'row', gap: 12 }}>
-                        <Mono size={16} bold style={{ width: 54 }}>{x.planned_arrive}</Mono>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <Txt variant="strong">{x.label || x.place}</Txt>
-                            {x.arrive_by ? <Pill text={late ? t('office.task.minLate', { min: x.late_min ?? 0 }) : t('office.trip.onTime')} tone={late ? 'red' : 'blue'} size={13} /> : null}
-                          </View>
-                          <Txt variant="muted" size={15}>{stopTimesT(t, x)}{x.arrive_by ? ` · ${t('office.request.arriveBy', { time: x.arrive_by })}` : ''}</Txt>
-                        </View>
-                      </View>
-                    );
-                  }
-                  return <Txt key={`l${i}`} variant="small" style={{ marginLeft: 66 }}>{[legTextT(t, x, task?.start_place), x.via_expressway ? t('office.trip.viaExpressway') : ''].filter(Boolean).join(' · ')}</Txt>;
-                })}
+                <PlanStepper
+                  rows={timelineRows(items, {
+                    leaveBy: t('office.request.leaveBy'),
+                    stopTimes: (x) => stopTimesT(t, x),
+                    arriveBy: (time) => t('office.request.arriveBy', { time }),
+                    onTime: t('office.trip.onTime'),
+                    late: (min) => t('office.task.minLate', { min }),
+                    leg: (x) => [legTextT(t, x, task?.start_place), x.via_expressway ? t('office.trip.viaExpressway') : ''].filter(Boolean).join(' · '),
+                  })}
+                  framed={false}
+                  testID="plan-timeline"
+                />
                 {totals && <Txt variant="strong" size={15}>{`${t('office.trip.kmN', { km: Math.round(totals.km) })} · ${durationText(t, totals.drive_min)} · ${t('office.trip.endsAtTime', { time: totals.ends })}`}</Txt>}
               </View>
             </Section>

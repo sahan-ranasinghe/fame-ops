@@ -60,9 +60,12 @@ export function groupRows(sug: Pick<Suggestions, 'groups' | 'vehicles'> | null |
   return GROUP_ORDER.map((key) => ({ key, rows: sug.groups![key], disabled: key === 'in_garage' })).filter((g) => g.rows.length > 0);
 }
 
-/** A vehicle's second line: "Toyota HiAce · 12 seats · Free · back 14:30". */
-export function vehicleLine(v: SuggestedVehicle, seatsWord: (n: number) => string): string {
-  return [v.make_model, v.seats ? seatsWord(v.seats) : '', v.availability, v.but, v.back].filter(Boolean).join(' · ');
+/**
+ * A vehicle's second line: "Toyota HiAce · 12 seats · Free · back 14:30". `say`: the availability and the way back in the
+ * person's language (office/availabilityWords.ts availabilityText); without it, as the server sent them.
+ */
+export function vehicleLine(v: SuggestedVehicle, seatsWord: (n: number) => string, say: (line: string) => string = (line) => line): string {
+  return [v.make_model, v.seats ? seatsWord(v.seats) : '', v.availability ? say(v.availability) : '', v.but, v.back ? say(v.back) : ''].filter(Boolean).join(' · ');
 }
 
 /** The free drivers to offer: the picked one stays in the list even when it is no longer free (the site's withPicked). Round 3:

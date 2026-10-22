@@ -27,6 +27,7 @@ import { ChoiceChip, ChoiceRow } from '@/components/patterns/Select';
 import { Button, Field, Plate, Txt } from '@/components/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { askTargets } from '@/office/askLogic';
+import { availabilityText } from '@/office/availabilityWords';
 import { holderOf, wantedOfWindow } from '@/office/holderLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
@@ -122,7 +123,7 @@ export default function ChangeTaskScreen() {
 
   const vehicleRow = (v: SuggestedVehicle, disabled: boolean, reason?: string) => (
     <ChoiceRow key={v.reg_no} selected={f?.vehicle === v.reg_no} onPress={() => { set({ vehicle: v.reg_no }); setChoosing(false); }} disabled={disabled} disabledReason={reason} leading={<Plate regNo={v.reg_no} />} mark="end" accessibilityLabel={v.reg_no} testID={`vehicle-row-${v.reg_no}`}>
-      <Txt variant="muted" size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
+      <Txt variant="muted" size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }), (line) => availabilityText(t, line))}</Txt>
       {v.assigned_to ? <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt> : null}
     </ChoiceRow>
   );

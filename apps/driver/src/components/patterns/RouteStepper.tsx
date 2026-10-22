@@ -8,6 +8,8 @@
 // Presentational and general (planned / actual times, a compact size): the plan (Review, the request), the live timeline
 // (components/office/StopTimeline.tsx) and the driver's own screens can all feed it rows (a compact card: the time at the
 // right with `timeSide="right"`, the stops behind the driver `passed`, a "Show all N stops" link as a row's `after`).
+// The driver's Today (mockup 5) is that compact card: one line a row centred on its mark, the place in regular weight (the
+// one being driven to in bold), the deadline as the row's chip; app/(tabs)/index.tsx feeds it lib/todayCard.ts todaySteps.
 
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -51,6 +53,8 @@ export interface StepperRow {
   leg?: string;
   /** Under the row, on the rail (a "Show all N stops" link). */
   after?: ReactNode;
+  /** What a screen reader says for the row ("Start, Head office · pickup, 08:35"). */
+  accessibilityLabel?: string;
   testID?: string;
 }
 
@@ -66,15 +70,16 @@ export function RouteStepper({ rows, live = false, framed = true, compact = fals
   testID?: string;
 }) {
   if (rows.length === 0) return null;
-  const timeW = timeSide === 'right' ? 0 : compact ? 46 : 52;
+  const right = timeSide === 'right';
+  const timeW = right ? 0 : compact ? 46 : 52;
   return (
     <View style={framed ? styles.card : undefined} testID={testID}>
       {rows.map((r, i) => {
         const last = i === rows.length - 1;
         const doneRail = live && r.state === 'done' && !last;
         return (
-          <View key={r.key} style={styles.row} testID={r.testID}>
-            {timeSide === 'left' ? (
+          <View key={r.key} style={styles.row} testID={r.testID} accessibilityLabel={r.accessibilityLabel}>
+            {!right ? (
               <View style={{ width: timeW, paddingTop: 3 }}>
                 {r.time ? <Mono size={compact ? 14 : 15} bold color={r.timeTone === 'blue' ? colors.blue : colors.ink}>{r.time}</Mono> : null}
                 {r.sub ? <Mono size={12} color={colors.muted} style={r.subStruck ? styles.struck : undefined}>{r.sub}</Mono> : null}
@@ -84,11 +89,11 @@ export function RouteStepper({ rows, live = false, framed = true, compact = fals
               <Mark row={r} live={live} />
               {!last ? <View style={[styles.line, doneRail && { backgroundColor: colors.blue }]} /> : null}
             </View>
-            <View style={[styles.body, !last && { paddingBottom: compact ? 14 : 18 }]}>
-              <View style={styles.titleRow}>
-                <Txt variant="strong" size={compact ? 14 : 16} numberOfLines={r.titleLines ?? 1} color={r.state === 'passed' ? colors.muted : colors.ink} style={{ flexShrink: 1, flexGrow: timeSide === 'right' ? 1 : 0 }}>{r.title}</Txt>
+            <View style={[styles.body, !last && { paddingBottom: right ? 8 : compact ? 14 : 18 }]}>
+              <View style={[styles.titleRow, right && styles.titleRowRight]}>
+                <Txt variant={!right || r.state === 'current' ? 'strong' : 'body'} size={compact ? 14 : 16} numberOfLines={r.titleLines ?? 1} color={r.state === 'passed' ? colors.muted : colors.ink} style={{ flexShrink: 1, flexGrow: right ? 1 : 0 }}>{r.title}</Txt>
                 {r.chip ? <View style={[styles.chip, { backgroundColor: TINT[r.chip.tone].bg }]}><Txt variant="strong" size={13} color={TINT[r.chip.tone].ink} numberOfLines={1}>{r.chip.text}</Txt></View> : null}
-                {timeSide === 'right' && r.time ? <Mono size={13} color={colors.muted}>{r.time}</Mono> : null}
+                {right && r.time ? <Mono size={13} color={colors.muted}>{r.time}</Mono> : null}
               </View>
               {r.meta && r.meta.length > 0 ? (
                 <View style={styles.meta}>
@@ -158,6 +163,8 @@ const styles = StyleSheet.create({
   line: { flex: 1, width: 2, minHeight: 10, backgroundColor: look.rail, marginTop: 2 },
   body: { flex: 1, minWidth: 0, paddingLeft: 10, gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // The compact card's one line, centred on its 24 px mark (2 px down the rail).
+  titleRowRight: { minHeight: 28 },
   chip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1, flexShrink: 0 },
   meta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, rowGap: 2, marginTop: 2 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },

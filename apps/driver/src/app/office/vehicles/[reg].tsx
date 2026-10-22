@@ -16,6 +16,7 @@ import { Image, Linking, Pressable, View } from 'react-native';
 import { PhotoPick } from '@/components/office/PhotoPick';
 import { VehicleChecksSection } from '@/components/office/VehicleChecks';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
+import { availabilityText } from '@/office/availabilityWords';
 import { docTone, fuelKeys, kmLine, vehicleTone } from '@/office/manageLogic';
 import { uploadToTicket, type Shot } from '@/office/media';
 import { canSetVehiclePhoto, canUploadDocs, documentRows, ticketOf } from '@/office/mediaLogic';
@@ -115,7 +116,7 @@ export default function VehicleScreen() {
             )}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               <Pill text={v.active === false ? t('office.vehicles.returned') : v.status ?? ''} tone={vehicleTone(v)} size={15} />
-              {v.availability ? <Txt variant="muted" size={15}>{v.availability}</Txt> : null}
+              {v.availability ? <Txt variant="muted" size={15}>{availabilityText(t, v.availability)}</Txt> : null}
             </View>
             {check ? <VehicleChecksSection plate={v.reg_no} today={v.check_today} focus={check} /> : null}
             <View style={{ backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 14 }}>

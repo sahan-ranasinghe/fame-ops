@@ -4,6 +4,7 @@
 // scripts/test-lists2.ts (and tests/officeLists2.test.tsx through the screens).
 
 import { keyExists } from '../i18n/keys';
+import { availabilityText } from './availabilityWords';
 import { sentenceWords, wordsText, type Words } from './statusWords';
 import type { BoardColumn } from './statusWords';
 import type { BoardDriver, Inbox, MyTrips, RequestCard, VehicleCard } from './types';
@@ -35,7 +36,8 @@ export function vehicleRowShown(
       : !line && status
         ? { text: status, tone: /task/i.test(status) ? 'blue' as const : 'green' as const }
         : null;
-  return { title, availability: garage && /garage/i.test(line) ? '' : line, pill };
+  // The line in the person's language (Round 4–7 unify: office/availabilityWords.ts; a sentence it does not know as sent).
+  return { title, availability: garage && /garage/i.test(line) ? '' : availabilityText(t, line), pill };
 }
 
 /** A document chip is quiet (its name with a tick, no fill) when valid; expiring, expired and not set keep their colour. */

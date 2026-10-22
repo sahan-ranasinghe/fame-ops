@@ -102,8 +102,9 @@ console.log('\nA4: the screens use it (no raw server date on screen)');
   // No screen prints a server date field as it came: {x.at}, {x.since}, {x.expiry} … straight into the text.
   const screens = [...filesUnder('app'), ...filesUnder('components')].filter((f) => f.endsWith('.tsx'));
   const raw = screens.filter((f) => /<(Txt|Mono)[^>]*>\{[a-z]+\.(at|since|sent|created|updated|opened|reported|expiry|added|until|day|uploaded|removed|started|completed|decided|seen|last_used|updated_at)\}<\//.test(read(f)));
-  // A plan's timeline row ({x.at} / {leave.at}) and a vehicle check's time of day ({c.at}, Round 4–7) are HH:MM, not dates.
-  check(same(raw.sort(), ['app/office/task/[id]/plan.tsx', 'app/office/trip/review.tsx', 'components/office/VehicleChecks.tsx'].sort()), 'no raw date field printed on a screen (only the plans\' and the checks\' HH:MM)', raw);
+  // A plan's timeline row ({leave.at}) and a vehicle check's time of day ({c.at}, Round 4–7) are HH:MM, not dates. (The plan
+  // screen's {x.at} moved into the route stepper's rows, Round 4–7 unify: office/stepperRows.ts timelineRows.)
+  check(same(raw.sort(), ['app/office/trip/review.tsx', 'components/office/VehicleChecks.tsx'].sort()), 'no raw date field printed on a screen (only the plans\' and the checks\' HH:MM)', raw);
   check(monthWords(en, '2026-10', NOW) === 'Oct' && monthWords(en, '2025-12', NOW) === 'Dec 2025' && monthWords(si, '2026-10', NOW) === si('months.9') && monthWords(en, 'x', NOW) === 'x', 'a month: "Oct", "Dec 2025"');
   check(shortWhen(en, '2026-10-21 08:31', NOW) === '08:31' && shortWhen(en, '2026-10-20 08:31', NOW) === 'Yesterday 08:31' && shortWhen(en, '—', NOW) === '—' && shortWhen(en, '~10:38', NOW) === '~10:38', "a step's time: alone today, with its day otherwise");
   check(spanWords(en, '2026-10-21 08:31', '2026-10-21 11:40', NOW) === 'Today 08:31–11:40' && spanWords(en, '2026-10-19 22:10', '2026-10-20 01:05', NOW) === 'Mon 19 Oct 22:10 – Yesterday 01:05' && spanWords(en, '2026-10-21 08:31', undefined, NOW) === 'Today 08:31', 'a span on one day, across two, still running');

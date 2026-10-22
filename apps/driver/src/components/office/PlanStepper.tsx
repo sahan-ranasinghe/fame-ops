@@ -1,6 +1,7 @@
 // Round 4–7, item 12: a trip's plan on the route stepper (components/patterns/RouteStepper.tsx) for Review, the request page
 // and the plan screen: the pure rows of office/stepperRows.ts with their icons (the stay a clock, the leave time an arrow,
-// the deadline a flag, the people at the start), in the person's words. And the ⓘ sheet that says how the plan was made
+// the deadline a flag, the people at the start), in the person's words; the plan screen's rows (timelineRows) carry its
+// times as a sentence under each stop and every leg in full. And the ⓘ sheet that says how the plan was made
 // (where the leave time came from, each leg in full with its source and the rush hour): the explanations item 11 puts
 // behind a small ⓘ, nothing dropped.
 
@@ -38,11 +39,12 @@ export function planWords(t: T): PlanWords {
   };
 }
 
-/** The pure rows with their icons, ready for the stepper. */
+/** The pure rows with their icons (and a row's sentence under it, wrapped), ready for the stepper. */
 export function withIcons(rows: readonly PlanRow[], testID?: string): StepperRow[] {
-  return rows.map((r, i) => ({
+  return rows.map(({ words, ...r }, i) => ({
     ...r,
     meta: r.meta?.map((m) => ({ ...m, icon: m.icon ? ICON[m.icon] : undefined })),
+    lines: words ? <Txt variant="muted" size={15} testID={testID ? `${testID}-${i}-words` : undefined}>{words}</Txt> : undefined,
     testID: testID ? `${testID}-${i}` : undefined,
   }));
 }
