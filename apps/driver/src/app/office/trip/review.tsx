@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
+import { HolderLine } from '@/components/office/HolderParts';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { TimeField } from '@/components/patterns/TimeField';
 import { TaskMap } from '@/components/TaskMap';
@@ -24,6 +25,7 @@ import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { whatsappLink } from '@/lib/contacts';
 import { durationText } from '@/lib/durations';
 import { phoneLocal } from '@/lib/profile';
+import { conflictResource } from '@/office/holderLogic';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { validateAssign } from '@/office/trip/assignLogic';
@@ -65,6 +67,12 @@ export default function TripReview() {
   const opensTasks = has(me.permissions, 'assign_tasks');
   const aboveFor = (m: TripMode) => m === 'task' ? t('office.trip.assignAbove', { n: 4 }) : m === 'edit' ? t('office.trip.editAbove') : m === 'stops' ? t('office.trip.stopsAbove') : t('office.trip.newAbove', { n: 4 });
 
+  // Round 4–7 (7): the trip being planned (Ask for it asks for its day and times) and what the conflict is about.
+  const tripWanted = () => {
+    const leaveAt = trip.preview?.timeline?.items.find((x) => x.kind === 'leave');
+    return { date: d?.fields.date, from: leaveAt?.kind === 'leave' ? leaveAt.at : d?.fields.leaveBy, until: trip.preview?.timeline?.totals.ends };
+  };
+  const conflictWhat = (c: Conflict) => (c.kind === 'driver' ? d?.driverName || d?.fields.driver : d?.fields.vehicle && d.fields.vehicle !== ON_THE_DAY && !/^any /.test(d.fields.vehicle) ? d.fields.vehicle : undefined) || undefined;
   const conflictCard = (c: Conflict, i: number, picks: boolean) => {
     const a = conflictActions(c, opensTasks);
     const reach = (who: Conflict['requester'] | Conflict['driver']) => who && (who.call || who.whatsapp) ? (
@@ -76,6 +84,8 @@ export default function TripReview() {
     return (
       <View key={`${c.kind}-${c.task?.id ?? i}`} style={styles.conflict} testID="conflict-card">
         <Txt variant="strong" size={15} color={colors.red}>{sentenceText(t, c.text)}</Txt>
+        {/* Round 4–7 (7): who holds it (Google Calendar's room booking), with Call, WhatsApp and Ask for it for this trip. */}
+        {c.holder && conflictResource(c) ? <HolderLine holder={c.holder} resource={conflictResource(c)!} what={conflictWhat(c)} wanted={tripWanted()} testID={`conflict-holder-${i}`} /> : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {a.openTask ? <Button kind="outline" label={t('office.trip.openThatTask')} onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: a.openTask! } })} style={styles.smallBtn} /> : null}
           {reach(c.requester)}
@@ -167,7 +177,7 @@ export default function TripReview() {
         { openTasks: opensTasks, openRequests: has(me.permissions, 'approve'), request: has(me.permissions, 'request') },
       );
       const notice = [...s.notice, ...(wantsWa && !waLink ? [t('office.trip.whatsappNoPhone')] : [])];
-      setSavedNotice(s.noticeKey, notice);
+      setSavedNotice(s.noticeKey, notice, undefined, o.conflicts);
       // Change stops was opened from the task: back to that same screen (and what was under it). A new trip or an edited
       // request: the editor's steps go and the item opens on the tab the person was on.
       if (d!.mode === 'stops' && s.target.kind === 'task') {

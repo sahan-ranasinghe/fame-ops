@@ -37,6 +37,8 @@ const IC: Record<string, string> = {
   accounts: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-5-6.3"/>',
   // Stage 0 (docs/ui-patterns.md): the date, time and filter controls.
   calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  timeline: '<path d="M3 5h18M3 12h18M3 19h18" stroke-opacity=".35"/><rect x="5" y="3.2" width="8" height="3.6" rx="1.2"/><rect x="10" y="10.2" width="9" height="3.6" rx="1.2"/><rect x="4" y="17.2" width="6" height="3.6" rx="1.2"/>',
+  holder_asks: '<path d="M4 5h16v11H9l-5 4z"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4"/><path d="M12 14.6v.1"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   // Round 1 item 6: our place in the location search's empty box (a building; the clock is a recent one).
   building: '<rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h1.5M13.5 7H15M9 11h1.5M13.5 11H15M9 15h1.5M13.5 15H15M10.5 21v-3h3v3"/>',

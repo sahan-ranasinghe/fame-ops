@@ -20,6 +20,8 @@ import { InboxPage } from "../screens/InboxPage";
 import { More } from "../screens/More";
 import { MyTrips } from "../screens/MyTrips";
 import { MyTripOrRequest } from "../screens/MyTripPage";
+import { HolderAsks } from "../screens/HolderAsks";
+import { Schedule } from "../screens/Schedule";
 import { NewRequest } from "../screens/NewRequest";
 import { NewTask } from "../screens/NewTask";
 import { NoAccess } from "../screens/NoAccess";
@@ -114,6 +116,10 @@ export const routes: RouteObject[] = [
       { path: "tasks/new", element: <Guard need={["assign_tasks"]}><NewTask /></Guard> },
       // Phase 7 (§8): Tasks → History (list_tasks); a static segment outranks the board's /tasks/:id.
       { path: "tasks/history", element: <Guard need={["assign_tasks"]}><TaskHistory /></Guard> },
+      // Round 4–7 (7): the asks for a busy driver or vehicle (holder_asks: everyone's own, all with approve; a static
+      // segment outranks the board's /tasks/:id) and the day's timeline per driver or vehicle (day_timeline: view).
+      { path: "tasks/asks", element: <ToolGuard tool="holder_asks" need={[]}><HolderAsks /></ToolGuard> },
+      { path: "schedule", element: <Guard need={["view"]}><Schedule /></Guard> },
       { path: "tasks/:id/edit", element: <Guard need={["assign_tasks"]}><TaskEdit /></Guard> },
       { path: "tasks/:id/stops", element: <Guard need={["assign_tasks"]}><TaskStops /></Guard> },
       // Phase 7 (§16): the Overview's "Reminders due" as a page (the same permission as the Overview's block).

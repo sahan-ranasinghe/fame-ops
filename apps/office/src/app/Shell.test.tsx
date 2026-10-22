@@ -141,8 +141,8 @@ describe("the menu in sections (L5)", () => {
     await mount(admin, "/", t);
     expect(within(screen.getByTestId("nav-reports")).queryAllByRole("link")).toEqual([]);
     expect(within(screen.getByTestId("nav-admin")).queryAllByRole("link")).toEqual([]);
-    // Part 3b (H5): Today holds the Drivers board too.
-    expect(within(screen.getByTestId("nav-today")).getAllByRole("link").length).toBe(7);
+    // Part 3b (H5): Today holds the Drivers board too; Round 4–7 (7): and the Timeline.
+    expect(within(screen.getByTestId("nav-today")).getAllByRole("link").length).toBe(8);
   });
 
   it("Round 2b: no More in the rail; the name opens the profile menu (My profile, Settings; Esc closes it)", async () => {
@@ -158,7 +158,7 @@ describe("the menu in sections (L5)", () => {
   it("a dispatcher sees only what the permissions allow", async () => {
     await mount(dispatcher);
     expect(within(rail()).getAllByRole("link").map((a) => a.textContent)).toEqual([
-      "Overview", "Live locations", "Tasks", "Requests", "My trips", "Issues5", "Drivers board", "Vehicles", "Drivers", "Duty log", "Projects",
+      "Overview", "Live locations", "Tasks", "Requests", "My trips", "Issues5", "Drivers board", "Timeline", "Vehicles", "Drivers", "Duty log", "Projects",
     ]);
   });
 });

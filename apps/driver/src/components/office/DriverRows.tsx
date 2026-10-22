@@ -6,7 +6,8 @@
 // card wherever a driver is picked or listed for a trip:
 //   - DriverChoiceRow: one driver to pick (the shared ChoiceRow: the radio, the tint and the border when picked): the Who
 //     step and Book now (Who's available), Change the task, Give it a driver, Approve, Book now's free drivers;
-//   - DriverRows: Who's available as a list of those, with "Ask drivers" beside the title;
+//   - DriverRows: Who's available as a list of those, with "Ask drivers" beside the title; a busy driver's holder under
+//     the row (Round 4–7, 7: "Anoja's · 08:00–11:00" and Ask for it);
 //   - VehicleChipView: the chip alone (the Drivers tab, Live's list);
 //   - TaskDriverCard: a task's header (Task detail): the driver, the person who drives it themselves or someone else, with
 //     a small word instead of the duty state ("Drives themselves", "Someone else") and Call / WhatsApp.
@@ -14,9 +15,11 @@
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MessageCircle, Phone } from '@/components/icons';
+import { HolderStrip } from '@/components/office/HolderParts';
 import { ChoiceRow } from '@/components/patterns/Select';
 import { Plate, Txt } from '@/components/ui';
 import { driverParts, driverPill, presenceLine, rankedDrivers, type VehicleChip, vehicleChip, vehicleChipText } from '@/office/approveLogic';
+import { holderOf, wantedOfWindow } from '@/office/holderLogic';
 import { sentenceText } from '@/office/statusWords';
 import { drivenByKey } from '@/office/trip/whoWords';
 import type { Availability, AvailableDriver, DrivenBy } from '@/office/types';
@@ -89,7 +92,7 @@ export function DriverChoiceRow({ d, selected, onPress, onDay, lines, best = fal
 }
 
 /** Who's available as rows (the Who step, Book now, Change the task): one DriverChoiceRow per driver. */
-export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSignIn, onAsk, noWindow, onDay = false }: {
+export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSignIn, onAsk, noWindow, onDay = false, ignoreTask }: {
   data: Availability | null;
   loading: boolean;
   error: { code?: string; message: string } | null;
@@ -104,6 +107,8 @@ export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSi
   noWindow?: boolean;
   /** The fleet setting vehicle_on_the_day. */
   onDay?: boolean;
+  /** Round 4–7 (7): the task being changed (a driver busy with it names no holder to ask). */
+  ignoreTask?: string;
 }) {
   const { t } = useApp();
   const drivers = data ? rankedDrivers(data.drivers) : [];
@@ -124,22 +129,26 @@ export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSi
       {data && !loading && drivers.length === 0 && <ListEmpty text={t('office.request.nobody')} />}
       {drivers.map((x) => {
         const pillKey = driverPill(x, best);
+        // Round 4–7 (7): a busy driver's holder under the row ("Anoja's · 08:00–11:00", Ask), never inside the pick row.
+        const holder = holderOf(x);
         return (
-          <DriverChoiceRow
-            key={x.username ?? x.name}
-            d={x}
-            selected={!!x.username && x.username === picked}
-            onPress={() => onPick(x)}
-            onDay={onDay}
-            lines={driverParts(x, t)}
-            best={pillKey === 'best'}
-            bestWhy={data?.best?.why ? sentenceText(t, data.best.why) : undefined}
-            pill={pillKey && pillKey !== 'best' ? { text: t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted' } : null}
-            disabled={!x.username}
-            disabledReason={x.username ? undefined : t('office.ask.noAccount')}
-            presence={presenceLine(x, t)}
-            testID={`driver-row-${x.username ?? x.name}`}
-          />
+          <View key={x.username ?? x.name} style={{ gap: 2 }}>
+            <DriverChoiceRow
+              d={x}
+              selected={!!x.username && x.username === picked}
+              onPress={() => onPick(x)}
+              onDay={onDay}
+              lines={driverParts(x, t)}
+              best={pillKey === 'best'}
+              bestWhy={data?.best?.why ? sentenceText(t, data.best.why) : undefined}
+              pill={pillKey && pillKey !== 'best' ? { text: t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted' } : null}
+              disabled={!x.username}
+              disabledReason={x.username ? undefined : t('office.ask.noAccount')}
+              presence={presenceLine(x, t)}
+              testID={`driver-row-${x.username ?? x.name}`}
+            />
+            {holder && !x.free && holder.task_id !== ignoreTask ? <HolderStrip holder={holder} resource="driver" what={x.name} wanted={wantedOfWindow(data?.window)} testID={`driver-holder-${x.username ?? x.name}`} /> : null}
+          </View>
         );
       })}
     </View>

@@ -13,9 +13,9 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import { flashWarnings } from "../data/flash";
+import { flashConflicts, flashWarnings } from "../data/flash";
 import { useLists } from "../data/hooks";
-import type { Passenger, TaskDetail, UpdateTaskResult } from "../data/types";
+import type { Conflict, Passenger, TaskDetail, UpdateTaskResult } from "../data/types";
 import { cap, joinDots, plateOf, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
@@ -206,7 +206,8 @@ export function TaskEdit() {
       : "input" in v ? v.input : { task_id: id, plan_version: t!.plan_version ?? 0, driver: f.driver };
     setBusy(true);
     try {
-      const out = await transport.call<UpdateTaskResult>("update_task", input);
+      // Round 4–7 (7): update_task answers the overlaps as cards too (who holds the driver or the vehicle then).
+      const out = await transport.call<UpdateTaskResult & { conflicts?: Conflict[] }>("update_task", input);
       draft.clear();
       const vehicleWords = !f.vehicle && def && input.vehicle === def.reg_no ? ` · ${def.reg_no} (${def.why})` : "";
       toast((needsDriver && f.driver ? `Task sent to ${out.driver ?? "the driver"}` : "Task changed") + vehicleWords);
@@ -216,7 +217,9 @@ export function TaskEdit() {
       // Back to where the person came from. New warnings must be read on the task page: from it, they wait there (data/flash);
       // from anywhere else, the task page takes this page's place so they are seen.
       flashWarnings(id, warnings);
-      if (warnings.length && !openedFromTask) navigate(back, { replace: true, state: { warnings } });
+      const conflicts = out.conflicts ?? [];
+      flashConflicts(id, conflicts);
+      if ((warnings.length || conflicts.length) && !openedFromTask) navigate(back, { replace: true, state: { warnings, conflicts } });
       else afterSave(back);
       return;
     } catch (e) {

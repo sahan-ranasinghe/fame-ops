@@ -40,7 +40,10 @@ import { useToast } from "../ui/Toast";
 import { PlanWithMap } from "./PlanMap";
 import { amountText, videoWords } from "./fuelLogic";
 import { driveText } from "./stopsLogic";
-import { readFlashWarnings } from "../data/flash";
+import { readFlashConflicts, readFlashWarnings } from "../data/flash";
+import type { Conflict } from "../data/types";
+import { ConflictCards } from "./ConflictCards";
+import { TaskAsksLine } from "./HolderAsks";
 import { findDriverPath } from "./needsDriverLogic";
 import { dwellNote, fuelCardWords, needsDriverText, segmentRows, segmentsTotal, taskTone, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
@@ -144,7 +147,10 @@ export function TaskDetail() {
   const q = useBoardQuery();
   // The warnings of a change just made on /tasks/:id/edit or its stops (passed in the navigation state, or, after a save
   // that went back in the history, left in data/flash).
-  const flash = (useLocation().state as { warnings?: string[] } | null)?.warnings ?? readFlashWarnings(id);
+  const navState = useLocation().state as { warnings?: string[]; conflicts?: Conflict[] } | null;
+  const flash = navState?.warnings ?? readFlashWarnings(id);
+  // Round 4–7 (7): the overlaps of that change as cards (who holds the driver or the vehicle then, Ask for it).
+  const flashedConflicts = navState?.conflicts ?? readFlashConflicts(id);
 
   if (err) return <><PageTop title="Task" backTo={backTo} /><Notice tone="bad">{err}</Notice></>;
   if (!p) return <><PageTop title="Task" backTo={backTo} /><Loading>Loading the task…</Loading></>;
@@ -183,6 +189,8 @@ export function TaskDetail() {
         </Notice>
       )}
       <WarningsNote warnings={flash} />
+      <ConflictCards conflicts={flashedConflicts} />
+      <TaskAsksLine taskId={id} />
       {/* Round 4–7 (4b): Completed · not confirmed (a trip nobody drives with the app, closed without its odometer) is grey. */}
       {t.finish_flag && (t.finish_flag.kind === "not_confirmed"
         ? <div className="card card-b" data-testid="finish-flag"><Pill>{finishChip(t.finish_flag)?.text}</Pill> <span className="muted small">{t.finish_flag.text}</span></div>

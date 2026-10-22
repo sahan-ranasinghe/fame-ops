@@ -5,19 +5,26 @@
 
 import { useSyncExternalStore } from 'react';
 
+import type { Conflict } from './types';
+
 export interface SavedNoticeValue {
   lines: string[];
   /** The card's heading when it is not the warnings' (a swap's readings: "Vehicle swapped"). */
   title?: string;
+  /** Round 4–7 (7): the conflicts that name who holds the driver or vehicle, shown as cards (Call, WhatsApp, Ask for it). */
+  conflicts?: Conflict[];
 }
 
 const notices = new Map<string, SavedNoticeValue>();
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
-export function setSavedNotice(key: string, lines: readonly string[], title?: string): void {
-  const clean = [...new Set(lines.map((l) => l.trim()).filter(Boolean))];
-  if (clean.length) notices.set(key, title ? { lines: clean, title } : { lines: clean });
+export function setSavedNotice(key: string, lines: readonly string[], title?: string, conflicts?: readonly Conflict[]): void {
+  // Round 4–7 (7): a conflict with its holder is a card of its own; its sentence is not repeated as a line.
+  const cards = (conflicts ?? []).filter((c) => !!c.holder && (c.kind === 'driver' || c.kind === 'vehicle'));
+  const carded = new Set(cards.map((c) => c.text.trim()));
+  const clean = [...new Set(lines.map((l) => l.trim()).filter((l) => l && !carded.has(l)))];
+  if (clean.length || cards.length) notices.set(key, { lines: clean, ...(title ? { title } : {}), ...(cards.length ? { conflicts: cards } : {}) });
   else notices.delete(key);
   emit();
 }

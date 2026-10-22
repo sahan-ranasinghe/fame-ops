@@ -83,7 +83,7 @@ export function homeChips(permissions: readonly string[]): HomeChip[] {
   return chips;
 }
 
-export type MoreItem = 'tasks' | 'task_history' | 'approve' | 'drivers' | 'asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'places' | 'maintenance' | 'people_drivers' | 'people_users' | 'settings' | 'activity';
+export type MoreItem = 'tasks' | 'task_history' | 'approve' | 'drivers' | 'timeline' | 'asks' | 'holder_asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'places' | 'maintenance' | 'people_drivers' | 'people_users' | 'settings' | 'activity';
 
 /** What More lists under Work: the screens built so far that are not on the bar. */
 export function moreFor(permissions: readonly string[]): MoreItem[] {
@@ -93,10 +93,14 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     { key: 'tasks', need: ['assign_tasks'] },
     { key: 'task_history', need: ['assign_tasks'] },
     { key: 'drivers', need: ['approve', 'assign_tasks'] },
+    // Round 4–7 (7): the day's timeline per driver or vehicle (day_timeline: anyone who sees the fleet).
+    { key: 'timeline', need: ['view'] },
     { key: 'trips', need: ['request'] },
     { key: 'issues', need: ['issues', 'assign_tasks'] },
     // Stage 1 (O3 item 7): the questions asked to drivers in the last 7 days.
     { key: 'asks', need: ['approve', 'assign_tasks'] },
+    // Round 4–7 (7): asks for a busy driver or vehicle (holder_asks), for the people who ask for one or hold a trip.
+    { key: 'holder_asks', need: ['request', 'approve', 'assign_tasks'] },
     { key: 'alerts', need: [] },
     // O2 item 7 (design 19): management by permission. Vehicles with view (plan section 2: the list and the page are
     // read; Register / Edit by their tools), Reports with vehicles or assign_tasks (the duty log); Drivers' management
@@ -119,13 +123,17 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
 /** More's sections (design 19): Work (the screens), People (drivers, office users), then Quick settings. */
 export type MoreSection = 'work' | 'people' | 'settings';
 export const MORE_SECTION: Record<MoreItem, MoreSection> = {
-  approve: 'work', tasks: 'work', task_history: 'work', drivers: 'work', asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work', maintenance: 'work', places: 'work',
+  approve: 'work', tasks: 'work', task_history: 'work', drivers: 'work', timeline: 'work', asks: 'work', holder_asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work', maintenance: 'work', places: 'work',
   people_drivers: 'people', people_users: 'people', settings: 'settings', activity: 'settings',
 };
 
 /** A notification's link on the site (InboxItem.url) → the office screen in the app, or null when O1 has no such screen. */
 export function routeForUrl(url: string | undefined, permissions: readonly string[]): string | null {
   if (!url) return null;
+  // Round 4–7 (7): the site's Asks page (/tasks/asks, also ?task=<id>) and the day's timeline (/schedule).
+  const page = url.replace(/^https?:\/\/[^/]+/, '').split('#')[0];
+  if (/^\/tasks\/asks(?:\?|$)/.test(page)) return '/office/holder-asks';
+  if (/^\/schedule(?:\?|$)/.test(page)) return has(permissions, 'view') ? '/office/timeline' : null;
   // The site's query form (/tasks?task=<id>): a push tap on the site opens that task.
   const q = url.match(/[?&]task=([0-9a-f-]{36})/);
   if (q) return has(permissions, 'assign_tasks') ? `/office/task/${q[1]}` : null;

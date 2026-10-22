@@ -19,9 +19,9 @@
 // Round 3 (the driver-first card of Uber Fleet's and Samsara's driver lists): every row and the best match carry the
 // vehicle as a chip under the name (the plate, "regular", "Vehicle: on the day" or "No vehicle yet"); the best match is
 // the same driver card with its photo, its reasons and Use suggestion.
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Link } from "react-router";
-import type { Availability, AvailableDriver, BestMatch } from "../data/types";
+import type { Availability, AvailableDriver, BestMatch, Holder } from "../data/types";
 import { type Query, useQuery } from "../data/useQuery";
 import { useFleet } from "../app/FleetContext";
 import { errText } from "../transport/errors";
@@ -33,6 +33,8 @@ import { askWindow, bestRow, type DefaultVehicle, defaultVehicle, driverTone, li
 import { countsLine } from "./asks/askLogic";
 import { AnswerLine, AskSheet, useAskAnswers, usePageAsk } from "./asks/AskSheet";
 import { SkeletonRows } from "../ui/ListKit";
+import { HolderStrip } from "../ui/Holder";
+import { wantedOfArgs } from "../ui/holderLogic";
 
 export const AVAILABILITY_REFRESH_MS = 60_000;
 export const AVAILABILITY_SETTLE_MS = 400;
@@ -158,9 +160,11 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
             const on = !!picked && d.username === picked;
             const user = d.username;
             const answer = user ? answers.get(user) : undefined;
+            // Round 4–7 (7): a busy driver's holder (who asked for that trip, else who assigned it), under the row.
+            const holder = d.free ? undefined : (d as AvailableDriver & { holder?: Holder }).holder;
             return (
+              <Fragment key={user ?? d.name}>
               <DriverRow
-                key={user ?? d.name}
                 d={d}
                 // Hotfix 2 (F): Call and WhatsApp the driver, beside the row (never inside its button).
                 phone={toPhoneLinks(d.phone)}
@@ -186,6 +190,8 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
                   ? <span className="sub drow-line" data-testid="avail-vehicle-note">{d.vehicle_note}</span>
                   : veh && <span className="sub drow-line" data-testid="avail-vehicle-why">{veh.why}</span>}
               </DriverRow>
+              {holder && <HolderStrip holder={holder} resource="driver" what={d.name} wanted={wantedOfArgs(args)} />}
+              </Fragment>
             );
           })}
           {data.drivers.length === 0 && <p className="muted small" style={{ margin: 0 }}>No active drivers.</p>}

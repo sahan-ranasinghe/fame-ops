@@ -30,6 +30,7 @@ import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ChoiceRow } from '@/components/patterns/Select';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { DriverChoiceRow, TaskDriverCard } from '@/components/office/DriverRows';
+import { ConflictCard, HolderStrip } from '@/components/office/HolderParts';
 import { VehicleGroups } from '@/components/office/VehicleGroups';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { TellRequester } from '@/components/office/TellRequester';
@@ -48,6 +49,7 @@ import { CANCEL_TEXT, canCancelBooking, cancelReason, canRequestAgain, canWithdr
 import { canEdit as canEditTrip } from '@/office/tripsLogic';
 import { decideStore, useTimeChange } from '@/office/decideStore';
 import { requestTitle } from '@/office/homeLogic';
+import { holderOf, wantedOfWindow } from '@/office/holderLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { sentenceText } from '@/office/statusWords';
@@ -191,7 +193,8 @@ export default function ApproveRequest() {
       const taskId = (out as DecideResult).task_id ?? (out as RedecideResult).task?.task_id;
       const view = decision === 'approve' && taskId && me.tools.includes('task_detail') ? taskId : null;
       setOutcome({ title, warnings });
-      setSavedNotice(`request:${id}`, warnings);
+      // Round 4–7 (7): the conflicts that name who holds the driver or vehicle wait as cards (Call, WhatsApp, Ask for it).
+      setSavedNotice(`request:${id}`, warnings, undefined, (out as DecideResult).conflicts);
       showSnackbar(view
         ? { text: title, action: { label: t('office.saved.view'), onPress: () => router.push({ pathname: '/office/task/[id]', params: { id: view } }) } }
         : { text: title });
@@ -331,6 +334,14 @@ export default function ApproveRequest() {
           </View>
         )}
         {card && decider && (outcome || !open) && <TellRequester key={`${card.id}-${card.version ?? 0}-${card.status}`} q={card} onSaved={() => void q.reload()} />}
+        {/* Round 4–7 (7): the proposal's conflicts as cards, with who holds the driver or vehicle (Ask for it for this trip). */}
+        {card && open && !outcome && decider && (card.proposed?.conflicts?.length ?? 0) > 0 && (
+          <View style={{ gap: 8 }} testID="approve-conflicts">
+            {card.proposed!.conflicts!.map((c, i) => (
+              <ConflictCard key={`${c.kind}-${c.task?.id ?? i}`} c={c} wanted={{ date: trip?.date, from: trip?.leaveBy }} what={c.kind === 'driver' ? card.proposed?.driver : card.proposed?.vehicle} testID={`approve-conflict-${i}`} />
+            ))}
+          </View>
+        )}
         {card && (whoAsked || card.assigned) && (
           <Section title={t('office.who.title')}>
             {whoAsked && <Txt variant="strong" testID="request-who-asked">{t(whoAsked.key, whoAsked.vars)}</Txt>}
@@ -379,7 +390,7 @@ export default function ApproveRequest() {
             {!availArgs && <ListEmpty text={t('office.request.noTime')} />}
             {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
             {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-            {avail.data && <VehicleGroups rows={vehicleRows} picked={vehicle} onPick={setVehiclePick} empty={t('office.trip.noFreeVehicles')} testID="approve-vehicles" />}
+            {avail.data && <VehicleGroups rows={vehicleRows} picked={vehicle} onPick={setVehiclePick} empty={t('office.trip.noFreeVehicles')} testID="approve-vehicles" wanted={wantedOfWindow(avail.data.window)} ignoreTask={card.task_id ?? undefined} />}
           </Section>
         )}
         {card && open && !outcome && !asAsked && (
@@ -396,23 +407,27 @@ export default function ApproveRequest() {
             <View style={{ gap: 8 }}>
               {drivers.map((d) => {
                 const pillKey = driverPill(d, bestUsername);
+                // Round 4–7 (7): a busy driver's holder under the row, with Ask for it for this request's time.
+                const holder = holderOf(d);
                 return (
-                  <DriverChoiceRow
-                    key={d.username ?? d.name}
-                    d={d}
-                    card={false}
-                    selected={d.username === pick && !!d.username}
-                    onPress={() => setPicked(d.username ?? '')}
-                    onDay={onDay}
-                    lines={driverParts(d, t)}
-                    best={pillKey === 'best'}
-                    bestWhy={avail.data?.best?.why ? sentenceText(t, avail.data.best.why) : undefined}
-                    pill={pillKey && pillKey !== 'best' ? { text: t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : 'muted' } : null}
-                    disabled={!d.username}
-                    disabledReason={d.username ? undefined : t('office.ask.noAccount')}
-                    presence={presenceLine(d, t)}
-                    testID={`approve-row-${d.username ?? d.name}`}
-                  />
+                  <View key={d.username ?? d.name} style={{ gap: 2 }}>
+                    <DriverChoiceRow
+                      d={d}
+                      card={false}
+                      selected={d.username === pick && !!d.username}
+                      onPress={() => setPicked(d.username ?? '')}
+                      onDay={onDay}
+                      lines={driverParts(d, t)}
+                      best={pillKey === 'best'}
+                      bestWhy={avail.data?.best?.why ? sentenceText(t, avail.data.best.why) : undefined}
+                      pill={pillKey && pillKey !== 'best' ? { text: t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : 'muted' } : null}
+                      disabled={!d.username}
+                      disabledReason={d.username ? undefined : t('office.ask.noAccount')}
+                      presence={presenceLine(d, t)}
+                      testID={`approve-row-${d.username ?? d.name}`}
+                    />
+                    {holder && !d.free && holder.task_id !== card.task_id ? <HolderStrip holder={holder} resource="driver" what={d.name} wanted={wantedOfWindow(avail.data?.window)} testID={`approve-holder-${d.username ?? d.name}`} /> : null}
+                  </View>
                 );
               })}
             </View>

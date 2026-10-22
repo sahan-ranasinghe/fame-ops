@@ -13,14 +13,17 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useEntry } from "../data/hooks";
-import { addBanners, freshItems, headline, KIND_TONE, linkOf, markedRead, unreadBadge } from "../data/inboxLogic";
+import { addBanners, freshItems, headline, KIND_TONE, markedRead, unreadBadge } from "../data/inboxLogic";
 import { DEFAULT_SOUND, loudest, type MakeAudio, SoundPlayer, soundPrefs } from "../data/sounds";
 import type { Inbox, InboxItem, NotificationSettings, SoundPrefs } from "../data/types";
 import { today } from "../lib/format";
 import { AUTHZ } from "../transport/errors";
-import type { FleetError } from "../transport/types";
+import { canOpenTask, type FleetError } from "../transport/types";
 import { Icon } from "../ui/icons";
 import { useIsPhone } from "../ui/phone";
+import { useToast } from "../ui/Toast";
+import { InboxActions } from "./InboxActions";
+import { actionsOf, itemLink, saidText } from "./inboxActionsLogic";
 import { useFleet } from "./FleetContext";
 import { filterInbox, groupByDay, type InboxFilter } from "./inboxGroups";
 import { datesInWords } from "../lib/when";
@@ -198,9 +201,14 @@ export function InboxProvider({ children, makeAudio }: { children: ReactNode; ma
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
 
-/** One item: who and what, the body, when (the server's words), linked to its page; opening it marks it read. */
+/**
+ * One item: who and what, the body, when (the server's words), linked to its page; opening it marks it read. Round 4–7 (7):
+ * an item with buttons (an Ask for it's Yes / No) is the same row with the buttons under it (never inside the link); an
+ * answer marks it read. An ask's link goes to the Asks page for someone who cannot open tasks.
+ */
 function InboxRow({ item, onOpen }: { item: InboxItem; onOpen: (i: InboxItem) => void }) {
-  const link = linkOf(item.url);
+  const { me } = useFleet();
+  const link = itemLink(item, canOpenTask(me));
   const cls = `inbox-item${item.read ? "" : " unread"}`;
   const body = (
     <>
@@ -212,9 +220,18 @@ function InboxRow({ item, onOpen }: { item: InboxItem; onOpen: (i: InboxItem) =>
       </span>
     </>
   );
-  if (link && "to" in link) return <Link className={cls} to={link.to} onClick={() => onOpen(item)} data-testid="inbox-item">{body}</Link>;
-  if (link) return <a className={cls} href={link.href} target="_blank" rel="noreferrer" onClick={() => onOpen(item)} data-testid="inbox-item">{body}</a>;
-  return <button type="button" className={cls} onClick={() => onOpen(item)} data-testid="inbox-item">{body}</button>;
+  const row = link && "to" in link
+    ? <Link className={cls} to={link.to} onClick={() => onOpen(item)} data-testid="inbox-item">{body}</Link>
+    : link
+    ? <a className={cls} href={link.href} target="_blank" rel="noreferrer" onClick={() => onOpen(item)} data-testid="inbox-item">{body}</a>
+    : <button type="button" className={cls} onClick={() => onOpen(item)} data-testid="inbox-item">{body}</button>;
+  if (!actionsOf(item).length) return row;
+  return (
+    <div className={`inbox-entry${item.read ? "" : " unread"}`} data-testid="inbox-entry">
+      {row}
+      <InboxActions item={item} onDone={() => onOpen(item)} />
+    </div>
+  );
 }
 
 export function InboxList({ items, onOpen }: { items: InboxItem[]; onOpen: (i: InboxItem) => void }) {
@@ -307,11 +324,13 @@ export function InboxBell() {
 /** A banner per new item: who and what, Open (marks it read), Close. They stay until closed or opened. */
 export function InboxBanners() {
   const api = useInbox();
+  const { me } = useFleet();
+  const toast = useToast();
   if (!api?.banners.length) return null;
   return (
     <section className="inbox-banners" aria-label="New notifications" aria-live="polite">
       {api.banners.map((b) => {
-        const link = linkOf(b.url);
+        const link = itemLink(b, canOpenTask(me));
         return (
           <div key={b.id} className={`inbox-banner ${b.kind}`} data-testid="inbox-banner">
             <i className={`dot ${KIND_TONE[b.kind] || "live"}`} aria-hidden="true" />
@@ -320,6 +339,8 @@ export function InboxBanners() {
               {b.body && <div className="sub">{datesInWords(b.body)}</div>}
             </div>
             <div className="acts">
+              {/* Round 4–7 (7): an ask's Yes / No right on the banner; answered, it is read (the banner goes) and a toast says so. */}
+              <InboxActions item={b} onDone={(label) => { toast(saidText(label)); api.read([b.id]); }} />
               {link && "to" in link && <Link className="btn small dark" to={link.to} onClick={() => api.read([b.id])}>Open</Link>}
               {link && "href" in link && <a className="btn small dark" href={link.href} target="_blank" rel="noreferrer" onClick={() => api.read([b.id])}>Open</a>}
               <button type="button" className="btn small icon-btn" aria-label="Close" onClick={() => api.dismiss(b.id)}><Icon name="close" /></button>

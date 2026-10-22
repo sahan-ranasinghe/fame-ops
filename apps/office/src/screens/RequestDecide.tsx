@@ -39,6 +39,7 @@ import { linkedDriver } from "./asks/askLogic";
 import { availabilityArgs, driverVehicle } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
+import { wantedOfArgs } from "../ui/holderLogic";
 import { checkDeparture, departurePlan } from "./departureLogic";
 import { DecidedBy, refreshRequest, ReviewingLine, useReviewing } from "./approvers";
 import { basePlace, DepartureNote, useFleetSettings, usePlanPreview, VehicleChoiceRadios, vehicleOnTheDay } from "./dispatchParts";
@@ -319,7 +320,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
                   <span className="grow">{againDef ? <>{againDef.reg_no} · {againDef.why}</> : "Keep the vehicle"}</span></label>
                 {onDay && <VehicleChoiceRadios name="rq-veh" value={f.vehicle} onPick={(v) => set("vehicle", v)} />}
                 {sug?.groups
-                  ? <VehicleGroups sug={sug} name="rq-veh" vehicle={f.vehicle} onPick={(reg) => set("vehicle", reg)} />
+                  ? <VehicleGroups sug={sug} name="rq-veh" vehicle={f.vehicle} onPick={(reg) => set("vehicle", reg)} wanted={wantedOfArgs(availArgs)} />
                   : options.map((v) => <VehicleOption key={v.reg_no} v={v} name="rq-veh" checked={f.vehicle === v.reg_no} onPick={() => set("vehicle", v.reg_no)} />)}
               </>
             )}
@@ -394,7 +395,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             <>
               {onDay && !custodianDrives && !noAppDrives && <VehicleChoiceRadios name="rq-veh" value={vehicle} dayDefault={dayDefault} onPick={(v) => set("vehicle", v)} />}
               {sug?.groups
-                ? <VehicleGroups sug={sug} name="rq-veh" vehicle={vehicle} onPick={(reg) => set("vehicle", reg)} />
+                ? <VehicleGroups sug={sug} name="rq-veh" vehicle={vehicle} onPick={(reg) => set("vehicle", reg)} wanted={wantedOfArgs(availArgs)} />
                 : options.map((v) => <VehicleOption key={v.reg_no} v={v} name="rq-veh" checked={vehicle === v.reg_no} onPick={() => set("vehicle", v.reg_no)} />)}
               {options.length === 0 && <Empty>No vehicles registered yet.</Empty>}
             </>
@@ -425,7 +426,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             {backCheck?.kind === "late" && backCheck.back && <DepartureNote check={backCheck} testId="departure-check-back" />}
             <PlanWithMap timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating} leaveNote="the time asked for"
               stops={preview?.stops} start={preview?.start} />
-            <ConflictCards conflicts={preview?.conflicts} onPickVehicle={scrollToVehicles} onPickDriver={scrollToAvailability} />
+            <ConflictCards conflicts={preview?.conflicts} onPickVehicle={scrollToVehicles} onPickDriver={scrollToAvailability} wanted={wantedOfArgs(availArgs)} />
           </div>
         )}
         <div className="confirm" style={{ borderColor: "var(--line)" }}>

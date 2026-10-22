@@ -14,17 +14,19 @@ import { Phone } from '@/components/icons';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { DriverChoiceRow } from '@/components/office/DriverRows';
+import { HolderStrip } from '@/components/office/HolderParts';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { driverParts, driverPill, presenceLine, rankedDrivers } from '@/office/approveLogic';
 import { sentenceText } from '@/office/statusWords';
 import { askTargets } from '@/office/askLogic';
+import { holderOf, wantedOfWindow } from '@/office/holderLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { extrasFor } from '@/office/taskExtrasLogic';
 import { availabilityArgsForTask, CANCEL_TEXT, cancelInput, declinedThisTask, firstPickForTask, leaveIn, plateOf, reassignInput } from '@/office/taskLogic';
-import type { Availability, FleetError, SettingsResult, TaskDetail } from '@/office/types';
+import type { Availability, Conflict, FleetError, SettingsResult, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -74,11 +76,11 @@ export default function GiveDriverScreen() {
     setBusy('give');
     setProblem(null);
     try {
-      const out = await api.call<{ warnings?: string[]; was?: string }>('reassign_task', reassignInput(task.id, pickedDriver));
+      const out = await api.call<{ warnings?: string[]; was?: string; conflicts?: Conflict[] }>('reassign_task', reassignInput(task.id, pickedDriver));
       done.current = true;
       // Hotfix O2-H2, Part 1b: the task opens (the one under this page, else in its place), a snackbar says who has it, and
-      // the warnings wait on the task.
-      setSavedNotice(`task:${task.id}`, out.warnings ?? []);
+      // the warnings wait on the task. Round 4–7 (7): with the conflicts that name who holds the driver or vehicle.
+      setSavedNotice(`task:${task.id}`, [...(out.warnings ?? []), ...(out.conflicts ?? []).map((c) => c.text)], undefined, out.conflicts);
       router.dismissTo({ pathname: '/office/task/[id]', params: { id: task.id } });
       showSnackbar({ text: t('office.saved.driverGiven', { name: pickedDriver.name }) });
     } catch (e) {
@@ -205,23 +207,27 @@ export default function GiveDriverScreen() {
               {drivers.map((d) => {
                 const declined = declinedThisTask(task, d);
                 const pillKey = declined ? 'declined' : driverPill(d, bestUsername);
+                // Round 4–7 (7): a busy driver's holder under the row, with Ask for it for this task's time.
+                const holder = holderOf(d);
                 return (
-                  <DriverChoiceRow
-                    key={d.username ?? d.name}
-                    d={d}
-                    card={false}
-                    selected={!!d.username && d.username === pick}
-                    onPress={() => setPicked(d.username ?? '')}
-                    onDay={onDay}
-                    lines={declined ? undefined : driverParts(d, t)}
-                    best={pillKey === 'best'}
-                    bestWhy={avail.data?.best?.why ? sentenceText(t, avail.data.best.why) : undefined}
-                    pill={pillKey && pillKey !== 'best' ? { text: t(`office.give.${pillKey}`), tone: pillKey === 'declined' || pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted' } : null}
-                    disabled={!d.username || declined}
-                    disabledReason={declined ? t('office.give.declinedThis', { why: task.needs_driver?.reason_text ?? '' }) : d.username ? undefined : t('office.ask.noAccount')}
-                    presence={declined ? undefined : presenceLine(d, t)}
-                    testID={`give-row-${d.username ?? d.name}`}
-                  />
+                  <View key={d.username ?? d.name} style={{ gap: 2 }}>
+                    <DriverChoiceRow
+                      d={d}
+                      card={false}
+                      selected={!!d.username && d.username === pick}
+                      onPress={() => setPicked(d.username ?? '')}
+                      onDay={onDay}
+                      lines={declined ? undefined : driverParts(d, t)}
+                      best={pillKey === 'best'}
+                      bestWhy={avail.data?.best?.why ? sentenceText(t, avail.data.best.why) : undefined}
+                      pill={pillKey && pillKey !== 'best' ? { text: t(`office.give.${pillKey}`), tone: pillKey === 'declined' || pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted' } : null}
+                      disabled={!d.username || declined}
+                      disabledReason={declined ? t('office.give.declinedThis', { why: task.needs_driver?.reason_text ?? '' }) : d.username ? undefined : t('office.ask.noAccount')}
+                      presence={declined ? undefined : presenceLine(d, t)}
+                      testID={`give-row-${d.username ?? d.name}`}
+                    />
+                    {holder && !d.free && !declined && holder.task_id !== task.id ? <HolderStrip holder={holder} resource="driver" what={d.name} wanted={wantedOfWindow(avail.data?.window)} testID={`give-holder-${d.username ?? d.name}`} /> : null}
+                  </View>
                 );
               })}
             </View>

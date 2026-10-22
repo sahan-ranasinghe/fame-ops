@@ -46,6 +46,8 @@ export const NAV: NavItem[] = [
   { key: "my_trips", label: "My trips", need: TRIPS_NEED, path: "/my-trips" },
   { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
   { key: "drivers_board", label: "Drivers board", need: BOARD_NEED, path: "/drivers/board" },
+  // Round 4–7 (7): a day per driver or per vehicle, each booking with its holder (day_timeline: view).
+  { key: "timeline", label: "Timeline", need: ["view"], path: "/schedule" },
   // Fleet
   { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
   { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
@@ -70,7 +72,7 @@ export interface NavSection {
 }
 
 export const NAV_SECTIONS: { key: NavSectionKey; label: string; keys: string[] }[] = [
-  { key: "today", label: "Today", keys: ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board"] },
+  { key: "today", label: "Today", keys: ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board", "timeline"] },
   { key: "fleet", label: "Fleet", keys: ["vehicles", "drivers", "places", "maintenance"] },
   { key: "reports", label: "Reports", keys: ["mileage", "fuel", "duty"] },
   { key: "admin", label: "Admin", keys: ["projects", "settings"] },
@@ -149,6 +151,9 @@ export function tabsFor(me: Pick<Me, "permissions">): NavItem[] {
  */
 export const SUB_PAGES: (NavItem & { after: string })[] = [
   { key: "task_history", label: "Task history", need: ["assign_tasks"], path: "/tasks/history", after: "tasks" },
+  // Round 4–7 (7): the asks for a busy driver or vehicle (holder_asks: everyone's own; a desktop opens it from the
+  // Timeline, a task page and the notifications).
+  { key: "holder_asks", label: "Asks", need: ["request", "approve", "assign_tasks"], path: "/tasks/asks", after: "timeline" },
 ];
 
 /** NAV with the sub-pages in place, for the More list. */

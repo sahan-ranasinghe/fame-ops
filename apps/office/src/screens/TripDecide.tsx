@@ -35,6 +35,7 @@ import { linkedDriver } from "./asks/askLogic";
 import { availabilityArgs, type DefaultVehicle, driverVehicle, floorTo5 } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
+import { wantedOfArgs } from "../ui/holderLogic";
 import { checkDeparture, departurePlan } from "./departureLogic";
 import { DecidedBy, refreshRequest, ReviewingLine, useReviewing } from "./approvers";
 import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
@@ -211,7 +212,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
             <div className="section-t" style={{ marginBottom: 2 }}>As proposed</div>
             {(pick.driver || pick.vehicle) && <p className="hint" style={{ margin: 0 }}>These were checked for the proposed driver and vehicle; your pick is checked again when you send, and the answer lists any overlap.</p>}
             {checks.warnings?.length ? <WarningsNote warnings={checks.warnings} /> : null}
-            <ConflictCards conflicts={checks.conflicts} onPickVehicle={focusVehicle} onPickDriver={scrollToAvailability} />
+            <ConflictCards conflicts={checks.conflicts} onPickVehicle={focusVehicle} onPickDriver={scrollToAvailability} wanted={wantedOfArgs(availArgs)} />
           </div>
         ) : null}
         <div className="card card-b form" data-testid="decide-pick">
