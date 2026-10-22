@@ -66,10 +66,38 @@ select results_eq($$ select count(*)::int from public.location_points where empl
 select is(public.retention_batch('inbox_read', now(), 1, false), 1, 'a batch takes at most its limit');
 select throws_ok($$ select public.retention_batch('tasks', now(), 100, false) $$, 'P0001', NULL, 'there is no rule for a business record');
 
+-- The days to summarise come from the duty sessions (never a scan of the points): yesterday first, then the oldest without
+-- a summary; a day with its summary is not asked again (after 03:00 the morning after); never today.
+insert into public.duty_sessions (id, employee_id, vehicle_id, started_at, ended_at, end_reason) values
+  ('60000000-0000-0000-0000-0000000c9a02', '10000000-0000-0000-0000-0000000c9a01', '20000000-0000-0000-0000-0000000c9a01',
+   '2026-09-01 02:00+00', '2026-09-01 12:00+00', 'driver'),
+  ('60000000-0000-0000-0000-0000000c9a03', '10000000-0000-0000-0000-0000000c9a01', '20000000-0000-0000-0000-0000000c9a01',
+   '2026-09-05 02:00+00', '2026-09-05 12:00+00', 'driver'),
+  ('60000000-0000-0000-0000-0000000c9a04', '10000000-0000-0000-0000-0000000c9a01', '20000000-0000-0000-0000-0000000c9a01',
+   '2026-09-09 02:00+00', '2026-09-09 12:00+00', 'driver'),
+  ('60000000-0000-0000-0000-0000000c9a05', '10000000-0000-0000-0000-0000000c9a01', '20000000-0000-0000-0000-0000000c9a01',
+   '2026-09-10 02:00+00', null, null);
+insert into public.driver_day_summaries (employee_id, day, km, computed_at) values
+  ('10000000-0000-0000-0000-0000000c9a01', '2026-09-05', 3, '2026-09-06 00:00+00');
+select results_eq(
+  $$ select day from public.days_without_summary('2026-09-10 06:00+00', 10)
+     where employee_id = '10000000-0000-0000-0000-0000000c9a01' and day >= '2026-09-01' $$,
+  $$ values ('2026-09-09'::date), ('2026-09-01'::date) $$,
+  'yesterday first, then the oldest day without a summary; a summarised day and today are left out');
+select results_eq($$ select count(*)::int from public.days_without_summary('2026-09-10 06:00+00', 1) $$, $$ values (1) $$,
+  'a few at a time');
+-- A recent day summarised before 03:00 the morning after is asked once more after 03:00 (late uploads).
+insert into public.driver_day_summaries (employee_id, day, km, computed_at) values
+  ('10000000-0000-0000-0000-0000000c9a01', '2026-09-09', 1, '2026-09-09 19:00+00');
+select ok(exists(select 1 from public.days_without_summary('2026-09-10 06:00+00', 10) where day = '2026-09-09'),
+  'yesterday summarised in the night is done once more in the morning');
+select ok(not exists(select 1 from public.days_without_summary('2026-09-09 20:00+00', 10) where day = '2026-09-09'),
+  'and not before 03:00');
+
 -- Every rule with a cut-off in the future: the business records are untouched.
 select public.retention_batch(r, now() + interval '1 day', 20000, false, array['list_vehicles'])
 from unnest(array['inbox_read','inbox_unread','delivery','push_log','audit_routine','audit_changes','issue_events','issues_resolved',
-                  'location_points','heartbeats','google_calls','routing_calls','api_minute_calls','app_errors']) r;
+                  'location_points','route_matched','heartbeats','google_calls','routing_calls','api_minute_calls','app_errors']) r;
 select results_eq($$ select (select count(*) from public.tasks where id = '30000000-0000-0000-0000-0000000c9a01')::int,
                             (select count(*) from public.task_stops where task_id = '30000000-0000-0000-0000-0000000c9a01')::int,
                             (select count(*) from public.vehicle_requests where requested_by_name = 'Old ask')::int,
@@ -82,7 +110,7 @@ select results_eq($$ select (select count(*) from public.tasks where id = '30000
                             (select count(*) from public.vehicles where id = '20000000-0000-0000-0000-0000000c9a01')::int,
                             (select count(*) from public.places where id = '50000000-0000-0000-0000-0000000c9a01')::int,
                             (select count(*) from public.driver_day_summaries where employee_id = '10000000-0000-0000-0000-0000000c9a01')::int $$,
-  $$ values (1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1) $$,
+  $$ values (1, 1, 1, 1, 1, 1, 1, 5, 2, 1, 1, 3) $$,
   'business records untouched: tasks, stops, requests, odometer and fuel logs, reports, photos, duty, people, vehicles, places, summaries');
 
 select * from finish();

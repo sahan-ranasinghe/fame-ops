@@ -636,8 +636,8 @@ async function requestCards(db: Db, rows: VehicleRequest[], now: Date, withLine 
     reviewing,
     officePhone: settings.office_phone,
   };
-  // Round 4–7 (6): who rides, by name.
-  const riders = await passengerCards(db, { requestIds: ids }, now);
+  // Round 4–7 (6): who rides, by name; nothing while the switch passengers is off.
+  const riders = settings.passengers ? await passengerCards(db, { requestIds: ids }, now) : new Map();
   return rows.map((r) => {
     const card = requestCard(r, now, evs.filter((e) => e.request_id === r.id), stops.get(r.id) ?? [], refs, withLine);
     const list = riders.get(r.id);
@@ -1090,8 +1090,9 @@ export const myTrips = tool({
         .gte("start_at", span.from).lt("start_at", span.to).order("start_at", { ascending: false }).limit(500),
       "tasks",
     );
-    // Round 4–7 (6): the trips the person rides in (a registered passenger), view only: never their own or asked by them.
-    const riding = include === "tasks" ? [] : await (async () => {
+    // Round 4–7 (6): the trips the person rides in (a registered passenger), view only: never their own or asked by them;
+    // none while the switch passengers is off.
+    const riding = include === "tasks" || !(await loadSettings(db)).passengers ? [] : await (async () => {
       const ids = unwrap(
         await db.from("task_passengers").select("task_id").eq("employee_id", actor.employeeId!).is("removed_at", null),
         "passengers",

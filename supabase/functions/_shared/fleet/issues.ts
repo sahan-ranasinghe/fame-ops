@@ -8,7 +8,7 @@
 
 import type { Db, Row } from "./db.ts";
 import { notify, officePeople, recipientsFor } from "./notifications.ts";
-import { inChunks, unwrap, unwrapMaybe } from "./db.ts";
+import { fetchAll, inChunks, unwrap, unwrapMaybe } from "./db.ts";
 import { DECLINE_TEXT } from "./decline.ts";
 import { taskEta } from "./eta.ts";
 import {
@@ -971,14 +971,17 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
       scope,
     ),
   ]);
-  // Round 4–7 (item 8): information closed automatically stays closed (unless it comes back worse), with no time limit.
-  const autoClosed = unwrap(
-    await scoped(
-      db.from("issues").select("ref_key, severity").eq("status", "resolved").eq("resolved_by", "system")
-        .eq("resolution_note", AUTO_CLOSED_NOTE),
-      scope,
-    ),
+  // Round 4–7 (item 8): information closed automatically stays closed (unless it comes back worse), with no time limit:
+  // every one of them, page by page (one read stops at 1,000 rows, and a key left out would open again).
+  const autoClosed = await fetchAll(
+    (from, to) =>
+      scoped(
+        db.from("issues").select("ref_key, severity").eq("status", "resolved").eq("resolved_by", "system")
+          .eq("resolution_note", AUTO_CLOSED_NOTE),
+        scope,
+      ).order("id").range(from, to),
     "issues",
+    200000,
   );
   const active = unwrap(activeRes, "issues") as (ActiveRow & { task_id: string | null })[];
   // Hotfix 3 (L2): an issue about a task that is over and left over a day ago expires (resolved by the system, "Expired"):

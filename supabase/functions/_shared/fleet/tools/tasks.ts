@@ -1884,7 +1884,7 @@ export const taskDetail = tool({
     // Round 4–7 (4): the vehicle check of the task's day by its person for its vehicle (the driver's at Start work or
     // Start task, a self-driver's before the trip).
     const checkDay = dayRange(colomboDate(task.started_at ?? task.start_at));
-    const checkRows = task.vehicle_id
+    const checkRows = task.vehicle_id && settings.vehicle_check
       ? unwrap(
         await db.from("vehicle_checks").select("*").eq("vehicle_id", task.vehicle_id).eq("employee_id", task.employee_id)
           .gte("checked_at", checkDay.from).lt("checked_at", checkDay.to).order("checked_at"),
@@ -1892,7 +1892,8 @@ export const taskDetail = tool({
       )
       : [];
     // Round 4–7 (6): who rides, by name; a typed one with a phone can be sent the trip (Share trip, wa.me).
-    const riders = (await passengerCards(db, { taskIds: [task.id] }, now)).get(task.id) ?? [];
+    // Round 4–7 (6): who rides, by name; nothing while the switch passengers is off (the count stays).
+    const riders = settings.passengers ? (await passengerCards(db, { taskIds: [task.id] }, now)).get(task.id) ?? [] : [];
     const firstStop = stops[0];
     const lastStop = stops[stops.length - 1];
     const shareTrip = {
@@ -1904,7 +1905,8 @@ export const taskDetail = tool({
       plate: task.vehicle_id ? refs.veh.get(task.vehicle_id)?.reg_no : null,
     };
     // Round 4–7 (5): the fuel card the driver saw at Start task (the estimate is the database's) and their answer.
-    const fuelCard = task.driven_by === "driver" && task.vehicle_id
+    // Nothing while the switch fuel_card is off (the driver is not asked then).
+    const fuelCard = settings.fuel_card && task.driven_by === "driver" && task.vehicle_id
       ? (unwrapMaybe(await db.rpc("fuel_estimate", { p_task_id: task.id }), "fuel estimate") as FuelEstimate | null)
       : null;
 

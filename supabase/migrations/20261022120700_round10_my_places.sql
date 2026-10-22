@@ -4,7 +4,10 @@
 -- drove, personal trips included, the last 90 days, ranked by how often and how lately. The company's saved places stay
 -- shared ("Saved"). One person's destinations and a driver's personal trips never reach another person's suggestions.
 
-create function public.my_recent_places(p_employee uuid, p_text text, p_since timestamptz, p_limit integer default 5)
+-- p_personal false: the person's places as shown to someone else editing their trip (approve / assign_tasks): never their
+-- personal trips.
+create function public.my_recent_places(p_employee uuid, p_text text, p_since timestamptz, p_limit integer default 5,
+                                        p_personal boolean default true)
 returns table (name text, address text, lat double precision, lng double precision, last_used timestamptz, uses bigint)
 language sql
 stable
@@ -17,7 +20,7 @@ as $$
     select t.* from public.tasks t
     where t.start_at >= p_since and not t.demo and t.status <> 'cancelled'
       and (
-        t.employee_id = p_employee
+        (t.employee_id = p_employee and (p_personal or t.purpose is distinct from 'personal'))
         or (t.purpose <> 'personal' and (
               t.assigned_by_employee_id = p_employee
               or exists (select 1 from public.vehicle_requests r where r.id = t.request_id and r.requested_by_employee_id = p_employee)
@@ -61,9 +64,9 @@ as $$
   order by (g.k like q.e || '%') desc, g.uses desc, g.last_used desc
   limit greatest(1, least(p_limit, 20))
 $$;
-revoke all on function public.my_recent_places(uuid, text, timestamptz, integer) from public, anon, authenticated;
-grant execute on function public.my_recent_places(uuid, text, timestamptz, integer) to service_role;
-comment on function public.my_recent_places(uuid, text, timestamptz, integer) is
+revoke all on function public.my_recent_places(uuid, text, timestamptz, integer, boolean) from public, anon, authenticated;
+grant execute on function public.my_recent_places(uuid, text, timestamptz, integer, boolean) to service_role;
+comment on function public.my_recent_places(uuid, text, timestamptz, integer, boolean) is
   'Round 4–7 (item 10): one person''s own recent places (never another''s); the office''s search_places and driver-api.';
 
 -- The company-wide history is no longer read by anyone: kept for the record, callable only by the service role.

@@ -24,6 +24,11 @@ insert into public.vehicles (id, reg_no, current_odometer_km, active) values
   ('20000000-0000-0000-0000-0000000c4a01', 'WP R4-0001', 5000, true),
   ('20000000-0000-0000-0000-0000000c4a02', 'WP R4-0002', 9000, true);
 
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at) values
+  ('40000000-0000-0000-0000-0000000c4a01', 'Kamal''s task', '10000000-0000-0000-0000-0000000c4a01', '20000000-0000-0000-0000-0000000c4a01', now()),
+  ('40000000-0000-0000-0000-0000000c4a02', 'Nuwan''s task', '10000000-0000-0000-0000-0000000c4a02', '20000000-0000-0000-0000-0000000c4a02', now());
+insert into public.vehicles (id, reg_no, current_odometer_km, active) values ('20000000-0000-0000-0000-0000000c4a03', 'WP R4-0003', 1, false);
+
 -- As Kamal (the driver app).
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000c4a01","role":"authenticated"}';
@@ -39,6 +44,15 @@ select throws_ok($$ insert into public.vehicle_checks (id, vehicle_id, employee_
 select throws_ok($$ insert into public.vehicle_checks (id, vehicle_id, employee_id, checked_at, result, how)
   values (gen_random_uuid(), '20000000-0000-0000-0000-0000000c4a01', '10000000-0000-0000-0000-0000000c4a01', now() + interval '1 day', 'ok', 'change') $$,
   '23514', NULL, 'never a check from the future');
+select lives_ok($$ insert into public.vehicle_checks (id, vehicle_id, employee_id, task_id, checked_at, result, how)
+  values (gen_random_uuid(), '20000000-0000-0000-0000-0000000c4a01', '10000000-0000-0000-0000-0000000c4a01', '40000000-0000-0000-0000-0000000c4a01', now(), 'ok', 'task_start') $$,
+  'a check on the driver''s own task');
+select throws_ok($$ insert into public.vehicle_checks (id, vehicle_id, employee_id, task_id, checked_at, result, how)
+  values (gen_random_uuid(), '20000000-0000-0000-0000-0000000c4a02', '10000000-0000-0000-0000-0000000c4a01', '40000000-0000-0000-0000-0000000c4a02', now(), 'ok', 'task_start') $$,
+  '42501', NULL, 'never linked to another driver''s task');
+select throws_ok($$ insert into public.vehicle_checks (id, vehicle_id, employee_id, checked_at, result, how)
+  values (gen_random_uuid(), '20000000-0000-0000-0000-0000000c4a03', '10000000-0000-0000-0000-0000000c4a01', now(), 'ok', 'change') $$,
+  '42501', NULL, 'never a vehicle that is switched off');
 select lives_ok($$ insert into public.vehicle_checks (id, vehicle_id, employee_id, checked_at, result, how)
   values ('30000000-0000-0000-0000-0000000c4a02', '20000000-0000-0000-0000-0000000c4a01', '10000000-0000-0000-0000-0000000c4a01', now(), 'problem', 'task_start') $$,
   'and a check with a problem');
@@ -54,7 +68,7 @@ select lives_ok($$ insert into public.photos (id, employee_id, kind, storage_pat
   values ('50000000-0000-0000-0000-0000000c4a01', '10000000-0000-0000-0000-0000000c4a01', 'vehicle_check',
           '10000000-0000-0000-0000-0000000c4a01/2026-10-22/front.jpg', '30000000-0000-0000-0000-0000000c4a01', 'front') $$,
   'a side photo of the driver''s own check');
-select results_eq($$ select count(*)::int from public.vehicle_checks $$, $$ values (2) $$, 'the driver reads their own checks');
+select results_eq($$ select count(*)::int from public.vehicle_checks $$, $$ values (3) $$, 'the driver reads their own checks (three: two, and the one on their own task)');
 reset role;
 
 -- As Nuwan: he sees none of Kamal's checks, and cannot link a photo to them.

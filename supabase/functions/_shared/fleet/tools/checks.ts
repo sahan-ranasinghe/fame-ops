@@ -98,7 +98,8 @@ export async function checkCards(db: Db, refs: Refs, checks: readonly Check[], w
 /** Today's check of each vehicle, newest (list_vehicles' check_today; the vehicle page). */
 export async function checksToday(db: Db, refs: Refs, vehicleIds: readonly string[], now: Date) {
   const out = new Map<string, { result: string; result_text: string; at: string; by: string | null; report_id?: string }>();
-  if (!vehicleIds.length) return out;
+  // Nothing while the switch vehicle_check is off (the list shows no check then).
+  if (!vehicleIds.length || !(await loadSettings(db)).vehicle_check) return out;
   const day = dayRange(colomboDate(now));
   const rows = unwrap(
     await db.from("vehicle_checks").select("*").in("vehicle_id", [...vehicleIds]).gte("checked_at", day.from).lt("checked_at", day.to)
@@ -345,7 +346,8 @@ export const myTrip = tool({
   readOnly: true,
   input: z.object({ task_id: zId }),
   async run({ task_id }, { db, now, actor }) {
-    if (actor.employeeId) {
+    // A passenger's view only while the switch passengers is on.
+    if (actor.employeeId && (await loadSettings(db)).passengers) {
       const riding = unwrapMaybe(
         await db.from("task_passengers").select("id").eq("task_id", task_id).eq("employee_id", actor.employeeId).is("removed_at", null)
           .limit(1).maybeSingle(),

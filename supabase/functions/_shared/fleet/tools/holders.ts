@@ -75,7 +75,7 @@ export const askForIt = tool({
       await notify(db, "holder.asked", {
         title: `${actor.name} asks for ${what}`,
         body,
-        url: `/tasks/${t.id}`,
+        url: `/tasks/asks?task=${t.id}`,
         tag: `ask:${ask.id}`,
         who: actor.name,
         actions: [
@@ -89,7 +89,7 @@ export const askForIt = tool({
       await notify(db, "holder.asked", {
         title: `${actor.name} asks ${holder?.name ?? "the holder"} for ${what}`,
         body: `${windowWords(wantedFrom, wantedTo)} · "${t.title}"${args.note ? ` · ${args.note}` : ""}`,
-        url: `/tasks/${t.id}`,
+        url: `/tasks/asks?task=${t.id}`,
         tag: `ask:${ask.id}`,
         who: actor.name,
       }, admins);
@@ -134,14 +134,14 @@ export const answerHolderAsk = tool({
     const title = `${actor.name} said ${said}: ${what}`;
     const body = `${windowWords(ask.wanted_from, ask.wanted_to)}${t ? ` · "${t.title}"` : ""}`;
     if (ask.asked_by !== actor.employeeId) {
-      await notify(db, "holder.answered", { title, body, url: `/tasks/${ask.task_id}`, tag: `ask:${ask.id}`, who: actor.name }, [ask.asked_by]);
+      await notify(db, "holder.answered", { title, body, url: `/tasks/asks?task=${ask.task_id}`, tag: `ask:${ask.id}`, who: actor.name }, [ask.asked_by]);
     }
     const admins = await fleetAdmins(db, [actor.employeeId, ask.asked_by]);
     if (admins.length) {
       await notify(db, "holder.answered", {
         title,
         body: `${body}${answer === "yes" ? " · reassign it if it suits" : ""}`,
-        url: `/tasks/${ask.task_id}`,
+        url: `/tasks/asks?task=${ask.task_id}`,
         tag: `ask:${ask.id}`,
         who: actor.name,
       }, admins);

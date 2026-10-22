@@ -397,7 +397,7 @@ export const searchPlaces = tool({
     "at the cap the map layer is openrouteservice's again and map_note says why. With suggest and no text (an empty box) it " +
     "answers suggestions instead (about 5): Saved (the company's places, the base place and offices first, nearest to near " +
     "or the base) and Recent (the person's OWN places of the last 90 days: trips they asked for, assigned, booked, ride in or " +
-    "drove; never another person's), and with for_person or for_request the trip's person's recent too, labelled. Typed " +
+    "drove; never another person's), and with for_request the request's person's recent too (never their personal trips), labelled. Typed " +
     "results add only the person's own recent places.",
   readOnly: true,
   input: z.object({
@@ -410,11 +410,10 @@ export const searchPlaces = tool({
     google: z.boolean().optional().describe("The map layer from Google's place search when the google package is on (default false)"),
     session: z.string().regex(/^[A-Za-z0-9_-]{8,36}$/, "a session token: 8 to 36 letters, digits, - or _").optional()
       .describe("One token per typing session in one box, the same on the google_place call that ends it"),
-    for_person: zId.optional().describe("Editing or approving another person's trip: their recent places too (approve or assign_tasks)"),
-    for_request: zId.optional().describe("Or the request being edited or decided: its requester's recent places"),
+    for_request: zId.optional().describe("The request being edited or decided (approve or assign_tasks): its requester's recent places too"),
   }),
   async run(
-    { text, limit = 8, map = true, google = false, session, suggest = false, near: nearPoint, for_person, for_request },
+    { text, limit = 8, map = true, google = false, session, suggest = false, near: nearPoint, for_request },
     { db, now, actor },
   ) {
     const typed = (text ?? "").trim();
@@ -430,9 +429,9 @@ export const searchPlaces = tool({
       last_used: colomboDateTime(r.last_used),
     });
     // Round 4–7 (item 10): the recent places are the person's OWN (never another's: one function, my_recent_places).
-    const myRecent = (who: string | null, words: string, n: number) =>
+    const myRecent = (who: string | null, words: string, n: number, personal = true) =>
       who
-        ? db.rpc("my_recent_places", { p_employee: who, p_text: words, p_since: since, p_limit: n })
+        ? db.rpc("my_recent_places", { p_employee: who, p_text: words, p_since: since, p_limit: n, p_personal: personal })
         : Promise.resolve({ data: [] as never[], error: null });
     if (suggest && typed.length < SEARCH_MIN_CHARS) {
       // An empty box (Uber, Google Maps): Saved (the company's) and Recent (the person's own), about 5 rows; for someone
@@ -440,10 +439,11 @@ export const searchPlaces = tool({
       const settings = await loadSettings(db);
       const base = await basePoint(db, settings);
       const point = nearPoint ?? base?.point ?? COLOMBO;
-      const other = await tripPerson(db, actor, for_person, for_request);
+      const other = await tripPerson(db, actor, for_request);
       const [mineRes, theirsRes, oursRes] = await Promise.all([
         myRecent(actor.employeeId, "", other ? 2 : 3),
-        myRecent(other?.id ?? null, "", 2),
+        // Another person's: never their personal trips.
+        myRecent(other?.id ?? null, "", 2, false),
         db.from("places").select("id, name, address, kind, operator, site_id, other_ids, district, depot, lat, lng")
           .eq("active", true).is("removed_at", null).eq("operator", "other").not("lat", "is", null).limit(200),
       ]);
@@ -972,24 +972,17 @@ export const placeDetail = tool({
   },
 });
 
-/** Round 4–7 (item 10): the person another's trip is for (editing or approving it): their recent places may be shown, only
- *  to someone who approves or assigns trips, never as the person's own. Null when none or the person themself. */
-async function tripPerson(
-  db: Db,
-  actor: Actor,
-  forPerson: string | undefined,
-  forRequest: string | undefined,
-): Promise<{ id: string; name: string } | null> {
-  if (!forPerson && !forRequest) return null;
+/** Round 4–7 (item 10): the person a request being edited or decided is for: their recent places (never their personal
+ *  trips) may be shown, only to someone who approves or assigns trips, never as the person's own. Only through the request
+ *  (never any person by id). Null when none or the person themself. */
+async function tripPerson(db: Db, actor: Actor, forRequest: string | undefined): Promise<{ id: string; name: string } | null> {
+  if (!forRequest) return null;
   if (!actor.permissions.includes("approve") && !actor.permissions.includes("assign_tasks")) return null;
-  let id = forPerson ?? null;
-  if (!id && forRequest) {
-    const r = unwrapMaybe(
-      await db.from("vehicle_requests").select("requested_by_employee_id").eq("id", forRequest).maybeSingle(),
-      "request",
-    );
-    id = r?.requested_by_employee_id ?? null;
-  }
+  const r = unwrapMaybe(
+    await db.from("vehicle_requests").select("requested_by_employee_id").eq("id", forRequest).maybeSingle(),
+    "request",
+  );
+  const id = r?.requested_by_employee_id ?? null;
   if (!id || id === actor.employeeId) return null;
   const e = unwrapMaybe(await db.from("employees").select("id, name").eq("id", id).maybeSingle(), "person");
   return e ? { id: e.id, name: e.name } : null;

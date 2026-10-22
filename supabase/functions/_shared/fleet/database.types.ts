@@ -1831,7 +1831,7 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
 "my_recent_places":
-{ Args: { "p_employee": string,"p_limit"?: number,"p_since": string,"p_text": string }; Returns: {
+{ Args: { "p_employee": string,"p_limit"?: number,"p_personal"?: boolean,"p_since": string,"p_text": string }; Returns: {
               "address": string,"last_used": string,"lat": number,"lng": number,"name": string,"uses": number
             }[]
                            },

@@ -43,8 +43,15 @@ alter table public.vehicle_checks enable row level security;
 -- The driver writes and reads their own (the app reads today's back after a fresh sign-in; the queue's upsert reads too).
 create policy vehicle_checks_select_own on public.vehicle_checks
   for select to authenticated using (employee_id = (select public.current_employee_id()));
+-- A check names only the driver's own task (never another driver's) and an active vehicle. The vehicle is not tied to the
+-- one held: the app queues a check offline and may send it after the driver changed vehicle or clocked out.
 create policy vehicle_checks_insert_own on public.vehicle_checks
-  for insert to authenticated with check (employee_id = (select public.current_employee_id()) and channel = 'app');
+  for insert to authenticated with check (
+    employee_id = (select public.current_employee_id()) and channel = 'app'
+    and (task_id is null
+         or exists (select 1 from public.tasks t where t.id = task_id and t.employee_id = (select public.current_employee_id())))
+    and exists (select 1 from public.vehicles v where v.id = vehicle_id and v.active)
+  );
 grant select on public.vehicle_checks to authenticated;
 grant insert (id, vehicle_id, employee_id, task_id, checked_at, result, odometer_km, how) on public.vehicle_checks to authenticated;
 

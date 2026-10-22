@@ -22,6 +22,10 @@ const DRIVER_EVENTS: Record<string, string> = {
   add_trip_stop: "Driver added a stop to a trip",
   cancel_trip: "Driver cancelled a trip",
   update_my_profile_driver: "Driver changed their profile",
+  // Round 4–7: the driver's vehicle check (the app, by trigger) and the nightly data retention run (the system's row; Run
+  // now is run_retention, a tool of its own).
+  driver_vehicle_check: "Driver checked a vehicle",
+  retention: "Data retention removed old data",
 };
 
 /**
@@ -42,7 +46,7 @@ export const ROUTINE: ReadonlySet<string> = new Set([
   "vehicle_document_upload_url",
 ]);
 
-const CHANNEL_WORDS: Record<string, string> = { claude: "Claude", web: "Website or app", driver: "Driver app" };
+const CHANNEL_WORDS: Record<string, string> = { claude: "Claude", web: "Website or app", driver: "Driver app", system: "Automatic" };
 
 /** The keys of a call's arguments that name what it was about, in this order. */
 const TARGET_KEYS = ["name", "email", "username", "reg_no", "title", "driver", "vehicle", "place", "label"] as const;

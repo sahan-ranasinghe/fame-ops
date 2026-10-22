@@ -45,9 +45,12 @@ select is((select count(*)::int from public.my_recent_places('10000000-0000-0000
 select is((select count(*)::int from public.my_recent_places('10000000-0000-0000-0000-0000000caa02', 'R10 Head', now() - interval '90 days', 10)), 0,
   'a saved place is in Saved, not Recent');
 
+select is((select count(*)::int from public.my_recent_places('10000000-0000-0000-0000-0000000caa01', 'home town', now() - interval '90 days', 10, false)), 0,
+  'shown to someone editing their trip, a driver''s recent places never hold their personal trips');
+
 -- Never called by a signed-in person directly.
 set local role authenticated;
-select throws_ok($$ select * from public.my_recent_places('10000000-0000-0000-0000-0000000caa02', '', now(), 5) $$,
+select throws_ok($$ select * from public.my_recent_places('10000000-0000-0000-0000-0000000caa02', '', now(), 5, true) $$,
   '42501', NULL, 'only the server reads recent places');
 reset role;
 

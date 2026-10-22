@@ -3507,6 +3507,15 @@ if CHANNEL == "api":
               json.dumps({k: mt.get(k) for k in ("state", "window", "last_odometer_km", "checks", "viewer")})[:400])
         ok_, b_try = call_as(B, "api", "my_trip", {"task_id": TS})
         check(not ok_, "B cannot open A's trip", str(b_try)[:120])
+        # The reviewer's finding (22 October): names alone never skip update_request's own checks.
+        a_req = rs["request"]
+        for ch in ("api", "mcp"):
+            ok_, b_names = call_as(B, ch, "update_request", {"request_id": a_req["id"], "version": a_req.get("version", 0),
+                                                              "passenger_list": [{"person": B["id"]}]})
+            check(not ok_ and "not yours" in str(b_names), f"{ch}: B cannot put herself on A's request by sending names alone", str(b_names)[:200])
+        check(psql(f"select count(*) from request_passengers where request_id = '{a_req['id']}' and employee_id = '{B['id']}'") == "0"
+              and psql(f"select count(*) from task_passengers where task_id = '{TS}' and employee_id = '{B['id']}'") == "0",
+              "nothing was saved for B on A's request or its task")
         ok_, low = call_as(A, "api", "my_trip_check", {"task_id": TS, "result": "ok", "odometer_km": 19000})
         check(not ok_ and "under the vehicle's last reading" in str(low), "an odometer under the last reading is refused in words", str(low)[:200])
         ok_, ck = call_as(A, "api", "my_trip_check", {"task_id": TS, "result": "ok", "odometer_km": 20015})
