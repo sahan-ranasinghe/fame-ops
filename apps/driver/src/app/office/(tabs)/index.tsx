@@ -17,6 +17,7 @@ import { Pressable, View } from 'react-native';
 import { Mono, Txt } from '@/components/ui';
 import { addDays, colomboDate } from '@/lib/time';
 import { whenWords } from '@/lib/dateWords';
+import { dueWords } from '@/office/issuesLogic';
 import { shortDate } from '@/lib/durations';
 import { greeting, isCreatedTask, requestLine, requestTitle, tripLive, tripTitle } from '@/office/homeLogic';
 import { chipText, sentenceText, taskChip, taskRowLine, tripChip } from '@/office/statusWords';
@@ -128,7 +129,7 @@ export default function OfficeHome() {
                   left={<Avatar name={r.requested_by} photo={r.requested_by_photo_url} />}
                   title={requestTitle(r)}
                   line={requestLine(r)}
-                  right={r.asked ? <Txt variant="small" style={{ maxWidth: 90, textAlign: 'right' }}>{r.asked}</Txt> : undefined}
+                  right={r.asked ? <Txt variant="small" style={{ maxWidth: 90, textAlign: 'right' }}>{whenWords(t, r.asked)}</Txt> : undefined}
                   onPress={() => router.push({ pathname: '/office/request/[id]', params: { id: r.id } })}
                 />
               </View>
@@ -169,12 +170,12 @@ export default function OfficeHome() {
                   <Row
                     left={g.items.length > 1 ? (open ? <ChevronDown size={20} color={colors.ink} /> : <ChevronRight size={20} color={colors.ink} />) : undefined}
                     title={g.title}
-                    line={[g.vehicle, g.count > 1 ? t('office.home.attentionN', { n: g.count }) : g.items[0]?.due].filter(Boolean).join(' · ') || undefined}
+                    line={[g.vehicle, g.count > 1 ? t('office.home.attentionN', { n: g.count }) : dueWords(t, g.items[0]?.due)].filter(Boolean).join(' · ') || undefined}
                     chip={{ text: t(`office.home.sev_${g.severity}`), tone: g.severity === 'critical' ? 'red' : 'amber' }}
                     onPress={single ? () => router.push({ pathname: '/office/issues/[id]', params: { id: g.items[0].issue_id ?? '' } }) : () => setExpanded((x) => { const n = new Set(x); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n; })}
                   />
                   {open && g.items.map((x, k) => (
-                    <Row key={x.issue_id ?? `${g.key}-${k}`} title={x.what} line={[x.subject, x.vehicle, x.due].filter(Boolean).join(' · ') || undefined}
+                    <Row key={x.issue_id ?? `${g.key}-${k}`} title={x.what} line={[x.subject, x.vehicle, dueWords(t, x.due)].filter(Boolean).join(' · ') || undefined}
                       onPress={x.issue_id ? () => router.push({ pathname: '/office/issues/[id]', params: { id: x.issue_id ?? '' } }) : undefined} />
                   ))}
                   {maySnooze && g.issue_ids.length > 0 && (

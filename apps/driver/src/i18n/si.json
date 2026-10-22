@@ -711,7 +711,8 @@
     "hours": "පැය {h} මිනිත්තු {m}",
     "hoursOnly": "පැය {h}",
     "days": "දින {d} පැය {h}",
-    "daysOnly": "දින {d}"
+    "daysOnly": "දින {d}",
+    "late": "{dur} ප්‍රමාදයි"
   },
   "vehicleType": {
     "car": "කාර්",
@@ -1772,7 +1773,22 @@
       "filterKind": "වර්ගය",
       "filterVehicle": "වාහනය",
       "filterOpened": "විවෘත කළේ",
-      "openedAny": "ඕනෑම වේලාවක"
+      "openedAny": "ඕනෑම වේලාවක",
+      "dueOverdue": "දින {n} ක් ප්‍රමාදයි",
+      "dueInDays": "දින {n} කින්",
+      "dueSoon": "ළඟදීම",
+      "dueReported": "වාර්තා කළේ {when}",
+      "dueLogged": "සටහන් කළේ {when}",
+      "dueEnded": "අවසන් වූයේ {when}",
+      "dueFor": "{dur} ක් තිස්සේ",
+      "dueWaiting": "{dur} ක් බලා සිටී",
+      "dueFinalEta": "අවසන් ළඟාවීම ආසන්නව {time}",
+      "dueLeaveBy": "{when} ට පිටත් විය යුතුයි",
+      "dueNeedsDriver": "රියදුරෙක් අවශ්‍යයි",
+      "dueWasToLeave": "{when} ට පිටත් විය යුතුව තිබුණි",
+      "dueCompleted": "{when} ට අවසන් කළා",
+      "dueArrived": "{when} ට පැමිණියා",
+      "dueSince": "{time} සිට"
     },
     "ask": {
       "title": "රියදුරන්ගෙන් අසන්න",

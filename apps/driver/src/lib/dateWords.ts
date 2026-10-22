@@ -110,15 +110,71 @@ export function datesInWords(t: Translate, text: string | null | undefined, now:
     });
 }
 
+/** A relative phrase as keys: the dur.* key (the server's @fleet/durations words, the same in en.json) and its values. */
+export interface RelWords {
+  key: string;
+  vars: Record<string, string | RelWords>;
+  /** The server's "Fri 16 Oct" in a farther time: said with the language's day and month names. */
+  day?: string;
+}
+
+/**
+ * The server's relative words (Part B, M5: "2 h ago" was English on Sinhala screens). @fleet/durations whenText and duration
+ * say a time from now and a length in English: "now", "in 45 min", "in 3 h 20 min", "in 3 h", "tomorrow 09:00", "Mon 19 Oct
+ * 09:00 (in 2 days)", "45 min ago", "3 h 20 min ago", "3 h ago", "yesterday 09:00", "Fri 16 Oct 09:00 (2 days ago)", a length
+ * "45 min", "1 h 15 min", "2 h", "2 d 3 h", "2 d", and "20 min late". Null when the text is none of them.
+ */
+export function relativeKey(text: string): RelWords | null {
+  const s = text.trim();
+  let m: RegExpMatchArray | null;
+  if (s === 'now') return { key: 'dur.now', vars: {} };
+  if ((m = s.match(/^in (\d+) min$/))) return { key: 'dur.inMin', vars: { n: m[1] } };
+  if ((m = s.match(/^in (\d+) h (\d+) min$/))) return { key: 'dur.inHours', vars: { h: m[1], m: m[2] } };
+  if ((m = s.match(/^in (\d+) h$/))) return { key: 'dur.inHoursOnly', vars: { h: m[1] } };
+  if ((m = s.match(/^tomorrow (\d{2}:\d{2})$/))) return { key: 'dur.tomorrow', vars: { time: m[1] } };
+  if ((m = s.match(/^(.+) (\d{2}:\d{2}) \(in (\d+) days\)$/))) return { key: 'dur.later', vars: { time: m[2], days: m[3] }, day: m[1] };
+  if ((m = s.match(/^(\d+) min ago$/))) return { key: 'dur.agoMin', vars: { n: m[1] } };
+  if ((m = s.match(/^(\d+) h (\d+) min ago$/))) return { key: 'dur.agoHours', vars: { h: m[1], m: m[2] } };
+  if ((m = s.match(/^(\d+) h ago$/))) return { key: 'dur.agoHoursOnly', vars: { h: m[1] } };
+  if ((m = s.match(/^yesterday (\d{2}:\d{2})$/))) return { key: 'dur.yesterday', vars: { time: m[1] } };
+  if ((m = s.match(/^(.+) (\d{2}:\d{2}) \((\d+) days ago\)$/))) return { key: 'dur.earlier', vars: { time: m[2], days: m[3] }, day: m[1] };
+  if ((m = s.match(/^(\d+) min$/))) return { key: 'dur.minutes', vars: { n: m[1] } };
+  if ((m = s.match(/^(\d+) h (\d+) min$/))) return { key: 'dur.hours', vars: { h: m[1], m: m[2] } };
+  if ((m = s.match(/^(\d+) h$/))) return { key: 'dur.hoursOnly', vars: { h: m[1] } };
+  if ((m = s.match(/^(\d+) d (\d+) h$/))) return { key: 'dur.days', vars: { d: m[1], h: m[2] } };
+  if ((m = s.match(/^(\d+) d$/))) return { key: 'dur.daysOnly', vars: { d: m[1] } };
+  if ((m = s.match(/^(.+) late$/))) {
+    const length = relativeKey(m[1]);
+    return length && !length.day && /^dur\.(minutes|hours|hoursOnly|days|daysOnly)$/.test(length.key) ? { key: 'dur.late', vars: { dur: length } } : null;
+  }
+  return null;
+}
+
+/** The server's relative words in the person's language ("2 h ago" → "පැය 2 කට පෙර"), or null when the text is not one. */
+export function relativeWords(t: Translate, text: string | null | undefined, now: Date | string | number = Date.now()): string | null {
+  const r = text ? relativeKey(text) : null;
+  return r ? relText(t, r, now) : null;
+}
+
+function relText(t: Translate, r: RelWords, now: Date | string | number): string {
+  const vars: Record<string, string> = {};
+  for (const [k, v] of Object.entries(r.vars)) vars[k] = typeof v === 'string' ? v : relText(t, v, now);
+  if (r.day) vars.date = datesInWords(t, r.day, now);
+  return t(r.key, vars);
+}
+
 /**
  * A when-field the server sends ("Thu 22 Oct 08:30", "tomorrow 13:07", "2026-10-22 08:30", "08:30") in words, as the
- * screens say dates: "Tomorrow 08:30", "Mon 19 Oct 08:30" (Sinhala names in Sinhala). A time alone stays as it is.
+ * screens say dates: "Tomorrow 08:30", "Mon 19 Oct 08:30" (Sinhala names in Sinhala). A time alone stays as it is. The
+ * server's relative words ("2 h ago", "in 45 min", "Fri 16 Oct 09:00 (2 days ago)") in the person's language too (M5).
  */
 export function whenWords(t: Translate, value: string | null | undefined, now: Date | string | number = Date.now()): string {
   const s = (value ?? '').trim();
   if (!s) return '';
   const rel = s.match(/^(today|tomorrow|yesterday)(?: (\d{2}:\d{2}))?$/i);
   if (rel) return [t(`date.${rel[1].toLowerCase()}`), rel[2]].filter(Boolean).join(' ');
+  const ago = relativeWords(t, s, now);
+  if (ago) return ago;
   const en = s.match(/^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) (\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?: (\d{4}))?(?: (\d{2}:\d{2}))?$/);
   if (en) {
     const day = enDay(en[1], en[2], en[3], en[4], colomboDate(now));

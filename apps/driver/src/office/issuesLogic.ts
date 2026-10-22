@@ -7,6 +7,7 @@
 // keys): isActive, fitsStatus, defaultSort, severityTone / statusTone, mergeIssue, snoozeLine, whoLine, issueFacts,
 // eventText. Copy again when the site's change.
 
+import { datesInWords, relativeWords, whenWords } from '@/lib/dateWords';
 import type { FilterDef, FilterValues } from '@/lib/patterns/filterLogic';
 
 import type { Permission } from './permissions';
@@ -189,6 +190,36 @@ export function kindText(i: Pick<Issue, 'kind' | 'kind_text'>, tr: (key: string)
   const key = `office.issues.kind.${i.kind}`;
   const found = tr(key);
   return found && found !== key ? found : i.kind_text ?? i.kind;
+}
+
+type Tr = (key: string, vars?: Record<string, string | number>) => string;
+
+/**
+ * An issue's due words in the person's language (Part B, M5; the server's issues.ts writes them in English): "in 5 days",
+ * "2 d overdue", "today", "soon", "reported 2 h ago", "logged yesterday 09:00", "for 20 min", "waiting 3 h", "leave by Thu
+ * 22 Oct 08:30 · in 3 h", "was to leave …", "completed …", "arrived …", "since 09:10", "final ETA 11:40". Anything else as
+ * it came.
+ */
+export function dueWords(t: Tr, due: string | null | undefined, now: Date | string | number = Date.now()): string {
+  const s = (due ?? '').trim();
+  if (!s) return '';
+  if (s.includes(' · ')) return s.split(' · ').map((part) => dueWords(t, part, now)).join(' · ');
+  let m: RegExpMatchArray | null;
+  if (s === 'today' || s === 'tomorrow') return t(`date.${s}`);
+  if (s === 'soon') return t('office.issues.dueSoon');
+  if (s === 'needs a driver') return t('office.issues.dueNeedsDriver');
+  if ((m = s.match(/^(\d+) d overdue$/))) return t('office.issues.dueOverdue', { n: m[1] });
+  if ((m = s.match(/^in (\d+) days$/))) return t('office.issues.dueInDays', { n: m[1] });
+  const prefixed: [RegExp, string, 'when' | 'dur' | 'time'][] = [
+    [/^reported (.+)$/, 'dueReported', 'when'], [/^logged (.+)$/, 'dueLogged', 'when'], [/^ended (.+)$/, 'dueEnded', 'when'],
+    [/^for (.+)$/, 'dueFor', 'dur'], [/^waiting (.+)$/, 'dueWaiting', 'dur'], [/^leave by (.+)$/, 'dueLeaveBy', 'when'],
+    [/^was to leave (.+)$/, 'dueWasToLeave', 'when'], [/^completed (.+)$/, 'dueCompleted', 'when'], [/^arrived (.+)$/, 'dueArrived', 'when'],
+    [/^since (\d{2}:\d{2})$/, 'dueSince', 'time'], [/^final ETA (\d{2}:\d{2})$/, 'dueFinalEta', 'time'],
+  ];
+  for (const [rx, key, slot] of prefixed) {
+    if ((m = s.match(rx))) return t(`office.issues.${key}`, { [slot]: slot === 'time' ? m[1] : slot === 'dur' ? relativeWords(t, m[1], now) ?? m[1] : whenWords(t, m[1], now) });
+  }
+  return relativeWords(t, s, now) ?? datesInWords(t, s, now);
 }
 
 /** The row's first line under the title: the kind, the detail and the due words, the ones there. */

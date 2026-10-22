@@ -239,7 +239,7 @@ export default function ApproveRequest() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader
         title={card ? requestTitle(card) : t('office.request.title')}
-        subtitle={card ? [card.kind === 'task' ? t('office.request.proposedTask') : t('office.request.request'), card.requested_by, card.asked].filter(Boolean).join(' · ') : undefined}
+        subtitle={card ? [card.kind === 'task' ? t('office.request.proposedTask') : t('office.request.request'), card.requested_by, whenWords(t, card.asked)].filter(Boolean).join(' · ') : undefined}
       />
       <Screen refreshing={q.refreshing} onRefresh={refresh} bottom={16}>
         {!q.data && !q.error && <SkeletonRows rows={3} lines={2} />}
@@ -275,7 +275,7 @@ export default function ApproveRequest() {
           <View style={styles.tripCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} testID="request-asker">
               <Avatar name={card.requested_by} size={40} photo={card.requested_by_photo_url} />
-              <Txt variant="body" size={15} style={{ flex: 1 }}>{[t('office.task.askedBy', { name: card.requested_by }), card.asked].filter(Boolean).join(' · ')}</Txt>
+              <Txt variant="body" size={15} style={{ flex: 1 }}>{[t('office.task.askedBy', { name: card.requested_by }), whenWords(t, card.asked)].filter(Boolean).join(' · ')}</Txt>
             </View>
             {trip.date && <Txt variant="label" color={colors.muted}>{shortDate(names, `${trip.date}T06:00:00Z`).toUpperCase()}</Txt>}
             {trip.leaveBy && (

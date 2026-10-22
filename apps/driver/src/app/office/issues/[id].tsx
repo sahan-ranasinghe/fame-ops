@@ -17,7 +17,7 @@ import { Sheet } from '@/components/patterns/Sheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { colomboDate, colomboTime } from '@/lib/time';
 import {
-  eventParts, type IssueAction, issueActions, issueFacts, kindText, linksFor, noteRequired, patchHistory, REPORT_STATUS_KEYS, reportCategoryKey,
+  dueWords, eventParts, type IssueAction, issueActions, issueFacts, kindText, linksFor, noteRequired, patchHistory, REPORT_STATUS_KEYS, reportCategoryKey,
   severityTone, snoozeParts, statusTone, updateInput,
 } from '@/office/issuesLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -118,7 +118,7 @@ export default function IssueScreen() {
 
   const actions = i ? issueActions(i, me.tools) : [];
   const links = h ? linksFor(h, me.permissions) : {};
-  const facts = i ? issueFacts(i, { system: t('office.issues.system'), nobody: t('office.issues.nobody'), by: (name) => t('office.issues.by', { name }), when: (at) => dateWords(t, at) }) : [];
+  const facts = i ? issueFacts({ ...i, due: i.due ? dueWords(t, i.due) : i.due }, { system: t('office.issues.system'), nobody: t('office.issues.nobody'), by: (name) => t('office.issues.by', { name }), when: (at) => dateWords(t, at) }) : [];
   const statusWord = (s?: string) => (s ? t(`office.issues.status.${s}`) : '—');
   // A request's "declined" is a decision, not a task without a driver (office.status.declined says "needs a driver").
   const requestStatusWord = (s: string) => (s === 'declined' ? t('office.request.declinedTitle') : t(`office.status.${s}`));
