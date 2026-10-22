@@ -461,7 +461,9 @@
     "segmentsLeft": "තව කොටස් {n} ක් එක් කළ හැක",
     "noMoreSegments": "තවත් කොටස් එක් කළ නොහැක: තිබෙන දේ භාවිතා කරන්න.",
     "uploadingSize": "උඩුගත වෙමින් {size} · {pct} %",
-    "interruptedShort": "බාධා විය"
+    "interruptedShort": "බාධා විය",
+    "uploadFailed": "වීඩියෝව උඩුගත කිරීම අසාර්ථකයි",
+    "pctOfSize": "{size} න් {pct} %"
   },
   "phoneSetup": {
     "title": "දුරකථන සැකසුම",

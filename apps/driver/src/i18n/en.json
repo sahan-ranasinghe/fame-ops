@@ -461,7 +461,9 @@
     "segmentsLeft": "{n} more allowed",
     "noMoreSegments": "No more pieces can be added: use what you have.",
     "uploadingSize": "Uploading {size} · {pct} %",
-    "interruptedShort": "interrupted"
+    "interruptedShort": "interrupted",
+    "uploadFailed": "Video upload failed",
+    "pctOfSize": "{pct} % of {size}"
   },
   "phoneSetup": {
     "title": "Phone setup",
