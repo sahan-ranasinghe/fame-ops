@@ -49,7 +49,13 @@ const zDestination = z.object({
 }).refine((d) => (d.lat === undefined) === (d.lng === undefined), "Give both lat and lng, or neither.");
 
 const INPUTS = {
-  search: z.object({ text: z.string().trim().min(1).max(500), session: zSession }),
+  // Round 4–7 (item 10): an empty box (suggest) answers Saved and the driver's own Recent; near = the phone's position.
+  search: z.object({
+    text: z.string().trim().max(500).optional(),
+    session: zSession,
+    suggest: z.boolean().optional(),
+    near: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).optional(),
+  }),
   trip: z.object({
     id: z.string().uuid(),
     stop_id: z.string().uuid().optional(),
@@ -163,11 +169,18 @@ Deno.serve(async (request) => {
     if (path === "/places/search") {
       const p = INPUTS.search.safeParse(raw);
       if (!p.success) return bad(p.error);
-      // Google's layer whenever the google package is on (the tool asks the gate; at a cap openrouteservice answers). No
-      // "Used before" for a driver: it lists other people's typed destinations and requests (the phone keeps its own).
-      const out = await searchPlaces.run({ text: p.data.text, session: p.data.session, google: true, map: true, limit: 8 }, ctx);
-      const result = out.result as { results?: { layer: string }[] };
-      return json(200, { ...result, results: (result.results ?? []).filter((r) => r.layer !== "recent") });
+      // Google's layer whenever the google package is on (the tool asks the gate; at a cap openrouteservice answers). Round
+      // 4–7 (item 10): "Recent" is the driver's own (the trips they drove, personal ones too), never anyone else's.
+      const out = await searchPlaces.run({
+        text: p.data.text ?? "",
+        session: p.data.session,
+        suggest: p.data.suggest ?? false,
+        near: p.data.near,
+        google: true,
+        map: true,
+        limit: 8,
+      }, ctx);
+      return json(200, out.result);
     }
     if (path === "/trips") {
       const p = INPUTS.trip.safeParse(raw);

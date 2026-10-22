@@ -1162,6 +1162,27 @@ removes on a second press. Business records are NEVER removed automatically.
 The driver's route, mileage and km for an older day come from the daily summaries. pgTAP for each rule, with "business
 records untouched".
 
+### 33.9 Item 10: per person or shared (Sahan, 22 October 2026; Uber, Google Maps, Uber for Business)
+
+**The bug:** the place suggestions (request, assign, approve or edit, book; the driver's own trips) showed the WHOLE
+company's place history to everyone (`recent_places` read every trip and request).
+
+**The fix:**
+1. An empty box answers two groups, about 5 rows: **Saved** (the company's places: the base place and offices first;
+   shared, kept by people with vehicles or office_users) and **Recent** (ONLY the person's own: trips they asked for,
+   assigned, booked, ride in, and for a driver drove, personal trips too; the last 90 days by how often and how lately:
+   `my_recent_places`). Editing or approving SOMEONE ELSE's trip adds "<Name>'s recent" (`search_places for_person |
+   for_request`, approve or assign_tasks only).
+2. One person's destinations and a driver's personal trips never reach another's suggestions: tested on both channels (the
+   connector suite: A's recent places are not returned to B) and in pgTAP.
+3. Typing is unchanged (the saved places, the places, then the map search), with only the person's own recent places.
+
+**The rule:** history, drafts, recents and preferences are PER PERSON; company data (vehicles, drivers, saved places,
+projects, settings) is SHARED. The audit at the checkpoint (feature · today · should be · fix) covers at least: trip
+drafts, recent searches, last-used driver / vehicle / project, filters and sort, remembered tabs and views, the import
+presets, Home's "Needs you now" and counts (by permission), the notification inbox and settings, My trips, Ask drivers'
+questions and answers, the map's last view.
+
 ### 33.5 Also in the round
 - `docs/voice-calls-plan.md` (doc only): WebRTC through a service (LiveKit, Agora, Twilio Voice) with their current prices
   and free tiers (cited), the native modules (react-native-webrtc, CallKeep / ConnectionService, FCM high priority to

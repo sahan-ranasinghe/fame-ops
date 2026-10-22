@@ -13,9 +13,10 @@ import { orsAutocomplete, PUBLIC_MIN_CHARS, type PublicPlace } from "../geocode.
 import { GOOGLE_ATTRIBUTION, googleUse } from "../google.ts";
 import { GOOGLE_MIN_CHARS, googlePin, googleSuggestions } from "../googlePlaces.ts";
 import { pastedPin } from "../pasted.ts";
+import type { Actor } from "../roles.ts";
 import { BUILT_IN, type Field, FIELDS, type Mapping, type Preset } from "../sites.ts";
 import { loadSettings, saveSetting } from "../settings.ts";
-import { COLOMBO, kmText, nearestFirst, ourPlacesFirst, SUGGEST_LIMITS, TOWN_BOX_DEG } from "../suggest.ts";
+import { COLOMBO, kmText, ourPlacesFirst, SUGGEST_LIMITS } from "../suggest.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, dayRange } from "../time.ts";
 import { tool, zId, zPaging, zText } from "../tool.ts";
 import { offsetOf, pageInfo } from "../paging.ts";
@@ -333,6 +334,10 @@ export interface SearchResult {
   lng?: number;
   /** recent: the last time it was used (Asia/Colombo). */
   last_used?: string;
+  /** Round 4–7 (item 10): an empty box's group: saved (the company's), recent (the person's own), for (the person the trip
+   *  is for, when someone edits or approves another's trip), with its label ("Saved", "Recent", "Dilini's recent"). */
+  group?: "saved" | "recent" | "for";
+  group_label?: string;
   /** map: the provider's id and the credit to keep when it is saved. */
   ref?: string;
   attribution?: string;
@@ -390,8 +395,10 @@ export const searchPlaces = tool({
     "layer is Google's place search instead (badge Google, credit Google Maps): a result has google_place_id and no pin; " +
     "google_place gives its pin, and a stop takes google_place_id with the name as place. Every Google request is counted; " +
     "at the cap the map layer is openrouteservice's again and map_note says why. With suggest and no text (an empty box) it " +
-    "answers suggestions instead: the places used in the last 90 days, our own places (offices first) and the nearest towns, " +
-    "nearest to near (the phone's position) or to the base place.",
+    "answers suggestions instead (about 5): Saved (the company's places, the base place and offices first, nearest to near " +
+    "or the base) and Recent (the person's OWN places of the last 90 days: trips they asked for, assigned, booked, ride in or " +
+    "drove; never another person's), and with for_person or for_request the trip's person's recent too, labelled. Typed " +
+    "results add only the person's own recent places.",
   readOnly: true,
   input: z.object({
     text: z.string().trim().max(500).optional().describe('What was typed or pasted: a name, a site id, "lat, lng" or a Google Maps link'),
@@ -403,8 +410,13 @@ export const searchPlaces = tool({
     google: z.boolean().optional().describe("The map layer from Google's place search when the google package is on (default false)"),
     session: z.string().regex(/^[A-Za-z0-9_-]{8,36}$/, "a session token: 8 to 36 letters, digits, - or _").optional()
       .describe("One token per typing session in one box, the same on the google_place call that ends it"),
+    for_person: zId.optional().describe("Editing or approving another person's trip: their recent places too (approve or assign_tasks)"),
+    for_request: zId.optional().describe("Or the request being edited or decided: its requester's recent places"),
   }),
-  async run({ text, limit = 8, map = true, google = false, session, suggest = false, near: nearPoint }, { db, now }) {
+  async run(
+    { text, limit = 8, map = true, google = false, session, suggest = false, near: nearPoint, for_person, for_request },
+    { db, now, actor },
+  ) {
     const typed = (text ?? "").trim();
     const since = new Date(now.getTime() - RECENT_DAYS * 86400000).toISOString();
     const recentResult = (r: { name: string; address: string | null; lat: number | null; lng: number | null; last_used: string }): SearchResult => ({
@@ -417,26 +429,40 @@ export const searchPlaces = tool({
       lng: r.lng ?? undefined,
       last_used: colomboDateTime(r.last_used),
     });
+    // Round 4–7 (item 10): the recent places are the person's OWN (never another's: one function, my_recent_places).
+    const myRecent = (who: string | null, words: string, n: number) =>
+      who
+        ? db.rpc("my_recent_places", { p_employee: who, p_text: words, p_since: since, p_limit: n })
+        : Promise.resolve({ data: [] as never[], error: null });
     if (suggest && typed.length < SEARCH_MIN_CHARS) {
-      // An empty box (Hotfix O2-H1): what can be picked without typing, recent and nearest first.
+      // An empty box (Uber, Google Maps): Saved (the company's) and Recent (the person's own), about 5 rows; for someone
+      // else's trip, that person's recent too, labelled.
       const settings = await loadSettings(db);
-      const point = nearPoint ?? (await basePoint(db, settings))?.point ?? COLOMBO;
-      const [recentRes, oursRes, townsRes] = await Promise.all([
-        db.rpc("recent_places", { p_text: "", p_since: since, p_limit: SUGGEST_LIMITS.recent }),
+      const base = await basePoint(db, settings);
+      const point = nearPoint ?? base?.point ?? COLOMBO;
+      const other = await tripPerson(db, actor, for_person, for_request);
+      const [mineRes, theirsRes, oursRes] = await Promise.all([
+        myRecent(actor.employeeId, "", other ? 2 : 3),
+        myRecent(other?.id ?? null, "", 2),
         db.from("places").select("id, name, address, kind, operator, site_id, other_ids, district, depot, lat, lng")
           .eq("active", true).is("removed_at", null).eq("operator", "other").not("lat", "is", null).limit(200),
-        db.from("towns").select("id, name, lat, lng, population")
-          .gte("lat", point.lat - TOWN_BOX_DEG).lte("lat", point.lat + TOWN_BOX_DEG)
-          .gte("lng", point.lng - TOWN_BOX_DEG).lte("lng", point.lng + TOWN_BOX_DEG).limit(400),
       ]);
-      const recent = unwrap(recentRes, "recent places").map(recentResult);
-      const ours = ourPlacesFirst(unwrap(oursRes, "places") as RankedRow[], point, SUGGEST_LIMITS.ours)
-        .map((r) => ({ ...ourResult(r), detail: [ourResult(r).detail, kmText(point, { lat: r.lat as number, lng: r.lng as number })].filter(Boolean).join(" · ") }));
-      const towns = nearestFirst(unwrap(townsRes, "towns") as { id: number; name: string; lat: number; lng: number }[], point, SUGGEST_LIMITS.towns)
-        .map((t): SearchResult => ({ layer: "town", badge: "Town", name: t.name, detail: kmText(point, t), pinned: true, lat: t.lat, lng: t.lng }));
+      const saved = ourPlacesFirst(unwrap(oursRes, "places") as RankedRow[], point, SUGGEST_LIMITS.ours)
+        .sort((a, b) => Number(b.id === settings.base_place_id) - Number(a.id === settings.base_place_id))
+        .slice(0, 2)
+        .map((r): SearchResult => ({
+          ...ourResult(r),
+          detail: [ourResult(r).detail, kmText(point, { lat: r.lat as number, lng: r.lng as number })].filter(Boolean).join(" · "),
+          group: "saved",
+          group_label: "Saved",
+        }));
+      const recent = unwrap(mineRes, "recent places").map((r): SearchResult => ({ ...recentResult(r), group: "recent", group_label: "Recent" }));
+      const theirs = unwrap(theirsRes, "recent places")
+        .filter((r) => !recent.some((x) => x.name.toLowerCase() === r.name.toLowerCase()))
+        .map((r): SearchResult => ({ ...recentResult(r), group: "for", group_label: `${other!.name.split(" ")[0]}'s recent` }));
       return {
-        result: { text: "", results: [...recent, ...ours, ...towns], suggested: true },
-        summary: `suggestions near ${point.lat.toFixed(3)}, ${point.lng.toFixed(3)}: ${recent.length} used before, ${ours.length} ours, ${towns.length} towns`,
+        result: { text: "", results: [...saved, ...recent, ...theirs], suggested: true },
+        summary: `suggestions: ${saved.length} saved, ${recent.length} recent${other ? `, ${theirs.length} of ${other.name}` : ""}`,
       };
     }
     const pin = typed ? await pastedPin(typed) : null;
@@ -449,7 +475,7 @@ export const searchPlaces = tool({
     if (typed.length < SEARCH_MIN_CHARS) return { result: { text: typed, results: [] }, summary: "search: too short" };
     const [ourRes, recentRes, settings] = await Promise.all([
       db.rpc("search_places_ranked", { p_text: typed, p_limit: limit }),
-      db.rpc("recent_places", { p_text: typed, p_since: since, p_limit: 5 }),
+      myRecent(actor.employeeId, typed, 5),
       loadSettings(db),
     ]);
     const ours = unwrap(ourRes, "places").map((p) => ourResult(p as RankedRow));
@@ -945,3 +971,26 @@ export const placeDetail = tool({
     };
   },
 });
+
+/** Round 4–7 (item 10): the person another's trip is for (editing or approving it): their recent places may be shown, only
+ *  to someone who approves or assigns trips, never as the person's own. Null when none or the person themself. */
+async function tripPerson(
+  db: Db,
+  actor: Actor,
+  forPerson: string | undefined,
+  forRequest: string | undefined,
+): Promise<{ id: string; name: string } | null> {
+  if (!forPerson && !forRequest) return null;
+  if (!actor.permissions.includes("approve") && !actor.permissions.includes("assign_tasks")) return null;
+  let id = forPerson ?? null;
+  if (!id && forRequest) {
+    const r = unwrapMaybe(
+      await db.from("vehicle_requests").select("requested_by_employee_id").eq("id", forRequest).maybeSingle(),
+      "request",
+    );
+    id = r?.requested_by_employee_id ?? null;
+  }
+  if (!id || id === actor.employeeId) return null;
+  const e = unwrapMaybe(await db.from("employees").select("id, name").eq("id", id).maybeSingle(), "person");
+  return e ? { id: e.id, name: e.name } : null;
+}

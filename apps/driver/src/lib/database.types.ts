@@ -1805,6 +1805,11 @@ isOneToOne: false
 "my_office_contacts":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"my_recent_places":
+{ Args: { "p_employee": string,"p_limit"?: number,"p_since": string,"p_text": string }; Returns: {
+              "address": string,"last_used": string,"lat": number,"lng": number,"name": string,"uses": number
+            }[]
+                           },
 "my_task_contacts":
 { Args: { "p_task": string }; Returns: Json
                            },

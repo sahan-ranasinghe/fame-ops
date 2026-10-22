@@ -1117,6 +1117,9 @@ export interface SearchResult {
   ref?: string;
   attribution?: string;
   google_place_id?: string;
+  /** Round 4–7 (item 10): an empty box's group: saved (the company's), recent (the person's own), for (the trip's person). */
+  group?: "saved" | "recent" | "for";
+  group_label?: string;
 }
 
 /** google_place: a Google result's pin (kept 30 days on the server, never one of our places). */
