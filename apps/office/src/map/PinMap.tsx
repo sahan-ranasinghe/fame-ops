@@ -7,6 +7,7 @@ import { lazy, Suspense, useState } from "react";
 import DrawnMap from "./DrawnMap";
 import { NoMap } from "./NoMap";
 import { useGoogleMap } from "./google/useGoogleMap";
+import { usePageScheme } from "./scheme";
 
 const MapLibrePin = __BUILD__ === "web" ? lazy(() => import("./MapLibrePin")) : null;
 const GooglePin = __BUILD__ === "web" ? lazy(() => import("./google/GooglePin")) : null;
@@ -16,6 +17,8 @@ const loading = <div className="pinmap"><div className="loading" style={{ paddin
 export function PinMap({ lat, lng, onMove }: { lat: number; lng: number; onMove?: (lat: number, lng: number) => void }) {
   const [failed, setFailed] = useState(false);
   const choice = useGoogleMap();
+  // C (§33.12): the map in the page's theme, made again when it changes.
+  const scheme = usePageScheme();
   const drawn = (
     <div className="pinmap drawn" data-testid="pin-map">
       <DrawnMap markers={[{ id: "pin", label: "Pin", title: "The pin", lat, lng, tone: "live", selected: true }]} route={null} onPick={() => undefined} />
@@ -24,13 +27,13 @@ export function PinMap({ lat, lng, onMove }: { lat: number; lng: number; onMove?
   if (choice.kind === "loading") return loading;
   if (choice.kind === "google") {
     if (!GooglePin) return <NoMap small note="Google's map is web only" />;
-    return <Suspense fallback={loading}><GooglePin lat={lat} lng={lng} onMove={onMove} maps={choice.maps} /></Suspense>;
+    return <Suspense fallback={loading}><GooglePin key={scheme} lat={lat} lng={lng} onMove={onMove} maps={choice.maps} scheme={scheme} /></Suspense>;
   }
   // The open package, or Google's map refused or failed (Part 6): the free map (the pin is ours: a pasted pin or a place).
   if (!MapLibrePin || failed) return drawn;
   return (
     <Suspense fallback={loading}>
-      <MapLibrePin lat={lat} lng={lng} onMove={onMove} onFail={() => setFailed(true)} />
+      <MapLibrePin key={scheme} lat={lat} lng={lng} onMove={onMove} onFail={() => setFailed(true)} scheme={scheme} />
     </Suspense>
   );
 }

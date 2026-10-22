@@ -289,12 +289,16 @@ console.log('\nThe four routes and Today\'s card reach the one screen');
   check(/const checkFirst = app\.checkNeeded\(checkVehicleId\)/.test(log) && /needsOdometer = mode !== 'fuel' && !confirming && !checkFirst/.test(log) && /if \(checkFirst\) return;/.test(log), 'Start task: the odometer step and the save wait for the check');
   check(/vehicleConfirmed \? 'vehicle_confirm' : 'task_start'/.test(log) && /router\.push\(\{ pathname: '\/vehicle-check', params: \{ vehicleId: checkVehicleId, how: checkHow, taskId: task\.id \} \}\)/.test(log), 'the task\'s vehicle (task_start) or the one confirmed on the day (vehicle_confirm): the check pushed over the start, with the task');
   check(/askedCheck\.current === checkVehicleId/.test(log) && /<VehicleCheckCard vehicleId=\{checkVehicleId\}[^>]*body="vehicleCheck\.startWaits"/.test(log), 'asked once per vehicle; back without an answer leaves the card in the odometer\'s place');
+  // Round 4–7, item 12 (mockup 5): the check card is folded into Today's vehicle tile (components/DutyCard.tsx): "Check
+  // needed" opens the same screen with the same vehicle and how; "✓ Checked" once answered.
   const today = code('app/(tabs)/index.tsx');
+  const tiles = today.indexOf('<DutyTiles />');
   const notices = today.indexOf('<DutyNotices />');
-  const card = today.indexOf('<VehicleCheckCard');
   const nextCard = today.indexOf('{next ? (');
-  check(notices > 0 && card > notices && nextCard > card, "Today: the card between the duty notices and the next task's card");
-  check(/app\.sharing && app\.vehicle && app\.checkNeeded\(app\.vehicle\.id\)/.test(today), 'only on duty, with a vehicle held, while that vehicle needs its check');
+  check(tiles > 0 && notices > tiles && nextCard > notices, "Today: the vehicle tile (with the check) above the duty notices and the next task's card");
+  const duty = code('components/DutyCard.tsx');
+  check(/const held = sharing \? vehicle : null/.test(duty) && /const needed = held \? checkNeeded\(held\.id\) : false/.test(duty) && /\{needed && held \? \(/.test(duty), 'only on duty, with a vehicle held, while that vehicle needs its check');
+  check(/router\.push\(\{ pathname: '\/vehicle-check', params: \{ vehicleId: held\.id, how: heldHow\(held\.id\) \} \}\)/.test(duty), "the tile's Check needed opens the check with the vehicle held and how it was taken (as the card's Check now did)");
   const state = code('state/app.tsx');
   check(/needsCheck\(vehicleId, checks, Date\.now\(\), shift, me\?\.id\)/.test(state), 'one rule in the state: the switch, my checks of today, me');
   check(/problemOps\(check, row, photos, current\.id\)/.test(state) && /enqueue\(checkOp\(check\)\)/.test(state) && /sidePhotoOps\(check, shots, current\.id\)/.test(state), 'the state queues through the same builders this test runs');

@@ -64,3 +64,8 @@ export { default as RotateCcw } from 'lucide-react-native/icons/rotate-ccw';
 // Round 4–7 (§33.7, the driver's reports): a report's category as its row's icon (tyre, accident).
 export { default as CircleDot } from 'lucide-react-native/icons/circle-dot';
 export { default as Siren } from 'lucide-react-native/icons/siren';
+// Round 4–7, item 12 (the approved mockups): the duty tile's signal, the trip's km, the slide's arrow.
+export { default as Radio } from 'lucide-react-native/icons/radio';
+export { default as RadioOff } from 'lucide-react-native/icons/radio-off';
+export { default as Road } from 'lucide-react-native/icons/road';
+export { default as ArrowRight } from 'lucide-react-native/icons/arrow-right';

@@ -1,6 +1,6 @@
 // The mobile website's two map engines behind one small surface (Phase 8, O4), so the four maps (TaskMap, RouteMap,
 // DriversMap, PinAdjust: the .web.tsx files) are written once:
-//   - the free map: MapLibre GL JS with OpenFreeMap's Liberty style, no key (as the office site's MapLibreMap.tsx and the
+//   - the free map: MapLibre GL JS with OpenFreeMap's Liberty style (the app's theme: lib/appTheme.ts), no key (as the office site's MapLibreMap.tsx and the
 //     phones' OpenTaskMap.tsx);
 //   - Google's map: the Maps JavaScript API, one of the tab's maps (googleWeb.ts), with HTML overlays and no map id.
 // Each draws lines in groups (a group is one layer of the picture: the task's legs, the day's line, the trails), places
@@ -12,12 +12,14 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { LatLng } from '@/components/taskMapLogic';
+import { APP_SCHEME, freeMapStyle } from '@/lib/appTheme';
 import type { Engine } from '@/lib/mapEngine';
 import { zoomStep } from '@/office/liveLogic';
 import { type Anchor, anchorShift, type Camera, type Dash, dashKey, googleDash, layerBefore, libreDash, MAX_FIT_ZOOM, withLayer } from './browserMapLogic';
 import { failGoogle, giveGoogleMap, type GMap, type GoogleApi, type GoogleEntry } from './googleWeb';
 
-export const FREE_MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+/** The free map's style in the app's theme (lib/appTheme.ts, C §33.12: Liberty while /m/ is light only). */
+export const FREE_MAP_STYLE = freeMapStyle(APP_SCHEME);
 
 export interface Padding {
   top: number;

@@ -11,7 +11,8 @@ import type { Me, Transport, WatchEvent } from "../transport/types";
 import { DriverPage } from "./DriverPage";
 
 // The map is not under test here (the drawn map is covered by live.test.ts, the real one needs a browser): the mock shows
-// what the page gives it (the line's points, the gap markers, the open one, the playback marker) and closes a card like a tap.
+// what the page gives it (the line's points, the gap markers and stop pins, the open one, the playback marker), taps a
+// marker (its card's words on the button) and closes a card like a tap.
 const seen: { props: MapProps | null } = { props: null };
 vi.mock("../map/MapView", () => ({
   MapView: (p: MapProps) => {
@@ -20,6 +21,7 @@ vi.mock("../map/MapView", () => ({
       <div data-testid="map" data-gaps={p.gaps?.length ?? 0} data-open={p.openGap ?? ""} data-cursor={p.route?.cursor?.label ?? ""}>
         {p.route ? `${p.route.points.length} points` : "no route"}
         <button type="button" data-testid="map-close" onClick={() => p.onGap?.(null)} />
+        {p.gaps?.map((g) => <button type="button" key={g.id} data-testid={`mark-${g.kind}`} onClick={() => p.onGap?.(g.id)}>{g.text}</button>)}
       </div>
     );
   },
@@ -96,26 +98,30 @@ afterEach(() => {
 });
 
 describe("DriverPage", () => {
-  it("shows who, the status, today's numbers, the timeline and the playback", async () => {
+  // §33.6 item 1 (Round 4–7, Sahan's decision): ONE summary card above the map; the day's timeline list is gone.
+  it("shows who, the status, the day's summary card above the map and the playback; no timeline", async () => {
     await mount();
     expect(screen.getByRole("heading", { name: "Nuwan Perera" })).toBeTruthy();
     expect(screen.getByText("Live · 1 min")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Call" }).getAttribute("href")).toBe("tel:0771234567");
+    expect(screen.getByRole("link", { name: "WhatsApp" }).getAttribute("href")).toBe("https://wa.me/94771234567");
+    expect(screen.getByRole("link", { name: "Open in Google Maps" }).getAttribute("href")).toBe("https://maps");
+    const summary = screen.getByTestId("day-summary");
     expect(screen.getByText("Km (GPS)").parentElement?.textContent).toContain("41.2");
+    expect(screen.getByText("Km (GPS)").parentElement?.textContent).toContain("from 830 points");
     expect(screen.getByText("Driving time").parentElement?.textContent).toContain("1 h 35 min");
-    expect(screen.getByText("Stopped time").parentElement?.textContent).toContain("1 gap with no position");
-    const rows = screen.getByTestId("timeline").querySelectorAll(".tl-row");
-    expect(rows).toHaveLength(3);
-    expect(rows[0].textContent).toContain("Driving · 31.1 km");
-    expect(rows[1].textContent).toContain("near Peliyagoda");
-    expect(rows[2].textContent).toContain("App not running");
-    // Round 3 (A1): one icon per row (Google Maps Timeline), no coloured bar.
-    expect([...rows].map((r) => r.querySelector("[data-testid=tl-icon]")?.getAttribute("data-icon"))).toEqual(["car", "pin", "alert"]);
-    expect(screen.getByTestId("timeline").querySelectorAll(".bar")).toHaveLength(0);
-    expect(screen.getByTestId("map").textContent).toBe("3 points");
+    expect(screen.getByText("Stopped time").parentElement?.textContent).toContain("5 h 43 min");
+    expect(screen.getByText("Stops").parentElement?.textContent).toContain("1");
+    expect(screen.getByTestId("day-span").textContent).toBe("08:01–16:31");
+    expect(screen.getByTestId("day-gaps").textContent).toBe("No GPS for 56 min");
+    // The card is above the map.
+    expect(summary.compareDocumentPosition(screen.getByTestId("map")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByTestId("timeline")).toBeNull();
+    expect(document.querySelectorAll(".tl-row")).toHaveLength(0);
+    expect(screen.getByTestId("map").textContent).toContain("3 points");
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
-    fireEvent.click(rows[1]);
-    expect(rows[1].className).toContain("sel");
+    expect(screen.getByTestId("day-strip")).toBeTruthy();
+    expect(screen.getByLabelText("Legend").textContent).toContain("Stop");
   }, 20_000); // the file's first test pays for importing the page (over 5 s while every test file runs at once)
   it("Yesterday asks the tool for that day and says when nothing was shared", async () => {
     const transport = await mount();
@@ -144,8 +150,8 @@ describe("DriverPage", () => {
   });
 });
 
-describe("the gaps on the driver page (§21)", () => {
-  it("a marker per gap on the map and a row per gap beside it; a row opens its card and zooms to it, the map closes it", async () => {
+describe("the gaps and stops on the driver page (§21; §33.6 item 1)", () => {
+  it("a marker per gap and a pin per stop on the map, no Gaps list; a tap opens its card and moves the map to it, the map closes it", async () => {
     route = {
       ...base,
       route: { columns: ["time", "lat", "lng", "km/h", "at"], points: [["08:01", 6.88, 79.86, 0, iso("08:01")], ["09:55", 6.96, 79.89, 38, iso("09:55")], ["14:00", 6.96, 79.89, 0, iso("14:00")], ["14:56", 6.93, 79.86, 0, iso("14:56")]] },
@@ -154,26 +160,29 @@ describe("the gaps on the driver page (§21)", () => {
     };
     await mount();
     const map = screen.getByTestId("map");
-    expect(map.dataset.gaps).toBe("2");
-    const rows = screen.getAllByTestId("gap-row");
-    expect(rows.map((r) => r.textContent)).toEqual([
-      "09:55Offline here · uploaded 10:20under 1 min",
-      "14:00–14:56App not running56 min",
-    ]);
-    // The rows are not part of the timeline.
-    expect(screen.getByTestId("timeline").querySelectorAll(".tl-row")).toHaveLength(3);
-    fireEvent.click(rows[1]);
+    // Two gap markers (offline here, app not running) and the day's one stop.
+    expect(map.dataset.gaps).toBe("3");
+    expect(screen.queryByTestId("gaps-list")).toBeNull();
+    expect(screen.queryAllByTestId("gap-row")).toHaveLength(0);
+    // The stops are pins with a card, not the line's own labelled circles.
+    expect(seen.props?.route?.stops).toEqual([]);
+    expect(screen.getByTestId("mark-stop").textContent).toBe("Stopped near Peliyagoda · 09:55–15:38 · 5 h 43 min");
+    expect(screen.getByTestId("mark-no_data").textContent).toBe("App not running · 14:00–14:56 · 56 min");
+    expect(screen.getByTestId("mark-late").textContent).toBe("Offline here · 09:55 · uploaded 10:20");
+    fireEvent.click(screen.getByTestId("mark-no_data"));
     expect(screen.getByTestId("map").dataset.open).toMatch(/^no_data-/);
-    expect(rows[1].className).toContain("sel");
     expect(seen.props?.focus).toEqual([{ lat: 6.96, lng: 79.89 }, { lat: 6.93, lng: 79.86 }]);
-    expect(seen.props?.gaps?.[1].text).toBe("App not running · 14:00–14:56 · 56 min");
+    fireEvent.click(screen.getByTestId("mark-stop"));
+    expect(screen.getByTestId("map").dataset.open).toMatch(/^stop:/);
+    expect(seen.props?.focus).toEqual([{ lat: 6.96, lng: 79.89 }]);
     fireEvent.click(screen.getByTestId("map-close"));
     expect(screen.getByTestId("map").dataset.open).toBe("");
-    expect(rows[1].className).not.toContain("sel");
   });
-  it("no gaps: no list", async () => {
+  it("no gaps: no list and no line", async () => {
+    route = { ...base, gaps: [] };
     await mount();
     expect(screen.queryByTestId("gaps-list")).toBeNull();
+    expect(screen.queryByTestId("day-gaps")).toBeNull();
   });
 });
 

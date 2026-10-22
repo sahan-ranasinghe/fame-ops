@@ -16,6 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { enqueue } from '../sync';
 import type { VehiclePhotoOp } from '../sync/engine';
 import { odometerFromText } from './format';
+import { fileExists } from './localFile';
 import { lastPosition } from './location';
 import {
   fitWithin,
@@ -145,15 +146,8 @@ export async function takeVehiclePhoto(vehicleId: string): Promise<VehiclePhotoO
   };
 }
 
-/** Whether a file the app kept is still on the phone (a thumbnail shown before its upload). */
-export function fileExists(uri: string | null | undefined): boolean {
-  if (!uri) return false;
-  try {
-    return new File(uri).exists;
-  } catch {
-    return false;
-  }
-}
+/** Whether a file the app kept is still on the phone (lib/localFile.ts: Photos.tsx reads it without the queue). */
+export { fileExists };
 
 /** Removes a file the app kept (a photo the driver decided not to use, an old profile photo). */
 export function removeFile(uri: string | null | undefined): void {

@@ -6,6 +6,7 @@
 // refusing the key (gm_authFailure), the script blocked or not ready within 15 s: the free map in this tab until it is
 // loaded again (mapSession, as on a phone after Google failed).
 
+import { APP_SCHEME, googleColorScheme } from '@/lib/appTheme';
 import { mapSession } from '@/lib/mapEngine';
 import { officeApi } from '@/office/client';
 import { createGooglePool, GOOGLE_SCRIPT_TIMEOUT_MS, type MapLoadAnswer, withinLimit } from './browserMapLogic';
@@ -54,7 +55,7 @@ export interface GoogleApi {
   event: { addListenerOnce(target: GMap, event: string, fn: () => void): GListener };
   importLibrary(name: string): Promise<unknown>;
   /** google.maps.ColorScheme (LIGHT, DARK, FOLLOW_SYSTEM): the map's colours, set when it is made. */
-  ColorScheme?: { LIGHT: string };
+  ColorScheme?: { LIGHT: string; DARK: string };
 }
 
 /** One of the tab's Google maps: its box (moved into a page's box), the map, and whether it has drawn its tiles once. */
@@ -106,8 +107,9 @@ function makeEntry(): GoogleEntry {
     keyboardShortcuts: false,
     // One finger moves the map and the wheel zooms (the site's §23): never "Use two fingers to move the map".
     gestureHandling: 'greedy',
-    // Always the light map, whatever the browser's dark mode (Round 3 Part A3; Google reads it only when the map is made).
-    colorScheme: api.ColorScheme?.LIGHT ?? 'LIGHT',
+    // The app's theme (lib/appTheme.ts, C §33.12): /m/ is light only today, so the light map whatever the browser's dark
+    // mode. Google reads it only when the map is made (no map id needed).
+    colorScheme: api.ColorScheme?.[googleColorScheme(APP_SCHEME)] ?? googleColorScheme(APP_SCHEME),
   });
   return { holder, map, loaded: false };
 }

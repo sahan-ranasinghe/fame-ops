@@ -5,6 +5,7 @@
 // second load (Google bills one map load per map; reusing one map is its own advice). Phase 7:
 // greedy gestures (§23) and none of Google's buttons (our control cluster instead, §25).
 import type { Transport } from "../../transport/types";
+import type { MapScheme } from "../scheme";
 
 export type GoogleMapsApi = typeof google.maps;
 
@@ -106,6 +107,7 @@ export function resetGoogleMapForTests() {
   authListeners.clear();
   holder = null;
   shared = null;
+  madeWith = "light";
 }
 
 // ---- The tab's one map ------------------------------------------------------------------------------
@@ -113,9 +115,11 @@ export function resetGoogleMapForTests() {
 let holder: HTMLDivElement | null = null;
 let shared: google.maps.Map | null = null;
 let parking: HTMLDivElement | null = null;
+/** The scheme the tab's map was made in (Google reads colorScheme only then). */
+let madeWith: MapScheme = "light";
 const SRI_LANKA = { lat: 7.8, lng: 80.7 };
 
-/** The options the tab's map is made with. */
+/** The options the tab's map is made with (the colour scheme is added by mapOptionsFor: the page's theme then). */
 export const MAP_OPTIONS: google.maps.MapOptions = {
   center: SRI_LANKA,
   zoom: 7,
@@ -129,20 +133,69 @@ export const MAP_OPTIONS: google.maps.MapOptions = {
   clickableIcons: false,
   // Phase 7 (§23): one finger moves the map and the wheel zooms; never "Use ctrl + scroll to zoom".
   gestureHandling: "greedy",
-  // Round 3 A3: always the light map (Google Maps' own default on the web), never FOLLOW_SYSTEM: a dark browser or the
-  // site's dark theme does not darken it. It can only be set when the map is made. No `styles` and no map id: nothing
-  // else picks a scheme.
-  colorScheme: "LIGHT",
 };
 
-/** The tab's map, moved into this page's box (made on first use). */
-export function attachMap(box: HTMLElement, maps: GoogleMapsApi): google.maps.Map {
+/**
+ * C (Round 4–7, §33.12): the map follows the page's theme. Google's own colour scheme (ColorScheme DARK / LIGHT) works
+ * without a map id (Google's reference names no map id for it; only custom cloud styles need one) but is read only when
+ * the map is made, never by setOptions. So the tab's one map is made in the page's scheme at that moment, and a change of
+ * theme afterwards (the system's dark mode at sunset, data-theme) is drawn with the legacy `styles` (allowed without a map
+ * id, changeable at any time): the other scheme's colours over every feature, none once the page is back to the scheme the
+ * map was made in. Making a second map instead would be a second map load that was not counted (rule 10).
+ */
+export function mapOptionsFor(scheme: MapScheme): google.maps.MapOptions {
+  return { ...MAP_OPTIONS, colorScheme: scheme === "dark" ? "DARK" : "LIGHT" };
+}
+
+/** The legacy styles to lay over the map made in `madeWith` for the page's `scheme` now (null: the map's own scheme). */
+export function schemeStyles(scheme: MapScheme, made: MapScheme): google.maps.MapTypeStyle[] | null {
+  if (scheme === made) return null;
+  return scheme === "dark" ? DARK_STYLES : LIGHT_STYLES;
+}
+
+const fill = (color: string) => [{ color }];
+/** The dark map (Google's night style, in the site's dark tokens: --land, --sea, --coast, --muted, --bg). */
+export const DARK_STYLES: google.maps.MapTypeStyle[] = [
+  { elementType: "geometry", stylers: fill("#262a2f") },
+  { elementType: "labels.text.stroke", stylers: fill("#111316") },
+  { elementType: "labels.text.fill", stylers: fill("#9da1a8") },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: fill("#3a4048") },
+  { featureType: "poi", elementType: "geometry", stylers: fill("#2a2f35") },
+  { featureType: "poi.park", elementType: "geometry", stylers: fill("#1f2b24") },
+  { featureType: "road", elementType: "geometry", stylers: fill("#3a4048") },
+  { featureType: "road", elementType: "geometry.stroke", stylers: fill("#22262b") },
+  { featureType: "road.highway", elementType: "geometry", stylers: fill("#4d5560") },
+  { featureType: "road", elementType: "labels.text.fill", stylers: fill("#b7bbc1") },
+  { featureType: "transit", elementType: "geometry", stylers: fill("#2c3036") },
+  { featureType: "water", elementType: "geometry", stylers: fill("#17222d") },
+  { featureType: "water", elementType: "labels.text.fill", stylers: fill("#6b7a8a") },
+];
+/** The light map laid over one made dark (the site's light tokens: --land, --sea, white roads, --muted labels). */
+export const LIGHT_STYLES: google.maps.MapTypeStyle[] = [
+  { elementType: "geometry", stylers: fill("#f1efe9") },
+  { elementType: "labels.text.stroke", stylers: fill("#ffffff") },
+  { elementType: "labels.text.fill", stylers: fill("#5f646b") },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: fill("#c3c0b5") },
+  { featureType: "poi", elementType: "geometry", stylers: fill("#e9e7e0") },
+  { featureType: "poi.park", elementType: "geometry", stylers: fill("#d9e8d3") },
+  { featureType: "road", elementType: "geometry", stylers: fill("#ffffff") },
+  { featureType: "road", elementType: "geometry.stroke", stylers: fill("#e3e0d8") },
+  { featureType: "road.highway", elementType: "geometry", stylers: fill("#fde7a6") },
+  { featureType: "road", elementType: "labels.text.fill", stylers: fill("#5f646b") },
+  { featureType: "transit", elementType: "geometry", stylers: fill("#e3e0d8") },
+  { featureType: "water", elementType: "geometry", stylers: fill("#c9dcea") },
+  { featureType: "water", elementType: "labels.text.fill", stylers: fill("#4f6b80") },
+];
+
+/** The tab's map, moved into this page's box (made on first use, in the page's scheme; a later theme by `styles`). */
+export function attachMap(box: HTMLElement, maps: GoogleMapsApi, scheme: MapScheme = "light"): google.maps.Map {
   if (!holder || !shared) {
     holder = document.createElement("div");
     holder.style.position = "absolute";
     holder.style.inset = "0";
-    shared = new maps.Map(holder, { ...MAP_OPTIONS });
-  }
+    shared = new maps.Map(holder, mapOptionsFor(scheme));
+    madeWith = scheme;
+  } else shared.setOptions({ styles: schemeStyles(scheme, madeWith) });
   box.appendChild(holder);
   return shared;
 }

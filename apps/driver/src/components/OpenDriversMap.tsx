@@ -13,6 +13,7 @@ import { Camera, type CameraRef, type CameraStop, GeoJSONSource, Layer, Map, Mar
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 
+import { freeMapStyle, useMapScheme } from '@/lib/appTheme';
 import { fitAllFrame, zoomStep } from '@/office/liveLogic';
 import { ESTIMATED_COLOR, HOLE_COLOR, type HoleLine, STOP_PIN } from '@/office/liveRouteLogic';
 import { useApp } from '@/state/app';
@@ -21,10 +22,9 @@ import { MapCompass } from './MapCompass';
 import { DRIVER_PIN, DRIVER_ZOOM, DriverPin, DRIVERS_PADDING, type DriversEngineProps, nextTurn, ONE_PLACE_ZOOM, SRI_LANKA, type Turn } from './mapPins';
 import type { LatLng } from './taskMapLogic';
 
-const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
-
 export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, onFailed, layers, pins, command }: DriversEngineProps & LiveLayerProps) {
   const { t } = useApp();
+  const scheme = useMapScheme();
   const camera = useRef<CameraRef>(null);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
   const focused = focus !== null;
@@ -144,7 +144,7 @@ export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, o
     <>
       <Map
         style={StyleSheet.absoluteFill}
-        mapStyle={MAP_STYLE}
+        mapStyle={freeMapStyle(scheme)}
         logo={false}
         compass={false}
         onDidFinishLoadingMap={onLoaded}

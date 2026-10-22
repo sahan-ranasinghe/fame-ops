@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import GoogleMapView, { Marker as GoogleMarker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
+import { useMapScheme } from '@/lib/appTheme';
 import { fitAllFrame, zoomStep } from '@/office/liveLogic';
 import { ESTIMATED_COLOR, HOLE_COLOR, stopPinAnchorY } from '@/office/liveRouteLogic';
 import { useApp } from '@/state/app';
@@ -24,6 +25,7 @@ import type { LatLng } from './taskMapLogic';
 
 export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded, layers, pins, command }: DriversEngineProps & LiveLayerProps) {
   const { t } = useApp();
+  const scheme = useMapScheme();
   const map = useRef<GoogleMapView>(null);
   const [ready, setReady] = useState(false);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
@@ -109,9 +111,9 @@ export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded,
       <GoogleMapView
         ref={map}
         provider={PROVIDER_GOOGLE}
-        // Always the light map, whatever the phone's dark mode (Round 3 Part A3; read once when the map is made: Android's
-        // MapColorScheme.LIGHT through react-native-maps 1.27.2's initial props, no native change).
-        userInterfaceStyle="light"
+        // The app's theme (lib/appTheme.ts, C §33.12): light today, so the light map whatever the phone's dark mode; read
+        // once when the map is made (Android's MapColorScheme through react-native-maps 1.27.2's initial props, no native change).
+        userInterfaceStyle={scheme}
         style={StyleSheet.absoluteFill}
         initialRegion={{ latitude: SRI_LANKA.lat, longitude: SRI_LANKA.lng, latitudeDelta: 3.5, longitudeDelta: 3.5 }}
         toolbarEnabled={false}

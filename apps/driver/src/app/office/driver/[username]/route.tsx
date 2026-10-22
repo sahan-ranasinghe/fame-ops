@@ -2,8 +2,9 @@
 // Samsara): a driver's day on its own screen, opened from the profile's "Today's route" card, from Live's "Earlier days"
 // (?date=) or from a link with a day. The day strip (today and the 89 days before it), driver_route at tolerance 0 (up to
 // 3,000 points, the estimated roads; today read again every minute, a past day once), the day's tasks with their km
-// (list_tasks, with assign_tasks; a row opens the task) and components/office/DayRoute.tsx: the map on both engines, one
-// playback bar, the day's numbers and the timeline. Back means back. The rules: office/historyLogic.ts.
+// (list_tasks, with assign_tasks; a row opens the task) and components/office/DayRoute.tsx: the day's summary card above the
+// map (§33.6 item 1: no timeline list), the map on both engines with the stops as pins, one playback bar. Back means back.
+// The rules: office/historyLogic.ts.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';

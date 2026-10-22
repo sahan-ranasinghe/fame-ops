@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Txt } from '@/components/ui';
-import { openLocationSettings } from '@/lib/location';
+import { openLocationSettings } from '@/lib/settingsLinks';
 import { colomboTime } from '@/lib/time';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';

@@ -23,6 +23,7 @@ import { armWatchdog, disarmWatchdog } from './notifications';
 import { settingsIntents, type SetupBrand } from './phoneSetup';
 import type { Employee, Language } from './types';
 import { colors } from '../theme';
+import { openLocationSettings } from './settingsLinks';
 
 export const LOCATION_TASK = 'fame-driver-location';
 
@@ -267,10 +268,8 @@ export async function enableLocation(): Promise<boolean> {
   return Location.hasServicesEnabledAsync().catch(() => false);
 }
 
-/** Android's location settings (to switch location on). */
-export async function openLocationSettings(): Promise<void> {
-  await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.LOCATION_SOURCE_SETTINGS).catch(() => Linking.openSettings());
-}
+/** Android's location settings (to switch location on): lib/settingsLinks.ts. */
+export { openLocationSettings };
 
 /** This app's own settings page (permissions, battery). */
 export async function openAppSettings(): Promise<void> {

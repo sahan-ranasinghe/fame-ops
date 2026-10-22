@@ -42,7 +42,7 @@ const PAIRS: [string, string][] = [
   ["surface", "live"], ["surface", "ink"], ["surface", "bad"],
   // The toast (an inverse surface) and its action.
   ["inverse-ink", "inverse-bg"], ["inverse-accent", "inverse-bg"],
-  // Pins on the map (the same in both themes: the tiles are light).
+  // Pins on the map (each theme its own: the map follows the theme, C §33.12).
   ["map-pin-ink", "map-pin"], ["map-pin-ink", "map-pin-late"], ["map-pin-ink", "map-gap"],
 ];
 
@@ -54,12 +54,21 @@ describe("the theme's colours", () => {
     });
   }
 
-  it("every map stays light: the map block repeats the light colours (Round 3 A3)", () => {
-    const mapBlock = css.match(/^\.mapbox, \.pinmap \{([\s\S]*?)\n\}/m);
+  // C (Round 4–7, §33.12): the map follows the page's theme (Round 3 A3's "every map stays light" is replaced): the map block
+  // sets no colour of its own, and each theme has its own pins (the pairs above check them on both).
+  it("every map follows the theme: the map block sets no colour token and no colour scheme of its own", () => {
+    const mapBlock = css.match(/^\.mapbox, \.pinmap \{([^}]*)\}/m);
     expect(mapBlock).not.toBeNull();
-    const lightColours = Object.fromEntries(Object.entries(light).filter(([k]) => !k.startsWith("font-")));
-    expect(tokens(mapBlock![1])).toEqual(lightColours);
-    expect(mapBlock![1]).toMatch(/color-scheme: light/);
+    expect(tokens(mapBlock![1])).toEqual({});
+    expect(mapBlock![1]).not.toMatch(/color-scheme/);
+    expect(css).not.toMatch(/\.mapbox[^{]*\{[^}]*color-scheme: light/);
+  });
+
+  it("the dark theme has its own map pins (light pins with dark numbers on the dark map)", () => {
+    for (const k of ["map-pin", "map-pin-ink", "map-pin-late", "map-gap"]) {
+      expect(tokens(forcedDark)[k], k).toBeTruthy();
+      expect(tokens(forcedDark)[k], k).not.toBe(light[k]);
+    }
   });
 
   it("the system's dark theme and data-theme=\"dark\" are the same colours", () => {

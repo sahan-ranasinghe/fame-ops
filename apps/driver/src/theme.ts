@@ -20,6 +20,19 @@ export const colors = {
   greenChip: '#e3f1e4',
   redChip: '#fbeceb',
   amberChip: '#fdf1d6',
+  // Round 4–7, item 12 (design/mockups/2026-10-22, README's tokens): the approved mockups' card border and divider, the
+  // chips' text and tints, the stepper's rail, the slide's track.
+  cardLine: '#e7e5df',
+  divider: '#efede8',
+  rail: '#d9d6ce',
+  iconInk: '#3d4247',
+  greenText: '#1f6b2a',
+  greenSoft: '#e8f3e9',
+  amberSoft: '#fdf3dc',
+  amberEdge: '#f1d9a0',
+  amberDeep: '#6b4600',
+  redSoft: '#fbe9e7',
+  onBlueSoft: '#dbe5f6',
 } as const;
 
 // Names under which the fonts are loaded in src/app/_layout.tsx.
