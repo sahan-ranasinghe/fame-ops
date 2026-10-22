@@ -39,7 +39,9 @@ export default defineConfig({
   },
   projects: [
     // A desktop: the full flows; also the contrast check at a desktop's width (e2e/contrast.spec.ts, light and dark).
-    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /(phone|mobile)\.spec\.ts/ },
+    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /(phone|mobile|design-pilot)\.spec\.ts/ },
+    // Part B: the design pass's pilot screens photographed (e2e/design-pilot.spec.ts opens its own desktop and phone windows).
+    { name: "design", use: { browserName: "chromium" }, testMatch: /design-pilot\.spec\.ts/ },
     // A phone (412 × 915, touch): the tab bar per role, pages and detail screens, drafts, the stops editor, pull to refresh;
     // the contrast check at a phone's width (the site's screens, light and dark).
     { name: "phone", use: { browserName: "chromium", viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }, testMatch: /(phone|contrast)\.spec\.ts/ },
