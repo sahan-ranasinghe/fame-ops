@@ -496,7 +496,7 @@ export default function ApproveRequest() {
       {card && open && !outcome && (
         <StickyActions>
           <BarRow>
-            <Button kind="danger-text" label={t('office.request.decline')} onPress={() => setDeclining(true)} disabled={busy !== null} style={barDanger} testID="decline-button" />
+            <Button kind="danger-text" label={t('office.request.decline')} onPress={() => setDeclining(true)} disabled={busy !== null} style={barDanger} testID="decline-button" compact />
             <Button
               label={asAsked ? (vehicle ? t('office.who.approveVehicle', { plate: vehicle }) : t('office.request.approve')) : pickedDriver ? t('office.request.approveSend', { name: pickedDriver.name }) : t('office.request.approve')}
               icon={busy === 'approve' ? undefined : Check}
@@ -505,6 +505,7 @@ export default function ApproveRequest() {
               busy={busy === 'approve'}
               testID="approve-button"
               style={[barButton, { flex: 1 }]}
+              compact
             />
             {(me.tools.includes(card.status === 'changed' ? 'redecide_request' : 'decide_request') || mayAsk || (canCancelBooking(card, me.permissions, me.tools) && card.status !== 'waiting')) && (
               <BarMore label={t('office.common.more')} onPress={() => setMoreOpen(true)} testID="request-more" />
@@ -515,17 +516,17 @@ export default function ApproveRequest() {
       )}
       {card && !outcome && !open && canCancelBooking(card, me.permissions, me.tools) && card.status !== 'waiting' && (
         <StickyActions>
-          <Button kind="danger-text" label={t('office.requests.cancelBooking')} busy={cancelBusy} onPress={() => setCancelling(true)} style={barDanger} testID="cancel-booking" />
+          <Button kind="danger-text" label={t('office.requests.cancelBooking')} busy={cancelBusy} onPress={() => setCancelling(true)} style={barDanger} testID="cancel-booking" compact />
         </StickyActions>
       )}
       {card && !outcome && !decider && ((canEditTrip(card) && me.tools.includes('update_request')) || canWithdrawOwn(card, me.permissions, me.tools)) && (
         <StickyActions>
           <BarRow>
             {canWithdrawOwn(card, me.permissions, me.tools) && (
-              <Button kind="danger-text" label={t('office.trips.withdraw')} busy={cancelBusy} onPress={() => setCancelling(true)} style={barDanger} testID="withdraw-request" />
+              <Button kind="danger-text" label={t('office.trips.withdraw')} busy={cancelBusy} onPress={() => setCancelling(true)} style={barDanger} testID="withdraw-request" compact />
             )}
             {canEditTrip(card) && me.tools.includes('update_request') && (
-              <Button kind="outline" label={t('office.trip.edit')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'edit', id: card.id } })} style={[barButton, { flex: 1 }]} testID="edit-request" />
+              <Button kind="outline" label={t('office.trip.edit')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'edit', id: card.id } })} style={[barButton, { flex: 1 }]} testID="edit-request" compact />
             )}
           </BarRow>
         </StickyActions>

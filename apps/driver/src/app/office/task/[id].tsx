@@ -209,19 +209,19 @@ export default function TaskDetailScreen() {
     switch (a) {
       case 'giveDriver':
       case 'reassign':
-        return actions.reassign && <Button key={a} kind={a === 'giveDriver' && !inSheet ? 'primary' : 'outline'} icon={UserCog} label={task.needs_driver ? t('office.home.giveDriver') : t('office.task.reassign')} onPress={from(() => router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } }))} disabled={busy !== null} style={style} testID="task-reassign" />;
+        return actions.reassign && <Button key={a} kind={a === 'giveDriver' && !inSheet ? 'primary' : 'outline'} icon={UserCog} label={task.needs_driver ? t('office.home.giveDriver') : t('office.task.reassign')} onPress={from(() => router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } }))} disabled={busy !== null} style={style} testID="task-reassign" compact />;
       case 'time':
-        return extras.time && <Button key={a} kind="outline" icon={Clock} label={t('office.task.changeTime')} onPress={from(() => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } }))} disabled={busy !== null} style={style} testID="task-change-time" />;
+        return extras.time && <Button key={a} kind="outline" icon={Clock} label={t('office.task.changeTime')} onPress={from(() => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } }))} disabled={busy !== null} style={style} testID="task-change-time" compact />;
       case 'stops':
-        return extras.stops && <Button key={a} kind="outline" label={t('office.task.changeStops')} onPress={from(() => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } }))} disabled={busy !== null} style={style} testID="task-change-stops" />;
+        return extras.stops && <Button key={a} kind="outline" label={t('office.task.changeStops')} onPress={from(() => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } }))} disabled={busy !== null} style={style} testID="task-change-stops" compact />;
       case 'swap':
-        return extras.swap && <Button key={a} kind="outline" label={t('office.task.swapVehicle')} onPress={from(() => router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } }))} disabled={busy !== null} style={style} testID="task-swap" />;
+        return extras.swap && <Button key={a} kind="outline" label={t('office.task.swapVehicle')} onPress={from(() => router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } }))} disabled={busy !== null} style={style} testID="task-swap" compact />;
       case 'reopen':
-        return extras.reopen && <Button key={a} kind="outline" label={t('office.task.reopen')} onPress={from(() => setReopening(true))} busy={busy === 'reopen'} disabled={busy !== null} style={style} testID="task-reopen" />;
+        return extras.reopen && <Button key={a} kind="outline" label={t('office.task.reopen')} onPress={from(() => setReopening(true))} busy={busy === 'reopen'} disabled={busy !== null} style={style} testID="task-reopen" compact />;
       case 'cancel':
-        return actions.cancel && <Button key={a} kind="danger-text" label={t('office.task.cancel')} onPress={from(() => setCancelling(true))} busy={busy === 'cancel'} disabled={busy !== null} style={[style, styles.cancelBtn]} testID="task-cancel" />;
+        return actions.cancel && <Button key={a} kind="danger-text" label={t('office.task.cancel')} onPress={from(() => setCancelling(true))} busy={busy === 'cancel'} disabled={busy !== null} style={[style, styles.cancelBtn]} testID="task-cancel" compact />;
       case 'route':
-        return <Button key={a} kind="outline" label={t('office.history.showDrivenRoute')} onPress={from(() => router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } }))} style={style} testID="task-route" />;
+        return <Button key={a} kind="outline" label={t('office.history.showDrivenRoute')} onPress={from(() => router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } }))} style={style} testID="task-route" compact />;
       default:
         return null;
     }

@@ -2,7 +2,8 @@
 // bar): the ONE sticky bar at the bottom of a stack screen. White, a line on top, above the safe area: the outlined second
 // action on the left (Back, Decline, Save as waiting), the ONE primary button (amber) filling the rest, and ⋯ More for the
 // actions that have no room; the reason the primary is disabled stays under it (the disabled rule), and anything else the
-// screen needs (a note) under that. The primary button is the app's Button: its own spinner, disabled while busy, so a
+// screen needs (a note) under that. The buttons are the app's Button, compact (56 high, 17 pt words: a Sinhala label fits
+// half the width in two lines): its own spinner, disabled while busy, so a
 // press is never sent twice. While the screen is in front the snackbar sits above the bar (Hotfix O2-H2).
 // `children` alone (no primary) stacks them as the old sticky actions did.
 
@@ -68,12 +69,12 @@ export function BottomActionBar({ primary, secondary, more, reason, reasonTestID
         <View style={styles.row}>
           {secondary ? (
             <Button kind={secondary.danger ? 'danger-text' : 'outline'} label={secondary.label} icon={secondary.icon} onPress={secondary.onPress}
-              disabled={secondary.disabled || primary?.busy} busy={secondary.busy} testID={secondary.testID}
+              disabled={secondary.disabled || primary?.busy} busy={secondary.busy} testID={secondary.testID} compact
               style={[styles.btn, styles.secondary, secondary.danger && styles.danger, !primary && { flex: 1 }]} />
           ) : null}
           {primary ? (
             <Button label={primary.label} icon={primary.busy ? undefined : primary.icon} onPress={primary.onPress} disabled={primary.disabled || secondary?.busy}
-              busy={primary.busy} testID={primary.testID} style={[styles.btn, { flex: 1 }]} />
+              busy={primary.busy} testID={primary.testID} style={[styles.btn, { flex: 1 }]} compact />
           ) : null}
           {more ? (
             <Pressable accessibilityRole="button" accessibilityLabel={more.label} onPress={more.onPress} testID={more.testID ?? 'bar-more'}
