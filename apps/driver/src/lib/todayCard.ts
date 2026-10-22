@@ -132,6 +132,50 @@ export function stepperRows(task: StepOf, expanded = false): { rows: StepRow[]; 
   return { rows, hidden, total: stops.length };
 }
 
+/**
+ * A row of the card's stepper as the one route stepper draws it (components/patterns/RouteStepper.tsx StepperRow, compact,
+ * the time on the right): S / the stop's number / B, the place with "· pickup" / "· drop" (B "Back at base"), the plan's
+ * time, the deadline "by 11:00" as the row's amber chip while the stop is still ahead, the stops behind the driver
+ * `passed`, the one being driven to `current`, and what a screen reader says for the row.
+ */
+export interface TodayStep {
+  key: string;
+  mark: string;
+  kind: 'start' | 'stop' | 'back';
+  state: 'passed' | 'current' | 'todo';
+  title: string;
+  time?: string;
+  chip: { text: string; tone: 'amber' } | null;
+  accessibilityLabel: string;
+}
+
+/**
+ * The card's stepper rows in the driver's words (stepperRows, then the words). `showAllAfter`: the row "Show all N stops"
+ * goes under (the last stop shown, before Back at base), or null when every stop is shown; `google`: the Google credit
+ * goes under the list.
+ */
+export function todaySteps(t: Translate, task: StepOf, expanded = false): { steps: TodayStep[]; showAllAfter: number | null; total: number; google: boolean } {
+  const { rows, hidden, total } = stepperRows(task, expanded);
+  const deadline = new Map(task.task_stops.map((s) => [s.id, s.arrive_by]));
+  const typeWord: Record<'pickup' | 'drop', string> = { pickup: t('todayCard.pickup'), drop: t('todayCard.drop') };
+  const lastStop = rows.reduce((at, row, i) => (row.kind !== 'base' ? i : at), -1);
+  const steps = rows.map((row): TodayStep => {
+    const title = row.kind === 'base' ? t('todayCard.backAtBase') : `${row.name}${row.type ? ` · ${typeWord[row.type]}` : ''}`;
+    const by = row.stopId ? deadline.get(row.stopId) : null;
+    return {
+      key: row.key,
+      mark: row.mark,
+      kind: row.kind === 'base' ? 'back' : row.kind,
+      state: row.passed ? 'passed' : row.current ? 'current' : 'todo',
+      title,
+      time: row.time ?? undefined,
+      chip: by && !row.passed ? { text: t('preview.arriveBy', { time: colomboTime(by) }), tone: 'amber' } : null,
+      accessibilityLabel: [row.kind === 'start' ? t('stop.start') : null, title, row.time].filter(Boolean).join(', '),
+    };
+  });
+  return { steps, showAllAfter: hidden > 0 && lastStop >= 0 ? lastStop : null, total, google: rows.some((row) => row.google) };
+}
+
 // --- People and km --------------------------------------------------------------------------------------------------
 
 /** "3 people", "1 person"; null for none. */

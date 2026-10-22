@@ -31,6 +31,7 @@ import {
   sheetStats,
   stepperRows,
   stopPosition,
+  todaySteps,
   tripKmText,
 } from '../src/lib/todayCard';
 import { colomboTime } from '../src/lib/time';
@@ -131,6 +132,27 @@ console.log('\nThe stepper (stepperRows)');
   check(backAtBaseTime(null) === null && backAtBaseTime({ ends_at: 'x' }) === null, 'no plan: no back-at-base time');
 }
 
+console.log('\nThe stepper on the one route stepper (todaySteps → components/patterns/RouteStepper.tsx)');
+{
+  const { steps, showAllAfter, total, google } = todaySteps(en, task());
+  check(same(steps.map((s) => `${s.mark}:${s.kind}:${s.title}`), ['S:start:Head office · pickup', '2:stop:Kurunegala site · drop', '3:stop:Kandy depot', 'B:back:Back at base']),
+    'S, the stops by number (pickup / drop after the name, a visit says nothing), B "Back at base"', steps.map((s) => `${s.mark}:${s.kind}:${s.title}`));
+  check(same(steps.map((s) => s.time), stepperRows(task()).rows.map((r) => r.time ?? undefined)), 'the plan\'s time on each row, as stepperRows has it');
+  check(same(steps.map((s) => s.chip), [null, { text: `by ${colomboTime(iso(NOW + 190 * MIN))}`, tone: 'amber' }, null, null]), 'a stop\'s deadline: "by HH:MM", the row\'s amber chip', steps.map((s) => s.chip));
+  check(steps[0].accessibilityLabel === `Start · passengers get in here, Head office · pickup, ${colomboTime(iso(NOW + 25 * MIN))}` && steps[3].accessibilityLabel === `Back at base, ${colomboTime(iso(NOW + 380 * MIN))}`, 'what a screen reader says for a row (as before)', steps.map((s) => s.accessibilityLabel));
+  check(showAllAfter === null && total === 3 && google === false && steps.every((s) => s.state === 'todo'), 'three stops: all shown, no Google credit, nothing behind the driver yet');
+  const running = task({ status: 'in_progress', task_stops: [{ ...task().task_stops[0], status: 'done' }, { ...task().task_stops[1], status: 'skipped' }, ...task().task_stops.slice(2)] });
+  const r = todaySteps(en, running).steps;
+  check(same(r.map((s) => s.state), ['passed', 'passed', 'current', 'todo']) && r[1].chip === null, 'under way: the stops behind the driver passed (no deadline chip), the one driven to current', r.map((s) => s.state));
+  const many = task({ task_stops: Array.from({ length: 7 }, (_, i) => stop({ id: `s${i}`, seq: i + 1, place_name: `P${i}`, google_place_id: i === 5 ? 'g' : null })) });
+  const four = todaySteps(en, many);
+  check(four.steps.length === 1 + 4 + 1 && four.showAllAfter === 4 && four.total === 7 && four.steps[4].mark === '4' && four.steps[5].mark === 'B', '"Show all 7 stops" under the fourth stop, before Back at base', { n: four.steps.length, after: four.showAllAfter });
+  const all = todaySteps(en, many, true);
+  check(all.steps.length === 1 + 7 + 1 && all.showAllAfter === null && all.google, 'expanded: every stop, no link; a Google place: the credit');
+  const si3 = todaySteps(si, task()).steps;
+  check(si3[3].title === si('todayCard.backAtBase') && si3[0].title === `Head office · ${si('todayCard.pickup')}` && si3[1].chip?.text === si('preview.arriveBy', { time: colomboTime(iso(NOW + 190 * MIN)) }), 'in Sinhala: the words, the place as written, Latin digits');
+}
+
 console.log('\nPeople, km, the rows');
 {
   check(peopleWords(en, 3) === '3 people' && peopleWords(en, 1) === '1 person' && peopleWords(en, 0) === null && peopleWords(en, null) === null, '"3 people", "1 person", none');
@@ -189,6 +211,11 @@ console.log('\nToday keeps every action (read as text)');
   check(has(duty, /pathname: '\/vehicle-check', params: \{ vehicleId: held\.id, how: heldHow\(held\.id\) \}/) && has(duty, /t\('todayCard\.checkNeeded'\)/) && has(duty, /todayCard\.checked/), 'the vehicle check: Check needed opens it; ✓ Checked');
   check(has(duty, /t\('duty\.finishTaskFirst'\)/) && has(duty, /t\('todayCard\.since', \{ time: colomboTime\(dutySince\) \}\)/) && has(duty, /t\('duty\.officeCanSee'\)/), '"since 08:12 · Office can see you" and "Finish the task first."');
   check(has(rows, /pathname: '\/task\/\[id\]', params: \{ id: task\.id \}/) && has(rows, /<ChangedTag \/>/) && has(rows, /<GoogleCredit/) && has(rows, /showDate &&/), 'the rows: open the task, Changed, the Google credit, the date on Coming up');
+  // One stepper in the app (Round 4–7 unify): the card's stops are drawn by the route stepper, never by a stepper of its own.
+  check(has(today, /<NextStops task=\{next\} \/>/) && has(today, /todaySteps\(t, task, expanded\)/) && has(today, /<RouteStepper rows=\{rows\} timeSide="right" compact framed=\{false\} testID="stop-stepper" \/>/)
+    && has(today, /onPress=\{\(\) => setExpanded\(true\)\}[^\n]*testID="stepper-show-all"/) && has(today, /<GoogleCredit show=\{google\} \/>/), 'Today\'s stops on the one route stepper (compact, the time on the right), Show all N stops, the Google credit');
+  const stopStepper = readdirSync(src, { recursive: true }).map(String).filter((f) => /\.tsx?$/.test(f) && /\bStopStepper\b/.test(code(f)));
+  check(stopStepper.length === 0, 'StopStepper is gone (no file draws or names it)', stopStepper);
 }
 
 console.log('\nThe running task keeps every function (read as text)');

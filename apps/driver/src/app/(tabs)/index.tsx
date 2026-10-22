@@ -29,14 +29,15 @@
 //   - the notices under the tiles, as before (offline, the vehicle taken, the duty ended, the tracking notice, the
 //     office's question, the points waiting);
 //   - "Next task" with its chip (lib/todayCard.ts leaveChip: Leave in 25 min, Leave now, 12 min late, Tomorrow), the card:
-//     the big leave time "leave from <start>", the title, the stops as a stepper (components/task.tsx StopStepper), "3
+//     the big leave time "leave from <start>", the title, the stops on the one route stepper (NextStops below:
+//     components/patterns/RouteStepper.tsx, compact, the time on the right, fed by lib/todayCard.ts todaySteps), "3
 //     people · 197 km" with the call link (and ⋯: every call and WhatsApp in a sheet), the riders, the task's vehicle when
 //     it is not the one held, Accept / Start task / Running late / Can't do this task as before;
 //   - "Later today · N" and "Coming up" as list rows (components/TaskRows.tsx), "All today's tasks".
 
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronRight, Ellipsis, MessageCircle, Phone, Play, Road, Route, User } from '@/components/icons';
+import { Check, ChevronDown, ChevronRight, Ellipsis, MessageCircle, Phone, Play, Road, Route, User } from '@/components/icons';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,8 +47,10 @@ import { DeclineSheet } from '@/components/DeclineSheet';
 import { DutyNotices, DutyTiles } from '@/components/DutyCard';
 import { RunningLate } from '@/components/LateSheet';
 import { CallButtons } from '@/components/CallButtons';
+import { GoogleCredit } from '@/components/GoogleCredit';
+import { RouteStepper, type StepperRow } from '@/components/patterns/RouteStepper';
 import { Sheet } from '@/components/patterns/Sheet';
-import { ChangedTag, leaveTime, StopStepper, useDateLabel, useNow, usePeopleLine } from '@/components/task';
+import { ChangedTag, leaveTime, useDateLabel, useNow, usePeopleLine } from '@/components/task';
 import { Thumb, useVehicleThumbs } from '@/components/Photos';
 import { PlateText } from '@/components/PlateText';
 import { plateOf } from '@/components/SwapCard';
@@ -66,7 +69,7 @@ import { stopProgress } from '@/lib/stopProgress';
 import { nextAbout } from '@/lib/stopProgressWords';
 import { hasChanges, vehicleLine, vehicleWords } from '@/lib/taskPreview';
 import { colomboHour, colomboTime } from '@/lib/time';
-import { type Chip, greetingKey, leaveChip, leaveFromWords, peopleWords, tripKmText } from '@/lib/todayCard';
+import { type Chip, greetingKey, leaveChip, leaveFromWords, peopleWords, todaySteps, tripKmText } from '@/lib/todayCard';
 import { isSelfTrip } from '@/lib/trips';
 import type { TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
@@ -209,7 +212,7 @@ export default function TodayScreen() {
                     {nextChanged && <ChangedTag />}
                   </View>
                 </Pressable>
-                <StopStepper task={next} />
+                <NextStops task={next} />
                 {nextEta && (
                   <Txt variant="strong" size={15} color={colors.blue} testID="today-next-about">{t('today.nextStopAbout', { stop: nextEta.place, time: nextEta.time })}</Txt>
                 )}
@@ -340,6 +343,34 @@ function SectionHead({ title, chip }: { title: string; chip: Chip | null }) {
   );
 }
 
+/**
+ * Round 4–7, item 12 (mockup 5): the Next task card's stops on the one route stepper, compact with the time on the right: S
+ * where the trip starts, each stop by its number, B "Back at base"; one line each ("Fame Global Solutions · pickup"), a
+ * stop's deadline ("by 11:00", amber) and the plan's time on the right. Under way, the stops behind the driver are ticked
+ * and the one being driven to is marked. Up to four stops, then "Show all N stops" opens the rest in place (Hotfix 2). The
+ * Google credit under the list when a stop is a Google place.
+ */
+function NextStops({ task }: { task: TaskWithStops }) {
+  const { t } = useApp();
+  const [expanded, setExpanded] = useState(false);
+  const { steps, showAllAfter, total, google } = todaySteps(t, task, expanded);
+  const rows: StepperRow[] = steps.map((step, i) => ({
+    ...step,
+    after: i === showAllAfter ? (
+      <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} style={styles.showAll} testID="stepper-show-all">
+        <Txt variant="strong" size={14} color={colors.blue} style={{ flexShrink: 1 }}>{t('preview.showAll', { n: total })}</Txt>
+        <ChevronDown size={16} color={colors.blue} strokeWidth={2.6} />
+      </Pressable>
+    ) : undefined,
+  }));
+  return (
+    <View>
+      <RouteStepper rows={rows} timeSide="right" compact framed={false} testID="stop-stepper" />
+      <GoogleCredit show={google} />
+    </View>
+  );
+}
+
 /** One fact of the card's line: an icon and its words ("3 people", "197 km"). */
 function Fact({ icon, text, mono = false }: { icon: ReactNode; text: string; mono?: boolean }) {
   return (
@@ -364,6 +395,7 @@ const styles = StyleSheet.create({
   more: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   vehicleLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   decline: { minHeight: 44, marginTop: -6 },
+  showAll: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
   askBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.blue, borderRadius: 16, paddingHorizontal: 14,
     paddingVertical: 12, minHeight: 64,

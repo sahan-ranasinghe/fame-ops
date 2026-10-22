@@ -4,9 +4,11 @@
 //   leave time, each stop with its planned arrival, ONE meta line (the stay, the leave time, the arrive-by deadline) and its
 //   chip (on time / N min late against the deadline), each leg as the short line under the stop before it ("99 km ·
 //   2 h 23 min"; via the expressway kept there), and Back at base (B) at the end time;
-// - a request's own rows (approveLogic.ts tripView: no timeline yet, the stops as asked).
-// The explanations (where the leave time came from, each leg's source, the rush-hour factor) are not in the rows: they go to
-// the ⓘ sheet (planNotes) so nothing the plan says is lost.
+// - a request's own rows (approveLogic.ts tripView: no timeline yet, the stops as asked);
+// - the plan screen (task/[id]/plan.tsx, Round 4–7 unify: one stepper in the app): the same timeline in the screen's own
+//   words, in full (timelineRows): each stop's times as a sentence, each leg with its source; that screen has no ⓘ.
+// The explanations (where the leave time came from, each leg's source, the rush-hour factor) are not in planRows' rows: they
+// go to the ⓘ sheet (planNotes) so nothing the plan says is lost.
 
 import type { TimelineItem } from './types';
 
@@ -21,8 +23,11 @@ export interface PlanRow {
   kind: 'start' | 'stop' | 'back';
   time?: string;
   title: string;
+  titleLines?: 1 | 2;
   chip?: { text: string; tone: Tone } | null;
   meta?: PlanMeta[];
+  /** A sentence under the row, wrapped (the plan screen's times in words). */
+  words?: string;
   leg?: string;
 }
 
@@ -95,6 +100,58 @@ export function planNotes(items: readonly TimelineItem[], leaveLine: string | nu
   if (leaveLine) out.push(leaveLine);
   for (const x of items) if (x.kind === 'leg') out.push(legLine(x));
   return out;
+}
+
+type StopItem = Extract<TimelineItem, { kind: 'stop' }>;
+type LegItem = Extract<TimelineItem, { kind: 'leg' }>;
+
+/** The plan screen's words (task/[id]/plan.tsx: office/trip/words.ts stopTimesT / legTextT and its keys). */
+export interface TimelineWords {
+  /** "Leave by". */
+  leaveBy: string;
+  /** "Arrive 10:40 · 1 h · Leave 11:40" (the start: "Leave 08:35 · Passengers get in here"). */
+  stopTimes: (x: StopItem) => string;
+  arriveBy: (time: string) => string;
+  onTime: string;
+  late: (min: number) => string;
+  /** The leg in full: "From Head office · 42 km · 1 h 5 min · Google traffic" (· via the expressway). */
+  leg: (x: LegItem) => string;
+}
+
+/**
+ * A task's plan as the plan screen shows it, on the route stepper: the leave time (S, "Leave by"), each stop by its number
+ * with its planned arrival on the left, the server's label ("Stop 2 · Drop · Kurunegala site"), the on time / N min late
+ * chip against its deadline, its times in words under it ("Arrive 10:40 · 1 h · Leave 11:40 · Arrive by 11:00"), and each
+ * leg in full under the row before it (from the start under S, the drive back under the last stop): every word the screen
+ * said before the stepper, nothing new. The server's timeline opens with the leave time (tasks.ts planTimeline).
+ */
+export function timelineRows(items: readonly TimelineItem[], w: TimelineWords): PlanRow[] {
+  const rows: PlanRow[] = [];
+  for (const x of items) {
+    if (x.kind === 'leave') {
+      rows.push({ key: 'leave', mark: 'S', kind: 'start', time: x.at, title: w.leaveBy });
+      continue;
+    }
+    if (x.kind === 'leg') {
+      const text = w.leg(x);
+      const last = rows[rows.length - 1];
+      if (!last) rows.push({ key: 'leave', mark: 'S', kind: 'start', title: w.leaveBy, leg: text });
+      else last.leg = last.leg ? `${last.leg}\n${text}` : text;
+      continue;
+    }
+    const late = x.late_min != null && x.late_min > 0;
+    rows.push({
+      key: `s${x.n}`,
+      mark: String(x.n),
+      kind: 'stop',
+      time: x.planned_arrive,
+      title: x.label || x.place,
+      titleLines: 2,
+      chip: x.arrive_by ? (late ? { text: w.late(x.late_min ?? 0), tone: 'amber' } : { text: w.onTime, tone: 'green' }) : null,
+      words: [w.stopTimes(x), x.arrive_by ? w.arriveBy(x.arrive_by) : ''].filter(Boolean).join(' · '),
+    });
+  }
+  return rows;
 }
 
 /** A request's rows as approveLogic's tripView gives them (S / numbered / B, the place, its parts in words). */

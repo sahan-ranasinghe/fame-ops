@@ -23,7 +23,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { lateMinutes, requestBanner, taskActions, taskBanner } from '../src/office/detailBanner';
-import { legShort, planNotes, planRows, type PlanWords, requestRows } from '../src/office/stepperRows';
+import { legShort, planNotes, planRows, type PlanWords, requestRows, timelineRows } from '../src/office/stepperRows';
 import type { TimelineItem } from '../src/office/types';
 
 const src = join(__dirname, '..', 'src');
@@ -109,6 +109,47 @@ console.log('\nThe plan on the route stepper (office/stepperRows.ts)');
   check(notes.length === 4 && notes[0] === 'planned from the arrive-by times' && notes[1] === '99 km · google', 'ⓘ: the leave note and every leg in full (their source), nothing dropped');
   const req = requestRows([{ kind: 'start', mark: 'S', place: 'Office', parts: ['leave 09:00'] }, { kind: 'stop', mark: '1', place: 'Site', parts: [] }, { kind: 'back', mark: 'B', place: 'Back at Office', parts: ['back by 18:00'] }]);
   check(same(req.map((r) => `${r.mark}:${r.title}:${r.meta?.[0]?.text ?? ''}`), ['S:Office:leave 09:00', '1:Site:', 'B:Back at Office:back by 18:00']), 'a request with no plan yet: its own rows on the stepper');
+}
+
+console.log('\nThe plan screen on the route stepper (office/stepperRows.ts timelineRows; task/[id]/plan.tsx)');
+{
+  const words = {
+    leaveBy: 'Leave by',
+    stopTimes: (x: Extract<TimelineItem, { kind: 'stop' }>) => (x.is_start ? `Leave ${x.planned_leave} · Passengers get in here` : `Arrive ${x.planned_arrive} · ${x.dwell_min} min · Leave ${x.planned_leave}`),
+    arriveBy: (time: string) => `Arrive by ${time}`,
+    onTime: 'On time',
+    late: (min: number) => `${min} min late`,
+    leg: (x: Extract<TimelineItem, { kind: 'leg' }>) => [x.from_n === 'start' ? 'From Head office' : x.to_n === 'base' ? 'Back to the base' : '', `${x.km} km`, `${x.minutes} min`, x.source, x.via_expressway ? 'via the expressway' : ''].filter(Boolean).join(' · '),
+  };
+  const items: TimelineItem[] = [
+    { kind: 'leave', at: '08:16', source: 'plan' },
+    { kind: 'leg', from_n: 'start', to_n: 1, km: 99, minutes: 143, source: 'google' },
+    { kind: 'stop', n: 1, label: 'Stop 1 · Pickup · Wariyapola', place: 'Wariyapola', planned_arrive: '10:45', planned_leave: '11:45', arrive_by: '11:00', late_min: 0, dwell_min: 60 },
+    { kind: 'leg', from_n: 1, to_n: 2, km: 20, minutes: 30, source: 'ors', via_expressway: true },
+    { kind: 'stop', n: 2, label: '', place: 'Kurunegala', planned_arrive: '12:15', planned_leave: '12:45', arrive_by: '12:00', late_min: 15, dwell_min: 30 },
+    { kind: 'stop', n: 3, label: 'Stop 3 · Visit · Kandy', place: 'Kandy', planned_arrive: '14:00', planned_leave: '14:10', dwell_min: 10 },
+    { kind: 'leg', from_n: 3, to_n: 'base', km: 98, minutes: 159, source: 'estimate' },
+  ];
+  const rows = timelineRows(items, words);
+  check(same(rows.map((r) => `${r.mark}:${r.kind}:${r.time}:${r.title}`), ['S:start:08:16:Leave by', '1:stop:10:45:Stop 1 · Pickup · Wariyapola', '2:stop:12:15:Kurunegala', '3:stop:14:00:Stop 3 · Visit · Kandy']),
+    'S at the leave time ("Leave by"), each stop by its number with its planned arrival and its label (else the place)', rows.map((r) => `${r.mark}:${r.kind}:${r.time}:${r.title}`));
+  check(rows[0].leg === 'From Head office · 99 km · 143 min · google' && rows[1].leg === '20 km · 30 min · ors · via the expressway' && rows[2].leg === undefined && rows[3].leg === 'Back to the base · 98 km · 159 min · estimate',
+    'each leg in full under the row before it: from the start under S, its source, via the expressway, the drive back under the last stop', rows.map((r) => r.leg));
+  check(rows[1].words === 'Arrive 10:45 · 60 min · Leave 11:45 · Arrive by 11:00' && rows[3].words === 'Arrive 14:00 · 10 min · Leave 14:10', 'a stop\'s times in words under it, its arrive-by after them', rows.map((r) => r.words));
+  check(same(rows.map((r) => r.chip ?? null), [null, { text: 'On time', tone: 'green' }, { text: '15 min late', tone: 'amber' }, null]), 'the chip against the deadline: on time green, late amber; none without a deadline');
+  check(rows.slice(1).every((r) => r.titleLines === 2) && !rows.some((r) => r.meta), 'the label on up to two lines; no meta line of its own (the words say it all)');
+  const start = timelineRows([{ kind: 'leave', at: '09:29', source: 'plan' }, { kind: 'stop', n: 1, label: 'Stop 1 · Pickup · Office', place: 'Office', planned_arrive: '09:29', planned_leave: '09:29', dwell_min: 0, is_start: true }], words);
+  check(same(start.map((r) => `${r.mark}:${r.title}:${r.words ?? ''}`), ['S:Leave by:', '1:Stop 1 · Pickup · Office:Leave 09:29 · Passengers get in here']), 'a start stop keeps its own row and words under "Leave by" (as the screen had both)');
+  const two = timelineRows([{ kind: 'leave', at: '09:00', source: 'plan' }, { kind: 'leg', from_n: 'start', to_n: 1, km: 1, minutes: 2, source: 'ors' }, { kind: 'leg', from_n: 'start', to_n: 2, km: 3, minutes: 4, source: 'ors' }], words);
+  check(two.length === 1 && two[0].leg === 'From Head office · 1 km · 2 min · ors\nFrom Head office · 3 km · 4 min · ors', 'two legs in a row (a stop with no plan): both kept, one per line');
+  const plan = code('app/office/task/[id]/plan.tsx');
+  check(/<PlanStepper\s+rows=\{timelineRows\(items, \{/.test(plan) && /framed=\{false\}\s+testID="plan-timeline"/.test(plan) && !/items\.map\(/.test(plan) && !/<Pill\b/.test(plan),
+    'the plan screen draws its timeline on the one route stepper (PlanStepper), no timeline of its own');
+  check(plan.includes("leaveBy: t('office.request.leaveBy')") && plan.includes('stopTimes: (x) => stopTimesT(t, x)') && plan.includes("arriveBy: (time) => t('office.request.arriveBy', { time })")
+    && plan.includes("onTime: t('office.trip.onTime')") && plan.includes("late: (min) => t('office.task.minLate', { min })") && plan.includes("legTextT(t, x, task?.start_place), x.via_expressway ? t('office.trip.viaExpressway') : ''")
+    && plan.includes("t('office.trip.endsAtTime', { time: totals.ends })") && plan.includes('sentenceText(t, w)'), 'every word of the plan screen kept: Leave by, the stops\' times, arrive by, on time / late, each leg with its source, the totals, the warnings');
+  const stepper = code('components/office/PlanStepper.tsx');
+  check(/lines: words \? <Txt variant="muted" size=\{15\}/.test(stepper), 'a row\'s sentence wraps under it (the stepper\'s lines)');
 }
 
 console.log('\nThe banners and the task page\'s bar (office/detailBanner.ts)');
