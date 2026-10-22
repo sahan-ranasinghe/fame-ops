@@ -10,6 +10,7 @@ import type { RetentionDays, RetentionPreview, RetentionRun } from "../../data/t
 import type { Me, Transport, WatchEvent } from "../../transport/types";
 import { ToastProvider } from "../../ui/Toast";
 import DataRetention from "./DataRetention";
+import SettingsHome from "./SettingsHome";
 import { daysInput, MINIMUMS_FALLBACK, minimumOf, nightlyTime, periodsOf, previewLines, RETENTION_DEFAULTS, RETENTION_ROWS, removeLabel, withPeriod } from "./retentionLogic";
 
 const admin: Me = {
@@ -188,5 +189,29 @@ describe("Settings → Data retention", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(row("location_days").getByText("183 days")).toBeTruthy();
     expect(screen.queryByTestId("retention-run")).toBeNull();
+  });
+});
+
+describe("Settings home: the Data retention row (users only), every other row kept", () => {
+  const links = () => screen.getAllByRole("link").map((a) => [a.textContent?.replace(/(Data retention|Users|Fleet|App errors|Activity log|My profile|Import sites|Notifications).*/, "$1"), a.getAttribute("href")]);
+  function home(me: Me) {
+    const t = new Fake();
+    render(
+      <FleetProvider value={{ store: new FleetStore(t), transport: t, me, noConnector: false }}>
+        <MemoryRouter><SettingsHome /></MemoryRouter>
+      </FleetProvider>,
+    );
+  }
+  it("with users: Data retention beside My profile, Users, Fleet, App errors, Activity log and Notifications", () => {
+    home(admin);
+    expect(links()).toEqual([
+      ["My profile", "/settings/profile"], ["Users", "/settings/users"], ["Fleet", "/settings/fleet"], ["App errors", "/settings/app-errors"],
+      ["Activity log", "/settings/activity"], ["Data retention", "/settings/retention"], ["Notifications", "/settings/notifications"],
+    ]);
+    expect(screen.getByText(/How long notifications, the activity log, locations/)).toBeTruthy();
+  });
+  it("without users: no Data retention", () => {
+    home({ ...admin, permissions: ["view", "approve"], tools: [] });
+    expect(links().map(([, href]) => href)).toEqual(["/settings/profile", "/settings/notifications"]);
   });
 });

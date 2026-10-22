@@ -11,6 +11,8 @@
 // An empty box shows suggestions from search_places {suggest}, nearest to the phone when its position is already allowed
 // (no prompt), else to the base place. Round 1 item 6: at most 5 rows, our places (offices first) then 3 recent, with a
 // building or clock icon and no badge, no towns, "More places" for the rest (components/patterns/WhereSuggestions.tsx).
+// Round 4–7 (item 10): the server's groups under small headers (Saved, Recent: the person's own) and, for someone else's
+// request (`forRequest`), "<Name>'s recent" (search_places for_request).
 
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
@@ -20,7 +22,7 @@ import { ChevronRight, LocateFixed, Search, X } from '@/components/icons';
 import { ListError, SkeletonRows } from '@/components/patterns/ListState';
 import { WhereSuggestions } from '@/components/patterns/WhereSuggestions';
 import { Button, Txt } from '@/components/ui';
-import { badgeKey, splitSuggestions, whereRows } from '@/lib/placeSuggestLogic';
+import { badgeKey, groupedWhere } from '@/lib/placeSuggestLogic';
 import { POSITION_TIMEOUT_MS, SUGGEST_TIMEOUT_MS, TimeoutError, withTimeout } from '@/lib/patterns/listLogic';
 import { useOffice } from '@/office/state';
 import { PinAdjust } from './PinAdjust';
@@ -32,15 +34,14 @@ import { colors, webInnerInput } from '@/theme';
 
 export type { Picked };
 
-/** The empty box's rows from search_places {suggest}: our places, the recent ones (towns left out). */
+/** The empty box's rows from search_places {suggest}: Saved, Recent, the trip's person's recent (towns left out). */
 function whereFromAnswer(results: SearchResult[]) {
-  const { ours, recent } = splitSuggestions(results);
-  return whereRows(ours, recent, (r) => r.name);
+  return groupedWhere(results, (r) => r.name);
 }
 
 type Suggest = { answer: SearchAnswer | null; busy: boolean; failed: boolean };
 
-export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = false, autoFocus = false, editing = false }: {
+export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = false, autoFocus = false, editing = false, forRequest }: {
   value: string;
   placeholder: string;
   /** The person typed (the pick, if any, is gone). */
@@ -51,6 +52,8 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
   autoFocus?: boolean;
   /** Opened with Change: the previous text is selected, so typing replaces it (Hotfix O2-H1). */
   editing?: boolean;
+  /** Round 4–7 (item 10): someone else's request is being edited: an empty box adds the requester's recent places. */
+  forRequest?: string;
 }) {
   const { t } = useApp();
   const { api, me } = useOffice();
@@ -130,13 +133,13 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
         near = null;
       }
       try {
-        const a = await withTimeout(api.call<SearchAnswer>('search_places', suggestArgs(near)), SUGGEST_TIMEOUT_MS);
+        const a = await withTimeout(api.call<SearchAnswer>('search_places', suggestArgs(near, forRequest)), SUGGEST_TIMEOUT_MS);
         if (n === suggestSeq.current) setSuggest({ answer: a, busy: false, failed: false });
       } catch {
         if (n === suggestSeq.current) setSuggest({ answer: null, busy: false, failed: true });
       }
     })();
-  }, [wantSuggest, api, suggestTry]);
+  }, [wantSuggest, api, suggestTry, forRequest]);
 
   async function pick(r: SearchResult) {
     typed.current = false;

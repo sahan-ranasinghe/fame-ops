@@ -52,8 +52,9 @@ export const pinText = (p: { lat: number; lng: number }) => `${p.lat.toFixed(6)}
 export const inLanka = (lat: number, lng: number) => lat >= 5 && lat <= 10 && lng >= 79 && lng <= 82;
 
 /** Hotfix O2-H1: search_places' input for an empty box: suggestions, nearest to the phone when its position is known. */
-export function suggestArgs(near: { lat: number; lng: number } | null): Record<string, unknown> {
-  return { suggest: true, ...(near ? { near: { lat: near.lat, lng: near.lng } } : {}) };
+export function suggestArgs(near: { lat: number; lng: number } | null, forRequest?: string): Record<string, unknown> {
+  // Round 4–7 (item 10): someone else's request being edited: their recent places come too ("Anoja's recent").
+  return { suggest: true, ...(near ? { near: { lat: near.lat, lng: near.lng } } : {}), ...(forRequest ? { for_request: forRequest } : {}) };
 }
 
 /** Hotfix O2-H1: what the box shows under the field; never an empty list while a search is pending or failed. */

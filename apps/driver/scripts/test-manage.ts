@@ -5,7 +5,7 @@
 //
 //   npm run test:manage          (from apps/driver)
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -145,6 +145,23 @@ console.log('\nStrings in both languages');
   type Tree = { [k: string]: string | Tree };
   const en = JSON.parse(read('i18n/en.json')) as { office: Tree };
   const si = JSON.parse(read('i18n/si.json')) as { office: Tree };
+  // A screen's strings may wait in a sidecar (src/i18n/parts/*.json) for the lead's merge: read merged in, as the other
+  // suites do (test-trip-close, test-vehicle-check).
+  const merge = (into: Tree, from: Tree): void => {
+    for (const [k, v] of Object.entries(from)) {
+      const cur = into[k];
+      if (v && typeof v === 'object' && cur && typeof cur === 'object') merge(cur, v);
+      else into[k] = v;
+    }
+  };
+  const partsDir = join(SRC, 'i18n', 'parts');
+  if (existsSync(partsDir)) {
+    for (const f of readdirSync(partsDir).filter((x) => x.endsWith('.json')).sort()) {
+      const part = JSON.parse(readFileSync(join(partsDir, f), 'utf8')) as { en?: Tree; si?: Tree };
+      if (part.en) merge(en as unknown as Tree, part.en);
+      if (part.si) merge(si as unknown as Tree, part.si);
+    }
+  }
   const get = (tree: Tree, path: string): string | undefined => {
     let cur: string | Tree | undefined = tree;
     for (const k of path.split('.')) {

@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, View } from 'react-native';
 
-import { Bell, ChartColumn, Clock, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
+import { Bell, ChartColumn, Clock, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, ShieldCheck, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty } from '@/components/patterns/ListState';
@@ -37,6 +37,7 @@ const ITEM: Record<MoreItem, { icon: LucideIcon; label: string; path: string }> 
   people_users: { icon: UserCog, label: 'office.more.officeUsers', path: '/office/people/users' },
   settings: { icon: SlidersHorizontal, label: 'office.more.quickSettings', path: '/office/people/settings' },
   activity: { icon: ClipboardCheck, label: 'office.more.activity', path: '/office/people/activity' },
+  retention: { icon: ShieldCheck, label: 'office.more.retention', path: '/office/people/retention' },
 };
 const SECTIONS: { key: MoreSection; label: string }[] = [
   { key: 'work', label: 'office.more.work' },
@@ -53,7 +54,7 @@ export default function MoreTab() {
   const items = moreFor(me.permissions).filter((key) => key !== 'task_history' || me.tools.includes('list_tasks'));
   // The search at the top of More (docs/phase8-plan.md §16): the rows whose words match, as the person types.
   const [find, setFind] = useState('');
-  const lineOf = (key: MoreItem) => (key === 'people_drivers' ? t('office.more.driversLine') : key === 'people_users' ? t('office.more.officeUsersLine') : key === 'settings' ? t('office.more.quickSettingsLine') : key === 'activity' ? t('office.more.activityLine') : undefined);
+  const lineOf = (key: MoreItem) => (key === 'people_drivers' ? t('office.more.driversLine') : key === 'people_users' ? t('office.more.officeUsersLine') : key === 'settings' ? t('office.more.quickSettingsLine') : key === 'activity' ? t('office.more.activityLine') : key === 'retention' ? t('office.more.retentionLine') : undefined);
   const needle = find.trim().toLowerCase();
   const matches = (key: MoreItem) => !needle || [t(ITEM[key].label), lineOf(key) ?? ''].some((w) => w.toLowerCase().includes(needle));
   const shown = items.filter(matches);

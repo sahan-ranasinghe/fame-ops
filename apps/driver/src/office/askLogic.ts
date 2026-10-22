@@ -216,3 +216,8 @@ export function appendAsks(list: AskAnswers, page: AskAnswers): AskAnswers {
   if (page.total !== undefined) out.total = page.total;
   return out;
 }
+
+/** Round 4–7 (item 10): whose questions the list shows: the person's own, or (approve) everyone's. */
+export type Whose = 'mine' | 'all';
+/** ask_answers' arguments for the list (the site's asksArgs): everyone's only for an approver who chose it. */
+export const asksArgs = (whose: Whose, approver: boolean): Record<string, unknown> => (approver && whose === 'all' ? { all: true } : {});
