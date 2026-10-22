@@ -133,9 +133,10 @@ Components: **new** `components/patterns/StatusBanner.tsx` (app); site `ui/basic
 ### 4.7 StatsRow (Samsara's KPI tiles; Uber Fleet's summary)
 Two to six cells in one card (two a line on a phone, the most used first): a small label (muted, upper case), the value
 (big, mono for numbers), an optional unit / sub-line; a cell that counts a list opens it (R9). The same set and rule on every surface (Office Home's Free now leaves
-out the garage, as the site does). The order (pilot e, R12): both designs (`Desktop · Overview.png`, `Office · Home.png`)
-lead with On the road, Tasks today, Requests to approve, Reminders due (the last two by permission); Free now and In
-garage follow.
+out the garage, as the site does). The cells and their order follow each surface's design (R12): the site's Overview
+(`Desktop · Overview.png`) leads with On the road, Tasks today, Requests to approve, Reminders due (the last two by
+permission), then Free now and In garage; Office Home (`design/office/png/04 Home · Fleet admin.png`) has On the road,
+Free, In garage (its requests are the section right under them). Each count follows the one rule on both.
 Components: **new** `components/patterns/StatsRow.tsx` (app, replacing `StatTiles`, the reports' local `Tile` and the
 driver's stats box in the rollout); site `ui/basics.tsx` `Tile` in a **new** `StatsRow` wrapper.
 
