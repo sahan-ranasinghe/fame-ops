@@ -3286,7 +3286,7 @@
   "where": {
     "morePlaces": "More places",
     "ours": "Our place",
-    "recent": "Used recently",
+    "recent": "Recent",
     "badge": {
       "office": "Office",
       "siteDialog": "Site · Dialog",
@@ -3343,5 +3343,51 @@
     "cardBody": "Check it before you drive.",
     "checkNow": "Check now",
     "startWaits": "Start task waits for the vehicle check."
+  },
+  "fuelCard": {
+    "title": "Trip info",
+    "km": "About {km} km",
+    "litres": "roughly {range} L {fuel} (approx.)",
+    "litresNoType": "roughly {range} L (approx.)",
+    "battery": "check the battery",
+    "fromHistory": "From this vehicle's last fills",
+    "fromDefault": "A rough figure for this kind of vehicle",
+    "question": "Enough fuel?",
+    "fillOnWay": "I'll fill up on the way",
+    "reminderHint": "We'll remind you in 30 min to log the fill.",
+    "reminderTitle": "Fill up on the way?",
+    "reminderBody": "Tap to log fuel.",
+    "fillLine": "Fill up on the way"
+  },
+  "fuelKind": {
+    "label": "Fuel type",
+    "petrol": "Petrol",
+    "diesel": "Diesel",
+    "petrol_92": "Petrol 92",
+    "petrol_95": "Petrol 95",
+    "auto_diesel": "Auto Diesel",
+    "super_diesel": "Super Diesel",
+    "word": {
+      "petrol": "petrol",
+      "diesel": "diesel"
+    }
+  },
+  "logHistory": {
+    "recent": "Recent",
+    "seeAll": "See all",
+    "title": "Odometer and fuel",
+    "fuelTitle": "Fuel history",
+    "all": "All",
+    "empty": "Nothing logged yet.",
+    "emptyFuel": "No fuel logged yet.",
+    "emptyOdometer": "No odometer readings yet.",
+    "failed": "Couldn't load the history.",
+    "noAmount": "{n} fills without an amount",
+    "noAmountOne": "1 fill without an amount"
+  },
+  "pax": {
+    "title": "Passengers",
+    "more": "+{n} more",
+    "call": "Call {name}"
   }
 }

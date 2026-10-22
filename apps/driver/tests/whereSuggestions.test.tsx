@@ -50,7 +50,7 @@ describe('Office mode: the empty box', () => {
     office();
     await waitFor(() => expect(screen.getAllByTestId('where-row')).toHaveLength(5));
     const names = screen.getAllByTestId('where-row').map((r) => r.props.accessibilityLabel as string);
-    expect(names).toEqual(['Head office, Our place', 'Store A, Our place', 'Kandy depot, Used recently', 'Galle site, Used recently', 'Jaffna store, Used recently']);
+    expect(names).toEqual(['Head office, Our place', 'Store A, Our place', 'Kandy depot, Recent', 'Galle site, Recent', 'Jaffna store, Recent']);
     expect(screen.getAllByTestId('where-icon-building')).toHaveLength(2);
     expect(screen.getAllByTestId('where-icon-clock')).toHaveLength(3);
     expect(screen.queryByText('Used before')).toBeNull();
@@ -135,7 +135,7 @@ describe('The driver\'s Start a trip: the empty box', () => {
     expect(screen.getByTestId('suggest-saved')).toBeTruthy();
     expect(screen.getByTestId('suggest-recent')).toBeTruthy();
     expect(screen.getByText('Saved')).toBeTruthy();
-    expect(screen.getByText('Used recently')).toBeTruthy();
+    expect(screen.getByText('Recent')).toBeTruthy();
     expect(screen.getAllByTestId('where-icon-building')).toHaveLength(2);
     expect(screen.getAllByTestId('where-icon-clock')).toHaveLength(2);
     // The phone's own list is not shown beside the server's groups.
