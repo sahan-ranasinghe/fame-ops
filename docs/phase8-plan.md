@@ -972,6 +972,146 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 33. Round 4–7 plan (Sahan, 22 October 2026, branch `phase9-r47` from main `e6057b2`, worktree `~/projects/fame-ops-r47`)
+
+Rounds 4, 5, 6 and 7 are one round: build everything, then test once, review once, deploy once. Each feature has its own
+commits and its own migration file (any one can be reverted alone) and its own switch in Settings → Fleet → Dispatch, on by
+default, read by all four surfaces and the connector, so the office can switch one off live without a deploy:
+`vehicle_check`, `trip_close_prompt`, `fuel_card`, `passengers`, `holder_contact` (migration `20261022120000_round47_switches`:
+`fleet_switch(key)`, no row = on; `get_driver_settings` answers the five; `get_settings` / `update_settings` know them).
+While building: only the fast checks and the feature's own unit / component tests. At the end: one connector suite run (both
+channels), pgTAP, Deno, one CI run, one fresh reviewer for the whole diff. Up to 2 subagents on independent features, each
+in its own git worktree (never a stash), none during CI. All four surfaces (the site, /m/, Office mode, the driver app) and
+Claude; English and Sinhala; an audit table per feature.
+
+### 33.1 Feature 4: the vehicle check and closing a no-app trip
+
+**Industry patterns:** Samsara / Motive's pre-trip inspection (DVIR: one tap for no defects, a defect with a category and a
+photo, each vehicle's latest inspection for the office); Turo / Getaround's check-in photos (front, back, left, right);
+Zipcar / Turo's return (End trip with the odometer and the fuel; a trip nobody ended closes by itself and is flagged).
+
+**Sahan's answers (22 October 2026):** Damage is a sixth category: yes. A self-driver's check asks the odometer (typed; no
+reading the photo for office people): yes. The check starts a no-app trip (On the way) only on the trip's day and from 2 h
+before its planned start; earlier it only records the check. "Trip finished?" at the back-by time, else at `duty_cutoff`
+(21:00): yes. Pre-trip problems notify the people with the issues permission: ONE notification per check (never per
+photo); breakdown and accident urgent, damage and the rest normal. Relaxing the start / end reading checks only for
+"Completed · not confirmed" (a migration): OK. Self-driver fuel without the video: OK.
+
+| Surface | Screen | Today | Round 4–7 |
+|---|---|---|---|
+| Driver app | Start work, Change vehicle (`app/vehicle.tsx`) | The vehicle is taken; back to Today | On to the vehicle check |
+| Driver app | Start task (`startTask`, the task's vehicle) | Takes the task's vehicle | The check first when that vehicle has none today, then the start odometer |
+| Driver app | Which vehicle? on the day (`VehicleConfirm`) | Confirms the vehicle | The check after it |
+| Driver app | Today | — | "Vehicle check" card while the held vehicle has no check today |
+| Driver app | Report form | 1–3 photos, five categories | The pre-trip report: 1–6 photos, + Damage |
+| Office mode, /m/ | My trips | A no-app trip shows "Drives themselves"; it stays Sent forever | Its page: Vehicle check before you set off; Trip finished? Enter the odometer |
+| Office mode, /m/ | A vehicle | Facts, documents | Today's check and the last 7 days |
+| Office mode, /m/ | Issues, a task | — | The Pre-trip tag; the check line; Completed · not confirmed |
+| Website | My trips, the vehicle page, Issues, the task page | As Office mode | The same, the site's own components |
+| Claude | `list_vehicles`, tools | No checks | `check_today`; `vehicle_checks`; `my_trip`, `my_trip_check`, `finish_my_trip` |
+
+- Data (`20261022120100_round4_vehicle_check`): `vehicle_checks` (id made where answered, vehicle, person, task, checked_at,
+  result ok | problem, odometer_km, how clock_in | change | task_start | vehicle_confirm | trip, channel app | office, demo;
+  RLS: a driver inserts and reads their own); `vehicle_reports.check_id` (a pre-trip report; the same person's check of the
+  same vehicle) and the category `damage`; `photos.vehicle_check_id` + `side` (the optional four), kind `vehicle_check`; one
+  notification per problem check (`vehicle.check_urgent` breakdown / accident, `vehicle.check_problem` the rest; the issue it
+  opens is not pushed again). (`20261022120200_round4_trip_close`): `tasks.finish_ask_sent_at`; `finish_flag` kind
+  `not_confirmed` (the only completed task allowed without its readings); the finish check (completed early) and the
+  requester's "On the way" skip no-app trips; job `no-app-trips` every 15 min (`no_app_trips()`: the question once at the
+  trip's end, `trip.finish_ask`; the close at 09:00 the day after; nothing while `trip_close_prompt` is off).
+- Tools: `vehicle_checks(vehicle?, person?, date? | from+to, result?, paging)` (view; photo links for vehicles or issues);
+  `list_vehicles` cards `check_today {result, result_text, at, by, report_id?}`; `my_trip(task_id)`, `my_trip_check(task_id,
+  check_id?, result, odometer_km, category?, note?, photos?, sides?)`, `finish_my_trip(task_id, odometer_km,
+  start_odometer_km?, fuel? {litres?, amount_lkr?}, photo?)` (personal: the trip's own person; photos uploaded by the page to
+  the person's own folder); `my_trips` cards `trip_action` check | finish | confirm; task cards "Completed · not confirmed";
+  `list_issues` rows `pre_trip`; the issue kind `trip_not_confirmed` (warning, Needs attention; resolves when confirmed).
+- Driver app: one rule (the held vehicle has no check by this driver today → the check is needed; Start task waits for it);
+  the screen `vehicle-check` ("No, all good" one tap; "Add 4 photos" after it; "Yes" → category, 1–6 photos, note, Send);
+  queued offline like reports (the check, then the report, then the photos); today's checks kept on the phone and read back
+  on a fresh sign-in.
+- Office mode, /m/, the site: `/my-trips/:task` (the trip, its check, its finish); the vehicle page's Today's check + 7 days;
+  the Pre-trip tag; the chip.
+
+### 33.2 Feature 5: the fuel card at Start task (advisory, never blocks)
+
+**Industry patterns:** Google Maps' fuel-efficient routing estimate, the fleet fuel plans of Samsara / Fleetio (km per
+litre from the vehicle's own fills, a default by type until there are some), Uber's "trip info" card before a trip.
+
+| Surface | Screen | Today | Round 4–7 |
+|---|---|---|---|
+| Driver app | Start task (`log-mileage?mode=start`) | Odometer only | "Trip info" card: "About 180 km · roughly 12–15 L petrol (approx.)", "Enough fuel?" Yes / I'll fill up on the way |
+| Driver app | Running task | — | "Fill up on the way · Log fuel" line; a reminder 30 min after start that opens Log fuel |
+| Driver app | Log fuel | No fuel type | The vehicle's fuel type (and grade) preselected, changeable |
+| Site, Office mode, /m/ | Vehicle form and page | No fuel type | Fuel type (petrol / diesel / hybrid (petrol) / electric) required, grade optional; "Fuel type: not set" until filled |
+| Site, Office mode, /m/ | Task page | — | The driver's answer and the estimate |
+| Claude | vehicles, task_detail | — | `fuel_type`, `fuel_grade`, the task's `fuel` |
+
+- Data (`20261022120300_round5_fuel_card`): `vehicles.fuel_type` petrol | diesel | hybrid | electric (null = not set),
+  `fuel_grade` petrol_92 | petrol_95 | auto_diesel | super_diesel (petrol and hybrid take a petrol grade, diesel a diesel
+  one, electric none); drivers read both (column grant; the app's `VEHICLE_COLUMNS`); `fuel_logs.fuel_type` / `fuel_grade`;
+  `tasks.fuel_answer` enough | fill_on_way + `fuel_answer_at`; `fuel_estimate(task)` (the driver's own task; km per litre
+  from the vehicle's last 3 fills with an odometer, tank to tank, else the default by vehicle type and fuel type; the plan's
+  km; a range of ±10 %; electric: km and "check the battery"); `answer_fuel_card(task, answer, at)` (the driver; queued).
+- Tools: `register_vehicle` requires `fuel_type`; `update_vehicle` takes both; vehicle cards `fuel_type`, `fuel_grade`,
+  `fuel_text`; `task_detail.fuel_card {answer, at, estimate}`; `list_fuel` rows the fuel type.
+
+### 33.3 Feature 6: passengers on trips
+
+**Industry patterns:** Google Calendar's guests (search people with their photo, chips, a typed address for someone
+outside), Uber's "ride for someone else" (the rider is told and can follow the trip; a shared trip link for someone without
+the app).
+
+| Surface | Screen | Today | Round 4–7 |
+|---|---|---|---|
+| Site, Office mode, /m/ | Request, Assign a task, Book now, their edits | A passenger count | Passengers: search registered office people (photo, avatar chips) or type a name and an optional phone; the count stays |
+| Site, Office mode, /m/ | My trips | Own requests and created tasks | + trips I ride in, view only: time, stops, driver name and phone, plate, the live timeline |
+| Site, Office mode, /m/ | A task / request | — | The passengers; "Share trip" (wa.me) for each unregistered one with a phone |
+| Driver app | Today, the task | "5 passengers · Contact: …" | The passengers' names, Call for those with a phone |
+| Claude | trip tools | `passengers` / `pax` counts | `passenger_list` in, `passengers_list` out; `find_people` |
+
+- Data (`20261022120400_round6_passengers`): `task_passengers` and `request_passengers` (person or a typed name + phone;
+  removed, never deleted; copied from the request when it is approved or booked); the driver reads their own tasks'
+  passengers; `notify_passengers(task, event, title, body)`; registered passengers get the trip's events: assigned,
+  accepted, on the way, running late, arrived (each stop), changed, cancelled (events `passenger.trip` alert and
+  `passenger.moving` soft; their own switches; nothing while `passengers` is off).
+- Tools: `find_people(text)` (any office permission: active office people, name, label, photo; no phone or e-mail);
+  `passenger_list [{person? | name, phone?}]` on create_task, create_request, book_vehicle, update_request, update_task,
+  decide_request (copies the request's); `my_trips` answers `role: passenger` cards; `my_trip` answers the passenger's view;
+  `my_trips` for every office permission (a passenger may have only view).
+
+### 33.4 Feature 7: someone else has that driver or vehicle
+
+**Industry patterns:** Google Calendar's room booking (who booked the room, their photo, the time; "Propose a new time" /
+ask the organiser) and resource view (one row per room, the day's bookings as bars); Airbnb's "dates unavailable" with the
+host to contact. Never blocks.
+
+| Surface | Screen | Today | Round 4–7 |
+|---|---|---|---|
+| Site, Office mode, /m/ | Conflict cards (assign, request decide, Book now, edit, reassign) | The other task's requester or driver, text | WHO holds it: photo, name, label, the time range, Call and WhatsApp (office users), Ask for it |
+| Site, Office mode, /m/ | Notification centre | Opens a link | An "Ask for it" arrives with Yes / No in one tap |
+| Site, Office mode, /m/ | A day's timeline per driver and per vehicle | None | `/schedule`: one row per driver or vehicle, each booking a bar with its holder |
+| Everyone involved | A task's driver or vehicle changes | The driver, the requester, the custodian (some paths) | The driver, the requester, the person who assigned it, the passengers, both custodians: told in plain words |
+| Claude | availability, suggest_vehicles, task_detail | No holder | `holder` |
+
+- Data (`20261022120500_round7_holders`): `holder_asks` (the held task, driver or vehicle, who asks, for what time, the
+  answer yes | no, by whom, when); `office_inbox.actions` (Yes / No buttons calling a tool); `queue_notification` passes
+  them; events `holder.asked` (the holder and the fleet admins, urgent) and `holder.answered` (the asker and the fleet
+  admins).
+- Tools: the holder (the requester of the other trip, else the person who assigned it) on every conflict (`assignCheck`) and
+  on `book_vehicle`, `update_task`, `reassign_task` warnings as cards; `availability` busy drivers and `suggest_vehicles`
+  busy vehicles carry `holder`; `task_detail.holder`; `ask_for_it(task_id, resource, note?)`,
+  `answer_holder_ask(ask_id, answer)`, `holder_asks(status?)`; `day_timeline(date, kind drivers | vehicles)` (view);
+  `tell_involved` on every change of driver or vehicle. With `holder_contact` off: the warning without the person or Ask.
+
+### 33.5 Also in the round
+- `docs/voice-calls-plan.md` (doc only): WebRTC through a service (LiveKit, Agora, Twilio Voice) with their current prices
+  and free tiers (cited), the native modules (react-native-webrtc, CallKeep / ConnectionService, FCM high priority to
+  ring), battery and 4G caveats, the effort, the recommendation (after the pilot and the store release).
+- The connector suite on a fixed date and clock: `FLEET_NOW` (functions env, local and CI only) read where the tools run
+  (`run.ts`), the suite's own clock from it, the "today" checks against it.
+- The location-search e2e (office.spec.ts:1326) kept under office-api's 120 calls a minute: it moves between its pages
+  inside the site (client navigation) instead of eleven full page loads, so it no longer meets the limit.
+
 ## 32. Design pass parked (Sahan, 22 October 2026)
 
 Design pass parked 22 Oct; pilot on phase9-rd, not shipped.

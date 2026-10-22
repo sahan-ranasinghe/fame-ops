@@ -44,6 +44,14 @@ export interface Settings {
   /** Round 1 (21 October 2026): the trip forms suggest the leave time and each stop's stay in grey, and hint (amber) when a
    *  chosen time misses an arrive-by; off = just the fields. The planner never blocks either way. */
   planner_suggestions: boolean;
+  /** Round 4–7 (Sahan, 22 October 2026): each feature of the round has its switch (Settings → Dispatch), on by default,
+   *  so one can be switched off live: the vehicle check before work, the "Trip finished?" question and the 09:00 close of a
+   *  no-app trip, the fuel card at Start task, passengers on trips, who holds a busy driver or vehicle (and Ask for it). */
+  vehicle_check: boolean;
+  trip_close_prompt: boolean;
+  fuel_card: boolean;
+  passengers: boolean;
+  holder_contact: boolean;
   /** Snap to roads under the open package: none or osrm (secret OSRM_URL); under the google package Google's Roads API is used (google_caps.roads; 0 = off) and this is not read. */
   map_matching: { provider: MapMatchingProvider };
   /** The driver app's "At work? Start work" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
@@ -140,6 +148,11 @@ export const SETTINGS_DEFAULTS: Settings = {
   office_phone: null,
   vehicle_on_the_day: false,
   planner_suggestions: true,
+  vehicle_check: true,
+  trip_close_prompt: true,
+  fuel_card: true,
+  passengers: true,
+  holder_contact: true,
   map_matching: { provider: "none" },
   shift_start: "08:00",
   shift_days: [1, 2, 3, 4, 5],
@@ -198,6 +211,16 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "A task may be made without a vehicle: the driver's vehicle on the day, or any vehicle of a type (the driver confirms it at Start task). Switch it on after every phone has the app update that knows it",
   planner_suggestions:
     "The trip forms suggest the leave time and each stop's stay (in grey, editable) and give a hint when a chosen time misses an arrive-by; off = just the fields, no suggestions. Never blocks a save",
+  vehicle_check:
+    "The vehicle check before work: whenever a driver takes a vehicle, and before a self-drive or someone-else trip sets off, \"Any damage or problem with <plate>?\" (all good in one tap; a problem with photos becomes a pre-trip issue). Off = not asked",
+  trip_close_prompt:
+    "\"Trip finished? Enter the odometer\" for a trip nobody drives with the app (self-drive, someone else): asked at the back-by time or the duty cut-off, closed as Completed · not confirmed at 09:00 the next day when unanswered. Off = neither (the person can still finish it by hand)",
+  fuel_card:
+    "The fuel card at Start task: the trip's km and roughly how many litres it takes, and \"Enough fuel?\" (Yes / I'll fill up on the way). Advisory, never blocks. Off = not shown",
+  passengers:
+    "Passengers on trips: the Passengers field when asking for or assigning a trip; registered passengers are told about the trip and see it in My trips. Off = the field is hidden and nobody is told",
+  holder_contact:
+    "Who holds a busy driver or vehicle: the warning names them with Call and WhatsApp, and offers Ask for it. Off = the warning says only that it is busy
   driver_personal_trips:
     "Trips a driver starts in the app (Start a trip): allowed = Company work preselected and Personal offered, default = Personal preselected, off = no Personal choice; ask_first is reserved (accepted, behaves as allowed until it is built). Personal km are counted apart and never charged to a job",
   map_matching:
@@ -324,6 +347,13 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       return value;
     case "planner_suggestions":
       if (typeof value !== "boolean") throw new ToolError("planner_suggestions: true or false.");
+      return value;
+    case "vehicle_check":
+    case "trip_close_prompt":
+    case "fuel_card":
+    case "passengers":
+    case "holder_contact":
+      if (typeof value !== "boolean") throw new ToolError(`${key}: true or false.`);
       return value;
     case "driver_personal_trips":
       if (!PERSONAL_TRIPS.includes(value as PersonalTrips)) {
