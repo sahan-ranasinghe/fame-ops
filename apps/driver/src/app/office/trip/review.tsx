@@ -125,7 +125,9 @@ export default function TripReview() {
     const rf = { ...requestFieldsOf(d), ...(selfDrive ? {} : { who: emptyWho() }) };
     if (d.mode === 'edit') {
       // Only what changed since the request was loaded goes (the site's rule, with the version it was shown with).
-      const v = updateRequestInput(d.requestId ?? '', d.version ?? 0, rf, d.was ?? rf, trip.base);
+      // The request as loaded, its answer read as the draft's is (an edit draft saved in the old { choice } shape too).
+      const was = d.was ? { ...d.was, who: whoOfDraft(d.was) } : rf;
+      const v = updateRequestInput(d.requestId ?? '', d.version ?? 0, rf, was, trip.base);
       return 'error' in v ? v : { tool: 'update_request', input: v.input };
     }
     const v = validateNewRequest(rf, trip.base);
@@ -227,7 +229,7 @@ export default function TripReview() {
               <StatsRow
                 testID="review-stats"
                 cells={[
-                  { key: 'leave', label: t('office.request.leaveBy'), value: leave.at },
+                  { key: 'leave', label: t('office.request.leaveBy'), value: leave.at, wide: true },
                   ...(totals ? [
                     { key: 'km', label: t('office.trip.distance'), value: t('office.trip.kmN', { km: Math.round(totals.km) }) },
                     { key: 'drive', label: t('office.trip.driving'), value: durationText(t, totals.drive_min), words: true },

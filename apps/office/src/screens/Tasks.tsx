@@ -188,7 +188,7 @@ export function Tasks() {
           {board.data && board.err && <StaleNote entry={board} />}
           {board.data && (
             <div className="stack">
-              <NeedsDriverList tasks={needs} linked={canChange} headerLink={false} />
+              <NeedsDriverList tasks={needs} linked={canChange} opensTask headerLink={false} />
               <p className="muted small" style={{ margin: 0 }}>
                 Declined by the driver, or not accepted within the accept window. Open one to give it to a driver; the best match is offered there.{" "}
                 <Updated entry={board} />
@@ -213,7 +213,7 @@ export function Tasks() {
         </div>
         {needs.length > 0 && (
           <div style={{ marginBottom: 18 }}>
-            <NeedsDriverList tasks={needs} linked={canChange} />
+            <NeedsDriverList tasks={needs} linked={canChange} opensTask />
           </div>
         )}
         {/* The board's day: the week strip (docs/ui-patterns.md §3), any day (tomorrow's tasks too). */}

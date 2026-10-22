@@ -205,7 +205,9 @@
       "timeNotRecorded": "ගියා · වේලාව සටහන් නොවුණා"
     },
     "arriveAbout": "ළඟා වීම ආසන්නව",
-    "byRoad": "මාර්ගයේ"
+    "byRoad": "මාර්ගයේ",
+    "plannedSub": "සැලසුම් කළ",
+    "stopDone": "අවසන්"
   },
   "log": {
     "title": "ධාවන දුර සටහන් කරන්න",
@@ -2851,7 +2853,7 @@
       "seen": "දුටුවා",
       "accepted": "පිළිගත්තා",
       "underWay": "ගමනේ",
-      "late": "ප්‍රමාද මි. {min}",
+      "late": "ප්‍රමාද · මි. {min}",
       "done": "අවසන්",
       "needsDriver": "රියදුරෙක් අවශ්‍යයි",
       "selfDrive": "ස්වයං",
@@ -2872,7 +2874,9 @@
       "off": "සේවයෙන් පිට",
       "onDuty": "සේවයේ",
       "someoneElse": "වෙනත් අයෙක්",
-      "expired": "කල් ඉකුත්"
+      "expired": "කල් ඉකුත්",
+      "waitingLate": "රැඳී ඇත · ප්‍රමාද",
+      "changedDecide": "වෙනස් විය · නැවත තීරණය කරන්න"
     },
     "timeline": {
       "planned": "සැලසුම {time}",

@@ -1,6 +1,6 @@
 // The one banner above a page's content (Part B design pass, docs/design-pass.md §4.6; Material 3's banner): an icon, one
 // strong line, one muted line, at most one action. Tones by rule R3: red = someone must act now, amber = watch it, blue =
-// moving / for your information, green = done. The word is always there; the colour never stands alone.
+// moving / for your information, green = done, grey = over or off. The word is always there; the colour never stands alone.
 
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -8,13 +8,15 @@ import { CircleCheck, Info, type LucideIcon, TriangleAlert } from '@/components/
 import { Txt } from '@/components/ui';
 import { colors, hoverStyle, webHitSlop } from '@/theme';
 
-export type BannerTone = 'red' | 'amber' | 'blue' | 'green';
+export type BannerTone = 'red' | 'amber' | 'blue' | 'green' | 'grey';
 
 const TONE: Record<BannerTone, { bg: string; ink: string; icon: LucideIcon }> = {
   red: { bg: colors.redChip, ink: colors.red, icon: TriangleAlert },
   amber: { bg: colors.amberChip, ink: colors.amberText, icon: TriangleAlert },
   blue: { bg: colors.blueChip, ink: colors.blue, icon: Info },
   green: { bg: colors.greenChip, ink: colors.green, icon: CircleCheck },
+  // Over or off (R3): expired, cancelled.
+  grey: { bg: '#ebe9e3', ink: colors.muted, icon: Info },
 };
 
 export function StatusBanner({ tone, title, line, action, children, testID = 'status-banner' }: {

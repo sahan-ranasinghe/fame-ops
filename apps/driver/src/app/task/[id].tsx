@@ -179,8 +179,18 @@ export default function TaskScreen() {
   const ordered = task.task_stops.filter((s) => s.status !== 'removed').sort((a, b) => a.seq - b.seq);
   const lastId = ordered[ordered.length - 1]?.id;
   const undone = arrivalUndoneStops();
-  // The stop being driven to: its estimate once something was confirmed, else its planned arrival ("Arrive about").
-  const arriveAbout = stop ? progress.get(stop.id)?.estimate?.arrive ?? progress.get(stop.id)?.planned_arrive ?? null : null;
+  // "Arrive about" (the review, finding 4): at the stop already, when it was reached; else its new estimate once something
+  // was confirmed; else the planned arrival while it is still ahead (marked planned); else a dash (all done, or planned
+  // in the past with no estimate).
+  const cur = stop ? progress.get(stop.id) : undefined;
+  const stopOver = !stop || stop.status === 'done' || stop.status === 'skipped';
+  const arrivedAt = !stopOver && stop?.status === 'arrived' ? cur?.arrived ?? null : null;
+  const plannedAhead = cur?.planned_arrive && new Date(cur.planned_arrive).getTime() > here.now ? cur.planned_arrive : null;
+  const arriveCell = stopOver ? { value: '–' }
+    : arrivedAt ? { label: t('task.arrived'), value: colomboTime(arrivedAt) }
+    : cur?.estimate ? { value: colomboTime(cur.estimate.arrive) }
+    : plannedAhead ? { value: colomboTime(plannedAhead), sub: t('task.plannedSub') }
+    : { value: '–' };
   // Part B (§4.5): each stop as a step of the compact RouteStepper; the current one with its slide (the arrive slide by the
   // distance rule, then the leave slide; the last stop's finishes the task), a stop further down with its slides when
   // they apply (visited out of order), Skip beside every stop still open.
@@ -207,6 +217,8 @@ export default function TaskScreen() {
       times: detail || undefined,
       note: item.note ?? undefined,
       noteTone: 'amber',
+      // Done and skipped say so in words too (R3: never the colour alone).
+      stateWord: done ? t('task.stopDone') : skipped ? t('task.skipped') : undefined,
       keepOpen: outOfOrder,
       aside: !done && !skipped ? (
         <Pressable accessibilityRole="button" onPress={() => setSkipping(item)} hitSlop={8} style={styles.skip}>
@@ -301,7 +313,7 @@ export default function TaskScreen() {
               roadKm !== null
                 ? { key: 'left', label: t('task.distanceLeft'), value: `${kmText(roadKm)} ${t('common.km')}`, sub: t('task.byRoad') }
                 : { key: 'left', label: t('task.distanceLeft'), value: km === null ? '–' : `≈ ${kmText(km)} ${t('common.km')}`, sub: km !== null ? t('task.straightLine') : undefined },
-              { key: 'arrive', label: t('task.arriveAbout'), value: arriveAbout ? colomboTime(arriveAbout) : '–' },
+              { key: 'arrive', label: t('task.arriveAbout'), ...arriveCell },
               { key: 'odo', label: t('task.startOdo'), value: startOdo === null ? '–' : thousands(startOdo) },
             ]}
             gpsLine={gpsKm.taskId === task.id ? (

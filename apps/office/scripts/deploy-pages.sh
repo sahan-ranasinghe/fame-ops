@@ -25,7 +25,9 @@ cp -R ../driver/dist-web/. dist/m/
 # build's 127.0.0.1 cannot stay in it): the real project's address, never this laptop's.
 if grep -rqE "127\.0\.0\.1:54321|localhost:54321" dist/m; then echo "STOP: the mobile build points at the local stack"; exit 1; fi
 if ! grep -rq "hinurfsaxvplbyqgtozj.supabase.co" dist/m; then echo "STOP: the mobile build does not point at the real project"; exit 1; fi
-# Part B: a design page (sample data, the e2e build only) never goes up.
+# Part B: a design page (sample data, the e2e build only) never goes up: none of their routes may exist (every design page's
+# route is under src/web-app/design, written only with FLEET_DESIGN=1), and the driver's one is not in what was built.
+if [ -d ../driver/src/web-app/design ]; then echo "STOP: design pages' routes exist (apps/driver/src/web-app/design)"; exit 1; fi
 if grep -rq "design-driver-task" dist/m; then echo "STOP: a design page is in the mobile build"; exit 1; fi
 
 echo "== 3. The routes: a /m/ page reloads on the mobile website, any other page on the desktop site"

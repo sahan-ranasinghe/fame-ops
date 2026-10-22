@@ -247,9 +247,8 @@ export default function ApproveRequest() {
         subtitle={card ? [card.kind === 'task' ? t('office.request.proposedTask') : t('office.request.request'), card.requested_by, whenWords(t, card.asked)].filter(Boolean).join(' · ') : undefined}
         chips={card ? (
           <>
-            {(() => { const c = requestStateChip(card.status); return <Pill text={t(c.key)} tone={c.tone} size={14} icon={isExpired(card) ? CalendarX : undefined} />; })()}
+            {(() => { const c = requestStateChip(card.status, !!card.late); return <Pill text={t(c.key)} tone={c.tone} size={14} icon={isExpired(card) ? CalendarX : undefined} />; })()}
             {others.length > 0 && <Pill text={t('office.request.alsoLooking', { name: others.join(', ') })} tone="muted" size={14} />}
-            {card.late && <Pill text={t('office.approve.late')} tone="red" size={14} />}
           </>
         ) : undefined}
       />
@@ -260,7 +259,7 @@ export default function ApproveRequest() {
         {q.data && !card && <ListEmpty text={t('office.request.notFound')} />}
         {/* Round 3 (A6): nobody decided it before its day was over; the person who asked may request it again. */}
         {card && isExpired(card) && (
-          <StatusBanner tone="blue" title={t('office.requests.status_expired')} testID="request-expired">
+          <StatusBanner tone="grey" title={t('office.requests.status_expired')} testID="request-expired">
             <Txt variant="body" size={15} testID="request-expired-line">{expiredText(card, t, (at) => dateWords(t, at))}</Txt>
             {canRequestAgain(card, me.tools, !decider || card.requested_by === me.name) && (
               <Button kind="outline" icon={RotateCcw} label={t('office.requests.requestAgain')} onPress={requestAgain} style={{ minHeight: 52, marginTop: 6 }} testID="request-again" />
@@ -290,7 +289,7 @@ export default function ApproveRequest() {
                 cells={[
                   { key: 'leave', label: t('office.request.leaveBy'), value: trip.leaveBy },
                   ...(trip.totals ? [
-                    { key: 'km', label: t('office.trip.distance'), value: t('office.trip.kmN', { km: trip.totals.km }) },
+                    { key: 'km', label: t('office.trip.distance'), value: t('office.trip.kmN', { km: Math.round(trip.totals.km) }) },
                     { key: 'drive', label: t('office.trip.driving'), value: durationText(t, trip.totals.driveMin), words: true },
                   ] : []),
                 ]}

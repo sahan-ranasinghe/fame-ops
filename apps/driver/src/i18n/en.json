@@ -205,7 +205,9 @@
       "timeNotRecorded": "Visited · time not recorded"
     },
     "arriveAbout": "Arrive about",
-    "byRoad": "by road"
+    "byRoad": "by road",
+    "plannedSub": "planned",
+    "stopDone": "Done"
   },
   "log": {
     "title": "Log mileage",
@@ -2851,7 +2853,7 @@
       "seen": "Seen",
       "accepted": "Accepted",
       "underWay": "On the way",
-      "late": "Late {min} min",
+      "late": "Late · {min} min",
       "done": "Done",
       "needsDriver": "Needs a driver",
       "selfDrive": "Self-drive",
@@ -2872,7 +2874,9 @@
       "off": "Off duty",
       "onDuty": "On duty",
       "someoneElse": "Someone else",
-      "expired": "Expired"
+      "expired": "Expired",
+      "waitingLate": "Waiting · late",
+      "changedDecide": "Changed · decide again"
     },
     "timeline": {
       "planned": "Planned {time}",

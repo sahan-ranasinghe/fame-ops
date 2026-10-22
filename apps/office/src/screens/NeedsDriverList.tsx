@@ -15,8 +15,11 @@ import { bestLine, findDriverPath, NEEDS_DRIVER_LIST, needsDriverCount, sortNeed
 
 const ROW_LINK = { color: "inherit", textDecoration: "none" } as const;
 
-/** One task that needs a driver; a link to its change page with `linked`, `compact` on the Overview (two lines a row). */
-export function NeedsDriverRow({ t, linked, compact = false }: { t: NeedsDriverTask; linked: boolean; compact?: boolean }) {
+/**
+ * One task that needs a driver; a link to its change page with `linked`, else (the review: `opensTask`, on the board) to the
+ * task's own page; `compact` on the Overview (two lines a row).
+ */
+export function NeedsDriverRow({ t, linked, opensTask = false, compact = false }: { t: NeedsDriverTask; linked: boolean; opensTask?: boolean; compact?: boolean }) {
   const className = compact ? "row ov-row" : "row";
   const body = (
     <>
@@ -29,15 +32,17 @@ export function NeedsDriverRow({ t, linked, compact = false }: { t: NeedsDriverT
       <span className={`due ${whenTone(t.minutes_to_start)}`}>{t.when}</span>
     </>
   );
-  return linked
-    ? <Link className={className} style={ROW_LINK} to={findDriverPath(t.task_id)} data-testid="needs-driver-row">{body}</Link>
-    : <div className={className} data-testid="needs-driver-row">{body}</div>;
+  if (linked) return <Link className={className} style={ROW_LINK} to={findDriverPath(t.task_id)} data-testid="needs-driver-row">{body}</Link>;
+  if (opensTask) return <Link className={className} style={ROW_LINK} to={`/tasks/${t.task_id}`} data-testid="needs-driver-row">{body}</Link>;
+  return <div className={className} data-testid="needs-driver-row">{body}</div>;
 }
 
-export function NeedsDriverList({ tasks, linked, headerLink = true, action }: {
+export function NeedsDriverList({ tasks, linked, opensTask = false, headerLink = true, action }: {
   tasks: NeedsDriverTask[];
   /** Rows and the header are links (assign_tasks). */
   linked: boolean;
+  /** Rows the person cannot change open the task's page (the board: everyone on it may open a task). */
+  opensTask?: boolean;
   /** The header opens the filtered Tasks page (not on that page itself). */
   headerLink?: boolean;
   /** Something on the right of the header (the way back to the board). */
@@ -55,7 +60,7 @@ export function NeedsDriverList({ tasks, linked, headerLink = true, action }: {
       </div>
       <div className="rows">
         {list.length
-          ? list.map((t) => <NeedsDriverRow key={t.task_id} t={t} linked={linked} />)
+          ? list.map((t) => <NeedsDriverRow key={t.task_id} t={t} linked={linked} opensTask={opensTask} />)
           : <EmptyLine>Every task has a driver.</EmptyLine>}
       </div>
     </div>

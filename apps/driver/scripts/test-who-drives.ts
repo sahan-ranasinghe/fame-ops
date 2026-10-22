@@ -92,6 +92,10 @@ console.log('\nThe forms\' inputs (the site\'s requestLogic and assignLogic, cop
   check('error' in u0 && u0.error === 'Nothing changed.', 'update_request: who drives is not sent unless it changes (the custodian request stays as asked)');
   const u1 = updateRequestInput('r1', 3, { ...was, who: self }, was);
   check('input' in u1 && u1.input.driven_by === 'self' && u1.input.version === 3, 'update_request: the change of who drives, with the version', u1);
+  // An edit draft saved before the shared rules: its `was` holds { choice } (Review reads it as the draft's own answer).
+  const oldWas = { ...was, who: { choice: 'custodian', name: '', phone: '' } as never };
+  const uOld = updateRequestInput('r1', 3, { ...was }, { ...oldWas, who: whoOfDraft(oldWas) });
+  check('error' in uOld && uOld.error === 'Nothing changed.', 'an old draft\'s { choice } in was, read as Review reads it: nothing about who drives is sent (the custodian request stays as asked)', uOld);
   const u3 = updateRequestInput('r1', 3, { ...was, who: { ...other, name: '' } }, was);
   check('error' in u3 && reasonText(en, u3.error) === en('office.who.needName'), 'update_request: someone else without a name is refused before sending');
   const d = { ...newDraft('request', '2026-10-22'), req: { behalf: '', project: '', need: '', tools: false, note: '', requesterPhone: '', who: other } };

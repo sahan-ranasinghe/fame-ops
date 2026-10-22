@@ -126,7 +126,7 @@ console.log('\nThe screens as text');
   const where = read('app/office/trip/where.tsx');
   const review = read('app/office/trip/review.tsx');
   const when = read('app/office/trip/when.tsx');
-  check(page.includes("extrasFor(task, me.tools)") && page.includes("extras.time &&") && page.includes("extras.stops &&") && page.includes("extras.swap &&") && page.includes("extras.reopen &&"), 'the task page shows each extra by the task and the tools');
+  check(page.includes("extrasFor(task, me.tools)") && page.includes('time: extras.time, stops: extras.stops, swap: extras.swap, reopen: extras.reopen') && page.includes('taskActionPlan({'), 'the task page shows each extra by the task and the tools (Part B: taskActionPlan, its own test in test:steps)');
   check(page.includes("pathname: '/office/task/[id]/time'") && page.includes("params: { mode: 'stops', id: task.id }") && page.includes("pathname: '/office/task/[id]/swap'"), 'the buttons open Change time, the editor in mode stops, and Swap vehicle');
   check(page.includes("api.call('reopen_task', reopenInput(") && page.includes('ReasonSheet<ReopenReasonKey>'), 'Reopen asks a reason in the sheet and calls reopen_task');
   check(!/role|fleet_admin|admin/.test(page.replace(/\/\/.*$/gm, '')) || !/'(admin|fleet_admin|office|viewer|staff)'/.test(page), 'no role names on the task page');
@@ -146,7 +146,7 @@ console.log('\nThe screens as text');
   for (const [name, src] of [['the task page', page], ['Swap vehicle', swap], ['Give it a driver', give], ['Approve a request', request], ['the driver rows', rows]] as const) {
     check(src.includes('<SkeletonRows') && src.includes('<ListFailed') && src.includes('<ListEmpty') && !src.includes('<Loading') && !src.includes('<Empty '), `${name}: skeleton rows, the error with Try again, the empty state`);
   }
-  check(page.includes("busy={busy === 'cancel'}") && page.includes("busy={busy === 'reopen'}") && !page.includes("t('office.task.working')"), 'Cancel and Reopen show their spinner on the button pressed (no "Working…" line)');
+  check(page.includes("busy={(a === 'reopen' && busy === 'reopen') || (a === 'cancel' && busy === 'cancel')}") && !page.includes("t('office.task.working')"), 'Cancel and Reopen show their spinner on the button pressed (no "Working…" line)');
 }
 
 console.log('\nStrings in both languages');

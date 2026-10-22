@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { requestStateChip } from '../src/office/requestsLogic';
 import { planSteps, stopType, taskSteps } from '../src/office/stepsLogic';
-import { taskStateChip } from '../src/office/taskLogic';
+import { taskActionPlan, taskStateChip } from '../src/office/taskLogic';
 import type { Stop, TimelineItem } from '../src/office/types';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -78,8 +78,26 @@ console.log('\nOne vocabulary (docs/design-pass.md §3)');
   check(same(chip({ status: 'completed' }), { key: 'office.chip.done', tone: 'green' }) && same(chip({ status: 'cancelled' }), { key: 'office.chip.cancelled', tone: 'muted' }), 'Done (green), Cancelled (grey)');
   check(same(chip({ status: 'assigned', needs_driver: { since: 'x' } as never }), { key: 'office.chip.needsDriver', tone: 'red' }) && same(chip({ status: 'missed' }), { key: 'office.chip.missed', tone: 'red' }), 'Needs a driver, Missed (red)');
   check(en('office.chip.underWay') === 'On the way' && en('office.chip.needsDriver') === 'Needs a driver' && si('office.chip.needsDriver') === si('office.status.declined'), 'the chip says the same words as the rest ("On the way", never "Under way")');
-  check(same(requestStateChip('waiting'), { key: 'office.requests.status_waiting', tone: 'amber' }) && requestStateChip('changed').tone === 'amber' && requestStateChip('approved').tone === 'green' && requestStateChip('expired').tone === 'muted' && requestStateChip('declined').tone === 'muted', 'a request: Waiting and Changed amber, Approved green, the rest grey');
+  check(same(requestStateChip('waiting'), { key: 'office.requests.status_waiting', tone: 'amber' }) && requestStateChip('approved').tone === 'green' && requestStateChip('expired').tone === 'muted' && requestStateChip('declined').tone === 'muted', 'a request: Waiting amber, Approved green, the rest grey');
+  check(same(requestStateChip('waiting', true), { key: 'office.chip.waitingLate', tone: 'amber' }) && same(requestStateChip('changed'), { key: 'office.chip.changedDecide', tone: 'amber' }) && en('office.chip.waitingLate') === 'Waiting · late' && en('office.chip.changedDecide') === 'Changed · decide again', 'Waiting · late (its leave-by passed) and Changed · decide again, amber, one chip');
   for (const k of ['sent', 'seen', 'accepted', 'underWay', 'done', 'cancelled', 'needsDriver', 'missed']) check(/[඀-෿]/.test(si(`office.chip.${k}`)), `office.chip.${k} in Sinhala`);
+}
+
+console.log('\nThe task page\'s action bar (taskActionPlan): every action the person may take, one first, the rest under More');
+{
+  const all = { needsDriver: false, reassign: true, cancel: true, time: true, stops: true, swap: true, reopen: false, route: true };
+  const a = taskActionPlan(all);
+  check(a.primary === 'change' && same(a.more, ['reassign', 'swap', 'route', 'cancel']), 'Change time or stops first; Reassign, Swap, the route, Cancel under More', a);
+  const b = taskActionPlan({ ...all, needsDriver: true });
+  check(b.primary === 'give' && same(b.more, ['time', 'stops', 'swap', 'route', 'cancel']), 'needs a driver: Give a driver first, and Change time and Change stops still under More (the review\'s blocker)', b);
+  const c = taskActionPlan({ ...all, needsDriver: true, reassign: false });
+  check(c.primary === 'change' && !c.more.includes('reassign'), 'no reassign tool: no Give a driver, the change first', c);
+  const d = taskActionPlan({ needsDriver: false, reassign: false, cancel: false, time: false, stops: true, swap: false, reopen: true, route: false });
+  check(d.primary === 'stops' && same(d.more, ['reopen']), 'only the stops: Change stops first; Reopen under More', d);
+  const e = taskActionPlan({ needsDriver: false, reassign: false, cancel: false, time: false, stops: false, swap: false, reopen: false, route: false });
+  check(e.primary === null && e.more.length === 0, 'nothing allowed: no action bar');
+  const everyAction = new Set([...a.more, a.primary, ...b.more, b.primary]);
+  check(['give', 'change', 'time', 'stops', 'reassign', 'swap', 'route', 'cancel'].every((x) => everyAction.has(x as never)), 'every action reachable for someone with all the tools');
 }
 
 if (failures) {

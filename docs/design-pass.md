@@ -88,8 +88,8 @@ Each: what it is (the industry's pattern it follows), its parts top to bottom, i
 "New" = made in the pilot; "keep" = exists and becomes the only one.
 
 ### 4.1 Dashboard (Uber Fleet's and Samsara's overview; Material 3's "feed")
-A greeting / date line; one **StatsRow** first (the same counts and rules on every surface: On the road, Free now,
-In garage, Requests waiting); then the sections in the one order per permission (`overviewSections` on the site,
+A greeting / date line; one **StatsRow** first (each surface's design decides its cells, §4.7; the counts follow one rule
+everywhere); then the sections in the one order per permission (`overviewSections` on the site,
 `homeSections` in Office mode: the same list), each a card with a title, a count and one link "View all (N)", its rows
 the shared **List row**; a section that can be empty shows only while it has rows, except the person's own work.
 Components: site `screens/Overview.tsx` + `overview/Section.tsx` (keep); Office `(tabs)/index.tsx` + `office/ui.tsx`
@@ -163,7 +163,7 @@ with Try again on detail pages.
 |---|---|---|---|---|
 | a | Trip · 4 Review | Office mode + /m/ | Detail + RouteStepper + StatsRow + Forms | The plan as the RouteStepper (S, 1…n, B; time column; legs); Leave by · km · drive time · back at as a StatsRow; conflicts as StatusBanners; the reason under the button; skeleton, not a spinner |
 | b | Task detail and request detail | Office mode + /m/ | Detail page | The state chips under the title in the header; one StatusBanner slot (needs a driver, changed, late); the stops as the RouteStepper (task: live; request: planned); a StatsRow; one action bar at the bottom (task: Change time or stops · More; request: Approve · Decline as now) |
-| c | Office Home | Office mode + /m/ | Dashboard | The StatsRow (On the road, Free now without the garage, In garage, Requests waiting) on the site's rule; every section's link "View all (N)"; one right-hand slot per row; My trips rows open the trip |
+| c | Office Home | Office mode + /m/ | Dashboard | The StatsRow with design 04's three (On the road, Free without the garage as on the site, In garage); the section links "View all (N)" (On the road keeps design 04's "Live map"); one right-hand slot per row; My trips rows open the trip |
 | d | Task in progress | Driver app | Detail (map) | Three stats as designed (Distance left, Arrive about, Start odo); Navigate · Call · Complete task in the designed order right under the stats; the stops as the compact RouteStepper (the current stop with its slide, the others one line) under the actions |
 | e | Overview | Site, desktop + phone width | Dashboard | The StatsRow first (the design's four), then the sections; one empty-state component; the needs-a-driver row written once |
 | f | Tasks (board) | Site, desktop + phone width | List row / board | One status vocabulary (Sent · On the way · Done; Needs a driver only as the banner on top, not also a column); the task card's status as the chip; the empty column as the shared empty line |
@@ -172,10 +172,21 @@ As built (e, f; `apps/office`): the state→chip rule is `screens/taskStateLogic
 way, as §3 says; a finish flag keeps its issue's name, "Completed early"). A past day's declined task keeps a Needs a
 driver column on that day's board: the red block lists today and later only, so it would otherwise show nowhere.
 
+**After the review (as built):** the task page's action bar is one rule (`office/taskLogic.ts` taskActionPlan: whatever is
+not the primary is under More, so Change time and Change stops stay reachable when Give a driver comes first); the driver's
+Arrive about says Arrived HH:MM at the stop, the estimate, the planned time while still ahead, else a dash; the compact
+stepper opens any stop with a tap, keeps a stop's note visible and says Done / Skipped in words; the site's board opens a
+needs-a-driver row's task for someone who may not change it; Review's Leave by is the big wide cell (design 09).
+
+**For Sahan to decide at the pilot:** design 14 shows four buttons (Change time or stops, Reassign, Swap, Cancel) where the
+pilot keeps one primary and More (R7 against R12); the driver's sheet keeps the design's "IN PROGRESS" label (§3 says "On
+the way" everywhere else); the site's Overview at phone width now starts with the six tiles before the action sections.
+
 **The screenshots.** `apps/office/e2e/design-pilot.spec.ts` makes the same data and photographs each pilot screen (the site
 at 1440 × 900 and 412 × 915; /m/ at 412 × 915 in English and Sinhala; the driver's task screen through a design-only page
 of the e2e build, never in a deployed build). CI keeps them in the run's artifact (`design-pilot/`). "Before" = a run on
-branch `design-pilot-before` (main + the spec + the behaviour-free split of the driver's task view); "after" = a run on
+branch `design-pilot-before` (main + the spec + a design page copying main's driver sheet with the same sample data:
+faithful to the code it copies, not the phone itself); "after" = a run on
 `phase9-rd`. Sahan compares the two folders and approves, changes or rejects each screen.
 
 **After the OK (the rollout, in this order):** the shared components replace their look-alikes (StopTimeline and the

@@ -237,7 +237,7 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('road') && (
-          <Section title={t('office.home.road')} count={ov?.on_the_road.length} link={t('office.common.viewAllN', { n: ov?.on_the_road.length ?? 0 })} onLink={() => router.push('/office/(tabs)/live')}>
+          <Section title={t('office.home.road')} count={ov?.on_the_road.length} link={t('office.home.liveMap')} onLink={() => router.push('/office/(tabs)/live')}>
             {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
             {ov && ov.on_the_road.length === 0 && <ListEmpty text={t('office.home.noRoad')} />}
             {ov?.on_the_road.slice(0, ROWS).map((d, i) => (

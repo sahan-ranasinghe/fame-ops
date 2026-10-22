@@ -16,13 +16,17 @@ export interface StatCell {
   tone?: 'ink' | 'blue' | 'amber' | 'red' | 'green';
   /** Words, not a number: the body font. */
   words?: boolean;
+  /** The main number, a line of its own and bigger (Review's Leave by, design 09). */
+  wide?: boolean;
   onPress?: () => void;
 }
 
 const INK = { ink: colors.ink, blue: colors.blue, amber: colors.amberText, red: colors.red, green: colors.green } as const;
 
 export function StatsRow({ cells, testID = 'stats-row' }: { cells: readonly StatCell[]; testID?: string }) {
-  const perLine = cells.length === 4 ? 2 : Math.min(3, cells.length);
+  const rest = cells.filter((c) => !c.wide);
+  const perLine = rest.length === 4 ? 2 : Math.max(1, Math.min(3, rest.length));
+  const wideCount = cells.length - rest.length;
   return (
     <View style={styles.card} testID={testID}>
       {cells.map((c, i) => {
@@ -31,11 +35,15 @@ export function StatsRow({ cells, testID = 'stats-row' }: { cells: readonly Stat
             <Txt variant="label" size={12} color={colors.muted} numberOfLines={2}>{c.label.toUpperCase()}</Txt>
             {c.words
               ? <Txt variant="strong" size={18} color={INK[c.tone ?? 'ink']} numberOfLines={2}>{c.value}</Txt>
-              : <Mono size={22} bold color={INK[c.tone ?? 'ink']} numberOfLines={1}>{c.value}</Mono>}
+              : <Mono size={c.wide ? 34 : 22} bold color={INK[c.tone ?? 'ink']} numberOfLines={1}>{c.value}</Mono>}
             {c.sub ? <Txt variant="small" numberOfLines={2}>{c.sub}</Txt> : null}
           </>
         );
-        const style = [styles.cell, { width: `${100 / perLine}%` as const }, i % perLine !== 0 && styles.divider, i >= perLine && styles.topLine];
+        // A wide cell has its line; the others share the lines after the wide ones, perLine a line.
+        const j = i - wideCount;
+        const style = c.wide
+          ? [styles.cell, { width: '100%' as const }, i > 0 && styles.topLine]
+          : [styles.cell, { width: `${100 / perLine}%` as const }, j % perLine !== 0 && styles.divider, (wideCount > 0 || j >= perLine) && styles.topLine];
         return c.onPress ? (
           <Pressable key={c.key} accessibilityRole="button" accessibilityLabel={`${c.label}: ${c.value}`} onPress={c.onPress}
             style={(state) => [...style, hoverStyle(state), state.pressed && { opacity: 0.8 }]} testID={`${testID}-${c.key}`}>

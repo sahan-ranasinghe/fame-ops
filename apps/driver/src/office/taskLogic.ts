@@ -36,6 +36,28 @@ export function taskStatusKey(t: Pick<Task, 'status' | 'accepted' | 'needs_drive
   return t.status;
 }
 
+export type TaskAction = 'give' | 'change' | 'time' | 'stops' | 'reassign' | 'swap' | 'route' | 'reopen' | 'cancel';
+
+/**
+ * The task page's action bar (Part B, docs/design-pass.md R7): the one thing to do now and everything else under More, so
+ * no action the person may take is lost. Give a driver first when it needs one (with reassign), else Change time or stops
+ * (one choice when both), Change time, Change stops; the rest (and the two changes when Give a driver is first) in More.
+ */
+export function taskActionPlan(a: { needsDriver: boolean; reassign: boolean; cancel: boolean; time: boolean; stops: boolean; swap: boolean; reopen: boolean; route: boolean }): { primary: TaskAction | null; more: TaskAction[] } {
+  const primary: TaskAction | null = a.needsDriver && a.reassign ? 'give' : a.time && a.stops ? 'change' : a.time ? 'time' : a.stops ? 'stops' : null;
+  const more: TaskAction[] = [];
+  if (a.reassign && primary !== 'give') more.push('reassign');
+  if (primary === 'give') {
+    if (a.time) more.push('time');
+    if (a.stops) more.push('stops');
+  }
+  if (a.swap) more.push('swap');
+  if (a.route) more.push('route');
+  if (a.reopen) more.push('reopen');
+  if (a.cancel) more.push('cancel');
+  return { primary, more };
+}
+
 /**
  * The task's state as the one chip of docs/design-pass.md §3 (Part B): Sent, Seen, Accepted, On the way, Done, Needs a driver,
  * Missed, Cancelled, with its tone (R3: red = act now, blue = moving or taken, green = done, grey = still to come or over).

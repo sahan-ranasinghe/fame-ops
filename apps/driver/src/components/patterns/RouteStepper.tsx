@@ -5,8 +5,8 @@
 // ("22 min late" amber, "On time" green); the leg to the next step between them. The one stepper for a planned trip
 // (Review, a request) and a live one (a task, the driver's sheet). `compact`: the step in focus in full, the others one line.
 
-import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { type ReactNode, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Mono, Txt } from '@/components/ui';
 import { colors } from '@/theme';
@@ -39,6 +39,8 @@ export interface Step {
   aside?: ReactNode;
   /** Shown in full also when compact (a stop visited out of order, whose slide applies now). */
   keepOpen?: boolean;
+  /** The state in a word beside the place ("Done", "Skipped"): the colour never stands alone (R3). */
+  stateWord?: string;
 }
 
 const MARK: Record<StepState, { bg: string; border: string; ink: string; ring?: boolean }> = {
@@ -58,12 +60,21 @@ export function RouteStepper({ steps, compact = false, focus, testID = 'route-st
   testID?: string;
 }) {
   const inFocus = focus ?? steps.find((s) => s.state === 'here' || s.state === 'next')?.key;
+  // Compact: any step opens with a tap (its type, times and parts), the one in focus and the kept ones are open already.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) => setOpened((was) => {
+    const next = new Set(was);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
   return (
     <View testID={testID} accessibilityRole="list">
       {steps.map((s, i) => {
         const last = i === steps.length - 1;
         const m = MARK[s.state];
-        const full = !compact || s.key === inFocus || !!s.keepOpen;
+        const fixed = !compact || s.key === inFocus || !!s.keepOpen;
+        const full = fixed || opened.has(s.key);
         return (
           <View key={s.key} style={styles.row} testID={`${testID}-step-${s.key}`} accessibilityLabel={[s.mark, s.place, s.time].filter(Boolean).join(', ')}>
             <View style={styles.timeCol}>
@@ -78,13 +89,20 @@ export function RouteStepper({ steps, compact = false, focus, testID = 'route-st
             </View>
             <View style={[styles.body, last && { paddingBottom: 0 }]}>
               <View style={styles.head}>
-                <Txt variant="strong" numberOfLines={full ? 2 : 1} style={{ flex: 1 }}>{s.place}</Txt>
+                {fixed ? (
+                  <Txt variant="strong" numberOfLines={2} style={{ flex: 1 }}>{s.place}</Txt>
+                ) : (
+                  <Pressable accessibilityRole="button" accessibilityState={{ expanded: full }} onPress={() => toggle(s.key)} style={{ flex: 1 }} testID={`${testID}-open-${s.key}`}>
+                    <Txt variant="strong" numberOfLines={full ? 2 : 1}>{s.place}</Txt>
+                  </Pressable>
+                )}
+                {s.stateWord ? <Txt variant="small" color={s.state === 'skipped' ? colors.red : colors.green}>{s.stateWord}</Txt> : null}
                 {s.aside}
               </View>
               {s.type && full ? <Txt variant="small">{s.type}</Txt> : null}
               {s.times && full ? <Txt variant="muted" size={15}>{s.times}</Txt> : null}
               {s.delta ? <Txt variant="strong" size={14} color={s.delta.tone === 'late' ? colors.amberText : colors.green}>{s.delta.text}</Txt> : null}
-              {s.note && full ? <Txt variant={s.noteTone === 'blue' ? 'strong' : 'small'} size={s.noteTone === 'blue' ? 15 : undefined} color={s.noteTone === 'blue' ? colors.blue : s.noteTone === 'amber' ? colors.amberText : undefined}>{s.note}</Txt> : null}
+              {s.note && (full || s.noteTone === 'amber') ? <Txt variant={s.noteTone === 'blue' ? 'strong' : 'small'} size={s.noteTone === 'blue' ? 15 : undefined} color={s.noteTone === 'blue' ? colors.blue : s.noteTone === 'amber' ? colors.amberText : undefined}>{s.note}</Txt> : null}
               {full ? s.extra : null}
               {s.legAfter && !last ? <Txt variant="small" style={styles.leg}>{s.legAfter}</Txt> : null}
             </View>

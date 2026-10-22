@@ -36,7 +36,7 @@ import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
 import { DETAIL_LINKS_FRESH_MS, type LinkKey, linkOf } from '@/office/taskDetailLogic';
 import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
-import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStateChip } from '@/office/taskLogic';
+import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, type TaskAction, taskActionPlan, taskStateChip } from '@/office/taskLogic';
 import type { FleetError, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { taskSteps } from '@/office/stepsLogic';
@@ -172,14 +172,29 @@ export default function TaskDetailScreen() {
     const s = stops.find((x) => (x.id ?? `stop-${x.seq}`) === st.key);
     return s ? { ...st, extra: <StopArrival stop={s} onSaved={q.reload} /> } : st;
   }) : [];
-  // The action bar (R7): the one thing to do now, then More for the rest; every action only with its tool, as before.
-  const primary = !task ? null
-    : task.needs_driver && actions.reassign ? { label: t('office.home.giveDriver'), onPress: () => router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } }) }
-    : extras.time && extras.stops ? { label: t('office.task.changeTimeOrStops'), onPress: () => setChanging(true) }
-    : extras.time ? { label: t('office.task.changeTime'), onPress: () => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } }) }
-    : extras.stops ? { label: t('office.task.changeStops'), onPress: () => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } }) }
-    : null;
-  const hasMore = !!task && ((actions.reassign && !task.needs_driver) || extras.swap || extras.reopen || actions.cancel || ((task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route')));
+  // The action bar (R7): the one thing to do now, then More for the rest; every action only with its tool, as before
+  // (office/taskLogic.ts taskActionPlan; a started or finished task has "Show the driven route" with driver_route).
+  const plan = task ? taskActionPlan({
+    needsDriver: !!task.needs_driver, reassign: actions.reassign, cancel: actions.cancel,
+    time: extras.time, stops: extras.stops, swap: extras.swap, reopen: extras.reopen,
+    route: (task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route'),
+  }) : { primary: null, more: [] };
+  const actionLabel: Record<TaskAction, string> = {
+    give: t('office.home.giveDriver'), change: t('office.task.changeTimeOrStops'), time: t('office.task.changeTime'), stops: t('office.task.changeStops'),
+    reassign: t('office.task.reassign'), swap: t('office.task.swapVehicle'), route: t('office.history.showDrivenRoute'), reopen: t('office.task.reopen'), cancel: t('office.task.cancel'),
+  };
+  const act = (a: TaskAction) => {
+    if (!task) return;
+    setActing(false);
+    if (a === 'give' || a === 'reassign') router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } });
+    else if (a === 'change') setChanging(true);
+    else if (a === 'time') router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } });
+    else if (a === 'stops') router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } });
+    else if (a === 'swap') router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } });
+    else if (a === 'route') router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } });
+    else if (a === 'reopen') setReopening(true);
+    else setCancelling(true);
+  };
   const km = task?.km ?? task?.gps_km;
 
   return (
@@ -226,10 +241,11 @@ export default function TaskDetailScreen() {
                 return { key: 'leave', label: t('office.request.leaveBy'), value: m ? m[2] : at || '—', sub: m && m[1] ? whenWords(t, m[1]) : undefined };
               })(),
               task.status === 'in_progress' && task.eta?.final
-                ? { key: 'back', label: t('office.trip.backAtShort'), value: task.eta.final, sub: t('office.task.statLive'), tone: 'blue' as const }
+                ? { key: 'back', label: task.return_to_base ? t('office.trip.backAtShort') : t('office.trip.endsShort'), value: task.eta.final, sub: t('office.task.statLive'), tone: 'blue' as const }
                 : { key: 'back', label: task.return_to_base ? t('office.trip.backAtShort') : t('office.trip.endsShort'), value: p?.timeline?.totals.ends ?? task.end_by ?? '—', sub: p?.timeline?.totals.ends ? t('office.task.statPlanned') : undefined },
               km != null
-                ? { key: 'km', label: t('office.trip.distance'), value: t('office.trip.kmN', { km }), sub: task.km != null ? t('office.task.statLogged') : t('office.task.statGps') }
+                // The odometer's km, the GPS km under it when both are known (the site's task page shows both).
+                ? { key: 'km', label: t('office.trip.distance'), value: t('office.trip.kmN', { km }), sub: task.km != null ? [t('office.task.statLogged'), task.gps_km != null ? t('office.task.gpsKm', { km: task.gps_km }) : ''].filter(Boolean).join(' · ') : t('office.task.statGps') }
                 : { key: 'km', label: t('office.trip.distance'), value: p?.timeline?.totals.km != null ? t('office.trip.kmN', { km: Math.round(p.timeline.totals.km) }) : '—', sub: p?.timeline?.totals.km != null ? t('office.task.statPlanned') : undefined },
             ]}
           />
@@ -302,37 +318,32 @@ export default function TaskDetailScreen() {
         )}
         {problem && <ErrorNotice error={problem} onRetry={() => void q.reload()} />}
       </Screen>
-      {task && (primary || hasMore) && (
+      {task && (plan.primary || plan.more.length > 0) && (
         <StickyActions>
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            {hasMore && <Button kind="outline" label={t('office.common.more')} onPress={() => setActing(true)} disabled={busy !== null} style={{ flex: primary ? 0.7 : 1 }} testID="task-more" />}
-            {primary && <Button label={primary.label} onPress={primary.onPress} disabled={busy !== null} style={{ flex: 1.3 }} testID="task-primary" />}
+            {plan.more.length > 0 && <Button kind="outline" label={t('office.common.more')} onPress={() => setActing(true)} disabled={busy !== null} style={{ flex: plan.primary ? 0.7 : 1 }} testID="task-more" />}
+            {plan.primary && <Button label={actionLabel[plan.primary]} onPress={() => act(plan.primary!)} disabled={busy !== null} style={{ flex: 1.3 }} testID="task-primary" />}
           </View>
         </StickyActions>
       )}
       {task && (
         <Sheet visible={changing} title={t('office.task.changeTimeOrStops')} onClose={() => setChanging(false)} testID="task-change-sheet">
           <View style={{ gap: 10 }}>
-            {extras.time && <Button kind="outline" label={t('office.task.changeTime')} onPress={() => { setChanging(false); router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } }); }} />}
-            {extras.stops && <Button kind="outline" label={t('office.task.changeStops')} onPress={() => { setChanging(false); router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } }); }} />}
+            {extras.time && <Button kind="outline" label={t('office.task.changeTime')} onPress={() => { setChanging(false); act('time'); }} />}
+            {extras.stops && <Button kind="outline" label={t('office.task.changeStops')} onPress={() => { setChanging(false); act('stops'); }} />}
           </View>
         </Sheet>
       )}
       {task && (
         <Sheet visible={acting} title={t('office.task.moreTitle')} onClose={() => setActing(false)} testID="task-more-sheet">
           <View style={{ gap: 10 }}>
-            {actions.reassign && !task.needs_driver && <Button kind="outline" label={t('office.task.reassign')} onPress={() => { setActing(false); router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } }); }} />}
-            {extras.swap && <Button kind="outline" label={t('office.task.swapVehicle')} onPress={() => { setActing(false); router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } }); }} />}
-            {(task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route') && (
-              <Button kind="outline" label={t('office.history.showDrivenRoute')} onPress={() => { setActing(false); router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } }); }} />
-            )}
-            {extras.reopen && (
-              <View style={{ gap: 4 }}>
-                <Button kind="outline" label={t('office.task.reopen')} onPress={() => { setActing(false); setReopening(true); }} busy={busy === 'reopen'} />
-                <Txt variant="small">{t('office.task.reopenIntro')}</Txt>
+            {plan.more.map((a) => (
+              <View key={a} style={{ gap: 4 }}>
+                <Button kind="outline" label={actionLabel[a]} onPress={() => act(a)} busy={(a === 'reopen' && busy === 'reopen') || (a === 'cancel' && busy === 'cancel')}
+                  style={a === 'cancel' ? { borderColor: colors.red } : undefined} testID={`task-more-${a}`} />
+                {a === 'reopen' && <Txt variant="small">{t('office.task.reopenIntro')}</Txt>}
               </View>
-            )}
-            {actions.cancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => { setActing(false); setCancelling(true); }} busy={busy === 'cancel'} style={{ borderColor: colors.red }} />}
+            ))}
           </View>
         </Sheet>
       )}
