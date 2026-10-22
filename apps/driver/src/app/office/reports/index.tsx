@@ -8,6 +8,8 @@
 // vehicles held, the tasks, hours, km), Load more. Each section only with its tool; filters by vehicle or driver are
 // in one Filter under the days (O3 rows 7 and 10). A fill's video (Stage 1, O3 item 4) opens its 1-hour link in the phone's browser, one button per piece, the
 // steps' marks under it; a list read over 50 minutes ago is read again first (the links last an hour).
+// Round 4–7 (item 8, the list audit): each Mileage section shows its first 5 rows, "Show all N" 25, then Load more 25 at
+// a time (MileageSection; before: every row at once).
 
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
@@ -23,6 +25,7 @@ import {
   appendDuty, appendFuel, clockOut, dutyArgs, heldLine, hoursText, mileageView, outHowKey, outsideKm, rangeArgs, rangeFits, REPORT_MAX_DAYS, type ReportSection, reportSections, rowCells,
   clockOf, linksStale, reportFilterArgs, reportFilterDefs, videoChip, videoLine, videoPieces, amountsOf, amountWords, fuelTextParts,
 } from '@/office/manageLogic';
+import { SECTION_FIRST, sectionNext, sectionShown } from '@/office/lists2Logic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriversList, DutyLog, FleetError, FuelList, MileageSummary, Row, VehiclesList } from '@/office/types';
 import { BackHeader, Divider, ListFailed, Pill, Screen, Section } from '@/office/ui';
@@ -114,12 +117,33 @@ function Rows({ rows, hide, empty }: { rows: Row[]; hide?: readonly string[]; em
   );
 }
 
+/**
+ * Round 4–7 (item 8, the list audit): a Mileage section with its first 5 rows; "Show all N" in its header shows 25, then
+ * Load more 25 at a time (Gmail's and Samsara's report cards: the summary first, the rest one tap away). The rows are one
+ * answer (mileage_summary): nothing is asked again; another range or filter starts at 5 (the sections are keyed by them),
+ * a pull to refresh keeps what was opened.
+ */
+function MileageSection({ title, count, note, rows, hide, empty, testID }: { title: string; count: number; note: string; rows: Row[]; hide?: readonly string[]; empty: string; testID: string }) {
+  const { t } = useApp();
+  const [shown, setShown] = useState(SECTION_FIRST);
+  const n = sectionShown(rows.length, shown);
+  return (
+    <Section title={title} count={count} link={shown <= SECTION_FIRST && rows.length > SECTION_FIRST ? t('office.lists2.showAll', { n: rows.length }) : undefined} onLink={() => setShown(sectionNext(shown))} testID={testID}>
+      <Txt variant="small">{note}</Txt>
+      <Rows rows={rows.slice(0, n)} hide={hide} empty={empty} />
+      {shown > SECTION_FIRST && n < rows.length && <LoadMore shown={n} total={rows.length} busy={false} onPress={() => setShown(sectionNext(shown))} />}
+    </Section>
+  );
+}
+
 function Mileage({ from, to, by }: { from: string; to: string; by: Record<string, string> }) {
   const { t } = useApp();
   const { signOut } = useOffice();
   const q = useTool<MileageSummary>('mileage_summary', rangeArgs(from, to, by));
   const v = q.data ? mileageView(q.data) : null;
   const n = (x: number) => (Number(x) || 0).toLocaleString('en-US');
+  // Another range or filter: every section starts again at its first 5 rows.
+  const k = `${from}|${to}|${JSON.stringify(by)}`;
   return (
     <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
       {!v && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
@@ -134,28 +158,15 @@ function Mileage({ from, to, by }: { from: string; to: string; by: Record<string
             <Tile label={t('office.reports.fuel')} value={n(v.totals.fuel_litres)} unit={t('office.reports.litres')} sub={`LKR ${n(v.totals.fuel_lkr)}`} />
           </View>
           {v.totals.personal_km ? <Txt variant="muted" size={15}>{t('office.reports.personalKm', { km: n(v.totals.personal_km) })}</Txt> : null}
-          <Section title={t('office.reports.byVehicle')} count={v.vehicles.length}>
-            <Txt variant="small">{t(v.month ? 'office.reports.byVehicleNoteRange' : 'office.reports.byVehicleNote')}</Txt>
-            <Rows rows={v.vehicles} hide={v.month ? ['km_allowance', 'over_allowance'] : []} empty={t('office.reports.noneLogged')} />
-          </Section>
+          <MileageSection title={t('office.reports.byVehicle')} count={v.vehicles.length} note={t(v.month ? 'office.reports.byVehicleNoteRange' : 'office.reports.byVehicleNote')}
+            rows={v.vehicles} hide={v.month ? ['km_allowance', 'over_allowance'] : []} empty={t('office.reports.noneLogged')} testID="mileage-vehicles" key={`mileage-vehicles:${k}`} />
           {v.month && (
-            <Section title={t('office.reports.monthAllowance', { month: monthWords(t, v.month.month) })} count={v.month.rows.length}>
-              <Txt variant="small">{t('office.reports.monthAllowanceNote')}</Txt>
-              <Rows rows={v.month.rows} empty={t('office.reports.noneLogged')} />
-            </Section>
+            <MileageSection title={t('office.reports.monthAllowance', { month: monthWords(t, v.month.month) })} count={v.month.rows.length} note={t('office.reports.monthAllowanceNote')}
+              rows={v.month.rows} empty={t('office.reports.noneLogged')} testID="mileage-month" key={`mileage-month:${k}`} />
           )}
-          <Section title={t('office.reports.biggestGaps')} count={v.biggest_gaps.length}>
-            <Txt variant="small">{t('office.reports.gapsNote')}</Txt>
-            <Rows rows={v.biggest_gaps} empty={t('office.reports.noGaps')} />
-          </Section>
-          <Section title={t('office.reports.unloggedKm')} count={v.unlogged_km.length}>
-            <Txt variant="small">{t('office.reports.unloggedNote')}</Txt>
-            <Rows rows={v.unlogged_km} empty={t('office.reports.none')} />
-          </Section>
-          <Section title={t('office.reports.odometerChecks')} count={v.check_odometer.length}>
-            <Txt variant="small">{t('office.reports.checksNote')}</Txt>
-            <Rows rows={v.check_odometer} empty={t('office.reports.checksNone')} />
-          </Section>
+          <MileageSection title={t('office.reports.biggestGaps')} count={v.biggest_gaps.length} note={t('office.reports.gapsNote')} rows={v.biggest_gaps} empty={t('office.reports.noGaps')} testID="mileage-gaps" key={`mileage-gaps:${k}`} />
+          <MileageSection title={t('office.reports.unloggedKm')} count={v.unlogged_km.length} note={t('office.reports.unloggedNote')} rows={v.unlogged_km} empty={t('office.reports.none')} testID="mileage-unlogged" key={`mileage-unlogged:${k}`} />
+          <MileageSection title={t('office.reports.odometerChecks')} count={v.check_odometer.length} note={t('office.reports.checksNote')} rows={v.check_odometer} empty={t('office.reports.checksNone')} testID="mileage-checks" key={`mileage-checks:${k}`} />
         </>
       )}
     </Screen>

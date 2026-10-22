@@ -2,8 +2,9 @@
 // row; the list itself is not designed: the site's board as rows): the search bar (plate, make, regular driver,
 // custodian, holder: on the server), one Filter button (All · On a task · Available · In garage · Documents expiring ·
 // Returned, list_vehicles' own `filter`, with the fleet's counts in the sheet), the chip in use under it, skeleton rows
-// while the first answer comes, 25 a page with Load more, a row per vehicle (the plate, make · seats, the status pill,
-// the availability line, the document chips). "+ Register vehicle" only with register_vehicle (also as the empty
+// while the first answer comes, 25 a page with Load more, a row per vehicle (the plate, make · seats, the availability
+// line as the one status with the pill only for In garage or Returned, the document chips: a valid one quiet with its
+// tick; Round 4–7, item 8). "+ Register vehicle" only with register_vehicle (also as the empty
 // list's action); a row opens the vehicle.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,9 +13,11 @@ import { View } from 'react-native';
 
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
-import { Button, Plate } from '@/components/ui';
+import { Check } from '@/components/icons';
+import { Button, Plate, Txt } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
-import { appendVehicles, docTone, fuelKeys, kmLine, vehicleChoice, vehicleFilterDefs, vehiclesArgs, vehiclesEmpty, vehicleTone } from '@/office/manageLogic';
+import { appendVehicles, docTone, fuelKeys, kmLine, vehicleChoice, vehicleFilterDefs, vehiclesArgs, vehiclesEmpty } from '@/office/manageLogic';
+import { docQuiet, vehicleRowShown } from '@/office/lists2Logic';
 import { vehicleFilterParam } from '@/office/overviewLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleCard, VehiclesList } from '@/office/types';
@@ -59,11 +62,22 @@ export default function VehiclesScreen() {
     }
   }
 
+  // Round 4–7 (item 8): a valid document is quiet (its name with a tick, no fill: Fleetio's renewals), so the expiring,
+  // expired and not set ones stand out; each still says its state (the tick, "Lic valid" to the screen reader).
   const docs = (v: VehicleCard) => {
     const list = [['lic', v.documents?.lic], ['ins', v.documents?.ins], ['emi', v.documents?.emi]] as const;
     return (
-      <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
-        {list.map(([k, dc]) => <Pill key={k} text={t(`office.vehicles.doc_${k}`)} tone={docTone(dc?.chip)} size={12} />)}
+      <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, alignItems: 'center' }}>
+        {list.map(([k, dc]) => {
+          const tone = docTone(dc?.chip);
+          const word = t(`office.vehicles.doc_${k}`);
+          return docQuiet(tone) ? (
+            <View key={k} accessible accessibilityLabel={t('office.lists2.vehicles.docValid', { doc: word })} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6 }} testID="doc-ok">
+              <Check size={13} color={colors.green} strokeWidth={2.6} />
+              <Txt variant="small" size={12}>{word}</Txt>
+            </View>
+          ) : <Pill key={k} text={word} tone={tone} size={12} />;
+        })}
       </View>
     );
   };
@@ -95,16 +109,19 @@ export default function VehiclesScreen() {
           <View style={{ backgroundColor: colors.card, borderRadius: 18, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 4 }}>
             {d.vehicles.map((v, i) => {
               const km = kmLine(v);
+              // Round 4–7 (item 8): the plate once (left), one status (the availability line; the pill only for In garage or
+              // Returned).
+              const shown = vehicleRowShown(v, t);
               return (
                 <View key={v.reg_no} style={i > 0 ? { borderTopWidth: 1, borderTopColor: colors.line } : undefined}>
                   <Row
                     left={<Plate regNo={v.reg_no} />}
-                    title={[v.make_model, v.seats ? t('office.vehicles.seats', { n: v.seats }) : ''].filter(Boolean).join(' · ') || v.reg_no}
-                    line={[v.availability, v.held_by ? t('office.vehicles.heldBy', { name: v.held_by }) : v.assigned_to ? t('office.vehicles.assignedTo', { name: v.assigned_to }) : '', km.allow ? t('office.vehicles.kmOf', { used: km.used.toLocaleString('en-US'), allow: km.allow.toLocaleString('en-US') }) : ''].filter(Boolean).join(' · ')}
+                    title={shown.title}
+                    line={[shown.availability, v.held_by ? t('office.vehicles.heldBy', { name: v.held_by }) : v.assigned_to ? t('office.vehicles.assignedTo', { name: v.assigned_to }) : '', km.allow ? t('office.vehicles.kmOf', { used: km.used.toLocaleString('en-US'), allow: km.allow.toLocaleString('en-US') }) : ''].filter(Boolean).join(' · ')}
                     // Round 4–7 (5): the fuel ("Diesel", "Petrol 92"), amber "Fuel type: not set" until it is set (the page has Set it).
                     line2={v.fuel_text !== undefined ? fuelKeys(v.fuel_type, v.fuel_grade).map((k) => t(k)).join(' · ') : undefined}
                     line2Warn={v.fuel_text !== undefined && !v.fuel_type}
-                    right={<Pill text={v.active === false ? t('office.vehicles.returned') : v.status ?? ''} tone={vehicleTone(v)} />}
+                    right={shown.pill ? <Pill text={shown.pill.text} tone={shown.pill.tone} /> : undefined}
                     onPress={() => router.push({ pathname: '/office/vehicles/[reg]', params: { reg: v.reg_no } })}
                   />
                   <View style={{ paddingHorizontal: 12, paddingBottom: 10, marginTop: -6 }}>{docs(v)}</View>

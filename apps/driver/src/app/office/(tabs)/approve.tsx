@@ -5,6 +5,8 @@
 // Tell requester), with "Palitha is reviewing" when another approver has it open. Rules: office/requestsLogic.ts.
 // Round 3: an expired request's chip has its icon (A6); a self-drive request says the asker's licence (A5,
 // office/licenceLogic.ts selfDriveLine) on its second line.
+// Round 4–7 (item 8, the list audit): the requester once (the avatar and the line; the title is the trip), the status
+// chip only when the section does not say it (office/lists2Logic.ts approveRowShown, requestChipShown).
 
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -15,7 +17,7 @@ import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListSta
 import { Txt } from '@/components/ui';
 import { whenWords } from '@/lib/dateWords';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
-import { requestLine, requestTitle } from '@/office/homeLogic';
+import { approveRowShown, requestChipShown } from '@/office/lists2Logic';
 import { CalendarX } from '@/components/icons';
 import { selfDriveLine } from '@/office/licenceLogic';
 import { appendRequests, arrivals, isExpired, requestsArgs, requestsChoice, requestsFilterDefs, statusTone, withArrivals } from '@/office/requestsLogic';
@@ -125,18 +127,22 @@ export default function ApproveTab() {
               const reviewing = r.reviewing?.map((x) => x.name).join(', ');
               // Round 3 (A5): the asker drives it themselves: their licence on the trip's day (a warning, never a block).
               const licence = selfDriveLine(r);
+              // Round 4–7 (item 8): the requester once beside the avatar (the title is the trip; a request with no trip
+              // words keeps the name as its title and leaves it out of the line).
+              const words = approveRowShown(r, whenWords(t, r.when));
               return (
                 <View key={r.id}>
                   {i > 0 && <Divider />}
                   <Row
                     left={<Avatar name={r.requested_by} photo={r.requested_by_photo_url} />}
-                    title={requestTitle(r)}
-                    line={requestLine({ ...r, when: whenWords(t, r.when) })}
+                    title={words.title}
+                    line={words.line}
                     line2={reviewing ? t('office.approve.reviewing', { name: reviewing }) : r.late ? t('office.approve.late') : licence ? t(licence.key) : undefined}
                     line2Warn={!reviewing && !r.late && !!licence?.warn}
                     right={<View style={{ alignItems: 'flex-end', gap: 4 }}>
                       {marked.has(r.id) && <StatusChip text={t('office.approve.newPill')} tone="blue" />}
-                      <StatusChip text={t(`office.requests.status_${r.status}`)} tone={statusTone(r.status)} icon={isExpired(r) ? CalendarX : undefined} testID={isExpired(r) ? 'request-expired' : undefined} />
+                      {/* Round 4–7 (item 8): the status chip only when the section does not say it (a Changed one under Waiting). */}
+                      {requestChipShown(status, r.status) && <StatusChip text={t(`office.requests.status_${r.status}`)} tone={statusTone(r.status)} icon={isExpired(r) ? CalendarX : undefined} testID={isExpired(r) ? 'request-expired' : undefined} />}
                       {r.asked ? <Txt variant="small" style={{ maxWidth: 100, textAlign: 'right' }} numberOfLines={1}>{whenWords(t, r.asked)}</Txt> : null}
                     </View>}
                     onPress={() => router.push({ pathname: '/office/request/[id]', params: { id: r.id } })}

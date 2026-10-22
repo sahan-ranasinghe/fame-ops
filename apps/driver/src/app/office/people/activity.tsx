@@ -85,7 +85,8 @@ export default function ActivityLogScreen() {
         {!d && !q.error && <SkeletonRows rows={6} lines={2} />}
         {d && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {d && (
-          <Section title={t('office.activity.title')} count={d.total ?? d.entries.length}>
+          // Round 4–7 (item 8): the header says "Activity log"; the section names what it holds ("Changes", as the site's).
+          <Section title={t('office.lists2.activity.section')} count={d.total ?? d.entries.length}>
             {d.entries.length === 0
               ? <ListEmpty text={t(person ? 'office.activity.emptyPerson' : 'office.activity.empty')} />
               : d.entries.map((e, i) => <View key={e.id}>{i > 0 && <Divider />}{row(e)}</View>)}

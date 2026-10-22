@@ -92,7 +92,8 @@ export default function TaskHistoryScreen() {
         {d && <Txt variant="muted" size={15} testID="history-totals">{totalsLine(d, t)}</Txt>}
         {d?.more ? <Txt variant="small" color={colors.amberText}>{d.more}</Txt> : null}
         {d && (
-          <Section title={t('office.history2.title')} count={d.total ?? d.count}>
+          // Round 4–7 (item 8): the header says "Task history"; the section names what it holds (as the site's list header).
+          <Section title={t('office.lists2.history.section')} count={d.total ?? d.count}>
             {d.tasks.length === 0 && <ListEmpty text={t(emptyKey(search, choice), { search })} />}
             {d.tasks.map((x, i) => {
               const key = statusKey(x.status);

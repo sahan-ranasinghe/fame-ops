@@ -12,6 +12,9 @@
 // page (office/my-trip/[id]).
 // Round 4–7 (6): a trip the person rides in (a registered passenger) is tagged Passenger and opens its view-only page
 // (office/my-trip/[id]: the time, where it is, the driver with Call, the plate, the stops).
+// Round 4–7 (item 8, the list audit): 25 at a time with Load more (my_trips' cursor; before: 100 at once); the chip only
+// when it says something the section ("Waiting" in WAITING, "Done" in DONE, "Expired" in EXPIRED) and the "Approved by"
+// line do not (office/lists2Logic.ts tripChipShown).
 
 import { tripChip } from '@/office/statusWords';
 import { useRouter } from 'expo-router';
@@ -21,7 +24,7 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { CalendarX, Phone, RotateCcw } from '@/components/icons';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { FilterBar } from '@/components/patterns/FilterBar';
-import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Notice, Txt } from '@/components/ui';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
@@ -31,6 +34,7 @@ import { isCreatedTask, tripLive, tripTitle } from '@/office/homeLogic';
 import { TRIP_ACTION_KEY, tripTaskId } from '@/office/myTripLogic';
 import { canRequestAgain, expiredText } from '@/office/requestsLogic';
 import { requestAgainDraft, setDraft } from '@/office/trip/draft';
+import { appendTrips, tripChipShown, TRIPS_PAGE } from '@/office/lists2Logic';
 import { useOffice, useTool } from '@/office/state';
 import {
   canEdit, canWithdraw, changedText, isPassengerTrip, type Trip, tripBuckets, tripKey, tripLine, tripRoute, tripsArgs, tripsChoice, tripsFilterDefs,
@@ -41,8 +45,8 @@ import { DarkHeader, ErrorNotice, ListFailed, Pill, Screen, StatusChip } from '@
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
-/** 90 days of one person's trips: well under this (no endless list). */
-const LIMIT = 100;
+/** Round 4–7 (item 8): 25 at a time with Load more (before: 100 at once). */
+const LIMIT = TRIPS_PAGE;
 const SEARCH_DEBOUNCE_MS = 500;
 
 interface Withdrawing {
@@ -71,6 +75,20 @@ export default function TripsTab() {
   const q = useTool<MyTrips>('my_trips', tripsArgs(today, LIMIT, search));
   const trips = q.data?.trips ?? [];
   const groups = tripBuckets(trips, filter);
+  // The next 25 (my_trips' cursor): a page that lands after the search changed is dropped.
+  const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
+  async function loadMore() {
+    const k = q.key;
+    if (!q.data?.next || more.busy) return;
+    setMore({ busy: true, error: null });
+    try {
+      const page = await api.call<MyTrips>('my_trips', { ...tripsArgs(today, LIMIT, search), cursor: q.data.next });
+      q.patch((p) => appendTrips(p, page), k, true);
+      setMore({ busy: false, error: null });
+    } catch (e) {
+      setMore({ busy: false, error: e as FleetError });
+    }
+  }
 
   // Request again (Round 3, A6; Airbnb's and Uber's "Book again"): the copy in place, then the trip editor at Where.
   function requestAgain(trip: RequestCard) {
@@ -91,7 +109,7 @@ export default function TripsTab() {
     }
   }
 
-  function card(trip: Trip) {
+  function card(trip: Trip, group: string) {
     const live = tripLive(trip);
     const route = tripRoute(trip, me.permissions);
     const changed = changedText(trip);
@@ -102,7 +120,8 @@ export default function TripsTab() {
         {isPassengerTrip(trip) && <View style={{ flexDirection: 'row' }}><Pill text={t('office.passengers.tag')} tone="blue" size={13} /></View>}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
           <Txt variant="strong" size={17} style={{ flex: 1 }}>{tripTitle(trip)}</Txt>
-          {(() => { const k = tripChip(live.state); return <StatusChip text={t(`office.chip.${k.key}`)} tone={k.tone} icon={live.state === 'expired' ? CalendarX : undefined} testID={live.state === 'expired' ? 'trip-expired' : undefined} />; })()}
+          {/* Round 4–7 (item 8): the chip only when the section and the "Approved by" line do not say it. */}
+          {(() => { const k = tripChip(live.state); return tripChipShown(k.key, group, !!approved) ? <StatusChip text={t(`office.chip.${k.key}`)} tone={k.tone} icon={live.state === 'expired' ? CalendarX : undefined} testID={live.state === 'expired' ? 'trip-expired' : undefined} /> : null; })()}
         </View>
         <Txt variant="muted" size={15}>{tripLine(trip, t('office.trips.backBy'), { self: t('office.who.drivesThemselves'), other: t('office.who.someoneElse') }, (s) => whenWords(t, s))}</Txt>
         {changed ? <Txt variant="strong" size={14} color={colors.amberText}>{changed}</Txt> : null}
@@ -171,13 +190,15 @@ export default function TripsTab() {
         {q.data && trips.length === 0 && (search
           ? <ListEmpty text={t('office.trips.noneMatch', { search })} />
           : <ListEmpty text={t('office.trips.none')} action={me.tools.includes('create_request') ? t('office.trip.requestVehicle') : undefined} onAction={me.tools.includes('create_request') ? () => router.push({ pathname: '/office/trip/where', params: { mode: 'request' } }) : undefined} />)}
-        {q.data && trips.length > 0 && groups.length === 0 && <ListEmpty text={t('office.trips.noneInFilter')} action={t('patterns.clearAll')} onAction={() => setValues({ show: 'all' })} />}
+        {q.data && trips.length > 0 && groups.length === 0 && !q.data.next && <ListEmpty text={t('office.trips.noneInFilter')} action={t('patterns.clearAll')} onAction={() => setValues({ show: 'all' })} />}
         {groups.map((g) => (
           <View key={g.key} style={{ gap: 8 }}>
             <Txt variant="label" color={colors.muted} style={{ paddingHorizontal: 2 }}>{t(`office.trips.${g.key}`).toUpperCase()}</Txt>
-            {g.trips.map(card)}
+            {g.trips.map((x) => card(x, g.key))}
           </View>
         ))}
+        {more.error && <ListFailed error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
+        {q.data?.next && <LoadMore shown={trips.length} total={q.data.total} busy={more.busy} onPress={() => void loadMore()} />}
       </Screen>
       <ReasonSheet<WithdrawReason>
         visible={sheet !== null}

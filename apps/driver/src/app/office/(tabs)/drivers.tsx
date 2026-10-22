@@ -11,6 +11,9 @@
 // the reason, a note → set_unavailability). "Ask drivers" at the bottom opens the sheet of design 13
 // with every free driver ticked (Free for a trip? today: the person types the time). Every button only when the person's
 // tools allow it (me.tools); the rules: office/driversLogic.ts.
+// Round 4–7 (item 8, the list audit): a driver's state is said once. The Not available pill (in Call's place, as before)
+// unless the Show filter is Not available; under On a task / Off duty / Not available, or beside that pill, the first line
+// says only what the state adds ("Since 07:40", "Back 13:00"; office/lists2Logic.ts statusRest). The avatar's dot stays.
 
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -33,6 +36,7 @@ import { addDays, colomboDate } from '@/lib/time';
 import { askTargetsFromBoard } from '@/office/askLogic';
 import { attendanceGroups, attendanceLine, boardArgs, boardChoice, boardFilterDefs, boardPill, entryParts, PARTS, REASONS, rowLines, type UnavailabilityForm, unavailabilityInput, weekDays, weekGrid, type WeekRow } from '@/office/driversLogic';
 import { vehicleChip } from '@/office/approveLogic';
+import { type BoardShow, driverStateShown, statusRest } from '@/office/lists2Logic';
 import { VehicleChipView } from '@/components/office/DriverRows';
 import { useOffice, useTool } from '@/office/state';
 import type { BoardDriver, DriversBoard, FleetError, SetUnavailabilityResult, SettingsResult, UnavailabilityList, UnavailableEntry, UnavailablePart, UnavailableReason } from '@/office/types';
@@ -137,7 +141,7 @@ export default function DriversTab() {
         {board.data && board.error && <ListFailed stale error={board.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {problem && <ErrorNotice error={problem} onRetry={() => { if (lastRemove) void remove(lastRemove); else setProblem(null); }} />}
         {view === 'now' && board.data && drivers.length === 0 && <ListEmpty text={search ? t('office.drivers.noneMatch', { search }) : filter === 'all' ? t('office.drivers.empty') : t('office.drivers.noneInFilter')} />}
-        {view === 'now' && drivers.map((d) => <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} onDay={onDay} />)}
+        {view === 'now' && drivers.map((d) => <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} onDay={onDay} filter={filter} />)}
 
         {/* Round 2b: Today's attendance (Samsara's driver day): four groups from the day's duty sessions; Call on each row. */}
         {view === 'attendance' && board.data && attendanceGroups(drivers).map((g) => (
@@ -202,12 +206,17 @@ export default function DriversTab() {
  * A driver's row (design 12; Round 3: the driver-first card of Uber Fleet and Samsara): the photo with the state's dot, the
  * name, the vehicle chip under it (held today, or the regular one, or none), the two lines, Call or the not-available pill.
  */
-function DriverRow({ d, onPress, line, onDay }: { d: BoardDriver; onPress: () => void; line?: string; onDay: boolean }) {
+function DriverRow({ d, onPress, line, onDay, filter = 'all' }: { d: BoardDriver; onPress: () => void; line?: string; onDay: boolean; filter?: BoardShow }) {
   const { t } = useApp();
   const pill = boardPill(d);
   const lines = rowLines(d, t);
+  // Round 4–7 (item 8): the state said once. The Not available pill (unless the filter says it) or the Show filter says the
+  // state; the first line then says only what it adds ("Back 13:00", "Since 07:40"; the usual start kept).
+  const state = driverStateShown(d, filter);
+  const rest = state.restOnly ? statusRest(t, d.status.text) : null;
+  const first = rest === null ? lines[0] : [rest, d.status.kind === 'off_duty' && d.usual_start ? t('office.drivers.usuallyStarts', { time: d.usual_start }) : ''].filter(Boolean).join(' · ');
   // The attendance view's own line ("Started 07:12") instead of the board's.
-  const [line1, line2] = line ? [line, undefined] : lines;
+  const [line1, line2] = line ? [line, undefined] : [first, lines[1]];
   const call = d.links?.call;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={!d.username} style={({ pressed }) => [styles.row, pressed && { opacity: 0.8 }]} testID={`driver-row-${d.username ?? d.name}`}>
@@ -220,11 +229,11 @@ function DriverRow({ d, onPress, line, onDay }: { d: BoardDriver; onPress: () =>
           <Txt variant="strong" size={17} numberOfLines={1} style={{ flexShrink: 1 }}>{d.name}</Txt>
         </View>
         <VehicleChipView chip={vehicleChip(d, onDay)} testID={`driver-vehicle-${d.username ?? d.name}`} />
-        <Txt variant="muted" size={15} numberOfLines={2}>{line1}</Txt>
+        {line1 ? <Txt variant="muted" size={15} numberOfLines={2} testID="driver-line1">{line1}</Txt> : null}
         {line2 ? <Txt variant="small" numberOfLines={2}>{line2}</Txt> : null}
       </View>
       {d.status.kind === 'not_available' ? (
-        <StatusChip text={t('office.drivers.pill.notAvailable')} tone="red" />
+        state.pill || line ? <StatusChip text={t('office.drivers.pill.notAvailable')} tone="red" /> : null
       ) : call ? (
         <Pressable accessibilityRole="button" accessibilityLabel={`${t('office.common.call')} ${d.name}`} onPress={() => void Linking.openURL(call).catch(() => undefined)} style={styles.callBtn}>
           <Phone size={20} color={colors.ink} strokeWidth={2.4} />
