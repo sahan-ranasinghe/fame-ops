@@ -29,6 +29,7 @@ import { TripSection, useTripLine } from "./RequestTrip";
 import { useRequestsHome, useTripCard } from "./myTripsQuery";
 import { PassengerList } from "./PassengerList";
 import { ridersLine } from "./passengersLogic";
+import { useSwitch } from "./dispatchParts";
 
 /**
  * The request from the lists already loaded (followed as they refresh), else
@@ -72,6 +73,8 @@ export function RequestDetail() {
   const toast = useToast();
   const { q, err } = useRequest(id);
   const trip = useTripLine(q);
+  // Round 4–7: with the switch passengers off, nobody is named (the count stays where the page shows it).
+  const ridersOn = useSwitch("passengers").on;
   const [cancelReason, setCancelReason] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -149,7 +152,7 @@ export function RequestDetail() {
             ? <div><dt>Passengers</dt><dd>{p?.passengers ?? "—"}</dd></div>
             : <div><dt>Need</dt><dd>{q.need || "—"}</dd></div>}
           {/* Round 4–7 (6): who rides by name ("Asha, Kamal +3" and a row each; Call / WhatsApp for someone without an account). */}
-          {q.passengers_list?.length ? (
+          {ridersOn && q.passengers_list?.length ? (
             <div style={{ gridColumn: "1/-1" }} data-testid="request-passengers">
               <dt>Who rides</dt>
               <dd style={{ fontWeight: 400 }}>

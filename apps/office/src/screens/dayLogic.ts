@@ -47,6 +47,14 @@ export function daySummary(route: Route | null): DaySummary | null {
   };
 }
 
+/**
+ * A day with nothing recorded (no point, no summary kept): the summary card says "No trips recorded this day." (the empty
+ * state main's timeline had). A day kept as a summary only (older than the points) is not empty: its numbers are shown.
+ */
+export function dayIsEmpty(route: Route | null): boolean {
+  return !!route && route.count === 0 && route.points.length === 0 && route.km == null && !route.first;
+}
+
 /** A stop's card (Google Maps' visit): "Stopped near Kurunegala · 06:56–07:15 · 19 min"; with no town, "Stopped · …". */
 export function stopText(s: Pick<StopView, "from" | "to" | "minutes" | "near">): string {
   const span = s.from === s.to ? s.from : `${s.from}–${s.to}`;

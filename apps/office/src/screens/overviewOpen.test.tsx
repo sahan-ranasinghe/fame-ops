@@ -1,6 +1,6 @@
 // Phase 7 (§16), on the pages: the Overview's tiles open their lists (the side panel on a desktop, in the URL, with an X
 // and Esc; the full page on a phone), the list screens read and write their filter in the URL, and the Reminders page.
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { applyFilter, removeChip } from "../test/controls";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +13,7 @@ import { Live } from "./Live";
 import { Overview } from "./Overview";
 import { Reminders } from "./Reminders";
 import { Vehicles } from "./Vehicles";
+import { firstSelected, liveForTask } from "./overviewLinks";
 
 vi.mock("../map/MapView", () => ({ MapView: (_p: MapProps) => <div data-testid="map" /> }));
 
@@ -45,7 +46,7 @@ const live = {
   as_of: "2026-10-18 13:40", counts: { all: 2, sharing: 2, stale: 0, not_sharing: 0 },
   drivers: [
     { driver: "Nuwan Perera", username: "nuwan", duty: "on_task", task: "Team drop", state: "sharing", status: "live", location: "Live · 1 min", links: {} },
-    { driver: "Sunil Fernando", username: "sunil", duty: "on_duty", state: "sharing", status: "live", location: "Live · 1 min", links: {} },
+    { driver: "Sunil Fernando", username: "sunil", duty: "on_duty", state: "sharing", status: "live", location: "Live · 1 min", links: {}, task_id: "t2" },
   ],
 };
 const waiting = { status: "waiting", count: 1, requests: [{ id: "r1", requested_by: "Isuru Bandara", when: "Mon 19 Oct · 08:00", route: "Head office → Katunayake", need: "Car · 3 pax", status: "waiting" }] };
@@ -261,6 +262,25 @@ describe("the list screens' filter in the URL", () => {
     removeChip("Show: On duty");
     await act(async () => { await Promise.resolve(); });
     expect(where()).toBe("/live");
+  });
+});
+
+describe("Live opened from a task (the task page's on-the-way banner)", () => {
+  const selected = () => document.querySelector(".lrow.sel")?.textContent ?? "";
+  it("?task= selects the driver on that task; without it the first driver is selected as before", async () => {
+    expect(liveForTask("t2")).toBe("/live?task=t2");
+    await mount(liveForTask("t2"));
+    await waitFor(() => expect(selected()).toContain("Sunil Fernando"));
+    cleanup();
+    await mount("/live");
+    await waitFor(() => expect(selected()).toContain("Nuwan Perera"));
+  });
+  it("firstSelected: the task's driver, else the chip's first, else anyone", () => {
+    const a: { username: string; task_id?: string } = { username: "a" }, b = { username: "b", task_id: "t2" };
+    expect(firstSelected([a, b], [a, b], "t2")).toBe(b);
+    expect(firstSelected([a, b], [b], null)).toBe(b);
+    expect(firstSelected([a, b], [], "nobody")).toBe(a);
+    expect(firstSelected([], [], "t2")).toBeUndefined();
   });
 });
 

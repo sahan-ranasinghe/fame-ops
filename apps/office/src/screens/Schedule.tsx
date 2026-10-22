@@ -17,6 +17,7 @@ import { Avatar, Notice, Pill, Plate, Segmented } from "../ui/basics";
 import { DayStrip } from "../ui/DayPicker";
 import { EmptyLine, SkeletonRows, useUrlFilter } from "../ui/ListKit";
 import { useIsPhone } from "../ui/phone";
+import { useSwitch } from "./dispatchParts";
 import {
   barOf,
   type Booking,
@@ -159,6 +160,8 @@ function Cards({ data, opens }: { data: DayTimeline; opens: boolean }) {
 export function Schedule() {
   const { me, noConnector } = useFleet();
   const phone = useIsPhone();
+  // Round 4–7: the Asks button only while the switch holder_contact is on.
+  const holders = useSwitch("holder_contact").on;
   const [kind, setKind] = useUrlFilter<TimelineKind>("kind", "drivers", TIMELINE_KINDS);
   const [date, setDate] = useUrlFilter<string>("date", "");
   const day = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : today();
@@ -174,7 +177,7 @@ export function Schedule() {
     <section className="view" data-testid="schedule">
       <div className="ph">
         <div><div className="eyebrow">Who has each driver and vehicle, hour by hour</div><h1>Timeline</h1></div>
-        {me.tools.includes("holder_asks") && can(me, "request", "approve", "assign_tasks") && <div className="ph-actions"><Link className="btn" to="/tasks/asks">Asks</Link></div>}
+        {holders && me.tools.includes("holder_asks") && can(me, "request", "approve", "assign_tasks") && <div className="ph-actions"><Link className="btn" to="/tasks/asks">Asks</Link></div>}
       </div>
       <div className="sched-controls">
         <Segmented label="Show" options={[["drivers", "Drivers"], ["vehicles", "Vehicles"]] as const} value={kind} onChange={setKind} />

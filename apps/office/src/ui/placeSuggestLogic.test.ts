@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupedWhere, startsGroup, suggestArgs, splitSuggestions, SUGGEST_MAX_ROWS, WHERE_MAX_RECENT, WHERE_MAX_ROWS, whereRows } from "./placeSuggestLogic";
+import { groupedWhere, someoneElsesRequest, startsGroup, suggestArgs, type SuggestForWhom, splitSuggestions, SUGGEST_MAX_ROWS, WHERE_MAX_RECENT, WHERE_MAX_ROWS, whereRows } from "./placeSuggestLogic";
 
 const P = (name: string) => ({ layer: "place", name });
 const R = (name: string) => ({ layer: "recent", name });
@@ -70,9 +70,20 @@ describe("Where suggestions in groups (Round 4–7, item 10)", () => {
     expect(w.top.map((_, i) => startsGroup(w.top, i)).some(Boolean)).toBe(false);
   });
 
-  it("for someone else's request or person; nothing extra for one's own", () => {
+  it("for someone else's request; nothing extra for one's own; never for_person (the server took it away)", () => {
     expect(suggestArgs(null)).toEqual({ suggest: true });
     expect(suggestArgs({ request: "r-1" })).toEqual({ suggest: true, for_request: "r-1" });
-    expect(suggestArgs({ person: "e-1" })).toEqual({ suggest: true, for_person: "e-1" });
+    expect(suggestArgs({ person: "e-1" } as unknown as SuggestForWhom)).toEqual({ suggest: true });
+  });
+
+  it("someone else's request: by id when both sides carry one, else by name", () => {
+    expect(someoneElsesRequest({ requested_by: "Anoja Perera" }, { name: "Sahan Ranasinghe" })).toBe(true);
+    expect(someoneElsesRequest({ requested_by: "Sahan Ranasinghe" }, { name: "Sahan Ranasinghe" })).toBe(false);
+    expect(someoneElsesRequest({ requested_by: " Sahan Ranasinghe" }, { name: "Sahan Ranasinghe " })).toBe(false);
+    // Two people with one name: the ids tell them apart; the same person under another spelling is still their own.
+    expect(someoneElsesRequest({ requested_by: "Kamal Silva", requested_by_employee_id: "e-2" }, { name: "Kamal Silva", employee_id: "e-1" })).toBe(true);
+    expect(someoneElsesRequest({ requested_by: "K. Silva", requested_by_employee_id: "e-1" }, { name: "Kamal Silva", employee_id: "e-1" })).toBe(false);
+    // Only one side has an id: the name decides.
+    expect(someoneElsesRequest({ requested_by: "Kamal Silva", requested_by_employee_id: "e-2" }, { name: "Kamal Silva" })).toBe(false);
   });
 });

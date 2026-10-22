@@ -22,6 +22,7 @@ import type { FleetError } from "../transport/types";
 import { Loading, Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { SuggestFor } from "../ui/LocationSearch";
+import { someoneElsesRequest } from "../ui/placeSuggestLogic";
 import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { MyLicenceNote, WhoDrives } from "../ui/WhoDrives";
@@ -128,7 +129,7 @@ function EditForm({ id, q, f, setF, draft }: {
         </div>
 
         {/* Round 4–7 (item 10): someone else's request: the place boxes offer the requester's recent places too. */}
-        <SuggestFor request={q.requested_by !== me.name ? id : undefined}><TripEditor trip={trip} prefix="re" /></SuggestFor>
+        <SuggestFor request={someoneElsesRequest(q, me) ? id : undefined}><TripEditor trip={trip} prefix="re" /></SuggestFor>
 
         <div className="card card-b form">
           <div className="grid2">

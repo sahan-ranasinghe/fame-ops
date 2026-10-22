@@ -198,6 +198,14 @@ export class FleetStore {
     if (next !== e.data) this.set(key, { data: next });
   }
 
+  /**
+   * Every query on screen that asks this tool fetches again (quietly), whatever its onWrite: a write that changes what the
+   * tool answers (update_settings → get_settings, whose readers skip the after-write refresh).
+   */
+  refetchTool(tool: string): void {
+    for (const [key, q] of this.queries) if (q.tool === tool) void this.fetch(key, q.tool, q.args, true);
+  }
+
   /** After a write: everything watched fetches again, and every query on screen (quietly). */
   invalidate(): Promise<void> {
     for (const [key, q] of this.queries) if (q.onWrite) void this.fetch(key, q.tool, q.args, true);

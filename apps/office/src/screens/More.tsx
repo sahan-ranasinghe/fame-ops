@@ -1,12 +1,13 @@
 import { PERMISSION_TEXT } from "@fleet/permissions";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import { moreFor, NAV_SECTIONS } from "../app/nav";
+import { moreFor, NAV_SECTIONS, SUB_PAGES } from "../app/nav";
 import { badgeText, useNavBadges } from "../app/navBadges";
 import { ROLE_LABEL } from "../transport/types";
 import { Avatar } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { phoneLike, saveChoice, touchPointer } from "../app/viewChoice";
+import { useSwitchesOff } from "./dispatchParts";
 
 /**
  * Round 2b (Instagram / WhatsApp settings): the profile card at the top (My profile, Settings, Sign out: each once, here
@@ -15,9 +16,13 @@ import { phoneLike, saveChoice, touchPointer } from "../app/viewChoice";
  */
 export function More() {
   const { me, signOut, transport } = useFleet();
-  const more = moreFor(me).filter((n) => n.key !== "settings");
+  // Round 4–7: a page a switch turns off is not listed (Asks with holder_contact off).
+  const more = moreFor(me, useSwitchesOff()).filter((n) => n.key !== "settings");
+  // A sub-page (Task history, Asks) sits in the section of the page it follows (nav.ts SUB_PAGES `after`): before, only Task
+  // history was placed and Asks was in no section, so More never showed it.
+  const sectionKey = (key: string) => SUB_PAGES.find((x) => x.key === key)?.after ?? key;
   const groups = NAV_SECTIONS
-    .map((g) => ({ ...g, items: more.filter((n) => g.keys.includes(n.key) || (g.key === "today" && n.key === "task_history")) }))
+    .map((g) => ({ ...g, items: more.filter((n) => g.keys.includes(sectionKey(n.key))) }))
     .filter((g) => g.items.length > 0);
   const badges = useNavBadges();
   return (

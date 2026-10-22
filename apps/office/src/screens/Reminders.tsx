@@ -3,7 +3,8 @@
 // (the soonest due first, overdue at the top): the plate (to the vehicle's page), the service's bar from list_vehicles,
 // and the vehicle's reminders, each row to the vehicle; then the driver licences as rows (ReminderList); everything else
 // the overview lists (the km allowance, missed tasks, odometer checks, late starts…) is counted in one line that opens
-// Issues, where each of them is. Without the issues permission (no vehicle reminders reach the person) the cards come
+// Issues, where each of them is. A first line counts them as the Overview's tile does ("3 reminders · 1 vehicle · 1 driver
+// licence"). Without the issues permission (no vehicle reminders reach the person) the cards come
 // from list_vehicles: the vehicles whose service or documents are due in the window. The same view is the Overview's
 // side panel on a desktop. Hotfix 3 (L3): 25 at a time, paged on the page (the overview's list is whole).
 import { useEffect } from "react";
@@ -18,7 +19,7 @@ import { ErrBox, Plate, StaleNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { EmptyLine, ListHeader, LoadMore, Pager, useLocalPagedList, SkeletonRows } from "../ui/ListKit";
 import { PageTop } from "../ui/Page";
-import { isReminderKind, type ReminderRow, reminderGroups } from "./overviewLinks";
+import { isReminderKind, reminderCounts, type ReminderRow, reminderGroups, reminderSummary } from "./overviewLinks";
 import { careCards, docTone, docWords, isDue, serviceTone, serviceWords, type VehicleCare } from "./vehicleCareLogic";
 
 function Row({ r }: { r: ReminderRow }) {
@@ -137,8 +138,12 @@ export function ReminderCards({ items, vehicles, issues, windowDays }: { items: 
       </div>
     );
   }
+  // The same number as the Overview's tile (the reminders), then what they are on; without the issues permission no
+  // reminder reaches the person (the tile is not theirs), the vehicles due are counted instead.
+  const summary = issues ? reminderSummary(reminderCounts(items)) : `${plates.length} vehicle${plates.length === 1 ? "" : "s"} due`;
   return (
     <div className="stack" data-testid="reminders">
+      <p className="muted" style={{ margin: 0 }} data-testid="reminders-summary">{summary}</p>
       {plates.length > 0 && (
         <div className="stack" data-testid="reminders-vehicles">
           <div className="card"><ListHeader title="Vehicles: service and documents due" count={plates.length} /></div>

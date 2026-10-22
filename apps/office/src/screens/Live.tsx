@@ -15,7 +15,8 @@
 // on the card itself). Part 2: a driver on a task gets "Swap vehicle" (the
 // same page, as a swap during the task), and "declined the 09:00 task" /
 // "hasn't accepted the 09:00 task" in red while that task needs a driver.
-// Part 4 (§16): the chip is in the URL (/live?filter=road is the Overview's "Vehicles on the road").
+// Part 4 (§16): the chip is in the URL (/live?filter=road is the Overview's "Vehicles on the road"); ?task=<id> selects the
+// driver on that task first (a task page's on-the-way banner).
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -49,7 +50,7 @@ import { useGoogleMap } from "../map/google/useGoogleMap";
 import { snapAllowed } from "../map/mapChoice";
 import type { MapMarker, MapRoute, RoutePoint } from "../map/types";
 import { GapsList, useGaps } from "./GapsList";
-import { filterFromWord, LIVE_FILTER_WORDS, withParam } from "./overviewLinks";
+import { filterFromWord, firstSelected, LIVE_FILTER_WORDS, withParam } from "./overviewLinks";
 import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
@@ -167,8 +168,9 @@ export function Live() {
     return () => clearInterval(timer);
   }, [trails, !!route, transport]);
   const shown = filter === "all" ? all : all.filter((x) => inFilter(x, filter));
-  // The first driver of the chip in the URL is selected first (Live opened from the Overview's "on the road").
-  const first = shown[0] ?? all[0];
+  // The driver on the task in the URL is selected first (?task=: the task page's on-the-way banner), else the first driver
+  // of the chip in the URL (Live opened from the Overview's "on the road").
+  const first = firstSelected(all, shown, params.get("task"));
   const sel = all.find((x) => x.username === selected) ?? first;
   useEffect(() => { if (!selected && first) setSelected(first.username); }, [first?.username, selected]);
   // Watched mode: the selected driver (every sharing driver while the trails are on) uploads every 10 s while moving.

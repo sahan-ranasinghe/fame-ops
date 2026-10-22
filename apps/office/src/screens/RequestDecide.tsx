@@ -27,6 +27,7 @@ import { can, type FleetError } from "../transport/types";
 import { Empty, Loading, Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { SuggestFor } from "../ui/LocationSearch";
+import { someoneElsesRequest } from "../ui/placeSuggestLogic";
 import { phoneDisplay } from "../ui/ContactButtons";
 import { DriverPicker } from "../ui/DriverPicker";
 import { driverOptions } from "../ui/driverPickerLogic";
@@ -93,7 +94,7 @@ export function RequestDecide() {
   if (err) return <section className="view"><PageTop title="Vehicle request" backTo="/requests" /><Notice tone="bad">{err}</Notice></section>;
   if (!q || trip === null) return <section className="view"><PageTop title="Vehicle request" backTo="/requests" /><Loading>Loading the request…</Loading></section>;
   // Round 4–7 (item 10): deciding someone else's request, a place box offers the requester's recent places too.
-  return <SuggestFor request={q.requested_by !== me.name ? id : undefined}>{trip ? <TripDecide id={id} q={q} setQ={setQ} /> : <ClassicDecide id={id} q={q} setQ={setQ} />}</SuggestFor>;
+  return <SuggestFor request={someoneElsesRequest(q, me) ? id : undefined}>{trip ? <TripDecide id={id} q={q} setQ={setQ} /> : <ClassicDecide id={id} q={q} setQ={setQ} />}</SuggestFor>;
 }
 
 /** A request with From and To only (and every changed or approved booking decided again). */

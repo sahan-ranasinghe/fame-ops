@@ -54,6 +54,8 @@ import { PassengerList } from "./PassengerList";
 import { HolderLine } from "../ui/Holder";
 import { StatusBanner } from "../ui/patterns";
 import { countWithNames, ridersLine } from "./passengersLogic";
+import { featureOn } from "./switchLogic";
+import { liveForTask } from "./overviewLinks";
 
 /** Round 4–7 (5): "Fuel: Enough fuel · 07:42" with the estimate under it; before the start the estimate alone. */
 function FuelCardLine({ card, started }: { card: NonNullable<TaskDetailData["task"]["fuel_card"]>; started: boolean }) {
@@ -145,6 +147,9 @@ export function TaskDetail() {
   // Hotfix 2 (F): the office's number, for Call office beside "Approved by …" when the approver has none.
   const settings = useFleetSettings();
   const officePhone = linksOf(settings.data?.settings.office_phone);
+  // Round 4–7: a switched-off feature hides its part (the fuel card; who rides by name with Share trip, the count stays).
+  const fuelOn = featureOn(settings.data?.settings, "fuel_card");
+  const ridersOn = featureOn(settings.data?.settings, "passengers");
   const backTo = useBoardBack();
   const q = useBoardQuery();
   // The warnings of a change just made on /tasks/:id/edit or its stops (passed in the navigation state, or, after a save
@@ -172,6 +177,7 @@ export function TaskDetail() {
   const findDriver = !!t.needs_driver && can(me, "assign_tasks") && (me.tools.includes("update_task") || me.tools.includes("reassign_task"));
   const segments = segmentRows(p.segments);
   const segTotal = segmentsTotal(p.segments);
+  const riders = ridersOn ? t.passengers_list ?? [] : [];
 
   return (
     <div data-testid="task-detail">
@@ -244,13 +250,14 @@ export function TaskDetail() {
               <dd><LateReportLine late={t.late_report} /></dd>
             </div>
           )}
-          {/* Round 4–7 (6): the count (never under the names) and who rides by name, with Share trip for someone without an account. */}
-          <div style={t.passengers_list?.length ? { gridColumn: "1/-1" } : undefined} data-testid="task-passengers">
+          {/* Round 4–7 (6): the count (never under the names) and who rides by name, with Share trip for someone without an
+              account; with the switch passengers off, the count alone. */}
+          <div style={riders.length ? { gridColumn: "1/-1" } : undefined} data-testid="task-passengers">
             <dt>Passengers</dt>
             <dd>
-              <span className="num">{countWithNames(t.passengers, t.passengers_list?.length ?? 0) ?? "—"}</span>
-              {t.passengers_list?.length ? <span className="muted" style={{ fontWeight: 400 }}> · {ridersLine(t.passengers_list.map((x) => x.name), t.passengers)}</span> : null}
-              {t.passengers_list?.length ? <div style={{ fontWeight: 400 }}><PassengerList list={t.passengers_list} /></div> : null}
+              <span className="num">{countWithNames(t.passengers, riders.length) ?? "—"}</span>
+              {riders.length ? <span className="muted" style={{ fontWeight: 400 }}> · {ridersLine(riders.map((x) => x.name), t.passengers)}</span> : null}
+              {riders.length ? <div style={{ fontWeight: 400 }}><PassengerList list={riders} /></div> : null}
             </dd>
           </div>
           <div>
@@ -272,8 +279,9 @@ export function TaskDetail() {
           <TaskCheckLines checks={t.vehicle_checks} />
           <div><dt>Odometer</dt><dd className="num">{t.start_odometer_km != null ? num(t.start_odometer_km) : "—"}{t.end_odometer_km != null ? " → " + num(t.end_odometer_km) : ""}</dd></div>
           <div><dt>Km this task</dt><dd className="num">{km != null ? num(km) + " km" : "—"}{segments.length > 1 ? <span className="muted"> · {segments.length} vehicles</span> : null}{t.gps_km != null ? <span className="muted"> · GPS {num(t.gps_km)} km</span> : null}</dd></div>
-          {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none). */}
-          {t.fuel_card && <FuelCardLine card={t.fuel_card} started={!!t.started || t.status === "in_progress" || t.status === "completed"} />}
+          {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none, or
+              while the switch fuel_card is off). */}
+          {fuelOn && t.fuel_card && <FuelCardLine card={t.fuel_card} started={!!t.started || t.status === "in_progress" || t.status === "completed"} />}
           {t.created_by && <div><dt>Assigned by</dt><dd>{t.created_by}</dd></div>}
           {/* Hotfix 2 (K): who sent it to the driver, with their number (Call office when they have none). */}
           {t.approved_by && <div style={{ gridColumn: "1/-1" }}><dt>Approved</dt><dd style={{ fontWeight: 400 }}><DecisionRow kind="approved" who={t.approved_by} office={officePhone} /></dd></div>}
@@ -473,14 +481,14 @@ export function TaskDetail() {
 
 /**
  * The task's status banner while it is on the way (the approved mockup 4): "On the way to <stop>", arrives about, back
- * about, the late chip; a click opens Live. In the other states the page's top already says the state (the pill and the
- * Status line), so no second banner says it again.
+ * about, the late chip; a click opens Live with the driver on this task selected (/live?task=<id>). In the other states the
+ * page's top already says the state (the pill and the Status line), so no second banner says it again.
  */
 function TaskBanner({ t }: { t: TaskDetailData["task"] }) {
   const eta = t.eta;
   if (t.status !== "in_progress") return null;
   return (
-    <StatusBanner tone="live" icon="navigation" to="/live" testId="task-banner"
+    <StatusBanner tone="live" icon="navigation" to={liveForTask(t.id)} testId="task-banner"
       title={`On the way${eta?.next_stop ? ` to ${eta.next_stop}` : ""}`}
       line={joinDots([eta?.next ? `Arrives about ${eta.next}` : "", eta?.final ? `back about ${eta.final}` : ""]) || "On the way now"}
       chip={eta?.late_min ? { text: `${duration(eta.late_min)} late`, tone: "warn" } : null} />

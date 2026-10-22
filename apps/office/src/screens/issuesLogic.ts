@@ -235,6 +235,39 @@ export function bulkCalls(ids: readonly string[], status: BulkAction, note: stri
 /** "3 issues resolved", "1 issue dismissed". */
 export const bulkDoneText = (n: number, status: BulkAction): string => `${n} issue${n === 1 ? "" : "s"} ${status}`;
 
+/** update_issues' answer: how many were done, and the ones that were not with why. */
+export interface BulkAnswer {
+  done: number;
+  failed?: { id: string; error: string }[];
+}
+
+/**
+ * Sends the calls one after another. After each, the ids it did are handed to `onDone` (the page drops them from the
+ * selection, so Try again sends only the rest, never a done one twice); a call that fails, or that leaves some undone,
+ * stops there with its error and the count done so far. A failed call did none of its ids (its error is the reason).
+ */
+export async function sendBulk(
+  calls: readonly { ids: string[]; status: BulkAction; note: string }[],
+  send: (call: { ids: string[]; status: BulkAction; note: string }) => Promise<BulkAnswer>,
+  onDone: (ids: string[]) => void,
+): Promise<{ done: number; error: { code: string; message: string } | null }> {
+  let done = 0;
+  for (const c of calls) {
+    let r: BulkAnswer;
+    try {
+      r = await send(c);
+    } catch (e) {
+      return { done, error: e as { code: string; message: string } };
+    }
+    const failed = new Set((r.failed ?? []).map((f) => f.id));
+    const did = c.ids.filter((id) => !failed.has(id));
+    done += did.length;
+    if (did.length) onDone(did);
+    if (r.failed?.length) return { done, error: { code: "partial", message: r.failed[0].error } };
+  }
+  return { done, error: null };
+}
+
 /** The selection after a tick: on adds the ids, off takes them away. */
 export function toggled(selected: ReadonlySet<string>, ids: readonly string[], on: boolean): Set<string> {
   const next = new Set(selected);

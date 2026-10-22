@@ -1,5 +1,6 @@
 // Round 4–7, feature 5 (phase8-plan.md §33.2) and §33.6 item 3 on the site's screens: the vehicle form's fuel type
-// (required, the button waits with the reason; an edit starts from the vehicle's own; the grade that fits), the vehicle
+// (required to register, the button waits with the reason; an edit starts from the vehicle's own and, with none, says
+// "Fuel type: not set" and saves the other changes; the grade that fits), the vehicle
 // page's fuel ("Fuel type: not set" in amber with Set it), the task page's fuel card (the driver's answer and the
 // estimate), and the Fuel page (a missing amount is "–", never LKR 0; the totals say how many fills have none).
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -59,16 +60,17 @@ const viewer: Me = { name: "Viewer", role: "viewer", permissions: ["view"], tool
 const vehicles = (v: VehicleCard[]) => ({ filter: "all", counts: { all: v.length, on_task: 0, available: v.length, in_garage: 0, documents_expiring: 0 }, vehicles: v });
 
 describe("the vehicle form's fuel type (Round 4–7, feature 5)", () => {
-  it("an edit of a vehicle with no fuel type waits for one; the grades follow the type; only the change is sent", async () => {
+  it("an edit of a vehicle with no fuel type says Fuel type: not set and does not wait for one; the grades follow the type; only the change is sent", async () => {
     const t = new FakeTransport({
       list_vehicles: () => vehicles([{ reg_no: "WP CAB-4521", make_model: "Toyota HiAce", fuel_text: "Fuel type: not set" }]),
       list_drivers: () => ({ count: 0, drivers: [] }),
       update_vehicle: () => ({ updated: { reg_no: "WP CAB-4521" }, changed: ["fuel_type", "fuel_grade"] }),
     }, officer);
     mount(t, officer, <Routes><Route path="/vehicles/:reg/edit" element={<VehicleForm />} /><Route path="/vehicles/:reg" element={<div data-testid="vehicle-page" />} /></Routes>, "/vehicles/WP%20CAB-4521/edit");
-    await waitFor(() => expect(screen.getByTestId("save-why").textContent).toBe("Pick the fuel type"));
-    const save = screen.getByRole("button", { name: "Save changes" }) as HTMLButtonElement;
-    expect(save.disabled).toBe(true);
+    // The fresh reviewer (22 October 2026): an older vehicle without a fuel type is not blocked from every edit.
+    await waitFor(() => expect(screen.getByTestId("fuel-not-set").textContent).toBe("Fuel type: not set"));
+    expect(screen.getByTestId("fuel-not-set").className).toContain("warn");
+    expect(screen.queryByTestId("save-why")).toBeNull();
     // No grade for an electric vehicle; a petrol one offers 92 and 95.
     fireEvent.click(screen.getByRole("button", { name: "Electric" }));
     expect(screen.queryByTestId("fuel-grade")).toBeNull();
@@ -76,9 +78,26 @@ describe("the vehicle form's fuel type (Round 4–7, feature 5)", () => {
     const grades = within(screen.getByTestId("fuel-grade"));
     expect(grades.getAllByRole("button").map((b) => b.textContent)).toEqual(["Not set", "Petrol 92", "Petrol 95"]);
     fireEvent.click(grades.getByRole("button", { name: "Petrol 95" }));
+    expect(screen.queryByTestId("fuel-not-set")).toBeNull();
     expect(screen.queryByTestId("save-why")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(t.argsOf("update_vehicle")).toEqual([{ reg_no: "WP CAB-4521", fuel_type: "petrol", fuel_grade: "petrol_95" }]));
+  });
+
+  it("an edit of a vehicle with no fuel type saves the other changes without one", async () => {
+    const t = new FakeTransport({
+      list_vehicles: () => vehicles([{ reg_no: "WP CAB-4521", make_model: "Toyota HiAce", fuel_text: "Fuel type: not set" }]),
+      list_drivers: () => ({ count: 0, drivers: [] }),
+      update_vehicle: () => ({ updated: { reg_no: "WP CAB-4521" }, changed: ["seats"] }),
+    }, officer);
+    mount(t, officer, <Routes><Route path="/vehicles/:reg/edit" element={<VehicleForm />} /><Route path="/vehicles/:reg" element={<div data-testid="vehicle-page" />} /></Routes>, "/vehicles/WP%20CAB-4521/edit");
+    await screen.findByTestId("fuel-not-set");
+    fireEvent.change(screen.getByLabelText("Seats"), { target: { value: "9" } });
+    const save = screen.getByRole("button", { name: "Save changes" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await waitFor(() => expect(t.argsOf("update_vehicle")).toEqual([{ reg_no: "WP CAB-4521", seats: 9 }]));
+    await screen.findByTestId("vehicle-page");
   });
 
   it("an edit of a vehicle with its fuel set starts from it and sends nothing about it unless it changes", async () => {

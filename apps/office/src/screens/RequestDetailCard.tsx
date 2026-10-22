@@ -10,10 +10,13 @@ import { whenText } from "../lib/when";
 import { AskedWho, ChangesList, LateNotice, RequestHead, SelfDriveLicence, Timeline } from "./requestParts";
 import { PassengerList } from "./PassengerList";
 import { ridersLine } from "./passengersLogic";
+import { useSwitch } from "./dispatchParts";
 
 export function RequestDetailCard({ q, compact, hideLate }: { q: RequestCard; compact?: boolean; hideLate?: boolean }) {
   const { me } = useFleet();
   const view = requestView(q, me);
+  // Round 4–7: with the switch passengers off, nobody is named (the count stays where the page shows it).
+  const ridersOn = useSwitch("passengers").on;
   const p = view.proposal ? q.proposed : undefined;
   return (
     <div className="card card-b">
@@ -33,7 +36,7 @@ export function RequestDetailCard({ q, compact, hideLate }: { q: RequestCard; co
           ? <div><dt>Passengers</dt><dd>{p?.passengers ?? "—"}</dd></div>
           : <div><dt>Need</dt><dd>{q.need || "—"}</dd></div>}
           {/* Round 4–7 (6): who rides by name ("Asha, Kamal +3" and a row each; Call / WhatsApp for someone without an account). */}
-          {q.passengers_list?.length ? (
+          {ridersOn && q.passengers_list?.length ? (
             <div style={{ gridColumn: "1/-1" }} data-testid="request-passengers">
               <dt>Who rides</dt>
               <dd style={{ fontWeight: 400 }}>

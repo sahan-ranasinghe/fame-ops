@@ -99,15 +99,30 @@ export function groupedWhere<T extends { layer: string; group?: string; group_la
 export const startsGroup = <T>(rows: readonly WhereRow<T>[], i: number): boolean =>
   !!rows[i]?.group && (i === 0 || rows[i - 1].group !== rows[i].group || rows[i - 1].label !== rows[i].label);
 
-/** The person (or the request) whose trip someone else edits or decides: their recent places come too. */
+/**
+ * The request someone else edits or decides: its requester's recent places come too. Only through the request (the server
+ * took for_person away on 22 October 2026: a person's recent places come only from the request being edited or decided,
+ * never with their personal trips).
+ */
 export interface SuggestForWhom {
   request?: string;
-  person?: string;
 }
 
-/** search_places {suggest}, with for_request (or for_person) for someone else's trip. */
+/** search_places {suggest}, with for_request for someone else's request. */
 export function suggestArgs(forWhom?: SuggestForWhom | null): Record<string, unknown> {
   if (forWhom?.request) return { suggest: true, for_request: forWhom.request };
-  if (forWhom?.person) return { suggest: true, for_person: forWhom.person };
   return { suggest: true };
+}
+
+/**
+ * Is this someone else's request (deciding or editing it, the place box adds the requester's recent places)? By id when
+ * both sides carry one (the request's requested_by_employee_id, the person's employee_id), else by name: two people with
+ * the same name are then told apart, and a name typed differently does not make one's own request someone else's.
+ */
+export function someoneElsesRequest(
+  q: { requested_by?: string | null; requested_by_employee_id?: string | null },
+  me: { name?: string | null; employee_id?: string | null },
+): boolean {
+  if (q.requested_by_employee_id && me.employee_id) return q.requested_by_employee_id !== me.employee_id;
+  return !!q.requested_by && q.requested_by.trim() !== (me.name ?? "").trim();
 }

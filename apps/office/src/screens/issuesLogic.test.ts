@@ -10,6 +10,7 @@ import {
   kindIcon,
   rowMeta,
   rowTitle,
+  sendBulk,
   showsGroups,
   tabOf,
   toggled,
@@ -282,6 +283,40 @@ describe("bulk Resolve / Dismiss (update_issues, Gmail's bulk)", () => {
     expect(calls.every((c) => c.status === "dismissed" && c.note === "Test data")).toBe(true);
     expect(bulkDoneText(3, "resolved")).toBe("3 issues resolved");
     expect(bulkDoneText(1, "dismissed")).toBe("1 issue dismissed");
+  });
+
+  // The fresh reviewer (22 October 2026): a failed call used to throw away the rest, and the done ids stayed picked, so Try
+  // again resolved them a second time.
+  it("sendBulk: each call's done ids leave the selection; a failed call stops the rest with the count done", async () => {
+    const calls = bulkCalls(Array.from({ length: 230 }, (_, n) => `i${n}`), "resolved", "Test data");
+    const dropped: string[][] = [];
+    const sent: string[][] = [];
+    // The second call fails (no answer): the first's 100 are done and dropped, the third is never sent.
+    const r = await sendBulk(calls, async (c) => {
+      sent.push(c.ids);
+      if (sent.length === 2) throw { code: "network", message: "Failed to fetch" };
+      return { done: c.ids.length };
+    }, (ids) => dropped.push(ids));
+    expect(r).toEqual({ done: 100, error: { code: "network", message: "Failed to fetch" } });
+    expect(sent.map((x) => x.length)).toEqual([100, 100]);
+    expect(dropped.map((x) => x.length)).toEqual([100]);
+    expect(dropped[0][0]).toBe("i0");
+
+    // A call that did some and not others: the done ones leave, the failed ones stay picked, nothing after it is sent.
+    const sent2: string[][] = [];
+    const dropped2: string[][] = [];
+    const r2 = await sendBulk(bulkCalls(["a", "b", "c"], "dismissed", "x"), async (c) => {
+      sent2.push(c.ids);
+      return { done: 2, failed: [{ id: "b", error: "Issue b is already resolved" }] };
+    }, (ids) => dropped2.push(ids));
+    expect(r2).toEqual({ done: 2, error: { code: "partial", message: "Issue b is already resolved" } });
+    expect(dropped2).toEqual([["a", "c"]]);
+
+    // All done: every call sent, every id dropped, no error.
+    const dropped3: string[][] = [];
+    const r3 = await sendBulk(calls, async (c) => ({ done: c.ids.length }), (ids) => dropped3.push(ids));
+    expect(r3).toEqual({ done: 230, error: null });
+    expect(dropped3.flat()).toHaveLength(230);
   });
 
   it("the ticks: a row, a group's rows, and the group's state", () => {

@@ -6,8 +6,9 @@
 // Round 4–7 (item 8, §33.7; Fleetio): "Service and documents" is ONE card per vehicle (list_vehicles): the service due by
 // km and by date with its bar, the documents' expiries as chips (ok / expiring / expired / missing; the rental's end),
 // the summary first, the ones that need attention first (?show=all: every vehicle), 25 at a time; a card opens the
-// vehicle. What the old reminder rows also carried (the km allowance, missed tasks, odometer checks, licences and the
-// rest of the overview's list) is in Issues: one line counts it and opens Issues.
+// vehicle. What the old reminder rows also carried (the drivers' licences, the km allowance, missed tasks, odometer checks
+// and the rest of the overview's list) is in Issues: one line counts it and opens Issues (the licences are on Reminders
+// too). The vehicles list failing shows its error with Try again, never a skeleton for ever.
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -23,7 +24,7 @@ import { pairsDef } from "../ui/filterLogic";
 import { EmptyLine, ListHeader, SearchBox, SkeletonRows, usePagedList, useUrlFilter, useUrlSearch } from "../ui/ListKit";
 import { useToast } from "../ui/Toast";
 import { ListFooter, ListStale, ListWaiting } from "./listLocal";
-import { isReminderKind } from "./overviewLinks";
+import { CARE_KINDS } from "./overviewLinks";
 import { CareList, CareSummary } from "./VehicleCare";
 import { careCards, careCounts } from "./vehicleCareLogic";
 import { whenText } from "../lib/when";
@@ -110,13 +111,14 @@ const FILTER_WORDS: Record<Filter, string> = {
 export const reportsEmpty = (filter: Filter): string => FILTER_WORDS[filter];
 
 export function Maintenance() {
-  const { me, noConnector } = useFleet();
+  const { me, store, noConnector } = useFleet();
   const [filter, setFilter] = useUrlFilter<Filter>("status", "not_closed", FILTERS.map(([k]) => k));
   const [search, setSearch] = useUrlSearch();
   const canReports = me.tools.includes("list_vehicle_reports");
   const fromOverview = can(me, "issues");
   const overview = useEntry<Overview>("overview");
   const lists = useLists(!noConnector);
+  const vehiclesEntry = useEntry<{ vehicles: VehicleCard[] }>("lists.vehicles");
   // Hotfix 3 (L3): the newest reports first, 25 at a time (Load more on a phone, page numbers on a desktop).
   const list = usePagedList<VehicleReport, VehicleReports>(REPORTS_QUERY, "list_vehicle_reports", { status: filter, ...(search ? { search } : {}) }, (d) => d.reports,
     { every: 60000, enabled: !noConnector && canReports });
@@ -127,8 +129,9 @@ export function Maintenance() {
   const [show, setShow] = useUrlFilter<CareShow>("show", "attention", CARE_SHOW.map(([k]) => k));
   const cards = careCards((lists.vehicles ?? []) as VehicleCard[], today());
   const shown = show === "all" ? cards : cards.filter((c) => c.level > 0);
-  // What the overview lists besides service, documents and the drivers' problems: in Issues (counted here).
-  const elsewhere = fromOverview ? (overview.data?.needs_attention ?? []).filter((a) => !isReminderKind(a.kind) && a.kind !== "vehicle_report" && !/problem/i.test(a.what || "")).length : 0;
+  // What the overview lists besides the vehicles' service and documents (the cards) and the drivers' problems (above): in
+  // Issues, counted here. The drivers' licences are counted too (they are no vehicle's card; Reminders lists them).
+  const elsewhere = fromOverview ? (overview.data?.needs_attention ?? []).filter((a) => !CARE_KINDS.has(a.kind ?? "") && a.kind !== "vehicle_report" && !/problem/i.test(a.what || "")).length : 0;
   const label = FILTERS.find(([k]) => k === filter)?.[1] ?? "";
   return (
     <section className="view">
@@ -159,7 +162,15 @@ export function Maintenance() {
           </div>
         )}
         <div className="section-t">Service and documents</div>
-        {!lists.vehicles && !noConnector ? <div className="card"><SkeletonRows rows={3} label="Loading the vehicles…" /></div> : (
+        {!lists.vehicles && !noConnector ? (
+          vehiclesEntry.err && !vehiclesEntry.loading
+            ? (
+              <Notice tone="bad" action={<button type="button" className="btn small" onClick={() => void store.load("lists.vehicles", "list_vehicles", { filter: "all" })}>Try again</button>}>
+                <span data-testid="care-error">{errText(vehiclesEntry.err)[0]}</span>
+              </Notice>
+            )
+            : <div className="card"><SkeletonRows rows={3} label="Loading the vehicles…" /></div>
+        ) : (
           <>
             <div className="card card-b" style={{ display: "grid", gap: 12 }}>
               <CareSummary counts={careCounts(cards)} />
@@ -178,7 +189,7 @@ export function Maintenance() {
           <Link className="card row link-row" to="/issues" data-testid="maintenance-issues">
             <span className="grow">
               <span className="name" style={{ display: "block" }}>{elsewhere === 1 ? "1 more thing needs attention" : `${elsewhere} more things need attention`}</span>
-              <span className="sub" style={{ display: "block" }}>Km allowances, missed tasks, odometer checks and the rest are in Issues</span>
+              <span className="sub" style={{ display: "block" }}>Driver licences, km allowances, missed tasks, odometer checks and the rest are in Issues</span>
             </span>
             <span className="btn small">Open Issues</span>
           </Link>

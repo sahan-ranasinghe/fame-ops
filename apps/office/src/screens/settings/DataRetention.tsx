@@ -45,8 +45,13 @@ export default function DataRetention() {
   const [rowErr, setRowErr] = useState<Partial<Record<RetentionKey | "fuel", string>>>({});
   const [run, setRun] = useState<RunState>({ step: "idle" });
   const [runErr, setRunErr] = useState<string | null>(null);
+  // Mounted: set again in the effect's body, so React's StrictMode remount in development (unmount, mount again) leaves it
+  // true; set only once, Save stayed "Saving…" and Run now "Checking…" on `npm run dev`.
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!me.tools.includes("retention_preview")) return;

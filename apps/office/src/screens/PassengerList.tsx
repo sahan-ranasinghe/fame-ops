@@ -1,7 +1,8 @@
 // Round 4–7, feature 6 (phase8-plan.md §33.3): who rides on a trip (task_detail's or a request card's passengers_list).
 // A registered office person is a row with their photo (they get the trip's news in the app and see it in My trips);
 // someone without an account is a row with their number, Call / WhatsApp, and "Share trip" (the trip in words on WhatsApp,
-// task_detail's `share`; nothing is sent until they press Send in WhatsApp). The names show whatever the passengers switch.
+// task_detail's `share`; nothing is sent until they press Send in WhatsApp). The pages pass the list only while the switch
+// passengers is on (the task page, a request: off = the count alone; the server stops sending the names too).
 import type { Passenger, PhoneLinks } from "../data/types";
 import { Avatar } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
