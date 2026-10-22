@@ -186,9 +186,20 @@ async function ownNoAppTrip(db: Db, taskId: string, employeeId: string | null): 
 }
 
 /** The vehicle's last odometer reading (the prefilled number; never under it). */
+/** The vehicle's last known reading: its odometer, unless a vehicle check took a reading after the last logged one (a
+ *  check's odometer is a reading too: the next trip's start is prefilled and checked against it). */
 async function lastReading(db: Db, vehicleId: string): Promise<number | null> {
-  const v = unwrapMaybe(await db.from("vehicles").select("current_odometer_km").eq("id", vehicleId).maybeSingle(), "vehicle");
-  return v?.current_odometer_km ?? null;
+  const [veh, log, chk] = await Promise.all([
+    db.from("vehicles").select("current_odometer_km").eq("id", vehicleId).maybeSingle(),
+    db.from("odometer_logs").select("logged_at").eq("vehicle_id", vehicleId).order("logged_at", { ascending: false }).limit(1),
+    db.from("vehicle_checks").select("odometer_km, checked_at").eq("vehicle_id", vehicleId).not("odometer_km", "is", null)
+      .order("checked_at", { ascending: false }).limit(1),
+  ]);
+  const current = unwrapMaybe(veh, "vehicle")?.current_odometer_km ?? null;
+  const lastLog = unwrap(log, "odometer logs")[0]?.logged_at;
+  const check = unwrap(chk, "vehicle checks")[0];
+  if (check?.odometer_km != null && (!lastLog || new Date(check.checked_at) > new Date(lastLog))) return check.odometer_km;
+  return current;
 }
 
 /** The person's own photos (uploaded to their own folder by the page), unused, of one kind: or a refusal. */
@@ -218,10 +229,11 @@ async function tripStops(db: Db, taskId: string) {
 async function tripView(db: Db, t: Task, now: Date) {
   const refs = await loadRefs(db);
   const v = refs.veh.get(t.vehicle_id ?? "");
-  const [stops, checks, settings] = await Promise.all([
+  const [stops, checks, settings, last] = await Promise.all([
     tripStops(db, t.id),
     db.from("vehicle_checks").select("*").eq("task_id", t.id).order("checked_at", { ascending: false }).limit(1),
     loadSettings(db),
+    t.vehicle_id ? lastReading(db, t.vehicle_id) : Promise.resolve(null),
   ]);
   const check = unwrap(checks, "vehicle checks")[0];
   const state = noAppState(t);
@@ -247,7 +259,7 @@ async function tripView(db: Db, t: Task, now: Date) {
     start_odometer_km: t.start_odometer_km,
     end_odometer_km: t.end_odometer_km,
     km: t.km,
-    last_odometer_km: v?.current_odometer_km ?? null,
+    last_odometer_km: last ?? v?.current_odometer_km ?? null,
     // The check of the day starts the trip from 2 h before its planned start; earlier it only records the check.
     window: { opens_at: window.opens_at, open: window.open, past: window.past },
     check_needed: settings.vehicle_check,

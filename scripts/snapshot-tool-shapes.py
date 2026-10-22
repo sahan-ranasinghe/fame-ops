@@ -82,6 +82,9 @@ OPTIONAL = {
     # A plan's rush-hour factor is there only for a leg in a rush-hour band (settings.rush_hour): a run at another time of
     # day has none (main's CI at 16:40 Colombo recorded it, 21 October 2026).
     "task_detail": {
+        # Round 4–7 (7): who holds the task (the requester, else who assigned it, as a person): through office-api the
+        # assigner is the signed-in person; the connector's shared key has none (tools/holders.ts holdersOf).
+        "task.holder.": "tools/tasks.ts:1988 holder: (await holdersOf(db, [task], now)).get(task.id) (absent with no requester and no assigning person)",
         "plan.legs[].factor": "plan.ts: a leg's factor only when the rush-hour factor applied to it",
         "timeline.items[].rush_factor": "timeline.ts: rush_factor only on a leg in a rush-hour band",
     },
