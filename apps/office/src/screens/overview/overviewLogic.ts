@@ -1,20 +1,20 @@
 // The Overview's rules (Hotfix 3, L1 and L2), pure: which sections a person sees and in what order (action first, by
-// what they may do), how many rows a section shows, the "View all (N)" words, the requests tile's line, the rows of
-// Needs attention and Critical issues and what Snooze or Dismiss acts on, the Overview after issues were acted on (the
-// rows go at once; the refresh brings the server's own counts), and My trips' rows.
+// what they may do), how many rows a section shows, the "View all (N)" words, the requests tile's line, the vehicles free
+// now, the rows of Needs attention and Critical issues and what Snooze or Dismiss acts on, the Overview after issues were
+// acted on (the rows go at once; the refresh brings the server's own counts), and My trips' rows. The tiles are no
+// section since the design pass (pilot e): they are the StatsRow above every section, for everyone.
 import type { Attention, AttentionGroup, CreatedTaskCard, Overview, RequestCard, TripLive } from "../../data/types";
 import { addDays, joinDots } from "../../lib/format";
 import { can, type Me } from "../../transport/types";
 import { isRequestTrip, liveOf } from "../myTripsLogic";
 
-/** The Overview's sections; the keys are the ones prefs.overview_collapsed holds. */
-export type OverviewSection = "requests" | "needs_driver" | "critical" | "tiles" | "road" | "attention" | "my_trips";
+/** The Overview's sections; the keys are the ones prefs.overview_collapsed holds (an old "tiles" there is ignored). */
+export type OverviewSection = "requests" | "needs_driver" | "critical" | "road" | "attention" | "my_trips";
 
 export const SECTION_TITLE: Record<OverviewSection, string> = {
   requests: "Requests to approve",
   needs_driver: "Needs a driver",
   critical: "Critical issues",
-  tiles: "At a glance",
   road: "On the road",
   attention: "Needs attention",
   my_trips: "My trips",
@@ -25,11 +25,11 @@ export const SECTION_ROWS = { desktop: 5, phone: 3 } as const;
 export const rowsFor = (phone: boolean): number => (phone ? SECTION_ROWS.phone : SECTION_ROWS.desktop);
 
 /**
- * The sections for this person, in order (L1):
- * - approve: Requests to approve → Needs a driver → Critical issues → the tiles → On the road → Needs attention;
- * - assign_tasks (no approve): Needs a driver → Critical issues → the tiles → On the road → Needs attention;
- * - request (neither): My trips → the tiles (→ the issues sections, with the issues permission);
- * - view only: the tiles → On the road (→ the issues sections, with the issues permission).
+ * The sections for this person, in order (L1), all under the StatsRow:
+ * - approve: Requests to approve → Needs a driver → Critical issues → On the road → Needs attention;
+ * - assign_tasks (no approve): Needs a driver → Critical issues → On the road → Needs attention;
+ * - request (neither): My trips (→ the issues sections, with the issues permission);
+ * - view only: On the road (→ the issues sections, with the issues permission).
  * Critical issues and Needs attention need issues or assign_tasks (the server answers each person's own share); My
  * trips needs the my_trips tool. Sections with nothing to show are left out by the page, not here.
  */
@@ -37,18 +37,25 @@ export function overviewSections(me: Pick<Me, "permissions" | "tools">): Overvie
   const issues = can(me, "issues", "assign_tasks");
   const critical: OverviewSection[] = issues ? ["critical"] : [];
   const attention: OverviewSection[] = issues ? ["attention"] : [];
-  if (can(me, "approve")) return ["requests", "needs_driver", ...critical, "tiles", "road", ...attention];
-  if (can(me, "assign_tasks")) return ["needs_driver", ...critical, "tiles", "road", ...attention];
-  if (can(me, "request") && me.tools.includes("my_trips")) return ["my_trips", ...critical, "tiles", ...attention];
-  return [...critical, "tiles", "road", ...attention];
+  if (can(me, "approve")) return ["requests", "needs_driver", ...critical, "road", ...attention];
+  if (can(me, "assign_tasks")) return ["needs_driver", ...critical, "road", ...attention];
+  if (can(me, "request") && me.tools.includes("my_trips")) return ["my_trips", ...critical, ...attention];
+  return [...critical, "road", ...attention];
 }
 
 /** Sections that take a whole line on a desktop; the others go two to a line, an odd one out takes the line. */
-export const WIDE: ReadonlySet<OverviewSection> = new Set(["tiles", "critical"]);
+export const WIDE: ReadonlySet<OverviewSection> = new Set(["critical"]);
 
 /**
- * The sections in lines of the desktop's two columns, in order: a wide one alone; the others in pairs; a run with an odd
- * count ends with one alone (no hole beside it).
+ * The person's own work (what waits for them); the others are the fleet's state (On the road, Needs attention). Each pairs
+ * only with its own kind, so On the road and Needs attention stay side by side as in the design (the tiles' line kept
+ * them apart from the work above until the tiles became the StatsRow).
+ */
+const OWN_WORK: ReadonlySet<OverviewSection> = new Set(["requests", "needs_driver", "my_trips"]);
+
+/**
+ * The sections in lines of the desktop's two columns, in order: a wide one alone; the others in pairs of the same kind; a
+ * run with an odd count ends with one alone (no hole beside it).
  */
 export function inLines(sections: OverviewSection[]): OverviewSection[][] {
   const lines: OverviewSection[][] = [];
@@ -61,7 +68,10 @@ export function inLines(sections: OverviewSection[]): OverviewSection[][] {
     if (WIDE.has(s)) {
       flush();
       lines.push([s]);
-    } else run.push(s);
+      continue;
+    }
+    if (run.length && OWN_WORK.has(run[0]) !== OWN_WORK.has(s)) flush();
+    run.push(s);
   }
   flush();
   return lines;
@@ -69,6 +79,12 @@ export function inLines(sections: OverviewSection[]): OverviewSection[][] {
 
 /** "View all (12)"; without a number when it is not known. */
 export const viewAll = (n?: number | null): string => (typeof n === "number" ? `View all (${n})` : "View all");
+
+/**
+ * Free now: the vehicles parked (not on the road) and not in the garage. The server's `parked` counts the garage too, so
+ * it is taken off here (Office Home showed `parked` as Free until the design pass; docs/design-pass.md §4.7).
+ */
+export const freeNow = (v: Pick<Overview["vehicles"], "parked" | "in_garage">): number => Math.max(0, (v.parked ?? 0) - (v.in_garage ?? 0));
 
 /**
  * The line under "Requests to approve" (the tile and the panel): "Nothing waiting" only when nothing waits (proposed

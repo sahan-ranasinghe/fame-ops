@@ -74,16 +74,6 @@ export function levelTone(level?: string | null): Tone {
   const l = String(level || "").toLowerCase();
   return l === "red" ? "bad" : (l === "orange" || l === "amber" || l === "yellow") ? "warn" : l === "blue" ? "live" : l === "green" ? "ok" : "warn";
 }
-export function statusTone(col: string, text?: string | null): Tone {
-  const t = String(text || "").toLowerCase();
-  if (col === "completed") return "muted";
-  if (col === "cancelled" || col === "declined") return "bad";
-  if (t.startsWith("declined")) return "bad";
-  if (t.includes("not opened")) return "warn";
-  const m = t.match(/location (\d+) min old/);
-  if (m && +m[1] >= 15) return "warn";
-  return "live";
-}
 export function requestTone(status?: string): Tone {
   return status === "waiting" || status === "changed" ? "warn" : status === "approved" ? "ok" : status === "declined" ? "bad" : status === "cancelled" ? "muted" : "";
 }

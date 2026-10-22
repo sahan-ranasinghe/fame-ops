@@ -402,7 +402,7 @@ describe("the queue and the board", () => {
     const board: Board = { date: today(), counts: { assigned: 0, in_progress: 0, completed: 0, cancelled: 0 }, assigned: [], in_progress: [], completed: [], waiting_approval: [] };
     const transport = new FakeTransport({ task_board: () => board }, approver);
     await mount(transport, "/tasks", <Route path="/tasks" element={<Tasks />} />);
-    await screen.findAllByText("No tasks");
+    await screen.findAllByTestId("empty-line");
     expect(screen.queryByTestId("waiting-approval")).toBeNull();
   });
 });

@@ -1,9 +1,12 @@
-// Overview. Hotfix 3 (L1): action first, by what the person may do (overview/overviewLogic.ts: overviewSections):
-// an approver sees Requests to approve, Needs a driver, Critical issues, the tiles, On the road and Needs attention; a
-// dispatcher the same without the requests; a requester My trips and the tiles; a viewer the tiles and On the road.
-// Every section shows at most 5 rows (3 on a phone) and "View all (N)" to its page; its title collapses it (the count
-// stays), and the collapsed sections are remembered per person (app/prefs.ts). L2: Needs attention is the server's
-// groups (one row per kind, expanding in place), Critical issues the critical ones; each row has Snooze and Dismiss.
+// Overview. The design pass (pilot e, docs/design-pass.md §4.1 Dashboard): the StatsRow first, for everyone, the
+// design's four in its order (Vehicles on the road, Tasks today, Requests to approve, Reminders due; the last two by
+// permission), then Free now and In garage; then the sections. Hotfix 3 (L1): the sections action first, by what the
+// person may do (overview/overviewLogic.ts: overviewSections): an approver sees Requests to approve, Needs a driver,
+// Critical issues, On the road and Needs attention; a dispatcher the same without the requests; a requester My trips; a
+// viewer On the road. Every section shows at most 5 rows (3 on a phone) and "View all (N)" to its page; its title
+// collapses it (the count stays), and the collapsed sections are remembered per person (app/prefs.ts). L2: Needs
+// attention is the server's groups (one row per kind, expanding in place), Critical issues the critical ones; each row
+// has Snooze and Dismiss. An empty section says so with the shared empty line (ListKit EmptyLine).
 // Phase 7 (§16): each tile opens its list: on a desktop a panel beside the Overview (/?open=road …, with an X and Esc; a
 // reload or a shared link opens it again); on a phone, and in a shared link opened on one, the full page
 // (/live?filter=road, /vehicles?filter=free …), Back returning here. A tile the person has no list for stays a number.
@@ -17,14 +20,18 @@ import type { MyTrips, Overview as OverviewData, RequestsList } from "../data/ty
 import { useQuery } from "../data/useQuery";
 import { longDate, today } from "../lib/format";
 import { can } from "../transport/types";
-import { Empty, ErrBox, Notice, StaleNote, Tile, type TileLink } from "../ui/basics";
+import { ErrBox, Notice, StaleNote, Tile, type TileLink } from "../ui/basics";
 import { Icon } from "../ui/icons";
+import { EmptyLine, SkeletonRows } from "../ui/ListKit";
 import { useIsPhone } from "../ui/phone";
+import { StatsRow } from "../ui/StatsRow";
+import { NeedsDriverRow } from "./NeedsDriverList";
 import { NEEDS_DRIVER_LIST, sortNeedsDriver } from "./needsDriverLogic";
 import { IssueLine, useIssueAction } from "./overview/IssueRows";
 import {
   attentionOf,
   criticalOf,
+  freeNow,
   inLines,
   itemRow,
   myTripsArgs,
@@ -37,11 +44,10 @@ import {
   tripRow,
   viewAll,
 } from "./overview/overviewLogic";
-import { NeedsDriverLine, RequestLine, TripLine } from "./overview/rows";
+import { RequestLine, TripLine } from "./overview/rows";
 import { Section } from "./overview/Section";
 import { canOpen, FULL_PATH, OPEN_TEXT, openFrom, type OverviewOpen, tileTarget, withParam } from "./overviewLinks";
 import { OverviewPanel, RoadRows } from "./OverviewPanel";
-import { SkeletonRows } from "../ui/ListKit";
 
 /** The waiting queue on the Overview: the first page (the section shows 5, the count is the answer's total). */
 export const REQ_WAITING_ARGS = { status: "waiting", limit: SECTION_ROWS.desktop };
@@ -61,7 +67,6 @@ export function Overview() {
   const canAct = me.tools.includes("update_issue");
   const issuesPage = can(me, ...ISSUES_NEED);
   const o = ov.data;
-  const free = o ? Math.max(0, (o.vehicles.parked ?? 0) - (o.vehicles.in_garage ?? 0)) : 0;
 
   // The open list (§16): in the URL, so a reload or a shared link opens it again.
   const [params, setParams] = useSearchParams();
@@ -103,7 +108,7 @@ export function Overview() {
               <div className="card-b"><ErrBox entry={rq} onRetry={() => void store.load("reqWaiting", "list_requests", REQ_WAITING_ARGS)} /></div>
             ) : !rq.data ? <SkeletonRows rows={3} label="Loading requests…" />
             : list.length ? <div className="rows">{list.slice(0, rows).map((q) => <RequestLine key={q.id} q={q} decide={me.tools.includes("decide_request")} />)}</div>
-            : <Empty>No requests are waiting.</Empty>}
+            : <EmptyLine>No requests are waiting.</EmptyLine>}
           </Section>
         );
       }
@@ -116,7 +121,7 @@ export function Overview() {
           <Section key={id} id={id} testid="needs-driver" title={SECTION_TITLE.needs_driver} count={count} tone="bad" {...fold(id)}
             viewAll={linked ? { to: NEEDS_DRIVER_LIST, label: viewAll(count) } : null}
             summary={count === 1 ? "1 task needs a driver" : `${count} tasks need a driver`}>
-            <div className="rows">{list.map((t) => <NeedsDriverLine key={t.task_id} t={t} linked={linked} />)}</div>
+            <div className="rows">{list.map((t) => <NeedsDriverRow key={t.task_id} t={t} linked={linked} compact />)}</div>
           </Section>
         );
       }
@@ -132,24 +137,6 @@ export function Overview() {
           </Section>
         );
       }
-      case "tiles":
-        return (
-          <Section key={id} id={id} title={SECTION_TITLE.tiles} {...fold(id)}
-            summary={`${d.vehicles.on_the_road ?? 0} of ${d.vehicles.total ?? 0} on the road · ${free} free · ${d.tasks.total ?? 0} tasks today`}>
-            <div className="tiles">
-              <Tile label="Vehicles on the road" value={d.vehicles.on_the_road ?? 0} unit={`of ${d.vehicles.total ?? 0}`} sub={`${d.tasks.in_progress ?? 0} task${d.tasks.in_progress === 1 ? "" : "s"} in progress`} link={linkOf("road")} />
-              <Tile label="Free now" value={free} unit="vehicles" sub="not on a task, not in the garage" link={linkOf("free")} />
-              <Tile label="In garage" value={d.vehicles.in_garage ?? 0} unit="vehicles" sub={d.vehicles.in_garage ? "off the road" : "none"} tone={d.vehicles.in_garage ? "warn" : ""} link={linkOf("garage")} />
-              <Tile label="Tasks today" value={d.tasks.total ?? 0} unit="jobs" sub={`${d.tasks.in_progress ?? 0} in progress · ${d.tasks.done ?? 0} done`} link={linkOf("tasks")} />
-              {approves && (
-                <Tile label="Requests to approve" value={d.requests.waiting ?? 0} unit="open" sub={requestsLine(d.requests)} tone={d.requests.waiting ? "warn" : ""} link={linkOf("requests")} />
-              )}
-              {issuesPage && (
-                <Tile label="Reminders due" value={d.reminders.count ?? 0} unit={`in ${d.reminders.window_days ?? 14} days`} sub={d.reminders.red ? `${d.reminders.red} need action now` : "Nothing urgent"} tone={d.reminders.red ? "bad" : ""} link={linkOf("reminders")} />
-              )}
-            </div>
-          </Section>
-        );
       case "road": {
         const road = d.on_the_road ?? [];
         return (
@@ -167,7 +154,7 @@ export function Overview() {
             <div className="rows">
               {a.rows.length
                 ? a.rows.slice(0, rows).map((r) => <IssueLine key={r.key} row={r} canAct={canAct} onAct={act} />)
-                : <Empty>{can(me, "issues") ? "Nothing needs attention. Documents, services and km allowances are in order." : "No task needs attention right now."}</Empty>}
+                : <EmptyLine>{can(me, "issues") ? "Nothing needs attention. Documents, services and km allowances are in order." : "No task needs attention right now."}</EmptyLine>}
             </div>
           </Section>
         );
@@ -182,7 +169,7 @@ export function Overview() {
               <div className="card-b"><ErrBox entry={{ data: undefined, err: trips.err, loading: false }} onRetry={trips.refetch} /></div>
             ) : !trips.data ? <SkeletonRows rows={3} label="Loading your trips…" />
             : list.length ? <div className="rows">{list.slice(0, rows).map((t) => { const r = tripRow(t); return <TripLine key={r.key} r={r} />; })}</div>
-            : <Empty>No trips in the last 30 days or the next 30.{can(me, "request") && <> <Link to="/requests/new">New request</Link></>}</Empty>}
+            : <EmptyLine>No trips in the last 30 days or the next 30.{can(me, "request") && <> <Link to="/requests/new">New request</Link></>}</EmptyLine>}
           </Section>
         );
       }
@@ -191,6 +178,28 @@ export function Overview() {
 
   const shown = o ? sections.map((id) => [id, section(id, o)] as const).filter(([, node]) => node !== null) : [];
   const nodeOf = new Map(shown);
+
+  /**
+   * The StatsRow (§4.7): the design's four first, in its order (requests and reminders by permission), then Free now and
+   * In garage. Each tile opens its list as before; Free now leaves out the vehicles in the garage.
+   */
+  const stats = (d: OverviewData) => {
+    const inProgress = d.tasks.in_progress ?? 0;
+    return (
+      <StatsRow label="The fleet at a glance">
+        <Tile label="Vehicles on the road" value={d.vehicles.on_the_road ?? 0} unit={`of ${d.vehicles.total ?? 0}`} sub={`${inProgress} task${inProgress === 1 ? "" : "s"} on the way`} link={linkOf("road")} />
+        <Tile label="Tasks today" value={d.tasks.total ?? 0} unit="jobs" sub={`${inProgress} on the way · ${d.tasks.done ?? 0} done`} link={linkOf("tasks")} />
+        {approves && (
+          <Tile label="Requests to approve" value={d.requests.waiting ?? 0} unit="open" sub={requestsLine(d.requests)} tone={d.requests.waiting ? "warn" : ""} link={linkOf("requests")} />
+        )}
+        {issuesPage && (
+          <Tile label="Reminders due" value={d.reminders.count ?? 0} unit={`in ${d.reminders.window_days ?? 14} days`} sub={d.reminders.red ? `${d.reminders.red} need action now` : "Nothing urgent"} tone={d.reminders.red ? "bad" : ""} link={linkOf("reminders")} />
+        )}
+        <Tile label="Free now" value={freeNow(d.vehicles)} unit="vehicles" sub="not on a task, not in the garage" link={linkOf("free")} />
+        <Tile label="In garage" value={d.vehicles.in_garage ?? 0} unit="vehicles" sub={d.vehicles.in_garage ? "off the road" : "none"} tone={d.vehicles.in_garage ? "warn" : ""} link={linkOf("garage")} />
+      </StatsRow>
+    );
+  };
 
   return (
     <section className="view">
@@ -219,6 +228,7 @@ export function Overview() {
           {o && (
             <div className="stack ov-stack" data-testid="overview-sections">
               <StaleNote entry={ov} />
+              {stats(o)}
               {inLines(shown.map(([id]) => id)).map((line) => (line.length === 2
                 ? <div className="two ov-two" key={line.join("+")}>{nodeOf.get(line[0])}{nodeOf.get(line[1])}</div>
                 : nodeOf.get(line[0])))}

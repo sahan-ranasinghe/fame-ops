@@ -235,7 +235,8 @@ td.r, th.r { text-align: right }
 .col { background: var(--surface-2); border-radius: 16px; padding: 12px; display: grid; gap: 10px; min-width: 0 }
 .col-h { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 2px; font-weight: 700; font-size: 17px }
 .col-h span { display: flex; gap: 10px; align-items: center }
-.col-empty { margin: 0; padding: 10px 6px; color: var(--muted); font-size: 14px }
+/* An empty column: the shared empty line (ListKit EmptyLine), as small as the column's own words. */
+.col > .card-b { padding: 10px 6px; font-size: 14px }
 .tcard { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; cursor: pointer; display: grid; gap: 8px; width: 100% }
 .tcard:hover { border-color: var(--line-strong) }
 .tcard .top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--muted) }
@@ -247,6 +248,8 @@ td.r, th.r { text-align: right }
 .status { font-size: 14px; font-weight: 600 }
 .status.live { color: var(--live) } .status.warn { color: var(--warn) } .status.muted { color: var(--muted) } .status.bad { color: var(--bad) }
 .tcard .leave { font-size: 14px; display: block }
+/* The card's state: its chips (taskStateLogic.ts), the server's sentence muted under them. */
+.tcard .tstate { display: flex; flex-wrap: wrap; align-items: center; gap: 6px }
 .daynav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
 
 /* stops and the plan */
@@ -700,10 +703,16 @@ a.bell-btn { text-decoration: none }
 .ov-sec.warn .ov-count { background: var(--warn-bg); color: var(--warn) }
 .ov-all { font-weight: 600; font-size: 14px; white-space: nowrap }
 .ov-summary { padding: 0 16px 12px 46px; color: var(--muted); font-size: 14px; margin-top: -4px }
-/* The tiles keep their own cards: their section is only a title. */
-.ov-sec[data-section="tiles"] { background: transparent; border: 0; border-radius: 0 }
-.ov-sec[data-section="tiles"] .ov-sec-h { border-bottom: 0; padding: 0 0 8px; margin-left: -8px }
-.ov-sec[data-section="tiles"] .ov-summary { padding: 0 0 4px 30px }
+/* The StatsRow (ui/StatsRow.tsx, docs/design-pass.md §4.7): the tiles as the cells of one card, a line between them (each
+   cell's right and bottom line; the ones on the card's edge go under its clip). One row on a desktop, wrapping when the
+   panel beside it takes the room; two a line on a phone. */
+.stats-row { overflow: hidden }
+.stats-cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0 -1px -1px 0 }
+.stats-cells > .tile { border: 0; border-radius: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line) }
+.stats-cells > a.tile:hover { border-color: var(--line); background: var(--surface-2) }
+.stats-cells > a.tile[aria-current="true"] { border-color: var(--line); box-shadow: inset 0 0 0 2px var(--ink) }
+/* The focus ring inside the cell: the card's clip would cut one drawn outside it. */
+.stats-cells > a.tile:focus-visible { outline-offset: -3px }
 /* Compact rows: two lines each. */
 .ov-row { padding: 10px 16px; gap: 12px }
 .ov-row .name { gap: 6px }
@@ -741,10 +750,10 @@ a.bell-btn { text-decoration: none }
   .ov-sec-h h2 { font-size: 17px }
   .ov-items { margin-left: 24px; margin-right: 8px }
   .ov-more.icon-btn { width: 40px; height: 40px; min-height: 40px }
-  .ov-sec[data-section="tiles"] .tiles { gap: 10px }
-  .ov-sec[data-section="tiles"] .tile { padding: 12px 14px; gap: 4px }
-  .ov-sec[data-section="tiles"] .tile .val b { font-size: 30px }
-  .ov-sec[data-section="tiles"] .tile .lbl, .ov-sec[data-section="tiles"] .tile .sub { font-size: 13px }
+  .stats-cells { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .stats-cells > .tile { padding: 12px 14px; gap: 4px }
+  .stats-cells > .tile .val b { font-size: 30px }
+  .stats-cells > .tile .lbl, .stats-cells > .tile .sub { font-size: 13px }
 }
 
 /* Hotfix 3 W2 (L3): the search box (ui/ListKit SearchBox), the list header holding it, Load more under a board column. */
@@ -759,10 +768,9 @@ a.bell-btn { text-decoration: none }
 }
 
 /* Hotfix 3 (L1, L7): the phone's big button stays on the phone (.home-action's own display came after .phone-only and won
-   on a desktop, repeating the section under it); the Overview's tiles in one row on a desktop (6 tiles were two rows). */
+   on a desktop, repeating the section under it). */
 .home-action.phone-only { display: none }
 @media (max-width: 768px) { .home-action.phone-only { display: flex } }
-@media (min-width: 1151px) { .ov-sec[data-section="tiles"] .tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) } }
 
 /* Hotfix 3 W3 (L3): the search row above a list (Drivers, Vehicles, Users), the search box in it, a note beside a list's
    title (Mileage's tables), a header that wraps on a phone. */

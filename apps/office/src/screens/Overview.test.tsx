@@ -1,7 +1,8 @@
 // The Overview (Hotfix 3, L1 and L2): the sections by role and in order, at most 5 rows each (3 on a phone) with
 // "View all (N)", collapsing remembered per person (my_prefs / set_my_prefs on the web, this browser in the artifact),
 // Needs attention as the server's groups expanding in place, Snooze and Dismiss on rows and groups, and the requests
-// tile's line ("1 open · Nothing waiting" never again).
+// tile's line ("1 open · Nothing waiting" never again). The design pass (pilot e): the tiles are the StatsRow above every
+// section, the design's four first.
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -144,9 +145,10 @@ afterEach(() => {
 });
 
 describe("Overview: the sections by role (L1)", () => {
-  it("an approver: Requests to approve, Needs a driver, Critical issues, the tiles, On the road, Needs attention", async () => {
+  it("an approver: the StatsRow, then Requests to approve, Needs a driver, Critical issues, On the road, Needs attention", async () => {
     await mount(new FakeTransport({ ...grouped, needs_driver: needsDriver.needs_driver }));
-    expect(order()).toEqual(["requests", "needs_driver", "critical", "tiles", "road", "attention"]);
+    expect(order()).toEqual(["requests", "needs_driver", "critical", "road", "attention"]);
+    expect(screen.getByTestId("stats-tiles").compareDocumentPosition(sectionEl("requests")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const req = sectionEl("requests");
     expect(within(req).getByRole("heading").textContent).toBe("Requests to approve1");
     expect(within(req).getByTestId("request-row").textContent).toContain("Isuru Bandara");
@@ -170,11 +172,11 @@ describe("Overview: the sections by role (L1)", () => {
 
   it("a dispatcher: Needs a driver first, no requests queue; Critical issues only while any", async () => {
     await mount(new FakeTransport({ ...grouped, critical: { count: 0, items: [] }, needs_driver: needsDriver.needs_driver }, dispatcher));
-    expect(order()).toEqual(["needs_driver", "tiles", "road", "attention"]);
+    expect(order()).toEqual(["needs_driver", "road", "attention"]);
     expect(screen.queryByText("Requests to approve")).toBeNull();
   });
 
-  it("a requester: My trips (the last 30 days and the next 30, the newest 5, each with its live state) and the tiles", async () => {
+  it("a requester: the StatsRow and My trips (the last 30 days and the next 30, the newest 5, each with its live state)", async () => {
     const t = new FakeTransport(overview, requester);
     t.trips = {
       from: "2026-09-12", to: "2026-11-11", count: 2, total: 7,
@@ -184,7 +186,8 @@ describe("Overview: the sections by role (L1)", () => {
       ],
     };
     await mount(t);
-    expect(order()).toEqual(["my_trips", "tiles"]);
+    expect(order()).toEqual(["my_trips"]);
+    expect(screen.getByTestId("stats-tiles")).toBeTruthy();
     const args = t.argsOf("my_trips")[0];
     expect(args.limit).toBe(5);
     expect(String(args.from) < String(args.to)).toBe(true);
@@ -196,9 +199,10 @@ describe("Overview: the sections by role (L1)", () => {
     expect(within(sectionEl("my_trips")).getByTestId("view-all").getAttribute("href")).toBe("/my-trips");
   });
 
-  it("a viewer: the tiles and On the road", async () => {
+  it("a viewer: the StatsRow and On the road", async () => {
     await mount(new FakeTransport(grouped, viewer));
-    expect(order()).toEqual(["tiles", "road"]);
+    expect(order()).toEqual(["road"]);
+    expect(screen.getByTestId("stats-tiles")).toBeTruthy();
   });
 });
 
@@ -374,7 +378,8 @@ describe("Needs a driver", () => {
   it("the soonest first, each row to the task's change page, View all to the filtered board", async () => {
     await mount(new FakeTransport(needsDriver));
     const block = screen.getByTestId("needs-driver");
-    expect(block.compareDocumentPosition(screen.getByText("Vehicles on the road")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Under the StatsRow, as every section.
+    expect(screen.getByTestId("stats-tiles").compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(block).getByTestId("view-all").getAttribute("href")).toBe("/tasks?filter=needs_driver");
     const rows = screen.getAllByTestId("needs-driver-row");
     expect(rows.map((r) => r.getAttribute("href"))).toEqual(["/tasks/t1/edit?driver=1", "/tasks/t2/edit?driver=1"]);
@@ -395,10 +400,27 @@ describe("Needs a driver", () => {
   });
 });
 
-describe("the tiles", () => {
-  it("show the counts; the requests tile never says Nothing waiting while something waits", async () => {
+describe("the tiles (the StatsRow)", () => {
+  const labels = () => [...screen.getByTestId("stats-tiles").querySelectorAll(".tile .lbl")].map((e) => e.textContent);
+
+  it("first on the page, the design's four first in its order, then Free now and In garage; the rest by permission", async () => {
+    await mount(new FakeTransport());
+    const stats = screen.getByTestId("stats-tiles");
+    const firstSection = screen.getByTestId("overview-sections").querySelector("[data-section]") as HTMLElement;
+    expect(stats.compareDocumentPosition(firstSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(labels()).toEqual(["Vehicles on the road", "Tasks today", "Requests to approve", "Reminders due", "Free now", "In garage"]);
+    // No section of its own any more.
+    expect(screen.queryByText("At a glance")).toBeNull();
+    cleanup();
+    await mount(new FakeTransport(overview, viewer));
+    expect(labels()).toEqual(["Vehicles on the road", "Tasks today", "Free now", "In garage"]);
+  });
+
+  it("show the counts in the one vocabulary; the requests tile never says Nothing waiting while something waits", async () => {
     await mount(new FakeTransport());
     expect(screen.getByText("Vehicles on the road").parentElement?.textContent).toContain("2of 5");
+    expect(screen.getByText("Vehicles on the road").parentElement?.textContent).toContain("1 task on the way");
+    expect(screen.getByText("Tasks today").parentElement?.textContent).toContain("1 on the way · 2 done");
     expect(screen.getByText("Free now").parentElement?.textContent).toContain("2vehicles"); // 3 parked, 1 in garage
     expect(screen.getByText("Oldest waiting 3 h")).toBeTruthy();
     expect(screen.getByText("1 need action now")).toBeTruthy();

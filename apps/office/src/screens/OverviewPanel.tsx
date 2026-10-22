@@ -2,7 +2,8 @@
 // list a tile counts, with an X (and Esc) to close it and a link to the full page. The vehicles on the road and the
 // reminders come from the overview already on screen; Free now and In garage read list_vehicles, Tasks today the day's
 // board, Requests the first page of the waiting queue (Hotfix 3: 25, with how many there are). Each list keeps its
-// answer on screen while it refreshes.
+// answer on screen while it refreshes. The design pass (pilot e): Tasks today's groups say the states in the one
+// vocabulary (docs/design-pass.md §3: On the way, Sent, Needs a driver, Done) and an empty list is the shared empty line.
 import { type ReactNode, useEffect } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -13,9 +14,9 @@ import type { Board, BoardCard, Overview, RequestsList, RoadDriver, VehiclesList
 import { useQuery } from "../data/useQuery";
 import { joinDots, plateOf, today, vehicleAvailabilityTone } from "../lib/format";
 import { can } from "../transport/types";
-import { Avatar, Empty, ErrBox, IconLink, Pill, Plate, VehicleThumb } from "../ui/basics";
+import { Avatar, ErrBox, IconLink, Pill, Plate, VehicleThumb } from "../ui/basics";
 import { Icon } from "../ui/icons";
-import { PAGE_SIZE, SkeletonRows } from "../ui/ListKit";
+import { EmptyLine, PAGE_SIZE, SkeletonRows } from "../ui/ListKit";
 import { LATE_BADGE } from "./approvalLogic";
 import { requestsLine } from "./overview/overviewLogic";
 import { FULL_PATH, OPEN_TEXT, type OverviewOpen, VEHICLE_FILTER_WORDS } from "./overviewLinks";
@@ -28,7 +29,7 @@ import { dayWords } from "../lib/when";
 export function RoadRows({ rows }: { rows: RoadDriver[] }) {
   const { me } = useFleet();
   const routes = can(me, ...ROUTES_NEED);
-  if (!rows.length) return <Empty>No vehicle is on the road right now.</Empty>;
+  if (!rows.length) return <EmptyLine>No vehicle is on the road right now.</EmptyLine>;
   return (
     <>
       {rows.map((d, i) => (
@@ -80,16 +81,16 @@ function VehicleRows({ filter }: { filter: "available" | "in_garage" }) {
             </Link>
           ))}
         </div>
-      ) : <Empty>{filter === "available" ? "No vehicle is free right now." : "No vehicle is in the garage."}</Empty>)}
+      ) : <EmptyLine>{filter === "available" ? "No vehicle is free right now." : "No vehicle is in the garage."}</EmptyLine>)}
     </>
   );
 }
 
 const TASK_GROUPS: [keyof Pick<Board, "in_progress" | "assigned" | "declined" | "completed">, string][] = [
-  ["in_progress", "In progress"],
-  ["assigned", "Assigned"],
+  ["in_progress", "On the way"],
+  ["assigned", "Sent"],
   ["declined", "Needs a driver"],
-  ["completed", "Completed"],
+  ["completed", "Done"],
 ];
 
 function TaskRow({ t }: { t: BoardCard }) {
@@ -122,7 +123,7 @@ function TaskRows() {
           ) : null))}
           {b.waiting_approval?.length ? <p className="muted small" style={{ margin: "10px 22px" }}>{b.waiting_approval.length} proposed for today wait for an approver.</p> : null}
         </div>
-      ) : <Empty>No tasks today.</Empty>)}
+      ) : <EmptyLine>No tasks today.</EmptyLine>)}
     </>
   );
 }
@@ -136,7 +137,7 @@ function RequestRows() {
       ? <div className="card-b"><ErrBox entry={{ data: undefined, err: rq.err, loading: false }} onRetry={rq.refetch} /></div>
       : <SkeletonRows label="Loading requests…" />;
   }
-  if (!list.length) return <Empty>No requests are waiting.</Empty>;
+  if (!list.length) return <EmptyLine>No requests are waiting.</EmptyLine>;
   const total = rq.data.total ?? list.length;
   return (
     <div className="rows">
@@ -187,7 +188,7 @@ export function OverviewPanel({ open, overview, onClose }: { open: OverviewOpen;
       body = <VehicleRows filter="in_garage" />;
       break;
     case "tasks":
-      eyebrow = o ? `${o.tasks.in_progress ?? 0} in progress · ${o.tasks.done ?? 0} done` : "Today";
+      eyebrow = o ? `${o.tasks.in_progress ?? 0} on the way · ${o.tasks.done ?? 0} done` : "Today";
       body = <TaskRows />;
       break;
     case "requests":

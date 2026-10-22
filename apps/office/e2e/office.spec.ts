@@ -657,19 +657,23 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await page.getByRole("button", { name: "Save password" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
-  // The board: Accepted HH:MM on one card; the other in "Needs a driver" with the reason.
+  // The board: Accepted HH:MM on one card (its chip Accepted); the other in the red "Needs a driver" block with the reason,
+  // and only there: never also a card in a column (the design pass, pilot f).
   await page.goto(`/tasks?date=${day}`);
   const accepted = page.locator(".tcard", { hasText: `E2E accept ${stamp}` });
   await expect(accepted).toContainText(/Accepted \d\d:\d\d/);
-  await expect(page.locator(".col", { hasText: "Needs a driver" }).first()).toBeVisible();
+  await expect(accepted.getByTestId("task-state")).toHaveText("Accepted");
   // Phase 7 (§19): the red banner on every Tasks page.
   await expect(page.getByTestId("needs-driver-banner")).toContainText(/need(s)? a driver/);
-  const card = page.locator(".tcard", { hasText: `E2E decline ${stamp}` });
-  await expect(card).toContainText("Declined (Vehicle problem) · Flat tyre");
+  const declinedRow = page.getByTestId("needs-driver").getByTestId("needs-driver-row").filter({ hasText: `E2E decline ${stamp}` });
+  await expect(declinedRow).toContainText("declined · Vehicle problem");
+  await expect(declinedRow).toContainText("Flat tyre");
+  await expect(page.locator(".tcard", { hasText: `E2E decline ${stamp}` })).toHaveCount(0);
 
   // The detail: the reason; Give it a driver (Hotfix 4 b): the task on top, Who can take it below, a row fills the driver,
-  // Give to …; then back where it came from (the detail, with the history).
-  await card.click();
+  // Give to …; then back where it came from (the detail, with the history). (The block's row opens the change page
+  // straight; the detail is the task's own address.)
+  await page.goto(`/tasks/${t2.task_id}?date=${day}`);
   const detail = page.getByTestId("detail");
   await expect(detail.getByText(/Flat tyre/).first()).toBeVisible();
   await detail.getByRole("link", { name: "Give it a driver" }).first().click();
@@ -687,9 +691,11 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await page.keyboard.press("Escape");
   await expect(detail).toHaveCount(0);
   await expect(page).toHaveURL(/\/tasks/);
-  await expect(await boardCard(page, `E2E decline ${stamp}`)).toContainText("Sent · not opened yet");
-  // This task left the "Needs a driver" column (another run's declined task may still sit there).
-  await expect(page.locator(".col", { hasText: "Needs a driver" }).locator(".tcard", { hasText: `E2E decline ${stamp}` })).toHaveCount(0);
+  const reassigned = await boardCard(page, `E2E decline ${stamp}`);
+  await expect(reassigned).toContainText("Sent · not opened yet");
+  await expect(reassigned.getByTestId("task-state")).toHaveText("Sent");
+  // This task left the red "Needs a driver" block (another run's declined task may still sit there).
+  await expect(page.getByTestId("needs-driver-row").filter({ hasText: `E2E decline ${stamp}` })).toHaveCount(0);
 
   // Drivers: accepts and declines in the last 30 days.
   await page.goto("/drivers");

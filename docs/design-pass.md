@@ -133,7 +133,9 @@ Components: **new** `components/patterns/StatusBanner.tsx` (app); site `ui/basic
 ### 4.7 StatsRow (Samsara's KPI tiles; Uber Fleet's summary)
 Two to six cells in one card (two a line on a phone, the most used first): a small label (muted, upper case), the value
 (big, mono for numbers), an optional unit / sub-line; a cell that counts a list opens it (R9). The same set and rule on every surface (Office Home's Free now leaves
-out the garage, as the site does).
+out the garage, as the site does). The order (pilot e, R12): both designs (`Desktop · Overview.png`, `Office · Home.png`)
+lead with On the road, Tasks today, Requests to approve, Reminders due (the last two by permission); Free now and In
+garage follow.
 Components: **new** `components/patterns/StatsRow.tsx` (app, replacing `StatTiles`, the reports' local `Tile` and the
 driver's stats box in the rollout); site `ui/basics.tsx` `Tile` in a **new** `StatsRow` wrapper.
 
@@ -164,6 +166,10 @@ with Try again on detail pages.
 | d | Task in progress | Driver app | Detail (map) | Three stats as designed (Distance left, Arrive about, Start odo); Navigate · Call · Complete task in the designed order right under the stats; the stops as the compact RouteStepper (the current stop with its slide, the others one line) under the actions |
 | e | Overview | Site, desktop + phone width | Dashboard | The StatsRow first (the design's four), then the sections; one empty-state component; the needs-a-driver row written once |
 | f | Tasks (board) | Site, desktop + phone width | List row / board | One status vocabulary (Sent · On the way · Done; Needs a driver only as the banner on top, not also a column); the task card's status as the chip; the empty column as the shared empty line |
+
+As built (e, f; `apps/office`): the state→chip rule is `screens/taskStateLogic.ts` (Late is its own amber chip beside On the
+way, as §3 says; a finish flag keeps its issue's name, "Completed early"). A past day's declined task keeps a Needs a
+driver column on that day's board: the red block lists today and later only, so it would otherwise show nowhere.
 
 **The screenshots.** `apps/office/e2e/design-pilot.spec.ts` makes the same data and photographs each pilot screen (the site
 at 1440 × 900 and 412 × 915; /m/ at 412 × 915 in English and Sinhala; the driver's task screen through a design-only page
