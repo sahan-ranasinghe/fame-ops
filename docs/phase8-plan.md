@@ -1111,6 +1111,57 @@ host to contact. Never blocks.
 | Driver app | Fuel tab, Mileage tab | Every entry of the month in a list | Google Pay / Revolut / PickMe's history: the summary card, the Log buttons, ONE "Recent" card with the last 5 (an icon: fuel pump / odometer gauge; litres or km; the date in words; a video mark when uploaded), "See all" → a history screen grouped by month with Load more; on Mileage the chips All · Odometer · Fuel. Today's tasks on Mileage stay |
 | Driver app, site | Fuel tab, the Fuel page, totals | A missing amount reads "LKR 0" | "–"; totals add only the known amounts and say "N fills without an amount" |
 
+### 33.7 Item 8: lists cleaned up everywhere (Sahan, 22 October 2026; no switch)
+
+**Industry patterns:** Gmail's rows (an icon for the kind, one specific title, one grey meta line; select and act in bulk),
+Samsara alerts / Sentry / GitHub notifications (mixed kinds grouped with counts, the newest first, "Show all N", most urgent
+group first; critical / warning / info), Fleetio's maintenance (service and documents per vehicle, progress bars and expiry
+chips).
+
+**The evidence:** the site's Issues shows 24 rows and each repeats its kind three times ("Missed task" / "Missed task · Test
+Driver …" / "… System · Missed task"); Maintenance → Reminders repeats the missed tasks and odometer checks of Issues; most
+items stay open forever (missed tasks from 10 October, odometer photos that could not be read), so the badge says 24 when a
+few need action.
+
+**The rules (every list of every surface):**
+1. Rows: an icon for the kind; ONE specific title ("Test Driver missed 'Trip · Head office'", "CAP-2207: 3 documents
+   missing"); ONE grey meta line (plate chip · driver · when in words). Never the kind or "System" repeated in the row.
+2. Mixed kinds are grouped by kind with counts ("Missed tasks · 12"): each group its 3 newest, "Show all N" for the rest;
+   collapsible; the most urgent group first.
+3. Severity: every issue kind is critical, warning or info (§33.7 table below). Only critical and warning count in the Issues
+   badge, Home's "Needs you now" and the Overview. Info kinds resolve themselves after 7 days ("closed automatically"),
+   listed under Resolved, and are not opened again for the same thing.
+4. Bulk: select rows or "Select all in this group" → Resolve / Dismiss with a reason (e.g. "test data"); never delete;
+   audited (`update_issues`).
+5. Tabs Open · Snoozed · Resolved; 25 at a time with Load more; an empty state with an icon.
+6. Maintenance: only service and documents, one card per vehicle (service due by km and date with a progress bar; document
+   expiries as chips ok / expiring / expired / missing). Missed tasks and odometer checks live in Issues only.
+7. Every other long list found by the audit (the audit table at the checkpoint: page · rows today · repeated text ·
+   grouping · paging · bulk actions · fix): the summary first, the recent N, See all, grouped where mixed, no repeated text.
+
+### 33.8 Item 9: data retention (Sahan, 22 October 2026; Slack / Google Workspace / Samsara retention policies)
+
+A nightly job (pg_cron, Colombo night) removes what is past its period, in batches (no long locks), and writes ONE activity
+log row per run ("Removed 312 read notifications older than 30 days; …"). Each period is an admin setting under Settings →
+Data retention (what is removed and when), in `get_settings` for the connector; "Run now" first shows only the counts, then
+removes on a second press. Business records are NEVER removed automatically.
+
+| What | Kept | Minimum |
+|---|---|---|
+| Notifications read / unread (the inbox) | 30 days / 90 days | — |
+| Push and notification delivery records (`notifications`, `push_log`) | 14 days | — |
+| Activity log: routine entries / changes | 30 days / 2 years | changes ≥ 6 months |
+| Issues: info kinds | resolved after 7 days (item 8) | — |
+| Issues resolved or dismissed (and their events) | 12 months | — |
+| Raw location points | 6 months; a per-driver per-day summary (km, driving time, stops, first and last point) forever | ≥ 30 days |
+| Heartbeats, map-load and routing counters | 90 days | — |
+| Unsent trip drafts (on the device) | 30 days | — |
+| App errors, fuel videos (already) | 90 days, 12 months (shown on the same page) | — |
+| NEVER automatic | tasks, stops, requests, odometer and fuel logs, their photos, vehicle reports, documents, employees, vehicles, places, projects, duty sessions | — |
+
+The driver's route, mileage and km for an older day come from the daily summaries. pgTAP for each rule, with "business
+records untouched".
+
 ### 33.5 Also in the round
 - `docs/voice-calls-plan.md` (doc only): WebRTC through a service (LiveKit, Agora, Twilio Voice) with their current prices
   and free tiers (cited), the native modules (react-native-webrtc, CallKeep / ConnectionService, FCM high priority to
