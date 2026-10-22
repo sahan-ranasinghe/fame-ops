@@ -94,7 +94,7 @@ export function VehicleChecksSection({ plate, today: checkToday, focus }: { plat
   const q = useTool<VehicleChecks>('vehicle_checks', lastWeekArgs(plate, colomboDate()), { enabled: allowed });
   const days = q.data ? byDay(q.data.checks) : [];
   return (
-    <Section title={t('office.checks.title')} count={q.data?.problems ? q.data.problems : undefined} tone={q.data?.problems ? 'red' : undefined}>
+    <Section title={t('office.checks.title')}>
       <View style={{ gap: 6, paddingVertical: 6 }}>
         <Txt variant="label" color={colors.muted}>{t('office.checks.today').toUpperCase()}</Txt>
         <CheckTodayLine check={checkToday} />
