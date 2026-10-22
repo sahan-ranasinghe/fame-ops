@@ -5,6 +5,7 @@
 import type { FuelList, MileageSummary, MileageTotals, Row } from "../data/types";
 import { num } from "../lib/format";
 import { monthOf, rangeText } from "../ui/dateRange";
+import { amountsLine } from "./fuelLogic";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -109,5 +110,6 @@ export function fuelLabel(d: Pick<FuelList, "month" | "from" | "to">): string {
 export function fuelMonthLine(d: Pick<FuelList, "month" | "month_totals">): string | undefined {
   const m = d.month_totals;
   if (!m) return undefined;
-  return `${monthName(d.month)}: ${num(m.entries)} fill${m.entries === 1 ? "" : "s"} · ${num(m.litres)} litres · LKR ${num(m.lkr)}`;
+  // Round 4–7 (§33.6): the known amounts added up, and how many fills have none.
+  return `${monthName(d.month)}: ${num(m.entries)} fill${m.entries === 1 ? "" : "s"} · ${num(m.litres)} litres · ${amountsLine(m)}`;
 }

@@ -38,15 +38,32 @@ import { DecisionRow } from "./approvers";
 import { useFleetSettings } from "./dispatchParts";
 import { useToast } from "../ui/Toast";
 import { PlanWithMap } from "./PlanMap";
-import { videoWords } from "./fuelLogic";
+import { amountText, videoWords } from "./fuelLogic";
 import { driveText } from "./stopsLogic";
 import { readFlashWarnings } from "../data/flash";
 import { findDriverPath } from "./needsDriverLogic";
-import { dwellNote, needsDriverText, segmentRows, segmentsTotal, taskTone, whatOf } from "./taskDetailLogic";
+import { dwellNote, fuelCardWords, needsDriverText, segmentRows, segmentsTotal, taskTone, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
 import { datesInWords, whenText } from "../lib/when";
 import { finishChip } from "./myTripLogic";
 import { TaskCheckLines } from "./VehicleChecks";
+import { PassengerList } from "./PassengerList";
+import { countWithNames, ridersLine } from "./passengersLogic";
+
+/** Round 4–7 (5): "Fuel: Enough fuel · 07:42" with the estimate under it; before the start the estimate alone. */
+function FuelCardLine({ card, started }: { card: NonNullable<TaskDetailData["task"]["fuel_card"]>; started: boolean }) {
+  const w = fuelCardWords(card, started);
+  if (!w.answer && !w.estimate) return null;
+  return (
+    <div style={{ gridColumn: "1/-1" }} data-testid="fuel-card">
+      <dt>Fuel</dt>
+      <dd style={{ fontWeight: 400 }}>
+        {w.answer ? <b className={w.tone === "warn" ? "status warn" : w.tone === "muted" ? "muted" : undefined}>{w.answer}</b> : <span className="muted">Asked at Start task</span>}
+        {w.estimate && <div className="sub">{w.estimate}</div>}
+      </dd>
+    </div>
+  );
+}
 
 /** The arrival flags shown in amber (an override, no GPS fix, Done without Arrived); "no pin" is plain. */
 const ARRIVAL_WARN = new Set(["override", "no_gps", "not_arrived"]);
@@ -212,7 +229,15 @@ export function TaskDetail() {
               <dd><LateReportLine late={t.late_report} /></dd>
             </div>
           )}
-          <div><dt>Passengers</dt><dd>{t.passengers ?? "—"}</dd></div>
+          {/* Round 4–7 (6): the count (never under the names) and who rides by name, with Share trip for someone without an account. */}
+          <div style={t.passengers_list?.length ? { gridColumn: "1/-1" } : undefined} data-testid="task-passengers">
+            <dt>Passengers</dt>
+            <dd>
+              <span className="num">{countWithNames(t.passengers, t.passengers_list?.length ?? 0) ?? "—"}</span>
+              {t.passengers_list?.length ? <span className="muted" style={{ fontWeight: 400 }}> · {ridersLine(t.passengers_list.map((x) => x.name), t.passengers)}</span> : null}
+              {t.passengers_list?.length ? <div style={{ fontWeight: 400 }}><PassengerList list={t.passengers_list} /></div> : null}
+            </dd>
+          </div>
           <div>
             <dt>Contact</dt>
             <dd>
@@ -232,6 +257,8 @@ export function TaskDetail() {
           <TaskCheckLines checks={t.vehicle_checks} />
           <div><dt>Odometer</dt><dd className="num">{t.start_odometer_km != null ? num(t.start_odometer_km) : "—"}{t.end_odometer_km != null ? " → " + num(t.end_odometer_km) : ""}</dd></div>
           <div><dt>Km this task</dt><dd className="num">{km != null ? num(km) + " km" : "—"}{segments.length > 1 ? <span className="muted"> · {segments.length} vehicles</span> : null}{t.gps_km != null ? <span className="muted"> · GPS {num(t.gps_km)} km</span> : null}</dd></div>
+          {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none). */}
+          {t.fuel_card && <FuelCardLine card={t.fuel_card} started={!!t.started || t.status === "in_progress" || t.status === "completed"} />}
           {t.created_by && <div><dt>Assigned by</dt><dd>{t.created_by}</dd></div>}
           {/* Hotfix 2 (K): who sent it to the driver, with their number (Call office when they have none). */}
           {t.approved_by && <div style={{ gridColumn: "1/-1" }}><dt>Approved</dt><dd style={{ fontWeight: 400 }}><DecisionRow kind="approved" who={t.approved_by} office={officePhone} /></dd></div>}
@@ -354,7 +381,8 @@ export function TaskDetail() {
           {p.fuel.map((f, i) => (
             <div className="row" key={"f" + i}>
               <div className="grow">
-                <div className="name">{num(f.litres)} L · LKR {num(f.amount_lkr)}</div>
+                {/* Round 4–7 (§33.6): no amount given is "–", never LKR 0. */}
+                <div className="name">{joinDots([f.litres != null ? `${num(f.litres)} L` : "", amountText(f.amount_lkr)])}</div>
                 <div className="sub">{joinDots(["Fuel", whenText(f.at), f.video ? videoWords(f.video) : ""])}</div>
               </div>
               {f.video?.status === "uploaded" && f.id && can(me, "vehicles") && <Link className="btn small" to={`/fuel/${f.id}${f.at ? `?range=custom&from=${f.at.slice(0, 10)}&to=${f.at.slice(0, 10)}` : ""}`}><Icon name="video" />Video</Link>}

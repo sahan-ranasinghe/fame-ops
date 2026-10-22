@@ -12,7 +12,7 @@ import type { TaskWithStops } from '@/lib/types';
 import { videoPieces } from './manageLogic';
 import { parseKm } from './taskExtrasLogic';
 import { isoOn } from './trip/planMap';
-import type { AssignmentEvent, OdometerRead, ProjectShare, Stop, TaskDetail, TaskSegment, TimelineItem, TripPurpose, TripPurposeResult } from './types';
+import type { AssignmentEvent, FuelCard, OdometerRead, ProjectShare, Stop, TaskDetail, TaskSegment, TimelineItem, TripPurpose, TripPurposeResult } from './types';
 
 export type Words = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -62,9 +62,10 @@ export function odometerParts(o: OdometerRead, t: Words): { title: string; line:
   };
 }
 
-/** "32.5 L · LKR 12,000" (the litres may be unknown). */
-export function fuelTitle(f: { litres: number | null; amount_lkr: number }, t: Words): string {
-  return f.litres != null ? t('office.task.fuelLine', { litres: n(f.litres), lkr: n(f.amount_lkr) }) : `LKR ${n(f.amount_lkr)}`;
+/** "32.5 L · LKR 12,000" (the litres may be unknown); Round 4–7 (§33.6): no amount given is "LKR –", never LKR 0. */
+export function fuelTitle(f: { litres: number | null; amount_lkr?: number | null }, t: Words): string {
+  const lkr = f.amount_lkr != null ? n(f.amount_lkr) : '–';
+  return f.litres != null ? t('office.task.fuelLine', { litres: n(f.litres), lkr }) : `LKR ${lkr}`;
 }
 
 const REPORT_CATEGORIES = ['breakdown', 'accident', 'tyre', 'warning_light', 'other'];
@@ -301,3 +302,26 @@ export function detailTask(p: TaskDetail): TaskWithStops {
 /** The map is worth showing: a pin (a stop's or the start's) to draw. */
 export const planDrawable = (p: TaskDetail): boolean =>
   (typeof p.task.start_lat === 'number' && typeof p.task.start_lng === 'number') || p.stops.some((s) => s.status !== 'removed' && typeof s.lat === 'number' && typeof s.lng === 'number');
+
+/**
+ * Round 4–7 (5): the driver's fuel card on the task page, in the person's language. The answer once the card was shown at
+ * Start task ("Enough fuel · 07:42", "Fills up on the way · 07:42", or "Not answered"); before the start the estimate only
+ * (the server's estimateText words: "About 180 km · roughly 13–17 L diesel (approx.)", "About 40 km · check the battery").
+ */
+export function fuelCardParts(card: FuelCard, started: boolean, t: Words): { answer?: string; tone: 'amber' | 'muted' | 'ink'; estimate?: string } {
+  let estimate: string | undefined;
+  if (card.km != null) {
+    if (card.electric) estimate = t('office.fuel.estimateElectric', { km: n(card.km) });
+    else if (card.litres_low != null && card.litres_high != null) {
+      const litres = card.litres_low === card.litres_high ? `${card.litres_low}` : `${card.litres_low}–${card.litres_high}`;
+      const word = card.fuel_type === 'diesel' ? 'diesel' : card.fuel_type === 'petrol' || card.fuel_type === 'hybrid' ? 'petrol' : 'fuel';
+      estimate = t('office.fuel.estimate', { km: n(card.km), litres, fuel: t(`office.fuel.word_${word}`) });
+    }
+  }
+  if (card.answer) {
+    const said = t(card.answer === 'enough' ? 'office.fuel.answer_enough' : 'office.fuel.answer_fill_on_way');
+    return { answer: [said, card.answered_at ?? ''].filter(Boolean).join(' · '), tone: card.answer === 'fill_on_way' ? 'amber' : 'ink', estimate };
+  }
+  if (started) return { answer: t('office.fuel.notAnswered'), tone: 'muted', estimate };
+  return { tone: 'ink', estimate };
+}

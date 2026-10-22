@@ -25,6 +25,8 @@ export const PAIRS = [
   ["screens/stopsLogic.ts", "stopsLogic.ts", { "@fleet/durations": "./durations" }],
   ["screens/tripLogic.ts", "tripLogic.ts", { "../data/types": "../types" }],
   ["screens/vehicleChoiceLogic.ts", "vehicleChoiceLogic.ts", { "./availabilityLogic": "./format" }],
+  // Round 4–7 (6): the Passengers field's rules (before the request and assign rules that use them).
+  ["screens/passengersLogic.ts", "passengersLogic.ts", { "../data/types": "../types", "../lib/phones": "./phones" }],
   ["screens/requestLogic.ts", "requestLogic.ts", { "../data/types": "../types", "../ui/whoDrivesLogic": "./whoDrivesLogic" }],
   ["screens/assignLogic.ts", "assignLogic.ts", { "../data/types": "../types", "../lib/format": "./format", "../ui/whoDrivesLogic": "./whoDrivesLogic" }],
 ];

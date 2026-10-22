@@ -18,7 +18,7 @@ import { DateRangePicker, type DateRangeValue, useDateRange } from "../ui/DateRa
 import type { FilterValues } from "../ui/filterLogic";
 import { EmptyLine, ListHeader, SkeletonRows, usePagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
-import { megabytes, videoChip, videoTone, videoWords } from "./fuelLogic";
+import { amountsLine, megabytes, videoChip, videoTone, videoWords } from "./fuelLogic";
 import { ListFooter, ListStale, ListWaiting } from "./listLocal";
 import { useVehicleDriver, VehicleDriverFilter } from "./Mileage";
 import { fuelLabel, fuelMonthLine, rangeArgs } from "./mileageLogic";
@@ -81,7 +81,7 @@ export function Fuel() {
             <div className="stack" style={q.stale ? { opacity: 0.6 } : undefined} aria-busy={updating || undefined}>
               <div className="tiles">
                 <Tile label="Fills" value={t.entries} unit="entries" sub={fuelLabel(d)} />
-                <Tile label="Fuel" value={num(t.litres)} unit="litres" sub={`LKR ${num(t.lkr)}`} />
+                <Tile label="Fuel" value={num(t.litres)} unit="litres" sub={amountsLine(t)} />
                 <Tile label="Videos" value={t.videos} unit="uploaded" sub={t.bytes ? megabytes(t.bytes) : "nothing stored yet"} />
                 <Tile label="Without a video" value={t.videos_missing + t.videos_waiting} unit="fills" sub={[t.videos_waiting ? `${t.videos_waiting} still on a phone` : "none missing", t.interrupted ? `${t.interrupted} interrupted` : ""].filter(Boolean).join(" · ")} tone={t.videos_missing ? "bad" : t.videos_waiting ? "warn" : ""} />
               </div>
@@ -92,15 +92,17 @@ export function Fuel() {
                 {list.items.length ? (
                   <div className="tbl-wrap">
                     <table data-testid="fuel-table">
-                      <thead><tr><th>When</th><th>Vehicle</th><th>Driver</th><th>Litres</th><th>LKR</th><th>Odometer</th><th>Video</th></tr></thead>
+                      <thead><tr><th>When</th><th>Vehicle</th><th>Driver</th><th>Fuel</th><th>Litres</th><th>LKR</th><th>Odometer</th><th>Video</th></tr></thead>
                       <tbody>
                         {list.items.map((e) => (
                           <tr key={e.id} className={`click${e.id === id ? " selected" : ""}`} onClick={() => navigate(`/fuel/${e.id}${search}`)} aria-current={e.id === id ? "true" : undefined} data-testid="fuel-row">
                             <td data-label="When">{whenText(e.at)}</td>
                             <td data-label="Vehicle">{e.vehicle ? <span className="plate">{e.vehicle}</span> : "—"}</td>
                             <td data-label="Driver">{e.driver ?? "—"}</td>
+                            <td data-label="Fuel">{e.fuel ?? "—"}</td>
                             <td data-label="Litres" className="num">{e.litres != null ? num(e.litres) : "—"}</td>
-                            <td data-label="LKR" className="num">{e.lkr != null ? num(e.lkr) : "—"}</td>
+                            {/* Round 4–7 (§33.6): no amount given is "–", never LKR 0. */}
+                            <td data-label="LKR" className="num">{e.lkr != null ? num(e.lkr) : "–"}</td>
                             <td data-label="Odometer" className="num">{e.odometer_km != null ? `${num(e.odometer_km)} km` : "—"}</td>
                             <td data-label="Video"><Pill tone={videoTone(e.video.status)}>{videoChip(e.video.status, e.video.interrupted)}</Pill>{e.video.status === "uploaded" && <div className="sub">{videoWords(e.video)}</div>}</td>
                           </tr>

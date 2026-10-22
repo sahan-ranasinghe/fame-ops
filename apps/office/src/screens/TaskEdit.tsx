@@ -15,7 +15,7 @@ import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { flashWarnings } from "../data/flash";
 import { useLists } from "../data/hooks";
-import type { TaskDetail, UpdateTaskResult } from "../data/types";
+import type { Passenger, TaskDetail, UpdateTaskResult } from "../data/types";
 import { cap, joinDots, plateOf, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
@@ -38,6 +38,8 @@ import { leaveIn, TaskSummary } from "./TaskSummary";
 import { TripDayPicker } from "../ui/DayPicker";
 import { ChoiceChip } from "../ui/Select";
 import { whenText } from "../lib/when";
+import { PassengersField } from "../ui/PassengersField";
+import { passengersOn, type Rider, ridersEdit, ridersFrom } from "./passengersLogic";
 
 interface EditForm {
   driver: string;
@@ -51,11 +53,13 @@ interface EditForm {
   contactPhone: string;
   notes: string;
   reason: string;
+  /** Round 4–7 (6): who rides, by name; absent = not on the form (switched off, an older draft). */
+  riders?: Rider[];
 }
 
 const EMPTY: EditForm = { driver: "", vehicle: "", date: "", time: "", end: "", title: "", passengers: "", contactName: "", contactPhone: "", notes: "", reason: "" };
 
-type TaskFields = { date?: string; time?: string; end_by?: string; title: string; passengers?: number | null; contact?: { name?: string | null; phone?: string | null }; notes?: string | null };
+type TaskFields = { date?: string; time?: string; end_by?: string; title: string; passengers?: number | null; contact?: { name?: string | null; phone?: string | null }; notes?: string | null; passengers_list?: Passenger[] };
 
 /** The form as the task is now (the driver and vehicle selects start at "Keep"). */
 const fromTask = (t: TaskFields): EditForm => ({
@@ -68,6 +72,7 @@ const fromTask = (t: TaskFields): EditForm => ({
   contactName: t.contact?.name ?? "",
   contactPhone: t.contact?.phone ?? "",
   notes: t.notes ?? "",
+  riders: ridersFrom(t.passengers_list),
 });
 const untouched = (f: EditForm) => JSON.stringify(f) === JSON.stringify(EMPTY);
 
@@ -89,8 +94,10 @@ export function updateTaskInput(id: string, version: number, f: EditForm, t: Tas
   if (s(f.contactName) !== (t.contact?.name ?? "")) input.contact_name = s(f.contactName);
   if (s(f.contactPhone) !== (t.contact?.phone ?? "")) input.contact_phone = s(f.contactPhone);
   if (s(f.notes) !== (t.notes ?? "")) input.notes = s(f.notes);
-  if (Object.keys(input).length === 2) return { error: "Nothing changed." };
-  return { input };
+  // Round 4–7 (6): the names when they changed (names alone: only the ids and the list; with other changes the count too).
+  const named = ridersEdit(input, f.riders, ridersFrom(t.passengers_list), { key: "passengers", was: t.passengers ?? null }, ["task_id", "plan_version"]);
+  if (Object.keys(named).length === 2) return { error: "Nothing changed." };
+  return { input: named };
 }
 
 /** Why the task needs a driver, in one sentence (§19): declined with the reason, or not accepted in time. */
@@ -145,6 +152,7 @@ export function TaskEdit() {
     first?.lat != null && first.lng != null && !first.google ? { lat: first.lat, lng: first.lng } : first?.place ? { place: first.place } : null);
   const avail = useAvailability(availArgs);
   const settings = useFleetSettings();
+  const riding = passengersOn(settings.data);
 
   const fallback = driverMode ? "/" : back;
   if (err) return <><PageTop title="Task" backTo={fallback} /><Notice tone="bad">{err}</Notice></>;
@@ -180,7 +188,8 @@ export function TaskEdit() {
 
   async function save(ev: FormEvent) {
     ev.preventDefault();
-    const v = updateTaskInput(id, t!.plan_version ?? 0, { ...f, vehicle: vehicleToSend }, t!);
+    // The passengers switch off: the names are left as they are.
+    const v = updateTaskInput(id, t!.plan_version ?? 0, { ...f, vehicle: vehicleToSend, ...(riding ? {} : { riders: undefined }) }, t!);
     if ("error" in v) {
       if (needsDriver && !f.driver) {
         setMsg("Choose the driver first.");
@@ -326,6 +335,7 @@ export function TaskEdit() {
               <div className="field"><label htmlFor="ra-contact">Contact name</label><input id="ra-contact" maxLength={120} value={f.contactName} onChange={(e) => set("contactName", e.target.value)} /></div>
               <div className="field"><label htmlFor="ra-phone">Contact phone</label><input id="ra-phone" maxLength={30} value={f.contactPhone} onChange={(e) => set("contactPhone", e.target.value)} /></div>
             </div>
+            {riding && <PassengersField id="ra" value={f.riders ?? []} onChange={(r) => set("riders", r)} count={f.passengers} />}
             <div className="field"><label htmlFor="ra-notes">Notes for the driver</label><textarea id="ra-notes" maxLength={1000} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></div>
             {msg && <Notice tone="bad">{msg}</Notice>}
             <StickyActions><button className="btn dark" type="submit" disabled={busy}>{needsDriver ? "Reassign" : "Save changes"}</button></StickyActions>

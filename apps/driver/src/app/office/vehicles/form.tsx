@@ -4,6 +4,8 @@
 // "+ Add a company" (add_rental_company) when allowed, the custodian by name or e-mail ("none" clears). Register saves
 // through register_vehicle, an update through update_vehicle; both go back to the vehicle. Documents and photos are
 // laptop work (their upload tools are web-only).
+// Round 4–7 (5): the fuel type as chips, required (the button waits with "Pick the fuel type" above it; an edit starts
+// from the vehicle's own), and the grade that fits it (optional; Not set).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -14,9 +16,9 @@ import { DateField } from '@/components/patterns/Calendar';
 import { ChoiceChips } from '@/components/patterns/Select';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Txt } from '@/components/ui';
-import { companyInput, emptyVehicle, VEHICLE_TYPES, vehicleFormDirty, type VehicleFields, vehicleInput } from '@/office/manageLogic';
+import { companyInput, emptyVehicle, FUEL_TYPES, fuelMissing, fuelShown, gradesFor, VEHICLE_TYPES, vehicleFormDirty, type VehicleFields, vehicleInput, withFuelGrade, withFuelType } from '@/office/manageLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { DriversList, FleetError, VehicleCard, VehiclesList } from '@/office/types';
+import type { DriversList, FleetError, FuelGrade, FuelType, VehicleCard, VehiclesList } from '@/office/types';
 import { BackHeader, ErrorNotice, Screen, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
@@ -33,7 +35,8 @@ export default function VehicleFormScreen() {
   const [busy, setBusy] = useState(false);
   const [why, setWhy] = useState<string | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
-  const [current, setCurrent] = useState<VehicleCard | null>(null);
+  // The vehicle as it is (an edit): undefined while it loads, null when it could not be read.
+  const [current, setCurrent] = useState<VehicleCard | null | undefined>(undefined);
   const [company, setCompany] = useState<{ open: boolean; name: string; phone: string; note: string | null; busy: boolean }>({ open: false, name: '', phone: '', note: null, busy: false });
   const drivers = useTool<DriversList>('list_drivers', { limit: 100 }, { enabled: me.tools.includes('list_drivers') });
   const { allowLeave } = useLeaveGuard(vehicleFormDirty(f), busy);
@@ -46,15 +49,20 @@ export default function VehicleFormScreen() {
     let alive = true;
     void api.call<VehiclesList>('list_vehicles', { filter: 'all', search: plate, limit: 25 }).then((r) => {
       if (alive) setCurrent(r.vehicles.find((x) => x.reg_no === plate) ?? null);
-    }).catch(() => undefined);
+    }).catch(() => { if (alive) setCurrent(null); });
     return () => { alive = false; };
   }, [plate]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Round 4–7 (5): the vehicle's fuel now (an edit; undefined while it loads), what the form shows, and what the save waits for.
+  const now = isNew ? null : current === undefined ? undefined : current ? { fuel_type: current.fuel_type, fuel_grade: current.fuel_grade } : null;
+  const fuel = fuelShown(f, now);
+  const waits = fuelMissing(f, isNew, now) ? t('office.fuel.pickType') : !isNew && now === undefined ? t('office.common.loading') : null;
+
   async function save() {
-    if (busy) return;
-    const v = vehicleInput(f, plate);
+    if (busy || waits) return;
+    const v = vehicleInput(f, plate, now);
     if ('error' in v) {
-      setWhy(v.error === 'plate' ? t('office.vehicles.needPlate') : v.error === 'nothing' ? t('office.vehicles.nothing') : t(v.error === 'date' ? 'office.vehicles.badDate' : 'office.vehicles.badNumber', { field: t(`office.vehicles.f_${v.field ?? 'seats'}`) }));
+      setWhy(v.error === 'plate' ? t('office.vehicles.needPlate') : v.error === 'fuel' ? t('office.fuel.pickType') : v.error === 'nothing' ? t('office.vehicles.nothing') : t(v.error === 'date' ? 'office.vehicles.badDate' : 'office.vehicles.badNumber', { field: t(`office.vehicles.f_${v.field ?? 'seats'}`) }));
       return;
     }
     setWhy(null);
@@ -133,6 +141,16 @@ export default function VehicleFormScreen() {
           {chips(f.type, [keepOrNone, ...VEHICLE_TYPES.map((k) => ({ key: k, label: t(`office.vehicles.type_${k}`) }))], (k) => set('type', k))}
           {!isNew && current?.type ? <Txt variant="small">{t('office.vehicles.now', { value: t(`office.vehicles.type_${current.type}`) })}</Txt> : null}
         </View>
+        <View style={{ gap: 6 }} testID="vehicle-fuel">
+          <Txt variant="label" color={colors.muted}>{t('office.vehicles.f_fuelType').toUpperCase()}</Txt>
+          <ChoiceChips<FuelType> options={FUEL_TYPES.map((k) => ({ key: k, label: t(`office.fuel.type_${k}`) }))} value={fuel.type} onChange={(k) => setF((x) => ({ ...x, ...withFuelType(x, k, now) }))} />
+        </View>
+        {gradesFor(fuel.type).length > 0 && (
+          <View style={{ gap: 6 }} testID="vehicle-grade">
+            <Txt variant="label" color={colors.muted}>{t('office.vehicles.f_fuelGrade').toUpperCase()}</Txt>
+            <ChoiceChips<FuelGrade | ''> options={[{ key: '' as const, label: t('office.fuel.gradeNone') }, ...gradesFor(fuel.type).map((g) => ({ key: g, label: t(`office.fuel.grade_${g}`) }))]} value={fuel.grade ?? ''} onChange={(k) => setF((x) => ({ ...x, ...withFuelGrade(x, k, now) }))} />
+          </View>
+        )}
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <View style={{ flex: 1 }}>{field('seats', t('office.vehicles.f_seats'), { numeric: true, now: current?.seats })}</View>
           <View style={{ flex: 1 }}>{field('allow', t('office.vehicles.f_allow'), { numeric: true, now: current?.km_allowance })}</View>
@@ -194,7 +212,9 @@ export default function VehicleFormScreen() {
         {problem && <ErrorNotice error={problem} onRetry={() => void save()} />}
       </Screen>
       <StickyActions>
-        <Button label={isNew ? t('office.vehicles.register') : t('office.trip.saveChanges')} onPress={() => void save()} busy={busy} style={{ minHeight: 60 }} />
+        {/* The one reason the button waits (docs/phase8-plan.md §16): the fuel type, or the vehicle still loading. */}
+        {waits ? <Txt variant="strong" size={15} color={colors.red} testID="vehicle-save-why">{waits}</Txt> : null}
+        <Button label={isNew ? t('office.vehicles.register') : t('office.trip.saveChanges')} onPress={() => void save()} busy={busy} disabled={!!waits} style={{ minHeight: 60 }} />
       </StickyActions>
     </View>
   );

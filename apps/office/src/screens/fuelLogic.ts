@@ -1,7 +1,22 @@
 // The Fuel page's words (Phase 6, Part 3): the video's state in a phrase and a
 // tone, sizes and lengths as the office reads them. Pure.
-import type { VideoCard } from "../data/types";
-import type { Tone } from "../lib/format";
+import type { FuelList, VideoCard } from "../data/types";
+import { num, type Tone } from "../lib/format";
+
+/** Round 4–7 (§33.6): a fill's amount, "LKR 10,545", or "–" when the driver gave none (never "LKR 0"). */
+export const amountText = (lkr: number | null | undefined): string => (lkr != null ? `LKR ${num(lkr)}` : "–");
+
+/** "1 fill without an amount", "3 fills without an amount"; nothing when every fill has one. */
+export const withoutAmountText = (n: number | null | undefined): string => (n ? `${n} fill${n === 1 ? "" : "s"} without an amount` : "");
+
+/**
+ * The money of a set of fills: the known amounts added up ("LKR 120,500"), "–" when none of the fills has one, and how
+ * many have none ("LKR 120,500 · 2 fills without an amount").
+ */
+export function amountsLine(t: Pick<FuelList["totals"], "entries" | "lkr" | "without_amount">): string {
+  const none = !!t.entries && t.without_amount === t.entries;
+  return [none ? "–" : `LKR ${num(t.lkr)}`, withoutAmountText(t.without_amount)].filter(Boolean).join(" · ");
+}
 
 /** "16 MB" (one decimal under 10 MB). */
 export function megabytes(bytes: number): string {

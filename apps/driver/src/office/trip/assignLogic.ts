@@ -11,6 +11,7 @@
 import type { CreateTaskResult } from "../types";
 import { waLink } from "./format";
 import { emptyWho, plateReason, type WhoDrivesValue, whoInput } from "./whoDrivesLogic";
+import { type Rider, ridersInput } from "./passengersLogic";
 import { hasDeadline, stopsInput } from "./stopsLogic";
 import { type Base, emptyTrip, type TripFields, tripPlanInput } from "./tripLogic";
 import { isChoice } from "./vehicleChoiceLogic";
@@ -36,6 +37,8 @@ export interface AssignFields extends TripFields {
   whatsapp: boolean;
   /** Round 3: who drives (ui/WhoDrives); absent in a draft from before Round 3 = a driver. */
   who?: WhoDrivesValue;
+  /** Round 4–7 (6): who rides, by name (passenger_list); absent = the field is not on the form. */
+  riders?: Rider[];
 }
 
 /** The form's "Who drives?" (a driver when a draft has none). */
@@ -108,6 +111,8 @@ function taskExtras(f: AssignFields, used: ProjectRow[], createdBy?: string): Re
   if (t(f.notes)) input.notes = t(f.notes);
   if (used.length) input.projects = used.map((r) => ({ project: r.project.trim(), percent: Number(r.percent) }));
   if (createdBy) input.created_by = createdBy.slice(0, 80);
+  // Round 4–7 (6): who rides by name (the count stays; the server keeps it never under the names).
+  Object.assign(input, ridersInput(f.riders));
   return input;
 }
 

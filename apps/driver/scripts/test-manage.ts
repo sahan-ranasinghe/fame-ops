@@ -5,14 +5,16 @@
 //
 //   npm run test:manage          (from apps/driver)
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
   appendDuty, appendFuel, appendVehicles, clockOf, clockOut, companyInput, docTone, dutyArgs, emptyVehicle, filterCounts, heldLine, hoursText, isDate, kmLine, megabytes, mileageView, mondayOf,
   monthOf, outsideKm, rangeArgs, rangeDayCount, rangeFits, REPORT_MAX_DAYS, reportSections, rowCells, vehicleChoice, vehicleFilterDefs, vehicleFormDirty, vehicleInput, vehiclesArgs, vehiclesEmpty, vehicleTone,
   linksStale, reportFilterArgs, reportFilterDefs, videoChip, videoLine, videoPieces, VIDEO_LINK_FRESH_MS, wholeMonth,
+  amountsOf, amountWords, FUEL_GRADES, FUEL_TYPES, fuelKeys, fuelMissing, fuelShown, fuelTextParts, gradesFor, withFuelGrade, withFuelType,
 } from '../src/office/manageLogic';
+import { fuelTitle } from '../src/office/taskDetailLogic';
 import { MORE_SECTION, moreFor } from '../src/office/nav';
 import { PRESETS } from '../src/office/permissions';
 import type { DutyLog, FuelList, MileageSummary, VehiclesList } from '../src/office/types';
@@ -51,8 +53,8 @@ console.log('\nVehicles: the form');
   check(!vehicleFormDirty(f) && vehicleFormDirty({ ...f, model: 'x' }), 'the leave guard knows a typed field');
   const r0 = vehicleInput(f, null);
   check('error' in r0 && r0.error === 'plate', 'a new vehicle needs its plate');
-  const r1 = vehicleInput({ ...f, reg: ' wp cab-4521 ', model: 'Toyota HiAce', type: 'van', seats: '14', allow: '2,000', rent: '150000', company: 'Nimal Rentals', until: '2027-03-31', driver: 'kamal', lic: '2027-01-15' }, null);
-  check('input' in r1 && r1.tool === 'register_vehicle' && same(r1.input, { reg_no: 'WP CAB-4521', make_model: 'Toyota HiAce', vehicle_type: 'van', seats: 14, monthly_km_allowance: 2000, monthly_rent_lkr: 150000, rental_company: 'Nimal Rentals', rent_until: '2027-03-31', regular_driver: 'kamal', licence_expiry: '2027-01-15' }), 'register_vehicle: the plate upper-case, numbers as numbers, only the fields filled', r1);
+  const r1 = vehicleInput({ ...f, reg: ' wp cab-4521 ', model: 'Toyota HiAce', type: 'van', seats: '14', allow: '2,000', rent: '150000', company: 'Nimal Rentals', until: '2027-03-31', driver: 'kamal', lic: '2027-01-15', fuelType: 'diesel' }, null);
+  check('input' in r1 && r1.tool === 'register_vehicle' && same(r1.input, { reg_no: 'WP CAB-4521', make_model: 'Toyota HiAce', vehicle_type: 'van', seats: 14, monthly_km_allowance: 2000, monthly_rent_lkr: 150000, rental_company: 'Nimal Rentals', rent_until: '2027-03-31', regular_driver: 'kamal', licence_expiry: '2027-01-15', fuel_type: 'diesel' }), 'register_vehicle: the plate upper-case, numbers as numbers, only the fields filled', r1);
   const r2 = vehicleInput(f, 'WP CAB-4521');
   check('error' in r2 && r2.error === 'nothing', 'an update with nothing filled is refused');
   const r3 = vehicleInput({ ...f, ingarage: 'true', active: 'false', custodian: 'none', custodianNote: 'NONE' }, 'WP CAB-4521');
@@ -129,7 +131,7 @@ console.log('\nThe screens as text');
   const more = read('app/office/(tabs)/more.tsx');
   check(list.includes("me.tools.includes('register_vehicle') &&") && list.includes("useTool<VehiclesList>('list_vehicles', vehiclesArgs(filter, search)") && list.includes('appendVehicles(p, page)'), 'the list: list_vehicles with the filter and the search, Register only with its tool, Load more');
   check(page.includes("const canEdit = me.tools.includes('update_vehicle');") && page.includes("me.tools.includes('vehicle_documents')") && page.includes("'list_vehicles', { filter, search: reg, limit: 25 }"), 'the page: Edit only with update_vehicle, the files only with vehicle_documents, found by search');
-  check(form.includes('vehicleInput(f, plate)') && form.includes('await api.call<{ registered?: { reg_no?: string } }>(v.tool, v.input)') && form.includes("me.tools.includes('add_rental_company') &&") && form.includes("api.call('add_rental_company', input)") && form.includes('useLeaveGuard('), 'the form: register_vehicle / update_vehicle by the rule, the rental company only with its tool, the leave guard');
+  check(form.includes('vehicleInput(f, plate, now)') && form.includes('await api.call<{ registered?: { reg_no?: string } }>(v.tool, v.input)') && form.includes("me.tools.includes('add_rental_company') &&") && form.includes("api.call('add_rental_company', input)") && form.includes('useLeaveGuard('), 'the form: register_vehicle / update_vehicle by the rule, the rental company only with its tool, the leave guard');
   check(reports.includes('<DateRangeButton value={range} onChange={setRange} max={today} maxDays={REPORT_MAX_DAYS[section]}') && reports.includes("presetRange('this_month', today)") && reports.includes('<Segmented<ReportSection>') && !reports.includes('FilterChips') && reports.includes('rangeFits(section, from, to)'), 'Reports: Mileage · Fuel · Duty log as a segmented control, the days as one date range button (This month first, no future, the duty log 62 days)');
   check(list.includes('<FilterBar') && list.includes('vehicleFilterDefs(d?.counts, t)') && !list.includes('FilterChips') && list.includes('<SkeletonRows') && list.includes('<LoadMore') && list.includes("action={empty === 'noneRegister'"), 'the list: the search bar and one Filter button with the counts, skeleton rows, Load more, the empty list\'s Register by its tool');
   check(page.includes('<SkeletonRows') && !page.includes('<Loading') && reports.includes('<SkeletonRows') && !reports.includes('<Loading') && reports.includes('<LoadMore'), 'the page and the reports: skeleton rows while loading, Load more at the end');
@@ -140,11 +142,78 @@ console.log('\nThe screens as text');
   check(![list, page, form, reports, more].some((s) => roleWord.test(s)), 'no role names in the screens');
 }
 
+console.log('\nVehicles: the fuel type and grade (Round 4–7, feature 5)');
+{
+  const f = emptyVehicle();
+  // The lists are the server's (supabase/functions/_shared/fleet/fuelCard.ts) and the site's (vehicleLogic.ts).
+  const server = readFileSync(join(SRC, '..', '..', '..', 'supabase', 'functions', '_shared', 'fleet', 'fuelCard.ts'), 'utf8');
+  check(server.includes(`FUEL_TYPES = [${FUEL_TYPES.map((x) => `"${x}"`).join(', ')}]`) && server.includes(`FUEL_GRADES = [${FUEL_GRADES.map((x) => `"${x}"`).join(', ')}]`), 'the types and grades are the server\'s, in its order');
+  check(same(gradesFor('petrol'), ['petrol_92', 'petrol_95']) && same(gradesFor('hybrid'), ['petrol_92', 'petrol_95']) && same(gradesFor('diesel'), ['auto_diesel', 'super_diesel']) && gradesFor('electric').length === 0 && gradesFor('').length === 0, 'petrol and a hybrid take a petrol grade, diesel a diesel one, electric none');
+  const reg = { ...f, reg: 'WP CAB-1' };
+  const r0 = vehicleInput(reg, null);
+  check('error' in r0 && r0.error === 'fuel' && fuelMissing(reg, true, null), 'Register: no fuel type, no save (the reason under the button)');
+  const r1 = vehicleInput({ ...reg, fuelType: 'petrol', fuelGrade: 'petrol_92' }, null);
+  check('input' in r1 && r1.input.fuel_type === 'petrol' && r1.input.fuel_grade === 'petrol_92', 'register_vehicle takes the type and the grade', r1);
+  const r1b = vehicleInput({ ...reg, fuelType: 'electric', fuelGrade: 'petrol_92' }, null);
+  check('input' in r1b && r1b.input.fuel_type === 'electric' && !('fuel_grade' in r1b.input), 'a grade that does not fit the type is never sent', r1b);
+  const now = { fuel_type: 'petrol' as const, fuel_grade: 'petrol_92' as const };
+  check(same(fuelShown(f, now), { type: 'petrol', grade: 'petrol_92' }) && !fuelMissing(f, false, now), 'an edit starts from the vehicle\'s own fuel');
+  check(fuelMissing(f, false, { fuel_type: undefined }) && fuelMissing(f, false, null) && !fuelMissing(f, false, undefined), 'an edit of a vehicle with no fuel type waits for one; while the vehicle loads it does not refuse');
+  const r2 = vehicleInput({ ...f, seats: '9' }, 'WP CAB-1', now);
+  check('input' in r2 && same(r2.input, { reg_no: 'WP CAB-1', seats: 9 }), 'an edit that keeps the fuel sends none of it', r2);
+  const toDiesel = { ...f, ...withFuelType(f, 'diesel', now) };
+  check(toDiesel.fuelType === 'diesel' && toDiesel.fuelGrade === 'none' && fuelShown(toDiesel, now).grade === null, 'changing the type drops a grade that no longer fits');
+  const r3 = vehicleInput(toDiesel, 'WP CAB-1', now);
+  check('input' in r3 && same(r3.input, { reg_no: 'WP CAB-1', fuel_type: 'diesel', fuel_grade: null }), 'update_vehicle: the new type, the old grade cleared', r3);
+  const toHybrid = { ...f, ...withFuelType(f, 'hybrid', now) };
+  check(fuelShown(toHybrid, now).grade === 'petrol_92', 'a grade that still fits stays (petrol → hybrid keeps Petrol 92)');
+  const g95 = { ...f, ...withFuelGrade(f, 'petrol_95', now) };
+  const r4 = vehicleInput(g95, 'WP CAB-1', now);
+  check('input' in r4 && same(r4.input, { reg_no: 'WP CAB-1', fuel_grade: 'petrol_95' }), 'a new grade alone', r4);
+  const off = { ...f, ...withFuelGrade(f, '', now) };
+  check(off.fuelGrade === 'none' && 'input' in vehicleInput(off, 'WP CAB-1', now) && same((vehicleInput(off, 'WP CAB-1', now) as { input: unknown }).input, { reg_no: 'WP CAB-1', fuel_grade: null }), 'Not set clears the grade');
+  check(withFuelGrade({ ...f, fuelType: 'petrol', fuelGrade: 'petrol_95' }, 'petrol_95', null).fuelGrade === '', 'the picked grade tapped again: no grade');
+  check(same(fuelKeys('petrol', 'petrol_92'), ['office.fuel.grade_petrol_92']) && same(fuelKeys('diesel', null), ['office.fuel.type_diesel']) && same(fuelKeys('hybrid', 'petrol_95'), ['office.fuel.type_hybrid', 'office.fuel.grade_petrol_95']) && same(fuelKeys(undefined), ['office.fuel.notSet']),
+    'the words: Petrol 92, Diesel, Hybrid (petrol) · Petrol 95, Fuel type: not set (the server\'s fuelText)');
+  check(same(fuelTextParts('Hybrid (petrol) · Petrol 95'), [{ key: 'office.fuel.type_hybrid', text: 'Hybrid (petrol)' }, { key: 'office.fuel.grade_petrol_95', text: 'Petrol 95' }]) && same(fuelTextParts('Biogas'), [{ text: 'Biogas' }]) && fuelTextParts(undefined).length === 0, 'a fill\'s fuel words read back into keys (an unknown word as it came)');
+}
+
+console.log('\nFuel: a missing amount (Round 4–7, §33.6)');
+{
+  check(amountWords(10545) === 'LKR 10,545' && amountWords(undefined) === 'LKR –' && amountWords(null) === 'LKR –', 'a fill with no amount says "LKR –", never LKR 0');
+  check(same(amountsOf({ entries: 4, lkr: 12000, without_amount: 1 }), { lkr: '12,000', without: 1 }) && same(amountsOf({ entries: 2, lkr: 0, without_amount: 2 }), { lkr: '–', without: 2 }) && same(amountsOf({ entries: 0, lkr: 0 }), { lkr: '0', without: 0 }), 'the totals add only the known amounts; none known = "–"');
+  const tr = (k: string, v: Record<string, string | number> = {}) => k === 'office.task.fuelLine' ? `${v.litres} L · LKR ${v.lkr}` : k;
+  check(fuelTitle({ litres: 30, amount_lkr: 12000 }, tr) === '30 L · LKR 12,000' && fuelTitle({ litres: 30 }, tr) === '30 L · LKR –' && fuelTitle({ litres: null }, tr) === 'LKR –', "a task's fill with no amount: \"LKR –\"");
+  const reports = read('app/office/reports/index.tsx');
+  check(reports.includes('sub={amountsLine(d.totals)}') && reports.includes('amountWords(e.lkr)') && reports.includes('office.fuel.withoutAmountOne') && reports.includes('fuelTextParts(e.fuel)'), 'Reports → Fuel: the totals with "N fills without an amount", each fill\'s amount and fuel');
+  const form = read('app/office/vehicles/form.tsx');
+  check(form.includes('disabled={!!waits}') && form.includes("t('office.fuel.pickType')") && form.includes('withFuelType(x, k, now)') && form.includes('gradesFor(fuel.type)'), 'the form: the fuel type chips, the grades that fit, the button waits with the reason');
+  const page = read('app/office/vehicles/[reg].tsx');
+  check(page.includes('fuelKeys(v.fuel_type, v.fuel_grade)') && page.includes("t('office.fuel.setIt')") && page.includes('!v.fuel_type && canEdit'), 'the vehicle page: the fuel, amber "not set" with Set it for someone who may edit');
+}
+
 console.log('\nStrings in both languages');
 {
   type Tree = { [k: string]: string | Tree };
+  // en.json / si.json deep-merged with the sidecars (src/i18n/parts/*.json) while they wait for the lead's merge.
+  const merge = (into: Tree, from: Tree): Tree => {
+    for (const [k, v] of Object.entries(from)) {
+      const cur = into[k];
+      if (v && typeof v === 'object' && cur && typeof cur === 'object') merge(cur, v);
+      else into[k] = v;
+    }
+    return into;
+  };
   const en = JSON.parse(read('i18n/en.json')) as { office: Tree };
   const si = JSON.parse(read('i18n/si.json')) as { office: Tree };
+  const partsDir = join(SRC, 'i18n', 'parts');
+  if (existsSync(partsDir)) {
+    for (const file of readdirSync(partsDir).filter((x) => x.endsWith('.json')).sort()) {
+      const part = JSON.parse(readFileSync(join(partsDir, file), 'utf8')) as { en?: Tree; si?: Tree };
+      if (part.en) merge(en as unknown as Tree, part.en);
+      if (part.si) merge(si as unknown as Tree, part.si);
+    }
+  }
   const get = (tree: Tree, path: string): string | undefined => {
     let cur: string | Tree | undefined = tree;
     for (const k of path.split('.')) {
@@ -153,8 +222,8 @@ console.log('\nStrings in both languages');
     }
     return typeof cur === 'string' ? cur : undefined;
   };
-  const code = [read('app/office/vehicles/index.tsx'), read('app/office/vehicles/[reg].tsx'), read('app/office/vehicles/form.tsx'), read('app/office/reports/index.tsx'), read('app/office/(tabs)/more.tsx')].join('\n');
-  const keys = Array.from(new Set(Array.from(code.matchAll(/'office\.(vehicles|reports|more)\.([A-Za-z_]+)'/g)).map((m) => `${m[1]}.${m[2]}`)));
+  const code = [read('app/office/vehicles/index.tsx'), read('app/office/vehicles/[reg].tsx'), read('app/office/vehicles/form.tsx'), read('app/office/reports/index.tsx'), read('app/office/(tabs)/more.tsx'), read('app/office/task/[id].tsx'), read('office/taskDetailLogic.ts')].join('\n');
+  const keys = Array.from(new Set(Array.from(code.matchAll(/'office\.(vehicles|reports|more|fuel)\.([A-Za-z_]+)'/g)).map((m) => `${m[1]}.${m[2]}`)));
   const missing = keys.filter((k) => get(en.office, k) === undefined || get(si.office, k) === undefined);
   check(keys.length > 60 && missing.length === 0, `every office.vehicles / reports / more key the screens name exists in en and si (${keys.length})`, missing);
   // The families built at run time: the filters, the types, the form's fields, the ranges, the sections, the video states, the clock-out words.
@@ -162,6 +231,9 @@ console.log('\nStrings in both languages');
     ...['all', 'on_task', 'available', 'in_garage', 'documents_expiring', 'inactive'].map((k) => `vehicles.filter_${k}`),
     ...['car', 'van', 'double_cab', 'lorry', 'other'].map((k) => `vehicles.type_${k}`),
     ...['lic', 'ins', 'emi'].map((k) => `vehicles.doc_${k}`),
+    ...FUEL_TYPES.map((k) => `fuel.type_${k}`),
+    ...FUEL_GRADES.map((k) => `fuel.grade_${k}`),
+    ...['petrol', 'diesel', 'fuel'].map((k) => `fuel.word_${k}`),
     ...Object.keys(emptyVehicle()).map((k) => `vehicles.f_${k}`),
     ...['mileage', 'fuel', 'duty'].map((k) => `reports.${k}`),
     ...['uploaded', 'interrupted', 'recorded', 'uploading', 'failed', 'none', 'pruned'].map((k) => `reports.video_${k}`),
