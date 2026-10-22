@@ -3,8 +3,11 @@
 // already says is left out; a fact the row alone carries (a time, who decided, an action) always stays. Pure: tested in
 // scripts/test-lists2.ts (and tests/officeLists2.test.tsx through the screens).
 
+import { dateWords } from '@/lib/dateWords';
+
 import { keyExists } from '../i18n/keys';
 import { availabilityText } from './availabilityWords';
+import { docTone } from './manageLogic';
 import { sentenceWords, wordsText, type Words } from './statusWords';
 import type { BoardColumn } from './statusWords';
 import type { BoardDriver, Inbox, MyTrips, RequestCard, VehicleCard } from './types';
@@ -42,6 +45,29 @@ export function vehicleRowShown(
 
 /** A document chip is quiet (its name with a tick, no fill) when valid; expiring, expired and not set keep their colour. */
 export const docQuiet = (tone: 'red' | 'amber' | 'green' | 'muted'): boolean => tone === 'green';
+
+/** The three roadside documents, in the order the chips show them. */
+export const DOC_KEYS = ['lic', 'ins', 'emi'] as const;
+
+/**
+ * Sahan's removals (22 October 2026): when the licence, the insurance and the emission test are all valid and no document
+ * is missing, the vehicle (list and page) shows one quiet line "Documents valid" (a tick and the words) instead of three
+ * chips. Anything expiring, expired, not set or missing keeps the chips as before.
+ */
+export function docsAllValid(v: Pick<VehicleCard, 'documents' | 'documents_missing' | 'documents_missing_text'>): boolean {
+  if (v.documents_missing?.length || v.documents_missing_text) return false;
+  return DOC_KEYS.every((k) => docTone(v.documents?.[k]?.chip) === 'green');
+}
+
+/** What the screen reader hears on that line: "Documents valid, Lic valid until 12 Mar 2027, Ins valid until …" (each expiry). */
+export function docsValidLabel(v: Pick<VehicleCard, 'documents'>, t: T): string {
+  const each = DOC_KEYS.map((k) => {
+    const doc = t(`office.vehicles.doc_${k}`);
+    const expiry = v.documents?.[k]?.expiry;
+    return expiry ? t('office.lists2.vehicles.docValidUntil', { doc, date: dateWords(t, expiry) }) : t('office.lists2.vehicles.docValid', { doc });
+  });
+  return [t('office.lists2.vehicles.docsValid'), ...each].join(', ');
+}
 
 // ---- My trips ------------------------------------------------------------------------------------------------------
 
@@ -181,3 +207,10 @@ export function taskChipShown(column: BoardColumn, chipKey: string, card: { stat
   const said = CHIP_SAID_BY[chipKey];
   return !said || !said.includes(sentenceWords(card.status)?.key ?? '');
 }
+
+/**
+ * A Waiting for approval row's chip (Sahan, 22 October 2026): the section already says Waiting, so the row has a chip only
+ * when the request is late (its leave-by passed, not decided: task_board's `late`): "Late", in words, red. Before, every row
+ * said Waiting and only its red told a late one apart.
+ */
+export const waitingChip = (w: { late?: boolean }): boolean => w.late === true;

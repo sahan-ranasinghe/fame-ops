@@ -13,7 +13,7 @@ import { alreadyDecided, availabilityArgs, canApprove, decideCall, declineReason
 import { boardLine, boardPill, greeting, requestLine, requestTitle, statusTone, tripLive } from '../src/office/homeLogic';
 import { homeChips, homeSections, moreFor, routeForUrl, tabsFor } from '../src/office/nav';
 import { PRESETS } from '../src/office/permissions';
-import { allowedActions, availabilityArgsForTask, cancelInput, firstPickForTask, leaveIn, reassignInput, steps, stopLateMin, stopParts, taskStatusKey } from '../src/office/taskLogic';
+import { allowedActions, approvedParts, availabilityArgsForTask, cancelInput, dispatchParts, firstPickForTask, leaveIn, reassignInput, steps, stopLateMin, stopParts, taskStatusKey } from '../src/office/taskLogic';
 import type { AvailableDriver, FleetError, RequestCard, Stop, TaskDetail } from '../src/office/types';
 
 let failures = 0;
@@ -188,6 +188,25 @@ async function main() {
   check(st.map((s) => `${s.key}:${s.time}:${s.state}`).join(' ') === 'approved:Sun 18 Oct 16:40:done accepted:07:05:done on_the_way:08:31:now arrived:~10:38:todo done:—:todo', 'the five steps while on the way', st);
   const stDone = steps({ ...task, status: 'completed', completed: '12:30' }, [stop({ arrived: '10:41', done: '12:10', status: 'done' })]);
   check(stDone.every((s) => s.state === 'done') && stDone[3].time === '10:41' && stDone[4].time === '12:30', 'every step done once completed');
+  // Sahan's removals (22 October 2026): the five-steps card goes; its facts open the task's timeline (dispatchParts).
+  const dt = { sent: '2026-10-19 07:00', seen: '2026-10-19 07:02', accepted: '2026-10-19 07:05', started: '2026-10-19 08:31' };
+  check(same(dispatchParts(dt, true), [{ key: 'office.task.sentAt', time: dt.sent }, { key: 'office.task.seenAt', time: dt.seen }, { key: 'office.line.accepted', time: dt.accepted }]),
+    'the timeline\'s first line: Sent · Seen · Accepted with their times (the start row says Left)');
+  check(same(dispatchParts(dt, false).map((x) => x.key), ['office.task.sentAt', 'office.task.seenAt', 'office.line.accepted', 'office.timeline.left']) && dispatchParts(dt, false)[3].time === dt.started,
+    'no start row saying it: Left on the line too (On the way kept)');
+  check(same(dispatchParts({ sent: '2026-10-19 07:00', seen: 'not opened yet' }, true).map((x) => x.key), ['office.task.sentAt']) && dispatchParts({}, false).length === 0,
+    'only what happened: never the server\'s "not opened yet" as a time, nothing for a task not sent');
+  check(same(approvedParts({ approved_by: { name: 'Palitha', at: 'Sun 18 Oct 16:40' }, plan_version: 3 }), { approvedBy: { name: 'Palitha', at: 'Sun 18 Oct 16:40' }, planVersion: 3 })
+    && same(approvedParts({ plan_version: 0 }), { planVersion: 0 }) && same(approvedParts({}), {}), 'the line above: who approved it and when, the plan version (0 too), as the card had them');
+  {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const page = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'office', 'task', '[id].tsx'), 'utf8');
+    check(!page.includes('testID="task-steps"') && !/steps\(task, stops\)/.test(page) && !page.includes('office.task.step_'), 'the task page: no five-steps card');
+    check(page.includes('dispatchParts(task, startRowLeft)') && page.includes("t('office.request.approvedBy', approved.approvedBy)") && page.includes("t('office.task.planVersion', { v: approved.planVersion })")
+      && page.includes('testID="task-dispatch-line">{dispatch.map((s) => t(s.key, { time: shortWhen(t, s.time) })).join') && page.includes('{stops.length > 0 && <StopTimeline'),
+      'the task page: Approved (with the plan version) and Sent · Seen · Accepted on the timeline\'s first lines, the times in words');
+  }
   check(taskStatusKey(task) === 'in_progress' && taskStatusKey({ status: 'assigned', accepted: '07:05' }) === 'accepted' && taskStatusKey({ status: 'assigned', needs_driver: { since: 'x' } }) === 'declined', 'the status pill');
   const now = Date.parse('2026-10-19T02:48:00Z'); // 08:18 Colombo
   check(same(leaveIn('2026-10-19', '09:00', now), { key: 'leavesIn', minutes: 42 }) && same(leaveIn('2026-10-19', '08:08', now), { key: 'passed', minutes: 10 }) && leaveIn('2026-10-19', '15:00', now) === null && leaveIn(undefined, '09:00', now) === null, '"leaves in 42 min", "passed 10 min ago", nothing far off');
@@ -228,7 +247,8 @@ async function main() {
     const activity = read('people/activity.tsx');
     check(drivers.includes("pill.key !== 'active' && <StatusChip") && users.includes("chip={pill.key !== 'active' ?") && drivers.includes("pathname: '/office/people/driver/[username]'") && drivers.includes('<FilterBar') && drivers.includes('<LoadMore'),
       'Drivers and Office users: "active" no longer on every row (a switched-off one says so); the row, the filter and Load more kept');
-    check(activity.includes("chip={{ text: t(`office.activity.${e.outcome}`)") && activity.includes('<LoadMore'), 'Activity log: the outcome chip and Load more kept (hiding "Done" is a proposed removal)');
+    // Sahan's removals (22 October 2026): "Done" went (approved); Refused, Failed and In progress keep their chip.
+    check(activity.includes("chip={outcomeChipShown(e.outcome) ? { text: t(`office.activity.${e.outcome}`)") && activity.includes('<LoadMore'), 'Activity log: the outcome chip (not "Done") and Load more kept');
     const asks = read('asks/index.tsx');
     check(asks.includes('datesInWords(t, `${a.asked_day ?? \'\'} ${a.asked}`.trim())') && asks.includes('!a.expired && a.counts.yes > 0 ? { ...a.counts, yes: 0 } : a.counts') && asks.includes("pathname: '/office/asks/[id]'") && asks.includes('<LoadMore'),
       'Questions: the day with the time in words, "N yes" once; a row opens its question, Load more kept');

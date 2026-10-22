@@ -18,3 +18,9 @@ export function activityArgs(p: { from: string; to: string; person?: string; rou
 
 /** A routine row is shown quieter (no bold title) unless it was refused or failed: those always stand out. */
 export const quietRow = (e: { routine?: boolean; outcome: string }): boolean => !!e.routine && e.outcome === 'done';
+
+/**
+ * A row's outcome chip (Sahan, 22 October 2026): almost every row is done, so "Done" is not said on each; Refused, Failed and
+ * In progress keep their chip (they are the rows to look at).
+ */
+export const outcomeChipShown = (outcome: string): boolean => outcome !== 'done';

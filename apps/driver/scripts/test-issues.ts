@@ -9,7 +9,7 @@ import { join } from 'node:path';
 
 import {
   activeCount, appendPage, DEFAULT_STATUS, defaultSort, ISSUE_SORTS, issuesChoice, issuesFilterDefs, eventParts, fitsStatus, isActive, isSeverityFilter, isStatusFilter, issueActions, issueFacts, issuesArgs, kindText, LIMIT,
-  linksFor, listRows, mergeIssue, noteRequired, patchHistory, REPORT_STATUS_KEYS, reportCategoryKey, rowLine, SEVERITY_FILTERS, severityCounts, severityTone, snoozeParts,
+  linksFor, listRows, mergeIssue, noteRequired, patchHistory, REPORT_STATUS_KEYS, reportCategoryKey, rowLine, SEVERITY_FILTERS, severityChipShown, severityCounts, severityIcon, severityTone, snoozeParts,
   STATUS_FILTERS, statusTone, updateInput, whoLine, type WhoWords,
 } from '../src/office/issuesLogic';
 import {
@@ -293,6 +293,23 @@ console.log('\n== Round 4–7, item 8: the tabs, the groups, Gmail\'s rows, the 
   check(has('<ListEmpty icon='), 'the empty states have an icon');
   const page = readFileSync(join(__dirname, '..', 'src', 'app', 'office', 'issues', '[id].tsx'), 'utf8');
   check(page.includes('issueActions(') && same(issueActions(issue(), ['update_issue']), ['take', 'note', 'resolve', 'dismiss']), 'the issue\'s page keeps Take, Add a note, Resolve, Dismiss (Reopen when closed)');
+
+  // Sahan's removals (22 October 2026): the severity on the group's heading by its icon (never colour alone), so the rows
+  // under it lose Warning / Info; Critical keeps its chip; a flat list keeps every chip; the Pre-trip tag stays (item 8).
+  check(severityIcon('critical') === 'octagon' && severityIcon('warning') === 'triangle' && severityIcon('info') === 'info' && severityIcon(undefined) === 'info',
+    'the heading\'s icon: critical an octagon, warning a triangle, info a circle');
+  check(!severityChipShown('warning', 'warning') && !severityChipShown('info', 'info'), 'a row in its group: no Warning / Info chip (the heading says it)');
+  check(severityChipShown('critical', 'critical') && severityChipShown('critical', undefined), 'Critical keeps its chip on every row');
+  check(severityChipShown('warning') && severityChipShown('info', null) && severityChipShown('warning', ''), 'a flat list (no heading): every chip');
+  check(severityChipShown('warning', 'critical') && severityChipShown('info', 'warning'), 'a row unlike its group (the group takes its worst): its own chip');
+  check(has('SEVERITY_ICONS: Record<SeverityIcon, LucideIcon> = { octagon: OctagonAlert, triangle: TriangleAlert, info: Info }') && has('dotIcon={SEVERITY_ICONS[severityIcon(g.severity)]}')
+    && has('dotLabel={t(`office.issues.severity.${g.severity}`)}') && has('renderRow(i, g.severity)') && has('{severityChipShown(i.severity, group) ? <StatusChip text={t(`office.issues.severity.${i.severity}`)}'),
+    'the screen: each group heading gets its icon with its word; a row\'s chip by the rule (the group\'s severity passed, none in the flat list)');
+  check(/rows\.map\(\(i, n\) => <View key=\{i\.id\}>\{n > 0 && <Divider \/>\}\{renderRow\(i\)\}/.test(screen) && has('{i.pre_trip ? <StatusChip text={t(\'office.checks.preTrip\')}'),
+    'the flat list passes no group (every chip); the Pre-trip tag kept on the row');
+  const ui = readFileSync(join(__dirname, '..', 'src', 'office', 'ui.tsx'), 'utf8');
+  check(/accessibilityLabel=\{DotIcon \? undefined : dotLabel\}/.test(ui) && /<View accessible accessibilityRole="image" accessibilityLabel=\{dotLabel\} testID=\{testID \? `\$\{testID\}-severity` : undefined\}>/.test(ui),
+    'Section: the icon beside the dot carries the word for the screen reader (said once)');
 
   // The words: en.json / si.json with the strings sidecar (src/i18n/parts/*.json) merged in while it exists.
   const words = mergedWords();

@@ -6,6 +6,8 @@
 // line as the one status with the pill only for In garage or Returned, the document chips: a valid one quiet with its
 // tick; Round 4–7, item 8). "+ Register vehicle" only with register_vehicle (also as the empty
 // list's action); a row opens the vehicle.
+// Sahan's removals (22 October 2026): all three documents valid (and none missing) = one quiet line "Documents valid" with
+// a tick instead of the three chips; the screen reader hears each expiry (lists2Logic.ts docsAllValid, docsValidLabel).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -17,7 +19,7 @@ import { Check } from '@/components/icons';
 import { Button, Plate, Txt } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { appendVehicles, docTone, fuelKeys, kmLine, vehicleChoice, vehicleFilterDefs, vehiclesArgs, vehiclesEmpty } from '@/office/manageLogic';
-import { docQuiet, vehicleRowShown } from '@/office/lists2Logic';
+import { docQuiet, docsAllValid, docsValidLabel, vehicleRowShown } from '@/office/lists2Logic';
 import { vehicleFilterParam } from '@/office/overviewLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleCard, VehiclesList } from '@/office/types';
@@ -65,6 +67,14 @@ export default function VehiclesScreen() {
   // Round 4–7 (item 8): a valid document is quiet (its name with a tick, no fill: Fleetio's renewals), so the expiring,
   // expired and not set ones stand out; each still says its state (the tick, "Lic valid" to the screen reader).
   const docs = (v: VehicleCard) => {
+    if (docsAllValid(v)) {
+      return (
+        <View accessible accessibilityLabel={docsValidLabel(v, t)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingHorizontal: 6 }} testID="docs-valid">
+          <Check size={13} color={colors.green} strokeWidth={2.6} />
+          <Txt variant="small" size={12}>{t('office.lists2.vehicles.docsValid')}</Txt>
+        </View>
+      );
+    }
     const list = [['lic', v.documents?.lic], ['ins', v.documents?.ins], ['emi', v.documents?.emi]] as const;
     return (
       <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, alignItems: 'center' }}>

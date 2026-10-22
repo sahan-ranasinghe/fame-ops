@@ -94,6 +94,28 @@ export const mayAsk = (h: Partial<Pick<Holder, 'name' | 'task_id'>>, tools: read
 export const reachOf = (h: Partial<Pick<Holder, 'name' | 'call' | 'whatsapp'>>, meName: string | undefined): { call?: string; whatsapp?: string } =>
   h.name && isMe({ name: h.name }, meName) ? {} : { ...(h.call ? { call: h.call } : {}), ...(h.whatsapp ? { whatsapp: h.whatsapp } : {}) };
 
+/**
+ * A conflict card's requester buttons once the holder line is shown (Sahan, 22 October 2026): when the holder IS the
+ * conflict's requester (the same name, or the same number), the holder line's Call / WhatsApp reach them, so the
+ * requester's own "Call / WhatsApp <name>" are not drawn again. Per button: only what the holder line itself shows goes (a
+ * holder with no WhatsApp leaves the requester's WhatsApp). No holder line (holder_contact off): the requester's buttons stay.
+ */
+export function requesterReach(
+  c: Pick<Conflict, 'holder' | 'requester'>,
+  holderShown: boolean,
+  meName: string | undefined,
+): { call?: string; whatsapp?: string } {
+  const r = c.requester;
+  if (!r) return {};
+  const own = { ...(r.call ? { call: r.call } : {}), ...(r.whatsapp ? { whatsapp: r.whatsapp } : {}) };
+  const h = c.holder;
+  if (!holderShown || !h) return own;
+  const same = h.name.trim().toLowerCase() === r.name.trim().toLowerCase() || (!!h.call && h.call === r.call) || (!!h.whatsapp && h.whatsapp === r.whatsapp);
+  if (!same) return own;
+  const line = reachOf(h, meName);
+  return { ...(own.call && !line.call ? { call: own.call } : {}), ...(own.whatsapp && !line.whatsapp ? { whatsapp: own.whatsapp } : {}) };
+}
+
 // ---------------------------------------------------------------------------
 // Ask for it
 // ---------------------------------------------------------------------------

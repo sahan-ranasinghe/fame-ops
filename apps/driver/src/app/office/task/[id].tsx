@@ -26,6 +26,9 @@
 // Review of Round 4–7: the fleet's switches (office/switches.ts) hide their parts here too (passengers: who rides; the
 // vehicle check; holder_contact: the holder's words, Call and WhatsApp, and the asks; the fuel card); while on the way the
 // trip's row says who made it ("Made by", "Asked by") when no holder is shown, as the header does in the other states.
+// Sahan's removals (22 October 2026): the five-steps card (Approved · Accepted · On the way · Arrived · Done) is gone. Its
+// facts are on the timeline's first lines (who approved it with the plan version; Sent · Seen · Accepted with their times;
+// Left when no start row says it); arriving is on each stop's row, done on the banner.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -53,13 +56,13 @@ import { StopArrival, SwapSegments, TaskMoreDetails, TaskWarnings, TripPurposeCa
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { SavedNotice } from '@/components/office/SavedNotice';
-import { Button, Mono, Txt } from '@/components/ui';
+import { Button, Txt } from '@/components/ui';
 import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
 import { useSwitch } from '@/office/switches';
 import { DETAIL_LINKS_FRESH_MS, detailTask, fuelCardParts, type LinkKey, linkOf, planDrawable } from '@/office/taskDetailLogic';
 import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
-import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStatusKey } from '@/office/taskLogic';
+import { allowedActions, approvedParts, CANCEL_TEXT, cancelInput, dispatchParts, plateOf, taskStatusKey } from '@/office/taskLogic';
 import type { FleetError, FuelCard, LiveDrivers, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { BackHeader, ErrorNotice, ListFailed, Pill, Row, Screen, Section, StickyActions } from '@/office/ui';
@@ -180,6 +183,12 @@ export default function TaskDetailScreen() {
   const actions = { reassign: may.reassign && me.tools.includes('reassign_task'), cancel: may.cancel && me.tools.includes('cancel_task') };
   const extras = task ? extrasFor(task, me.tools) : { time: false, stops: false, swap: false, reopen: false };
   const statusKey = task ? taskStatusKey(task) : '';
+  // Sahan's removals (22 October 2026): the five-steps card's facts on the timeline (office/taskLogic.ts dispatchParts). The
+  // start row (S) says "Left HH:MM" itself when the task has a start place and a leave-by.
+  const startRowLeft = stops.length > 0 && !!task?.start_place && !stops.some((s) => s.is_start) && !!task?.leave_by;
+  const dispatch = task ? dispatchParts(task, startRowLeft) : [];
+  const approved = task ? approvedParts(task) : {};
+  const approvedLine = [approved.approvedBy ? t('office.request.approvedBy', approved.approvedBy) : '', approved.planVersion !== undefined ? t('office.task.planVersion', { v: approved.planVersion }) : ''].filter(Boolean).join(' · ');
 
   // Round 4–7, item 12 (the approved mockup 4): while the trip is on the way the map comes first with the driver's position
   // (live_drivers, as Live reads it), then ONE status banner, the people, the route stepper, the rest; the office's actions
@@ -313,28 +322,20 @@ export default function TaskDetailScreen() {
               {task.vehicle_changed && <Txt variant="small">{task.vehicle_changed}</Txt>}
             </View>
           )}
-          {task && (
-            <View style={styles.card}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }} testID="task-steps">
-                {steps(task, stops).map((s) => (
-                  <View key={s.key} style={{ alignItems: 'center', flex: 1, gap: 4 }}>
-                    <View style={[styles.dot, s.state === 'done' && { backgroundColor: colors.blue, borderColor: colors.blue }, s.state === 'now' && { borderColor: colors.blue, borderWidth: 3, backgroundColor: colors.card }]} />
-                    <Txt variant={s.state === 'todo' ? 'small' : 'strong'} size={12} style={{ textAlign: 'center' }} numberOfLines={1}>{t(`office.task.step_${s.key}`)}</Txt>
-                    {/* The step's time: alone today, else with its day in words (Round 3 A4, lib/dateWords.ts shortWhen). */}
-                    <Mono size={12} color={s.state === 'todo' ? colors.muted : colors.ink} style={{ textAlign: 'center' }}>{shortWhen(t, s.time)}</Mono>
-                  </View>
-                ))}
-              </View>
-              {(task.approved_by || task.plan_version !== undefined) && (
-                <Txt variant="small">{[task.approved_by ? t('office.request.approvedBy', { name: task.approved_by.name, at: task.approved_by.at }) : '', task.plan_version !== undefined ? t('office.task.planVersion', { v: task.plan_version }) : ''].filter(Boolean).join(' · ')}</Txt>
-              )}
-            </View>
-          )}
-          {p && stops.length > 0 && (
+          {p && task && (stops.length > 0 || approvedLine || dispatch.length > 0) && (
             <View style={styles.card} testID="task-stops">
+              {/* Sahan's removals (22 October 2026): the five-steps card is gone; its facts open the timeline: who approved
+                  it with the plan version (the card's own line), then "Sent 12:08 · Seen 12:10 · Accepted 12:15" (and "Left"
+                  when no start row says it), each time alone today, else with its day in words (lib/dateWords.ts shortWhen). */}
+              {(approvedLine || dispatch.length > 0) && (
+                <View style={{ gap: 2 }} testID="task-dispatch">
+                  {approvedLine ? <Txt variant="small" testID="task-approved">{approvedLine}</Txt> : null}
+                  {dispatch.length > 0 ? <Txt variant="small" testID="task-dispatch-line">{dispatch.map((s) => t(s.key, { time: shortWhen(t, s.time) })).join(' · ')}</Txt> : null}
+                </View>
+              )}
               {/* Round 2: the live timeline (planned, arrived, left, late or early, the stops to come re-estimated), on the
                   route stepper with the start and back at base. */}
-              <StopTimeline
+              {stops.length > 0 && <StopTimeline
                 stops={stops}
                 live={task?.status === 'in_progress'}
                 extra={(s) => <StopArrival stop={s} onSaved={q.reload} />}
@@ -355,8 +356,8 @@ export default function TaskDetailScreen() {
                   title: t('office.request.backAt', { place: task.start_place }),
                   meta: [p.timeline?.totals.ends ? t('office.request.about', { time: p.timeline.totals.ends }) : '', task.end_by ? t('office.request.backBy', { time: task.end_by }) : ''].filter(Boolean).map((text) => ({ text })),
                 } : null}
-              />
-              {task?.notes ? <Txt variant="muted" size={15} style={{ marginTop: 8 }}>{t('office.request.notes', { note: task.notes })}</Txt> : null}
+              />}
+              {stops.length > 0 && task?.notes ? <Txt variant="muted" size={15} style={{ marginTop: 8 }}>{t('office.request.notes', { note: task.notes })}</Txt> : null}
             </View>
           )}
           {/* Round 4–7 (6): the passengers (the count never under the names), a row each; Share trip for someone without an account. */}
@@ -507,7 +508,6 @@ const styles = StyleSheet.create({
   list: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, overflow: 'hidden' },
   inner: { paddingHorizontal: 14, paddingBottom: 8 },
   innerText: { paddingHorizontal: 14, paddingBottom: 12 },
-  dot: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#ebe9e3', borderWidth: 2, borderColor: '#ebe9e3' },
   map: { height: 300, backgroundColor: colors.mapLand },
   sheet: { padding: 16, gap: 12, backgroundColor: colors.page },
   sheetOverMap: { marginTop: -24, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10 },

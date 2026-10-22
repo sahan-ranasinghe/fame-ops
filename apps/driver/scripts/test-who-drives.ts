@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { activityArgs, quietRow } from '../src/office/activityLogic';
+import { activityArgs, outcomeChipShown, quietRow } from '../src/office/activityLogic';
 import { approveProblem, decideCall, driverParts, firstPick, presenceLine, vehicleChip, vehicleChipText } from '../src/office/approveLogic';
 import { rowLines } from '../src/office/driversLogic';
 import { datesInWords } from '../src/lib/dateWords';
@@ -161,6 +161,8 @@ console.log('\nThe Activity log (activityLogic.ts)');
   check(activityArgs({ from: 'a', to: 'b', routine: true }).include_routine === true, 'the switch on: include_routine true');
   check(same(activityArgs({ from: 'a', to: 'b', person: ' kamal ', routine: true, cursor: 'c2' }), { from: 'a', to: 'b', limit: 50, person: 'kamal', include_routine: true, cursor: 'c2' }), 'with the person, the page, 50 at a time');
   check(quietRow({ routine: true, outcome: 'done' }) && !quietRow({ routine: true, outcome: 'refused' }) && !quietRow({ outcome: 'done' }), 'a routine row is quieter, unless refused or failed');
+  // Sahan's removals (22 October 2026): no "Done" chip on a done row; Refused, Failed and In progress keep theirs.
+  check(!outcomeChipShown('done') && outcomeChipShown('refused') && outcomeChipShown('failed') && outcomeChipShown('running'), 'the outcome chip: not for done; refused, failed and in progress keep it');
 }
 
 console.log('\nThe server\'s sentences on a Sinhala screen');

@@ -24,7 +24,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
-  Bell, Calendar, CalendarX, Car, Check, ClipboardCheck, Clock, FileText, Gauge, IdCard, ListChecks, type LucideIcon, MapPin, Navigation, Route, TriangleAlert, User, Van, Wrench, X,
+  Bell, Calendar, CalendarX, Car, Check, ClipboardCheck, Clock, FileText, Gauge, IdCard, Info, ListChecks, type LucideIcon, MapPin, Navigation, OctagonAlert, Route, TriangleAlert, User, Van, Wrench, X,
 } from '@/components/icons';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
@@ -38,7 +38,7 @@ import { defaultValues, type FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
 import {
   appendPage, BULK_REASONS, type BulkAction, bulkCalls, defaultSort, dueWords, groupText, groupTick, type IssueGroup, ISSUE_SORTS, ISSUE_TABS, type IssueSort, type IssueTab, issuesArgs,
-  issuesChoice, issuesFilterDefs, isActive, kindText, listRows, metaParts, needsAction, rowTitle, rowWho, SEARCH_DEBOUNCE_MS, severityCounts, severityTone, showsGroups, snoozeParts, statusShown,
+  issuesChoice, issuesFilterDefs, isActive, kindText, listRows, metaParts, needsAction, rowTitle, rowWho, SEARCH_DEBOUNCE_MS, severityChipShown, severityCounts, severityIcon, type SeverityIcon, severityTone, showsGroups, snoozeParts, statusShown,
   statusTone, TAB_STATUS, tabExtra, tabFor, toggled, withoutIssues, issuesExtra, issuesExtraDefs, kindsFor,
 } from '@/office/issuesLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -57,6 +57,8 @@ const KIND_ICONS: Record<string, LucideIcon> = {
   missed_task: CalendarX, push_failed: Bell, routing_failed: Navigation, map_fallback: MapPin, trip_not_confirmed: ListChecks,
 };
 const SEVERITY_RANK: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+/** A group heading's severity by its shape (Sahan, 22 October 2026: never colour alone; issuesLogic.ts severityIcon). */
+const SEVERITY_ICONS: Record<SeverityIcon, LucideIcon> = { octagon: OctagonAlert, triangle: TriangleAlert, info: Info };
 
 const TILE: Record<Tone, { bg: string; ink: string }> = {
   red: { bg: colors.redChip, ink: colors.red },
@@ -194,7 +196,8 @@ export default function IssuesScreen() {
     return t(`office.issues.empty.${status}`);
   };
 
-  const renderRow = (i: Issue) => {
+  /** One row; `group` = the severity its group's heading shows (absent in a flat list: a search, a kind's list). */
+  const renderRow = (i: Issue, group?: string) => {
     const tile = TILE[severityTone(i.severity)];
     const snooze = snoozeParts(i);
     const meta = metaParts(i);
@@ -241,7 +244,8 @@ export default function IssuesScreen() {
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
             {/* Round 4–7 (4): a problem found by a vehicle check before work. */}
             {i.pre_trip ? <StatusChip text={t('office.checks.preTrip')} tone="amber" testID="issue-pre-trip" /> : null}
-            <StatusChip text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} />
+            {/* Sahan's removals (22 October 2026): Warning / Info only where no group heading says it; Critical always. */}
+            {severityChipShown(i.severity, group) ? <StatusChip text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} testID="issue-severity" /> : null}
             {statusShown(status, i.status) ? <StatusChip text={t(`office.issues.status.${i.status}`)} tone={statusTone(i.status)} /> : null}
             {/* Round 3: the person who took it, their photo (initials until there is one); their name is in the grey line. */}
             {i.assigned_to ? <Avatar name={i.assigned_to.name} size={28} photo={i.assigned_to.photo_url} /> : null}
@@ -275,6 +279,7 @@ export default function IssuesScreen() {
         count={g.count}
         dot={severityTone(g.severity)}
         dotLabel={t(`office.issues.severity.${g.severity}`)}
+        dotIcon={SEVERITY_ICONS[severityIcon(g.severity)]}
         open={isOpen}
         onToggle={() => setCollapsed((c) => toggled(c, [g.kind], !c.has(g.kind)))}
         link={g.count > g.newest.length ? t('office.issues.showAll', { n: g.count }) : undefined}
@@ -287,7 +292,7 @@ export default function IssuesScreen() {
         ) : undefined}
         testID={`issue-group-${g.kind}`}
       >
-        {ordered(g).map((i, n) => <View key={i.id}>{n > 0 && <Divider />}{renderRow(i)}</View>)}
+        {ordered(g).map((i, n) => <View key={i.id}>{n > 0 && <Divider />}{renderRow(i, g.severity)}</View>)}
         {mayBulk && tick === 'on' && g.count > ids.length && (
           <Pressable accessibilityRole="button" onPress={() => void pickAllOf(g.kind, g.count)} style={{ minHeight: 44, justifyContent: 'center' }} testID="group-select-all">
             <Txt variant="strong" size={15} color={colors.blue}>{t('office.issues.selectAllGroup', { n: g.count })}</Txt>

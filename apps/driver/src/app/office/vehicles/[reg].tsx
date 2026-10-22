@@ -8,6 +8,9 @@
 // Edit (update_vehicle) opens the form. Found by list_vehicles' search (one page; the active vehicles, then the returned
 // ones). Round 4–7 (4): the vehicle check (Today's check and the last 7 days, components/office/VehicleChecks.tsx); a
 // pre-trip problem's notification (/vehicles/<plate>?check=<id>) opens the page with the checks first and that one marked.
+// Sahan's removals (22 October 2026): the three documents all valid (none missing) = one quiet line "Documents valid" with a
+// tick instead of the chips (the screen reader hears each expiry; On file keeps each document's own date); anything
+// expiring, expired, not set or missing keeps the chips with their dates as before.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -15,9 +18,11 @@ import { Image, Linking, Pressable, View } from 'react-native';
 
 import { PhotoPick } from '@/components/office/PhotoPick';
 import { VehicleChecksSection } from '@/components/office/VehicleChecks';
+import { Check } from '@/components/icons';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { availabilityText } from '@/office/availabilityWords';
 import { docTone, fuelKeys, kmLine, vehicleTone } from '@/office/manageLogic';
+import { docsAllValid, docsValidLabel } from '@/office/lists2Logic';
 import { uploadToTicket, type Shot } from '@/office/media';
 import { canSetVehiclePhoto, canUploadDocs, documentRows, ticketOf } from '@/office/mediaLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -148,12 +153,19 @@ export default function VehicleScreen() {
               {fact(t('office.vehicles.garageBooked'), v.garage_booked ? dateWords(t, v.garage_booked) : v.garage_booked)}
               <View style={{ gap: 6 }}>
                 <Txt variant="label" color={colors.muted}>{t('office.vehicles.documents').toUpperCase()}</Txt>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {(['lic', 'ins', 'emi'] as const).map((k) => {
-                    const dc = docs[k];
-                    return <Pill key={k} text={`${t(`office.vehicles.doc_${k}`)}${dc?.expiry ? ` · ${dateWords(t, dc.expiry)}` : ''}`} tone={docTone(dc?.chip)} />;
-                  })}
-                </View>
+                {docsAllValid(v) ? (
+                  <View accessible accessibilityLabel={docsValidLabel(v, t)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} testID="docs-valid">
+                    <Check size={16} color={colors.green} strokeWidth={2.6} />
+                    <Txt variant="body" size={15}>{t('office.lists2.vehicles.docsValid')}</Txt>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }} testID="doc-chips">
+                    {(['lic', 'ins', 'emi'] as const).map((k) => {
+                      const dc = docs[k];
+                      return <Pill key={k} text={`${t(`office.vehicles.doc_${k}`)}${dc?.expiry ? ` · ${dateWords(t, dc.expiry)}` : ''}`} tone={docTone(dc?.chip)} />;
+                    })}
+                  </View>
+                )}
                 {v.documents_missing_text ? <Txt variant="small" color={colors.amberText}>{v.documents_missing_text}</Txt> : null}
               </View>
             </View>

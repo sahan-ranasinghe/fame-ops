@@ -5,6 +5,7 @@
 // Round 3 (Google Workspace / GitHub audit log): "Show routine actions" (off by default) asks for the routine actions too
 // (include_routine: watching drivers, reading notifications, loading a map…); their rows are quieter. Refused and failed
 // ones always show (the server's rule).
+// Sahan's removals (22 October 2026): a done row has no "Done" chip (activityLogic.ts outcomeChipShown).
 
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -16,7 +17,7 @@ import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListSta
 import { Txt } from '@/components/ui';
 import { presetRange } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
-import { activityArgs, quietRow } from '@/office/activityLogic';
+import { activityArgs, outcomeChipShown, quietRow } from '@/office/activityLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { ActivityEntry, ActivityLog, FleetError } from '@/office/types';
 import { BackHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
@@ -68,7 +69,8 @@ export default function ActivityLogScreen() {
       // The day in words beside the time column (Round 3 A4): "Today", "Yesterday", "Mon 19 Oct".
       line={[dateWords(t, e.at.slice(0, 10)), e.person, e.channel].filter(Boolean).join(' · ')}
       line2={e.reason}
-      chip={{ text: t(`office.activity.${e.outcome}`), tone: TONE[e.outcome] }}
+      // Sahan's removals (22 October 2026): no "Done" on every done row; Refused, Failed and In progress keep their chip.
+      chip={outcomeChipShown(e.outcome) ? { text: t(`office.activity.${e.outcome}`), tone: TONE[e.outcome] } : null}
       quiet={quietRow(e)}
       testID={e.routine ? 'activity-routine' : undefined}
     />

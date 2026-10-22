@@ -7,10 +7,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  appendTrips, approveRowShown, docQuiet, driverStateShown, inboxWithUnread, requestChipShown, SECTION_FIRST, SECTION_PAGE, sectionNext, sectionShown,
-  statusRest, taskChipShown, tripChipShown, TRIPS_PAGE, vehicleRowShown,
+  appendTrips, approveRowShown, docQuiet, docsAllValid, docsValidLabel, driverStateShown, inboxWithUnread, requestChipShown, SECTION_FIRST, SECTION_PAGE, sectionNext, sectionShown,
+  statusRest, taskChipShown, tripChipShown, TRIPS_PAGE, vehicleRowShown, waitingChip,
 } from '../src/office/lists2Logic';
 import type { MyTrips, RequestCard } from '../src/office/types';
+import { dateWords } from '../src/lib/dateWords';
 
 type Tree = { [k: string]: string | Tree | string[] };
 const here = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +64,18 @@ console.log('Vehicles: the plate once, one status, quiet valid documents');
   check(vehicleRowShown({ reg_no: 'WP X-1', type: 'van' }, si).title === si('office.vehicles.type_van'), 'in Sinhala too');
   check(vehicleRowShown({ reg_no: 'WP X-1', type: 'tractor' }, en).title === en('office.lists2.vehicles.noMake'), 'an unknown type: "Make not set"');
   check(docQuiet('green') && !docQuiet('amber') && !docQuiet('red') && !docQuiet('muted'), 'only a valid document is quiet (expiring, expired and not set keep their colour)');
+  // Sahan's removals (22 October 2026): all three valid and none missing = one quiet line; anything else keeps the chips.
+  const ok = { lic: { chip: 'ok', expiry: '2027-03-12' }, ins: { chip: 'ok', expiry: '2027-01-05' }, emi: { chip: 'ok', expiry: '2026-12-20' } };
+  check(docsAllValid({ documents: ok }), 'all three valid: "Documents valid"');
+  check(!docsAllValid({ documents: { ...ok, ins: { chip: 'orange' } } }) && !docsAllValid({ documents: { ...ok, emi: { chip: 'red' } } }) && !docsAllValid({ documents: { ...ok, lic: { chip: 'not set' } } }) && !docsAllValid({ documents: { lic: ok.lic, ins: ok.ins } }),
+    'one expiring, expired, not set or absent: the chips');
+  check(!docsAllValid({ documents: ok, documents_missing: ['registration'] }) && !docsAllValid({ documents: ok, documents_missing_text: '1 document missing: CR' }), 'a document missing (the file): the chips');
+  const label = docsValidLabel({ documents: ok }, en);
+  const until = (doc: 'lic' | 'ins' | 'emi') => en('office.lists2.vehicles.docValidUntil', { doc: en(`office.vehicles.doc_${doc}`), date: dateWords(en, ok[doc].expiry) });
+  check(label.startsWith(en('office.lists2.vehicles.docsValid')) && label.includes(until('lic')) && label.includes(until('ins')) && label.includes(until('emi')),
+    'the screen reader hears each expiry', label);
+  const labelSi = docsValidLabel({ documents: ok }, si);
+  check(labelSi.startsWith(si('office.lists2.vehicles.docsValid')) && !/[A-Za-z]{4,}/.test(labelSi.replace(/Lic|Ins|Emi/g, '')) && !/[෦-෯]/.test(labelSi), 'in Sinhala too (Latin digits)', labelSi);
 }
 
 console.log('\nMy trips: the chip against its section and the Approved-by line; 25 at a time');
@@ -123,6 +136,8 @@ console.log('\nTasks: the chip only when neither the section nor the line says i
   check(taskChipShown('assigned', 'accepted', { status: 'Seen by driver 16:06' }) && taskChipShown('assigned', 'sent', { status: 'Something new' }), 'a chip the line does not say stays');
   check(!taskChipShown('assigned', 'selfDrive', {}) && !taskChipShown('assigned', 'someoneElse', {}), 'Self-drive / Someone else: the line names who drives');
   check(taskChipShown('declined', 'needsDriver', {}), 'Needs driver stays');
+  // Sahan's removals (22 October 2026): Waiting for approval has no chip but "Late" (its leave-by passed, not decided).
+  check(!waitingChip({}) && !waitingChip({ late: false }) && waitingChip({ late: true }), 'Waiting for approval: no Waiting chip; Late only when late');
 }
 
 console.log('\nThe strings (office.lists2 in both languages)');
@@ -176,9 +191,19 @@ console.log('\nThe screens use the rules and keep every key action');
   const tasks = read('app/office/(tabs)/tasks.tsx');
   check(/taskChipShown\(column, k\.key, c\)/.test(tasks) && /office\.trip\.assignTask/.test(tasks) && /testID="tasks-history"/.test(tasks) && /office\.home\.giveDriver/.test(tasks) && /<LoadMore/.test(tasks),
     'Tasks: the chip rule; Assign a task, History, Give a driver, Load more kept');
+  check(!/office\.chip\.waiting/.test(tasks) && /chip=\{waitingChip\(w\) \? \{ text: t\('office\.chip\.lateWord'\), tone: 'red' \} : null\}/.test(tasks) && /pathname: '\/office\/request\/\[id\]', params: \{ id: w\.request_id \}/.test(tasks),
+    'Tasks: Waiting for approval without the Waiting chip, "Late" in words when late; a row still opens its request');
   const vehicles = read('app/office/vehicles/index.tsx');
   check(/vehicleRowShown\(v, t\)/.test(vehicles) && /docQuiet\(tone\)/.test(vehicles) && /office\.lists2\.vehicles\.docValid/.test(vehicles) && /office\.vehicles\.register/.test(vehicles) && /<LoadMore/.test(vehicles) && /<FilterBar/.test(vehicles),
     'Vehicles: one status, quiet valid documents; Register, the Filter, Load more kept');
+  const vehicle = read('app/office/vehicles/[reg].tsx');
+  check([vehicles, vehicle].every((x) => /docsAllValid\(v\) \?|if \(docsAllValid\(v\)\)/.test(x) && /accessibilityLabel=\{docsValidLabel\(v, t\)\}/.test(x) && /t\('office\.lists2\.vehicles\.docsValid'\)/.test(x) && /testID="docs-valid"/.test(x)),
+    'Vehicles (list and page): all valid = the one line with each expiry for the screen reader');
+  check(/<Pill key=\{k\} text=\{`\$\{t\(`office\.vehicles\.doc_\$\{k\}`\)\}\$\{dc\?\.expiry \? ` · \$\{dateWords\(t, dc\.expiry\)\}` : ''\}`\} tone=\{docTone\(dc\?\.chip\)\} \/>/.test(vehicle) && /v\.documents_missing_text \?/.test(vehicle),
+    'the vehicle page: any other documents keep their chips with the dates, and what is missing');
+  const activity = read('app/office/people/activity.tsx');
+  check(/chip=\{outcomeChipShown\(e\.outcome\) \? \{ text: t\(`office\.activity\.\$\{e\.outcome\}`\), tone: TONE\[e\.outcome\] \} : null\}/.test(activity),
+    'Activity log: no "Done" chip; Refused, Failed and In progress keep theirs');
   check(/office\.lists2\.history\.section/.test(read('app/office/task-history.tsx')) && /office\.lists2\.activity\.section/.test(read('app/office/people/activity.tsx')),
     'Task history and Activity log: the section names what it holds (the header keeps the title)');
   const words = read('office/statusWords.ts');
