@@ -211,13 +211,15 @@ export const askAnswers = tool({
   name: "ask_answers",
   title: "Answers from drivers",
   description: "Part 3b (H3): one question (ask_id) with each driver's answer (sent, seen, Yes / No / Call me, the time, or " +
-    "the point they shared with the nearest town and a map link), or the questions of the last 7 days, newest first.",
+    "the point they shared with the nearest town and a map link), or the questions of the last 7 days, newest first: the " +
+    "person's own (Round 4–7, item 10: per person); everyone's with all (the approve permission, or the shared key).",
   readOnly: true,
   input: z.object({
     ask_id: zId.optional(),
+    all: z.boolean().optional().describe("Everyone's questions (approve), not only the person's own"),
     ...zPaging,
   }),
-  async run({ ask_id, limit, cursor }, { db, now }) {
+  async run({ ask_id, all = false, limit, cursor }, { db, now, actor }) {
     const refs = await loadRefs(db);
     if (ask_id) {
       const ask = unwrap(await db.from("driver_asks").select("*").eq("id", ask_id).maybeSingle(), "question") as AskRow | null;
@@ -227,17 +229,18 @@ export const askAnswers = tool({
       return { result: { ask: card }, summary: `answers to ${card.question}: ${card.counts.answered}/${card.counts.asked}` };
     }
     const since = new Date(now.getTime() - 7 * 86400000).toISOString();
-    const asks = unwrap(
-      await db.from("driver_asks").select("*").gte("created_at", since).order("created_at", { ascending: false }).limit(500),
-      "questions",
-    ) as AskRow[];
+    // Round 4–7 (item 10): a person's own questions; everyone's only for someone who approves (or with no person: the key).
+    const everyone = !actor.employeeId || (all && actor.permissions.includes("approve"));
+    let q = db.from("driver_asks").select("*").gte("created_at", since);
+    if (!everyone) q = q.eq("asked_by_employee_id", actor.employeeId!);
+    const asks = unwrap(await q.order("created_at", { ascending: false }).limit(500), "questions") as AskRow[];
     const page = pageOf(asks, pageWindow(limit ?? 20, cursor));
     const rows: AnswerRow[] = page.rows.length
       ? unwrap(await db.from("driver_ask_answers").select("*").in("ask_id", page.rows.map((a) => a.id)).order("sent_at"), "answers")
       : [];
     const cards = await Promise.all(page.rows.map((a) => askCard(db, a, rows.filter((r) => r.ask_id === a.id), refs.employees, now)));
     return {
-      result: { count: cards.length, total: page.total, next: page.next, asks: cards },
+      result: { count: cards.length, total: page.total, next: page.next, mine: !everyone || undefined, asks: cards },
       summary: `${cards.length} questions to drivers`,
     };
   },

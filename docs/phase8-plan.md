@@ -1177,6 +1177,27 @@ company's place history to everyone (`recent_places` read every trip and request
    connector suite: A's recent places are not returned to B) and in pgTAP.
 3. Typing is unchanged (the saved places, the places, then the map search), with only the person's own recent places.
 
+**The audit (22 October 2026):**
+
+| Feature | Today | Should be | Fix |
+|---|---|---|---|
+| Place suggestions: Recent | SHARED: the whole company's history (`recent_places`) | per person | `my_recent_places`; Saved shared (done, 5ba624a) |
+| A driver's own trips' places (driver-api) | hidden (they were everyone's) | per person | the driver's own Recent, personal trips too (done) |
+| Trip drafts, site ("Resume draft") | per person (the e-mail in the key), kept forever | per person, 30 days | dropped after `retention.drafts_days` |
+| Trip draft, Office mode and /m/ | ONE per device (`office.trip.draft`) | per person, 30 days | a key per person; dropped after 30 days |
+| Recent searches | not kept on the device | — | — |
+| Last-used driver / vehicle / project | not remembered (the forms start from /me and the regular vehicle) | per person | — |
+| Filters and sort | the page address (site); in memory (Office mode) | per person | — |
+| Remembered views (desktop / phone site) | per browser (`fleet.view`) | per device (a phone or a desk) | — (a device choice, not history) |
+| The Overview's collapsed sections | per person (`office_prefs`) | per person | — |
+| Site import presets | shared | shared (company set-up) | — |
+| Home "Needs you now" and the counts | by permission | by permission | — |
+| Notification inbox, settings, the pause | per person | per person | — |
+| My trips | per person | per person (+ the trips one rides in) | — |
+| Ask drivers: the questions list | SHARED: everyone's questions of 7 days | per person (an approver may show everyone's) | `ask_answers` lists the person's own; `all` for approve; an answer by its link as before |
+| Map's last view | not kept | — | — |
+| The driver app (Today, logs, reports, checks) | per driver (RLS) | per driver | — |
+
 **The rule:** history, drafts, recents and preferences are PER PERSON; company data (vehicles, drivers, saved places,
 projects, settings) is SHARED. The audit at the checkpoint (feature · today · should be · fix) covers at least: trip
 drafts, recent searches, last-used driver / vehicle / project, filters and sort, remembered tabs and views, the import
