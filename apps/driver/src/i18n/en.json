@@ -3558,6 +3558,25 @@
       "activity": {
         "section": "Changes"
       }
+    },
+    "ui3": {
+      "stay": "{dur} stay",
+      "by": "by {time}",
+      "howPlanned": "How this was planned",
+      "factDistance": "distance",
+      "factDriving": "driving",
+      "factBack": "back",
+      "factEnds": "ends",
+      "factPeople": "people",
+      "driverRole": "Driver",
+      "checked": "Checked",
+      "checkProblem": "Check: problem",
+      "leaves": "Leaves {time}",
+      "chooseAnother": "Choose another · {n}",
+      "onTheWayTo": "On the way to {place}",
+      "arrivesAbout": "Arrives about {time}",
+      "askedBy": "Asked by {name}",
+      "assignedBy": "Assigned by {name}"
     }
   },
   "patterns": {

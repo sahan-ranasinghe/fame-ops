@@ -3558,6 +3558,25 @@
       "activity": {
         "section": "වෙනස්කම්"
       }
+    },
+    "ui3": {
+      "stay": "{dur} නැවතීම",
+      "by": "{time} ට පෙර",
+      "howPlanned": "මෙය සැලසුම් කළ හැටි",
+      "factDistance": "දුර",
+      "factDriving": "ධාවනය",
+      "factBack": "ආපසු",
+      "factEnds": "අවසන්",
+      "factPeople": "මගීන්",
+      "driverRole": "රියදුරු",
+      "checked": "පරීක්ෂා කළා",
+      "checkProblem": "ගැටලුවක්",
+      "leaves": "{time} ට පිටත් වේ",
+      "chooseAnother": "වෙනත් අයෙක් තෝරන්න · {n}",
+      "onTheWayTo": "{place} වෙත යමින්",
+      "arrivesAbout": "{time} පමණ ළඟා වේ",
+      "askedBy": "ඉල්ලුවේ {name}",
+      "assignedBy": "පැවරුවේ {name}"
     }
   },
   "patterns": {
