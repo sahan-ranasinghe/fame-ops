@@ -513,6 +513,8 @@ button.avail-row:focus-visible { outline: 3px solid var(--ink); outline-offset: 
 .ls-ic { width: 20px; height: 20px; flex: none; color: var(--muted) }
 .ls-ic svg { width: 100%; height: 100% }
 .ls-more { padding: 8px 10px }
+/* Round 4–7 (item 10): an empty box's group headers (Saved, Recent, <Name>'s recent). */
+.ls-group { padding: 10px 10px 2px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; cursor: default }
 .ls-confirm { margin-top: 8px; display: grid; gap: 10px }
 .pinmap { height: 220px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line) }
 .pinmap.drawn .mapbox { height: 220px }

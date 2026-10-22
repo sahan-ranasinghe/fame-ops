@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitSuggestions, WHERE_MAX_RECENT, WHERE_MAX_ROWS, whereRows } from "./placeSuggestLogic";
+import { groupedWhere, startsGroup, suggestArgs, splitSuggestions, SUGGEST_MAX_ROWS, WHERE_MAX_RECENT, WHERE_MAX_ROWS, whereRows } from "./placeSuggestLogic";
 
 const P = (name: string) => ({ layer: "place", name });
 const R = (name: string) => ({ layer: "recent", name });
@@ -28,5 +28,51 @@ describe("Where suggestions (Round 1 item 6)", () => {
     const w = whereRows(["1", "2", "3", "4", "5", "6", "7"].map(P), [], (r) => r.name);
     expect(w.top).toHaveLength(5);
     expect(names(w.more)).toEqual(["6", "7"]);
+  });
+});
+
+describe("Where suggestions in groups (Round 4–7, item 10)", () => {
+  const G = (name: string, layer: string, group: string, group_label: string) => ({ layer, name, group, group_label });
+  const answer = [
+    G("Head office", "place", "saved", "Saved"), G("Store A", "place", "saved", "Saved"),
+    G("Kandy depot", "recent", "recent", "Recent"), G("Galle site", "recent", "recent", "Recent"),
+    G("Matara", "recent", "for", "Anoja's recent"), G("Head office", "recent", "for", "Anoja's recent"),
+    { layer: "town", name: "Kegalle" },
+  ];
+
+  it("Saved, Recent, then <Name>'s recent, each under its header; a name shown once; no towns", () => {
+    const w = groupedWhere(answer, (r) => r.name);
+    expect(names(w.top)).toEqual(["Head office", "Store A", "Kandy depot", "Galle site", "Matara"]);
+    expect(w.top.map((r) => [r.group, r.label, r.icon])).toEqual([
+      ["saved", "Saved", "building"], ["saved", "Saved", "building"],
+      ["recent", "Recent", "clock"], ["recent", "Recent", "clock"],
+      ["for", "Anoja's recent", "clock"],
+    ]);
+    expect(w.top.map((_, i) => startsGroup(w.top, i))).toEqual([true, false, true, false, true]);
+    expect(w.more).toEqual([]);
+  });
+
+  it("the order is the groups', whatever order the rows come in; more than 7 go under More places", () => {
+    const many = [
+      ...["R1", "R2", "R3"].map((n) => G(n, "recent", "recent", "Recent")),
+      ...["S1", "S2", "S3", "S4", "S5", "S6"].map((n) => G(n, "place", "saved", "Saved")),
+    ];
+    const w = groupedWhere(many, (r) => r.name);
+    expect(SUGGEST_MAX_ROWS).toBe(7);
+    expect(names(w.top)).toEqual(["S1", "S2", "S3", "S4", "S5", "S6", "R1"]);
+    expect(names(w.more)).toEqual(["R2", "R3"]);
+  });
+
+  it("an answer without groups (an older server): ours then 3 recent as before, no headers", () => {
+    const w = groupedWhere([R("Kandy"), R("Galle"), P("Head office"), P("A")], (r) => r.name);
+    expect(names(w.top)).toEqual(["Head office", "A", "Kandy", "Galle"]);
+    expect(w.top.some((r) => r.group)).toBe(false);
+    expect(w.top.map((_, i) => startsGroup(w.top, i)).some(Boolean)).toBe(false);
+  });
+
+  it("for someone else's request or person; nothing extra for one's own", () => {
+    expect(suggestArgs(null)).toEqual({ suggest: true });
+    expect(suggestArgs({ request: "r-1" })).toEqual({ suggest: true, for_request: "r-1" });
+    expect(suggestArgs({ person: "e-1" })).toEqual({ suggest: true, for_person: "e-1" });
   });
 });

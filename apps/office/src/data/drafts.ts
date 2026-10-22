@@ -2,8 +2,13 @@
 // an edit), in the browser's localStorage, on every change. Leaving the page
 // keeps it; coming back offers "Resume draft from HH:MM · Discard"; Save or
 // Discard clears it. The key is the person's e-mail (web) or "artifact".
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
+// Round 4–7 (item 9, docs/phase8-plan.md §33.8): an unsent draft is kept `retention.drafts_days` (get_settings; 30 when
+// the setting is not known yet): an older one is never offered, and once the setting is known it is removed when read,
+// with every other expired draft in this browser (anyone's: a draft of another person is never shown anyway).
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useFleet } from "../app/FleetContext";
+import type { SettingsResult } from "./types";
+import { queryKey } from "./useQuery";
 
 export const DRAFT_PREFIX = "fame-fleet:draft:";
 /** Saved this long after the last change (and at once when the page is hidden). */
@@ -15,6 +20,20 @@ export interface Draft<T> {
 }
 
 export const draftKey = (user: string, form: string, record?: string | null) => `${DRAFT_PREFIX}${user}:${form}${record ? `:${record}` : ""}`;
+
+/** The server's default for retention.drafts_days. */
+export const DRAFT_KEEP_DAYS = 30;
+const DAY_MS = 86_400_000;
+
+/** Is a draft saved at `at` still within the period? */
+export const draftFresh = (at: number, keepDays: number, now = Date.now()): boolean => now - at <= keepDays * DAY_MS;
+
+/** The period from get_settings' answer (its default when the setting is absent); null = no answer yet. */
+export function keepDaysOf(s: SettingsResult | null | undefined): number | null {
+  if (!s) return null;
+  const d = s.settings?.retention?.drafts_days;
+  return typeof d === "number" && d > 0 ? d : DRAFT_KEEP_DAYS;
+}
 
 function storage(): Storage | null {
   try {
@@ -57,6 +76,45 @@ export function removeDraft(key: string): void {
   }
 }
 
+/** Removes every draft in this browser older than the period (anyone's); answers how many went. */
+export function pruneDrafts(keepDays: number, now = Date.now()): number {
+  const s = storage();
+  if (!s) return 0;
+  let gone = 0;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < s.length; i++) {
+      const k = s.key(i);
+      if (k?.startsWith(DRAFT_PREFIX)) keys.push(k);
+    }
+    for (const k of keys) {
+      const d = readDraft(k);
+      if (!d || !draftFresh(d.at, keepDays, now)) {
+        s.removeItem(k);
+        gone += 1;
+      }
+    }
+  } catch {
+    // Blocked storage: nothing kept, nothing to remove.
+  }
+  return gone;
+}
+
+/** The period this page knows: the settings answer in the store (shared with the forms that read get_settings). */
+const SETTINGS_ENTRY = queryKey("settings", {});
+const noSubscribe = () => (): void => undefined;
+let prunedWith: number | null = null;
+function useDraftKeepDays(): number | null {
+  const { store } = useFleet();
+  const live = !!store && typeof (store as { get?: unknown }).get === "function";
+  const subscribe = useCallback((l: () => void) => (live ? store.subscribe(l) : noSubscribe()), [store, live]);
+  return useSyncExternalStore(
+    subscribe,
+    () => (live ? keepDaysOf(store.get<SettingsResult>(SETTINGS_ENTRY).data) : null),
+    () => null,
+  );
+}
+
 export interface DraftControls<T = unknown> {
   /** A draft from an earlier visit that has not been resumed or discarded yet. */
   saved: { at: number } | null;
@@ -77,8 +135,23 @@ export interface DraftControls<T = unknown> {
 export function useFormDraft<T>(form: string, record: string | null, initial: T | (() => T), enabled = true): [T, Dispatch<SetStateAction<T>>, DraftControls<T>] {
   const { me } = useFleet();
   const key = draftKey(me.email ?? "artifact", form, record);
+  const known = useDraftKeepDays();
+  const keepDays = known ?? DRAFT_KEEP_DAYS;
   const [value, setValue] = useState<T>(initial);
   const [saved, setSaved] = useState<Draft<T> | null>(() => (enabled ? readDraft<T>(key) : null));
+  // A draft past the period is never offered; once the period is known it is removed (with every expired one here).
+  const offered = saved && draftFresh(saved.at, keepDays) ? saved : null;
+  useEffect(() => {
+    if (known === null) return;
+    if (prunedWith !== known) {
+      prunedWith = known;
+      pruneDrafts(known);
+    }
+    if (saved && !draftFresh(saved.at, known)) {
+      removeDraft(key);
+      setSaved(null);
+    }
+  }, [known, saved, key]);
   const changed = useRef(false);
   const cleared = useRef(false);
   const valueRef = useRef(value);
@@ -116,12 +189,12 @@ export function useFormDraft<T>(form: string, record: string | null, initial: T 
 
   const resume = useCallback(() => {
     const d = readDraft<T>(key);
-    if (d) {
+    if (d && draftFresh(d.at, keepDays)) {
       cleared.current = false;
       setValue(d.state);
     }
     setSaved(null);
-  }, [key]);
+  }, [key, keepDays]);
   const discard = useCallback(() => {
     removeDraft(key);
     setSaved(null);
@@ -137,6 +210,6 @@ export function useFormDraft<T>(form: string, record: string | null, initial: T 
     setValue(v);
   }, []);
 
-  const controls = useMemo<DraftControls<T>>(() => ({ saved: saved ? { at: saved.at } : null, resume, discard, clear, reset }), [saved, resume, discard, clear, reset]);
+  const controls = useMemo<DraftControls<T>>(() => ({ saved: offered ? { at: offered.at } : null, resume, discard, clear, reset }), [offered, resume, discard, clear, reset]);
   return [value, setValue, controls];
 }

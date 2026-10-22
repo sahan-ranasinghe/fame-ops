@@ -9,6 +9,7 @@ import { FleetProvider } from "../app/FleetContext";
 import type { Fleet } from "../app/FleetContext";
 import type { Me } from "../transport/types";
 import { DRAFT_SAVE_MS, draftKey, readDraft, useFormDraft, writeDraft } from "./drafts";
+import { queryKey } from "./useQuery";
 
 const me = { email: "sahan@fame.test", name: "Sahan", permissions: ["view"], tools: [] } as unknown as Me;
 const fleet = { me, store: {}, transport: {}, noConnector: false } as unknown as Fleet;
@@ -21,9 +22,11 @@ describe("useFormDraft", () => {
   afterEach(() => vi.useRealTimers());
 
   it("offers an earlier draft until it is resumed, and resumes it", () => {
-    writeDraft(key, { note: "Draft note" }, 1700000000000);
+    // An hour old (Round 4–7: a draft older than the keep period, 30 days by default, is not offered).
+    const at = Date.now() - 3_600_000;
+    writeDraft(key, { note: "Draft note" }, at);
     const { result } = renderHook(() => useFormDraft("request-new", null, { note: "" }), { wrapper });
-    expect(result.current[2].saved).toEqual({ at: 1700000000000 });
+    expect(result.current[2].saved).toEqual({ at });
     expect(result.current[0]).toEqual({ note: "" });
     act(() => result.current[2].resume());
     expect(result.current[0]).toEqual({ note: "Draft note" });
@@ -73,5 +76,46 @@ describe("useFormDraft.reset", () => {
     act(() => result.current[1]({ note: "typed" }));
     act(() => { vi.advanceTimersByTime(DRAFT_SAVE_MS); });
     expect(readDraft<{ note: string }>(draftKey(me.email ?? "", "request-edit", "r1"))?.state).toEqual({ note: "typed" });
+  });
+});
+
+describe("useFormDraft: the keep period (Round 4–7, item 9)", () => {
+  beforeEach(() => localStorage.clear());
+  const DAY = 86_400_000;
+  /** A page whose store holds get_settings' answer with retention.drafts_days. */
+  const withDays = (days: number) => {
+    const answer = { settings: { retention: { drafts_days: days } } };
+    const store = { get: (k: string) => (k === queryKey("settings", {}) ? { data: answer } : {}), subscribe: () => () => true };
+    const f = { ...fleet, store } as unknown as Fleet;
+    return ({ children }: { children: ReactNode }) => <FleetProvider value={f}>{children}</FleetProvider>;
+  };
+
+  it("the period not known yet: a draft older than 30 days is not offered, and not removed", () => {
+    writeDraft(key, { note: "old" }, Date.now() - 31 * DAY);
+    const { result } = renderHook(() => useFormDraft("request-new", null, { note: "" }), { wrapper });
+    expect(result.current[2].saved).toBeNull();
+    expect(readDraft(key)).not.toBeNull();
+  });
+
+  it("drafts_days 7: an 8-day-old draft is dropped when read, with every expired draft here (anyone's); fresh ones stay", () => {
+    const other = draftKey("anoja@fame.test", "task-new");
+    const otherFresh = draftKey("anoja@fame.test", "request-new");
+    writeDraft(key, { note: "old" }, Date.now() - 8 * DAY);
+    writeDraft(other, { note: "Anoja's old" }, Date.now() - 9 * DAY);
+    writeDraft(otherFresh, { note: "Anoja's" }, Date.now() - 2 * DAY);
+    const { result } = renderHook(() => useFormDraft("request-new", null, { note: "" }), { wrapper: withDays(7) });
+    expect(result.current[2].saved).toBeNull();
+    expect(readDraft(key)).toBeNull();
+    expect(readDraft(other)).toBeNull();
+    expect(readDraft(otherFresh)).not.toBeNull();
+  });
+
+  it("drafts_days 90: a 40-day-old draft is still offered and resumed", () => {
+    const at = Date.now() - 40 * DAY;
+    writeDraft(key, { note: "kept" }, at);
+    const { result } = renderHook(() => useFormDraft("request-new", null, { note: "" }), { wrapper: withDays(90) });
+    expect(result.current[2].saved).toEqual({ at });
+    act(() => result.current[2].resume());
+    expect(result.current[0]).toEqual({ note: "kept" });
   });
 });

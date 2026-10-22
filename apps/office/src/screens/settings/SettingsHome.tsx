@@ -15,6 +15,7 @@ const PAGE_TEXT: Record<string, string> = {
   users: "Office users, their permissions, set-password links, connector keys",
   fleet: "Dispatch defaults: minutes at stops, the buffer, the base place, rush hour, the routing provider's usage",
   notifications: "What reaches you, pause all, this browser and its sounds",
+  retention: "How long notifications, the activity log, locations and other records are kept; Run now",
 };
 
 export default function SettingsHome() {
@@ -27,7 +28,7 @@ export default function SettingsHome() {
         <div className="more-list">
           {pages.map((p) => (
             <Link key={p.key} to={p.path}>
-              <Icon name={p.key === "fleet" ? "settings" : p.key === "notifications" ? "issues" : p.key === "profile" ? "phone" : "accounts"} />
+              <Icon name={p.key === "fleet" ? "settings" : p.key === "notifications" ? "issues" : p.key === "profile" ? "phone" : p.key === "retention" ? "clock" : "accounts"} />
               <span className="grow">{p.label}<span className="sub" style={{ display: "block", fontWeight: 400 }}>{PAGE_TEXT[p.key]}</span></span>
             </Link>
           ))}

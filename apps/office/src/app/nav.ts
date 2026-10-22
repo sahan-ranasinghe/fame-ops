@@ -174,6 +174,8 @@ export const SETTINGS_PAGES: NavItem[] = [
   { key: "app-errors", label: "App errors", need: ["users"], path: "/settings/app-errors" },
   // Round 2b: the Activity log (office_audit's changes).
   { key: "activity", label: "Activity log", need: ["users"], path: "/settings/activity" },
+  // Round 4–7 (item 9): how long each kind of data is kept, and Run now.
+  { key: "retention", label: "Data retention", need: ["users"], path: "/settings/retention" },
   // Web only (the browser's push subscription); the artifact points to the web app.
   { key: "notifications", label: "Notifications", need: [], path: "/settings/notifications" },
 ];
