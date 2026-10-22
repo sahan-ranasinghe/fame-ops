@@ -389,6 +389,27 @@ come = plain), the stop the driver is at or heading to ringed and marked "Here n
 - The component, one per codebase: the site's `screens/StopProgress.tsx` (the task page); the app's
   `components/office/StopTimeline.tsx`.
 
+## 17. The approved mockups' patterns (Round 4–7, item 12, 22 October 2026)
+
+`design/mockups/2026-10-22` (approved by Charuka): the look and the layout of Office mode's Home, Review, the request page
+and the trip on the way (and the driver's two screens). One component per pattern per codebase; the screens are restyled
+in place (docs/phase8-plan.md §33.13, "Restyle, never rebuild"), every function kept.
+
+| Pattern | Where people know it | App (Office mode, /m/; the driver app may use them too) | Website |
+|---|---|---|---|
+| Thin top bar: the round back button (44 px, a ring), a small grey line above the title, the title in the heading font, the bell and the avatar at the right | Gmail, Uber Fleet, Material 3's top app bar | `components/patterns/TopBar.tsx` (`TopBar`, `RoundButton`); `office/ui.tsx` `TopBar` (Home: the date over the greeting, the bell, the avatar → My profile) and `BackHeader` (`above` for the line over the title); the trip editor's `TripHeader` | `ui/Page.tsx` `PageTop` (its back button is the round one) |
+| Stats row: one card, a cell per number, an icon and its label in the tone over the big mono number; each cell opens its list | Shopify, Stripe, Uber Fleet | `components/patterns/StatsRow.tsx` (`tiles`; `facts`: an icon over a value over a grey word, for Review, the request); `office/ui.tsx` `StatTiles` | `ui/basics.tsx` `Tile` with `icon` and `kind` (the Overview's row, styles.css); `ui/patterns.tsx` `StatsRow` (facts) |
+| ONE status banner per page: a round icon in the tone, the state, one line, one chip; a tap opens its place | Uber's trip status card, Google Calendar's response banner | `components/patterns/StatusBanner.tsx`; the rules `office/detailBanner.ts` (`requestBanner`, `taskBanner`) | `ui/patterns.tsx` `StatusBanner` (the task page on the way or needing a driver, the decide pages, the passenger's trip, a requester's note) |
+| Route stepper: the time left in mono (the actual or expected big, the plan small, struck through once it differs), a mark on one rail (S amber, numbered ink, B ringed; done = a check, here / next = a halo), the place on one line with its chip, ONE meta line with icons, the leg under it ("99 km · 2 h 23 min"); the rail blue up to the last stop left while the trip runs | Uber and DoorDash's route progress, Samsara's route view | `components/patterns/RouteStepper.tsx` (`compact`, `live`, `sub`/`subStruck`); the plan's rows `office/stepperRows.ts` + `components/office/PlanStepper.tsx` (Review, the request; ⓘ "How this was planned" for each leg's source and the rush hour); the live timeline `components/office/StopTimeline.tsx` draws on it | `ui/patterns.tsx` `RouteStepper`; the plan (`PlanTimeline`) and the live stops (`StopProgress`) on the same rail through styles.css (their words unchanged) |
+| List row: an icon tile, an avatar or a time; ONE title; ONE grey meta line; a small chip; a chevron when it opens a place | Gmail's rows (item 8) | `components/patterns/ListRow.tsx` (`ListRow`, `RowChip`, `RowIcon`, `RowPlate`); `office/ui.tsx` `Row` and `StatusChip` are these; `Section look="list"` (the title outside the card, rows edge to edge) and `look="group"` (Home's Needs you now) | `ui/patterns.tsx` `ListRow`, `RowIcon` |
+| Sticky bottom bar: the outlined second action (Back, Decline), the ONE primary, ⋯ More for the rest, the reason under them | Uber for Business, Airbnb's booking bar, Material 3's bottom app bar | `components/patterns/BottomActionBar.tsx` (`BottomActionBar`, `BarRow`, `BarMore`, the bar's sizes); `office/ui.tsx` `StickyActions`, the trip editor's `TripFooter` | `ui/patterns.tsx` `BottomActionBar` (the site's `.sticky-acts`) |
+| One floating "+ New trip" | Gmail's Compose, Google Calendar's +, Material 3's extended FAB | `components/patterns/NewTripFab.tsx`; `office/ui.tsx` `NewTripButton` | `ui/patterns.tsx` `NewTripFab` (a phone; the site's phone Home keeps its tested big action button for now) |
+
+The values the patterns add to the tokens (a round control's ring, a banner's border and second line) are in
+`components/patterns/look.ts` (app) and the `pt-` classes of `styles.css` (website); the README's tokens themselves are in
+`theme.ts` and the site's `:root`. The design pages `apps/driver/src/design/Office*.tsx` draw the real screens with sample
+answers (`sampleOffice.ts`) for the mockup comparison (`apps/office/e2e/mockups.spec.ts`, the e2e build only).
+
 ## The reviewer's checklist (each checkpoint)
 
 For every screen changed or added: the filters are one Filter button + sheet + chips; a date range is one button + one
@@ -396,5 +417,6 @@ calendar with presets; a day of history is a week strip; a trip date is Today / 
 time sheet; a list has skeletons, pull to refresh, Load more, an empty state and Try again; every call has a timeout;
 spinners only on a pressed button; sheets, cards, tabs, the place search, confirmations and toasts are the shared ones;
 a picked thing has its mark, the tint and the border (§11); a save closes its form, opens the item and says so in the
-snackbar, never an OK dialog (§12); no screen can go white (§13); a long settings list is grouped (§14); nothing is
+snackbar, never an OK dialog (§12); no screen can go white (§13); a long settings list is grouped (§14); a detail screen
+has one status banner, its stops on the route stepper and its actions in the bottom bar with ⋯ More (§17); nothing is
 invented twice.
