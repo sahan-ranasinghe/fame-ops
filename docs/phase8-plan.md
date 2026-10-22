@@ -984,7 +984,22 @@ Design pass parked 22 Oct; pilot on phase9-rd, not shipped.
   site's Live card asking `live_drivers` at once when a driver stops sharing (the duty chip's "by the office").
 - Next, each round with its checkpoint: Round 4 (the vehicle check, with self-drive and someone-else trips, §31) → Round 5
   (the fuel card at Start task, advisory) → Round 6 (passengers on trips) → Round 7 (someone else has that driver or
-  vehicle) → `docs/voice-calls-plan.md` (doc only) → the connector suite on a fixed date and clock.
+  vehicle) → `docs/voice-calls-plan.md` (doc only) → the connector suite on a fixed date and clock. (Changed the same day:
+  Rounds 4 to 7 are one round, §33.)
+
+**Deployed (22 October 2026, Sahan's go after CI run 39713363250 on `phase9-r3b` passed):**
+1. Server: nothing. No Edge Function bundles the changed code (nothing under `supabase/` changed), so no functions deploy
+   and no migration.
+2. Main fast-forwarded to `e6057b2` (in `~/projects/fame-ops-main`), key scan 0, pushed. Main's CI 39716033919 passed
+   with one flaky test: `office.spec.ts:1326`, the location search box. It had no CPU cut-off in its window. The page
+   itself was refused: office-api answered 429 (120 calls a minute per person) after the test's 139 calls in 22 s (eleven
+   full page loads). The test is fixed in Round 4–7.
+3. Website: `scripts/deploy-pages.sh --deploy`, scan: nothing found, https://c31dda83.fame-fleet.pages.dev. `/`, `/m/`,
+   `/m/offline`, `/privacy` and the /m/ files answer 200.
+4. Native check against ef69255: only test scripts changed in `package.json` since Round 3's update (the rest are the same
+   web and test packages and the FLEET_WEB-only config). EAS update "Shared trip rules, Sinhala times, duty chip fix":
+   group **e827a8e9-9752-4ab8-bc61-c829a5e4bd4e**, Android 01a161d5-7fc2-7f79-bc95-a5eec108c833, runtime 1.3.0-gmaps,
+   commit e6057b2.
 
 ## 31. Queued after Round 3 (Sahan, 22 October 2026, after Checkpoint 3)
 
