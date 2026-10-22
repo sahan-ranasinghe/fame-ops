@@ -56,10 +56,14 @@ export interface TileLink {
   current?: boolean;
 }
 
-export function Tile({ label, value, unit, sub, tone = "", link }: { label: string; value: ReactNode; unit: string; sub: string; tone?: "" | "warn" | "bad"; link?: TileLink }) {
+/**
+ * A number with its label, unit and line, opening its list. Round 4–7, item 12: on the Overview it is a cell of the one
+ * stats row (styles.css), with `icon` before the label in the tile's `kind` (live blue, ok green, warn, bad).
+ */
+export function Tile({ label, value, unit, sub, tone = "", link, icon, kind }: { label: string; value: ReactNode; unit: string; sub: string; tone?: "" | "warn" | "bad"; link?: TileLink; icon?: string; kind?: "live" | "ok" | "warn" | "bad" }) {
   const body = (
     <>
-      <div className="lbl">{label}</div>
+      <div className="lbl">{icon ? <Icon name={icon} /> : null}{label}</div>
       <div className="val">
         <b className="num">{value}</b>
         <span>{unit}</span>
@@ -67,9 +71,10 @@ export function Tile({ label, value, unit, sub, tone = "", link }: { label: stri
       <div className={`sub ${tone}`}>{sub}</div>
     </>
   );
-  if (!link) return <div className="tile">{body}</div>;
+  const cls = `tile${kind ? ` tone-${kind}` : ""}`;
+  if (!link) return <div className={cls}>{body}</div>;
   return (
-    <Link className="tile" to={link.to} replace={link.replace} state={link.state} aria-current={link.current ? "true" : undefined} data-testid="tile-link">
+    <Link className={cls} to={link.to} replace={link.replace} state={link.state} aria-current={link.current ? "true" : undefined} data-testid="tile-link">
       {body}
     </Link>
   );
