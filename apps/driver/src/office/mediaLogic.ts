@@ -18,9 +18,10 @@ export const DOC_PX = 2000;
 export const MAX_DOC_BYTES = 10 * 1024 * 1024;
 
 /** What is photographed: the size it is made at follows. */
-export type PhotoUse = 'driver_profile' | 'vehicle' | 'driver_licence' | 'document';
+/** Round 4–7 (4): 'check' = a photo of a no-app trip (a problem, a side of the vehicle, the odometer) at the driver app's 1600 px. */
+export type PhotoUse = 'driver_profile' | 'vehicle' | 'driver_licence' | 'document' | 'check';
 
-export const LONG_SIDE: Record<Exclude<PhotoUse, 'driver_profile'>, number> = { vehicle: VEHICLE_PX, driver_licence: LICENCE_PX, document: DOC_PX };
+export const LONG_SIDE: Record<Exclude<PhotoUse, 'driver_profile'>, number> = { vehicle: VEHICLE_PX, driver_licence: LICENCE_PX, document: DOC_PX, check: VEHICLE_PX };
 
 /** The resize for a picture so its long side is at most `max` (null when it is small enough already). */
 export function fitLongSide(width: number, height: number, max: number): { width: number } | { height: number } | null {

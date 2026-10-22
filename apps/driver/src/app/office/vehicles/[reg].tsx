@@ -6,13 +6,15 @@
 // browser, Take photo / Replace, the expiry date: vehicles/doc). The photo: Take photo / Replace photo with the camera or
 // the phone's photos (photo_upload_url + set_vehicle_photo, straight to Storage). Each button only with its tools.
 // Edit (update_vehicle) opens the form. Found by list_vehicles' search (one page; the active vehicles, then the returned
-// ones).
+// ones). Round 4–7 (4): the vehicle check (Today's check and the last 7 days, components/office/VehicleChecks.tsx); a
+// pre-trip problem's notification (/vehicles/<plate>?check=<id>) opens the page with the checks first and that one marked.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Linking, Pressable, View } from 'react-native';
 
 import { PhotoPick } from '@/components/office/PhotoPick';
+import { VehicleChecksSection } from '@/components/office/VehicleChecks';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { docTone, kmLine, vehicleTone } from '@/office/manageLogic';
 import { uploadToTicket, type Shot } from '@/office/media';
@@ -29,7 +31,7 @@ import { dateWords, datesInWords } from '@/lib/dateWords';
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
 export default function VehicleScreen() {
-  const { reg } = useLocalSearchParams<{ reg: string }>();
+  const { reg, check } = useLocalSearchParams<{ reg: string; check?: string }>();
   const { t } = useApp();
   const { api, me, signOut } = useOffice();
   const router = useRouter();
@@ -115,6 +117,7 @@ export default function VehicleScreen() {
               <Pill text={v.active === false ? t('office.vehicles.returned') : v.status ?? ''} tone={vehicleTone(v)} size={15} />
               {v.availability ? <Txt variant="muted" size={15}>{v.availability}</Txt> : null}
             </View>
+            {check ? <VehicleChecksSection plate={v.reg_no} today={v.check_today} focus={check} /> : null}
             <View style={{ backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 14 }}>
               {fact(t('office.vehicles.typeSeats'), [v.type ? t(`office.vehicles.type_${v.type}`) : '', v.seats ? t('office.vehicles.seats', { n: v.seats }) : ''].filter(Boolean).join(' · ') || null)}
               {fact(t('office.vehicles.rentedFrom'), v.rented_from, v.rent_until ? t('office.vehicles.until', { date: dateWords(t, v.rent_until) }) : null)}
@@ -141,6 +144,7 @@ export default function VehicleScreen() {
                 {v.documents_missing_text ? <Txt variant="small" color={colors.amberText}>{v.documents_missing_text}</Txt> : null}
               </View>
             </View>
+            {!check ? <VehicleChecksSection plate={v.reg_no} today={v.check_today} /> : null}
             {me.tools.includes('vehicle_documents') && (
               <Section title={t('office.vehicles.onFile')} count={docsQ.data?.documents.length}>
                 {!docsQ.data && !docsQ.error && <SkeletonRows rows={2} lines={2} />}

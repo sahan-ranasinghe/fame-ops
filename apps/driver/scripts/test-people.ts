@@ -191,8 +191,9 @@ console.log('\n== Office users ==');
 
 console.log('\n== Quick settings ==');
 {
-  check(same(QUICK_SETTINGS.map((r) => r.key), ['tasks_need_approval', 'vehicle_on_the_day', 'planner_suggestions', 'driver_personal_trips', 'duty_cutoff', 'accept_within_min', 'accept_before_leave_min', 'office_phone']), 'the rows of section 4, the design\'s first, with the planner\'s switch (Round 1)');
-  check(same(QUICK_SETTINGS.map((r) => r.kind), ['switch', 'switch', 'switch', 'choice', 'time', 'minutes', 'minutes', 'phone']), 'their kinds');
+  check(same(QUICK_SETTINGS.map((r) => r.key), ['tasks_need_approval', 'vehicle_on_the_day', 'planner_suggestions', 'driver_personal_trips', 'duty_cutoff', 'accept_within_min', 'accept_before_leave_min', 'office_phone', 'vehicle_check', 'trip_close_prompt', 'fuel_card', 'passengers', 'holder_contact']), 'the rows of section 4, the design\'s first, with the planner\'s switch (Round 1) and the five features (Round 4–7)');
+  check(same(QUICK_SETTINGS.map((r) => r.kind), ['switch', 'switch', 'switch', 'choice', 'time', 'minutes', 'minutes', 'phone', 'switch', 'switch', 'switch', 'switch', 'switch']), 'their kinds');
+  check(['vehicle_check', 'trip_close_prompt', 'fuel_card', 'passengers', 'holder_contact'].every((k) => switchValue(k as 'vehicle_check', {}, {}) === true) && switchValue('fuel_card', { fuel_card: false }, {}) === false, 'the five features: on when absent, off when saved off');
   check(same(PERSONAL_TRIPS, ['allowed', 'default', 'off', 'ask_first']), 'the four choices, the server\'s');
   const base: FleetSettings = { dwell_min: { default: 10 }, buffer_min: 10, base_place_id: null, avg_speed_kmh: 40, road_factor: 1.3, accept_within_min: 15, accept_before_leave_min: 30, rush_hour: { factor: 1.5, centre: { lat: 6.9, lng: 79.8 }, radius_km: 20, bands: [] } };
   check(switchValue('tasks_need_approval', {}, {}) === true && switchValue('vehicle_on_the_day', {}, {}) === false, 'nothing saved, no defaults: approval on, vehicle on the day off');

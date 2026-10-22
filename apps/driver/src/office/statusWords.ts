@@ -287,13 +287,15 @@ export function sentenceText(t: T, line: string | undefined | null): string {
 export type BoardColumn = 'assigned' | 'in_progress' | 'completed' | 'declined';
 
 /**
- * The short chip of a task card, by its column and its sentence (a short word; the sentence is the row's second line).
+ * The short chip of a task card, by its column and its sentence (Round 4–7: Completed · not confirmed is "Not confirmed",
+ * grey) (a short word; the sentence is the row's second line).
  * Round 3: a trip with no app says who drives from the card's `driven_by` (never read from the sentence): "Self-drive"
  * when the person drives it themselves, "Someone else" when someone not in Fame Fleet does.
  */
-export function taskChip(column: BoardColumn, card: { status?: string; accepted?: string; late_min?: number; driven_by?: string }): { key: string; tone: Tone; min?: number } {
+export function taskChip(column: BoardColumn, card: { status?: string; accepted?: string; late_min?: number; driven_by?: string; finish_flag?: { kind: string } | null }): { key: string; tone: Tone; min?: number } {
   if (column === 'in_progress') return card.late_min && card.late_min > 0 ? { key: 'late', tone: 'red', min: card.late_min } : { key: 'underWay', tone: 'blue' };
-  if (column === 'completed') return { key: 'done', tone: 'green' };
+  // Round 4–7 (4b): a trip nobody drives with the app, closed at 09:00 the next day without its odometer (grey).
+  if (column === 'completed') return card.finish_flag?.kind === 'not_confirmed' ? { key: 'notConfirmed', tone: 'muted' } : { key: 'done', tone: 'green' };
   if (column === 'declined') return { key: 'needsDriver', tone: 'red' };
   if (card.driven_by === 'self') return { key: 'selfDrive', tone: 'muted' };
   if (card.driven_by === 'other') return { key: 'someoneElse', tone: 'muted' };

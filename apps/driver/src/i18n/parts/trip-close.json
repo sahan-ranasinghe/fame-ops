@@ -1,0 +1,318 @@
+{
+  "en": {
+    "office": {
+      "myTrip": {
+        "title": "My trip",
+        "above": "My trip · {when}",
+        "leaveBack": "Leave {leave} · back by {back}",
+        "leave": "Leave {leave}",
+        "plannedKm": "About {km} km planned",
+        "checkTitle": "Vehicle check before you set off",
+        "question": "Any damage or problem with {plate}?",
+        "allGood": "No, all good",
+        "aProblem": "Yes, a problem",
+        "windowOpen": "Your check starts the trip (On the way).",
+        "windowOpenOdo": "Enter the odometer to start the trip (On the way).",
+        "windowEarly": "The trip starts from {when}. A check now is only recorded: check again then.",
+        "windowEarlyOdo": "The trip can start from {when}.",
+        "checkedTodayOk": "Checked today at {time} · all good.",
+        "checkedTodayProblem": "Checked today at {time} · a problem reported.",
+        "startTitle": "Start the trip",
+        "alreadyDone": "Trip already done? Enter the odometer",
+        "finishTitle": "Trip finished?",
+        "finishCta": "Trip finished? Enter the odometer",
+        "finishWhy": "Enter the odometer to close the trip: the vehicle's km and its allowance follow.",
+        "finishOnTheWay": "On the way. When you are back, enter the odometer to close the trip.",
+        "confirmTitle": "Enter the odometer",
+        "confirmWhy": "This trip was closed at 09:00 the next day without the odometer (Completed · not confirmed). Enter it to confirm the trip.",
+        "doneKm": "Trip finished · {km} km. Nothing more to do.",
+        "doneLine": "Trip finished. Nothing more to do.",
+        "cancelled": "This trip was cancelled.",
+        "nothing": "Nothing to do on this trip now.",
+        "notToCheck": "This trip needs no check now. Go back to see what it needs.",
+        "okTitle": "All good",
+        "problemTitle": "A problem",
+        "whatIsIt": "What is it?",
+        "problemPhotos": "Photos of the problem ({n} of {max})",
+        "note": "Note (optional)",
+        "notePlaceholder": "A few words for the office",
+        "odometerStart": "Odometer at the start (km)",
+        "lastReading": "The vehicle's last reading: {km} km. Never under it.",
+        "startHint": "No reading at the start: the vehicle's last reading ({km} km). Change it if it was different.",
+        "startHintNone": "No reading at the start: type the odometer when you set off.",
+        "startWas": "Start {km} km",
+        "kmThisTrip": "{km} km this trip",
+        "addSides": "Add 4 photos (front, back, left, right)",
+        "takeSide": "Take a photo · {side}",
+        "fuelAdded": "Fuel added",
+        "amount": "Amount (LKR)",
+        "odometerPhoto": "Odometer photo",
+        "startTrip": "Start trip",
+        "saveCheck": "Save check",
+        "sendAndStart": "Send and start trip",
+        "sendProblem": "Send the problem",
+        "finishTrip": "Finish trip",
+        "confirmTrip": "Confirm trip",
+        "sending": "Sending the photo…",
+        "photoFailed": "The photo was not saved. Take it again.",
+        "photoNetwork": "No connection: the photo did not go up. Take it again.",
+        "remove": "Remove",
+        "removePhoto": "Remove the photo: {what}",
+        "action": {
+          "check": "Vehicle check",
+          "finish": "Trip finished?",
+          "confirm": "Enter the odometer"
+        },
+        "why": {
+          "enterOdo": "Enter the odometer",
+          "enterStart": "Enter the odometer at the start",
+          "wholeKm": "The odometer is a whole number of km",
+          "underLast": "Under the vehicle's last reading ({km} km): check the number",
+          "underStart": "Under the start ({km} km): check the number",
+          "farLast": "{km} km more than the last reading: check the number",
+          "farStart": "{km} km more than the start: check the number",
+          "notYet": "You can start the trip from {when}",
+          "category": "Pick what the problem is",
+          "photo": "Add at least one photo of the problem",
+          "uploading": "Wait for the photos to go up",
+          "uploadingOne": "Wait for the photo to go up",
+          "litres": "Litres: a number up to {max}",
+          "amount": "Amount: LKR up to {max}"
+        },
+        "done": {
+          "started": "On the way · left {time}",
+          "recorded": "Check recorded. The trip starts from {when}: check again then.",
+          "recordedTitle": "Check recorded",
+          "finished": "Trip finished · {km} km",
+          "finishedNoKm": "Trip finished",
+          "confirmed": "Trip finished · {km} km · confirmed",
+          "confirmedNoKm": "Trip confirmed"
+        },
+        "fact": {
+          "checkedOk": "Checked {time} · all good · {km} km",
+          "checkedProblem": "Checked {time} · a problem reported · {km} km",
+          "started": "Started {time} · {km} km",
+          "ended": "Finished at {km} km · {trip} km this trip"
+        }
+      },
+      "checks": {
+        "title": "Vehicle check",
+        "today": "Today's check",
+        "noneToday": "No check today",
+        "lastWeek": "Last 7 days",
+        "noneWeek": "No checks in the last 7 days.",
+        "at": "at {time}",
+        "atBy": "at {time} by {name}",
+        "allGood": "All good",
+        "problem": "Problem: {what}",
+        "problemOnly": "Problem reported",
+        "note": "“{note}”",
+        "openReport": "Open the report ›",
+        "photoN": "Photo {n}",
+        "preTrip": "Pre-trip",
+        "notConfirmed": "Completed · not confirmed",
+        "taskLine": "Vehicle check {time} · {result}",
+        "cat": {
+          "damage": "Damage",
+          "tyre": "Tyre",
+          "warning_light": "Warning light",
+          "breakdown": "Breakdown",
+          "accident": "Accident",
+          "other": "Other problem"
+        },
+        "side": {
+          "front": "Front",
+          "back": "Back",
+          "left": "Left",
+          "right": "Right"
+        },
+        "how": {
+          "clock_in": "Start work",
+          "change": "Change vehicle",
+          "task_start": "Start task",
+          "vehicle_confirm": "Vehicle confirmed",
+          "trip": "Before the trip"
+        }
+      },
+      "features": {
+        "title": "Features",
+        "vehicle_check": "Vehicle check before work",
+        "vehicle_checkHint": "Whenever a vehicle is taken, and before a self-drive trip: \"Any damage or problem?\"",
+        "trip_close_prompt": "\"Trip finished?\" for self-drive trips",
+        "trip_close_promptHint": "Asks for the odometer when the trip ends; unanswered, it closes as Completed · not confirmed at 09:00.",
+        "fuel_card": "Fuel card at Start task",
+        "fuel_cardHint": "The trip's km, roughly how many litres, and \"Enough fuel?\". Never blocks.",
+        "passengers": "Passengers on trips",
+        "passengersHint": "The Passengers field; registered passengers are told and see the trip.",
+        "holder_contact": "Who holds a busy driver or vehicle",
+        "holder_contactHint": "The warning names them, with Call, WhatsApp and Ask for it."
+      },
+      "chip": {
+        "notConfirmed": "Not confirmed"
+      },
+      "issues": {
+        "kind": {
+          "trip_not_confirmed": "Trip not confirmed"
+        }
+      }
+    }
+  },
+  "si": {
+    "office": {
+      "myTrip": {
+        "title": "මගේ ගමන",
+        "above": "මගේ ගමන · {when}",
+        "leaveBack": "පිටත්වීම {leave} · ආපසු {back}",
+        "leave": "පිටත්වීම {leave}",
+        "plannedKm": "සැලසුම: {km} km පමණ",
+        "checkTitle": "පිටත්වීමට පෙර වාහන පරීක්ෂාව",
+        "question": "{plate} වාහනයේ හානියක් හෝ ගැටලුවක් තිබේද?",
+        "allGood": "නැත, සියල්ල හොඳයි",
+        "aProblem": "ඔව්, ගැටලුවක් ඇත",
+        "windowOpen": "ඔබේ පරීක්ෂාවෙන් ගමන ආරම්භ වේ (ගමනේ).",
+        "windowOpenOdo": "ගමන ආරම්භ කිරීමට ඔඩෝමීටරය ඇතුළත් කරන්න (ගමනේ).",
+        "windowEarly": "ගමන {when} සිට ආරම්භ වේ. දැන් කරන පරීක්ෂාව සටහන් වීම පමණයි: එවිට නැවත පරීක්ෂා කරන්න.",
+        "windowEarlyOdo": "ගමන {when} සිට ආරම්භ කළ හැක.",
+        "checkedTodayOk": "අද {time} ට පරීක්ෂා කළා · සියල්ල හොඳයි.",
+        "checkedTodayProblem": "අද {time} ට පරීක්ෂා කළා · ගැටලුවක් වාර්තා කළා.",
+        "startTitle": "ගමන ආරම්භ කරන්න",
+        "alreadyDone": "ගමන දැනටමත් අවසන්ද? ඔඩෝමීටරය ඇතුළත් කරන්න",
+        "finishTitle": "ගමන අවසන්ද?",
+        "finishCta": "ගමන අවසන්ද? ඔඩෝමීටරය ඇතුළත් කරන්න",
+        "finishWhy": "ගමන අවසන් කිරීමට ඔඩෝමීටරය ඇතුළත් කරන්න: වාහනයේ km සහ එහි සීමාව ඒ අනුව යාවත්කාලීන වේ.",
+        "finishOnTheWay": "ගමනේ. ආපසු පැමිණි විට ගමන අවසන් කිරීමට ඔඩෝමීටරය ඇතුළත් කරන්න.",
+        "confirmTitle": "ඔඩෝමීටරය ඇතුළත් කරන්න",
+        "confirmWhy": "මෙම ගමන ඔඩෝමීටරය නොමැතිව පසුදින 09:00 ට වසා දැමුණා (අවසන් · තහවුරු කර නැත). ගමන තහවුරු කිරීමට එය ඇතුළත් කරන්න.",
+        "doneKm": "ගමන අවසන් · {km} km. තවත් කිසිවක් කිරීමට නැත.",
+        "doneLine": "ගමන අවසන්. තවත් කිසිවක් කිරීමට නැත.",
+        "cancelled": "මෙම ගමන අවලංගු කළා.",
+        "nothing": "මෙම ගමනේ දැන් කිරීමට කිසිවක් නැත.",
+        "notToCheck": "මෙම ගමනට දැන් පරීක්ෂාවක් අවශ්‍ය නැත. අවශ්‍ය දේ බැලීමට ආපසු යන්න.",
+        "okTitle": "සියල්ල හොඳයි",
+        "problemTitle": "ගැටලුවක්",
+        "whatIsIt": "එය කුමක්ද?",
+        "problemPhotos": "ගැටලුවේ ඡායාරූප ({max} න් {n})",
+        "note": "සටහන (අවශ්‍ය නම්)",
+        "notePlaceholder": "කාර්යාලයට වචන කිහිපයක්",
+        "odometerStart": "ආරම්භයේ ඔඩෝමීටරය (km)",
+        "lastReading": "වාහනයේ අවසන් කියවීම: {km} km. ඊට අඩු විය නොහැක.",
+        "startHint": "ආරම්භයේ කියවීමක් නැත: වාහනයේ අවසන් කියවීම ({km} km). වෙනස් නම් එය වෙනස් කරන්න.",
+        "startHintNone": "ආරම්භයේ කියවීමක් නැත: පිටත් වූ විට ඔඩෝමීටරය ටයිප් කරන්න.",
+        "startWas": "ආරම්භය {km} km",
+        "kmThisTrip": "මෙම ගමනේ {km} km",
+        "addSides": "ඡායාරූප 4 ක් එක් කරන්න (ඉදිරිපස, පිටුපස, වම, දකුණ)",
+        "takeSide": "ඡායාරූපයක් ගන්න · {side}",
+        "fuelAdded": "එක් කළ ඉන්ධන",
+        "amount": "මුදල (LKR)",
+        "odometerPhoto": "ඔඩෝමීටරයේ ඡායාරූපය",
+        "startTrip": "ගමන අරඹන්න",
+        "saveCheck": "පරීක්ෂාව සුරකින්න",
+        "sendAndStart": "යවා ගමන අරඹන්න",
+        "sendProblem": "ගැටලුව යවන්න",
+        "finishTrip": "ගමන අවසන් කරන්න",
+        "confirmTrip": "ගමන තහවුරු කරන්න",
+        "sending": "ඡායාරූපය යවමින්…",
+        "photoFailed": "ඡායාරූපය සුරැකුණේ නැත. නැවත ගන්න.",
+        "photoNetwork": "සම්බන්ධතාවක් නැත: ඡායාරූපය උඩුගත නොවුණා. නැවත ගන්න.",
+        "remove": "ඉවත් කරන්න",
+        "removePhoto": "ඡායාරූපය ඉවත් කරන්න: {what}",
+        "action": {
+          "check": "වාහන පරීක්ෂාව",
+          "finish": "ගමන අවසන්ද?",
+          "confirm": "ඔඩෝමීටරය ඇතුළත් කරන්න"
+        },
+        "why": {
+          "enterOdo": "ඔඩෝමීටරය ඇතුළත් කරන්න",
+          "enterStart": "ආරම්භයේ ඔඩෝමීටරය ඇතුළත් කරන්න",
+          "wholeKm": "ඔඩෝමීටරය km පූර්ණ සංඛ්‍යාවකි",
+          "underLast": "වාහනයේ අවසන් කියවීමට ({km} km) වඩා අඩුයි: අංකය පරීක්ෂා කරන්න",
+          "underStart": "ආරම්භයට ({km} km) වඩා අඩුයි: අංකය පරීක්ෂා කරන්න",
+          "farLast": "අවසන් කියවීමට වඩා {km} km වැඩියි: අංකය පරීක්ෂා කරන්න",
+          "farStart": "ආරම්භයට වඩා {km} km වැඩියි: අංකය පරීක්ෂා කරන්න",
+          "notYet": "ගමන {when} සිට ආරම්භ කළ හැක",
+          "category": "ගැටලුව කුමක්දැයි තෝරන්න",
+          "photo": "ගැටලුවේ අවම වශයෙන් එක් ඡායාරූපයක් එක් කරන්න",
+          "uploading": "ඡායාරූප උඩුගත වන තුරු රැඳී සිටින්න",
+          "uploadingOne": "ඡායාරූපය උඩුගත වන තුරු රැඳී සිටින්න",
+          "litres": "ලීටර්: {max} දක්වා සංඛ්‍යාවක්",
+          "amount": "මුදල: LKR {max} දක්වා"
+        },
+        "done": {
+          "started": "ගමනේ · පිටත් වුණා {time}",
+          "recorded": "පරීක්ෂාව සටහන් කළා. ගමන {when} සිට ආරම්භ වේ: එවිට නැවත පරීක්ෂා කරන්න.",
+          "recordedTitle": "පරීක්ෂාව සටහන් කළා",
+          "finished": "ගමන අවසන් · {km} km",
+          "finishedNoKm": "ගමන අවසන්",
+          "confirmed": "ගමන අවසන් · {km} km · තහවුරු කළා",
+          "confirmedNoKm": "ගමන තහවුරු කළා"
+        },
+        "fact": {
+          "checkedOk": "පරීක්ෂා කළා {time} · සියල්ල හොඳයි · {km} km",
+          "checkedProblem": "පරීක්ෂා කළා {time} · ගැටලුවක් වාර්තා කළා · {km} km",
+          "started": "ආරම්භ කළා {time} · {km} km",
+          "ended": "අවසන් කියවීම {km} km · මෙම ගමනේ {trip} km"
+        }
+      },
+      "checks": {
+        "title": "වාහන පරීක්ෂාව",
+        "today": "අද පරීක්ෂාව",
+        "noneToday": "අද පරීක්ෂාවක් නැත",
+        "lastWeek": "පසුගිය දින 7",
+        "noneWeek": "පසුගිය දින 7 තුළ පරීක්ෂා නැත.",
+        "at": "{time} ට",
+        "atBy": "{time} ට · {name}",
+        "allGood": "සියල්ල හොඳයි",
+        "problem": "ගැටලුව: {what}",
+        "problemOnly": "ගැටලුවක් වාර්තා කළා",
+        "note": "“{note}”",
+        "openReport": "වාර්තාව විවෘත කරන්න ›",
+        "photoN": "ඡායාරූපය {n}",
+        "preTrip": "ගමනට පෙර",
+        "notConfirmed": "අවසන් · තහවුරු කර නැත",
+        "taskLine": "වාහන පරීක්ෂාව {time} · {result}",
+        "cat": {
+          "damage": "හානිය",
+          "tyre": "ටයරය",
+          "warning_light": "අනතුරු ඇඟවීමේ ලාම්පුව",
+          "breakdown": "කැඩී යාම",
+          "accident": "අනතුරක්",
+          "other": "වෙනත් ගැටලුවක්"
+        },
+        "side": {
+          "front": "ඉදිරිපස",
+          "back": "පිටුපස",
+          "left": "වම",
+          "right": "දකුණ"
+        },
+        "how": {
+          "clock_in": "වැඩ ආරම්භය",
+          "change": "වාහනය මාරු කිරීම",
+          "task_start": "කාර්යය ඇරඹීම",
+          "vehicle_confirm": "වාහනය තහවුරු කිරීම",
+          "trip": "ගමනට පෙර"
+        }
+      },
+      "features": {
+        "title": "විශේෂාංග",
+        "vehicle_check": "වැඩට පෙර වාහන පරීක්ෂාව",
+        "vehicle_checkHint": "වාහනයක් ගන්නා සෑම විටම, සහ තමන් ම පදවන ගමනකට පෙර: \"හානියක් හෝ ගැටලුවක් තිබේද?\"",
+        "trip_close_prompt": "තමන් ම පදවන ගමන් සඳහා \"ගමන අවසන්ද?\"",
+        "trip_close_promptHint": "ගමන අවසානයේ ඔඩෝමීටරය ඉල්ලයි; පිළිතුරක් නැත්නම් 09:00 ට අවසන් · තහවුරු කර නැත ලෙස වැසේ.",
+        "fuel_card": "කාර්යය ඇරඹීමේදී ඉන්ධන කාඩ්පත",
+        "fuel_cardHint": "ගමනේ km, ලීටර් කීයක් පමණ, සහ \"ඉන්ධන ප්‍රමාණවත්ද?\". කිසිවිටෙක නවත්වන්නේ නැත.",
+        "passengers": "ගමන්වල මගීන්",
+        "passengersHint": "මගීන් ක්ෂේත්‍රය; ලියාපදිංචි මගීන්ට දැනුම් දී ගමන පෙන්වයි.",
+        "holder_contact": "කාර්යබහුල රියදුරෙක් හෝ වාහනයක් ළඟ සිටින්නේ කවුද",
+        "holder_contactHint": "අනතුරු ඇඟවීම ඔවුන්ගේ නම, ඇමතුම, WhatsApp සහ ඉල්ලීම සමඟ පෙන්වයි."
+      },
+      "chip": {
+        "notConfirmed": "තහවුරු කර නැත"
+      },
+      "issues": {
+        "kind": {
+          "trip_not_confirmed": "ගමන තහවුරු කර නැත"
+        }
+      }
+    }
+  }
+}
