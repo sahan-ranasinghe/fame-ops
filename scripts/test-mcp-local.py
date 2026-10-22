@@ -3037,7 +3037,7 @@ check(not mapped(), "one failed try (a weak-signal trip): no issue for the offic
 code, res = rpc_as(km, "report_map_state", {"p_google_ok": False, "p_reason": "timeout", "p_at": iso(now_m - dt.timedelta(seconds=30)), "p_app_version": "1.3.0+abcd1234"})
 fleet_jobs()
 mi = mapped()
-check(len(mi) == 1 and mi[0]["title"] == f"Google map failed on {MAPS_NAME}'s phone; using the free map" and mi[0]["severity"] == "warning"
+check(len(mi) == 1 and mi[0]["title"] == f"Google map failed on {MAPS_NAME}'s phone; using the free map" and mi[0]["severity"] == "info"
       and "app 1.3.0+abcd1234" in (mi[0].get("detail") or ""),
       "the next try fails too: the issue opens, \"Google map failed on <driver>'s phone; using the free map\"", json.dumps(mi)[:400])
 # Two phones within the hour: a key or billing problem shows on every phone at once.
@@ -3048,7 +3048,8 @@ km2 = Driver(ses_m2["access_token"])
 rpc_as(km2, "report_map_state", {"p_google_ok": False, "p_reason": "timeout", "p_at": iso(now_m - dt.timedelta(minutes=2)), "p_app_version": "1.3.0"})
 fleet_jobs()
 two = [i for i in tool("list_issues", {"status": "active", "kind": "map_fallback"})["issues"] if f"Ruwan Maps Two {pm2}" in i["title"]]
-check(len(two) == 1 and "another phone too" in (two[0].get("detail") or ""), "a second phone failing within the hour opens its issue on its first try", json.dumps(two)[:300])
+check(len(two) == 1 and "another phone too" in (two[0].get("detail") or "") and two[0]["severity"] == "warning",
+      "a second phone failing within the hour opens its issue on its first try, as a warning (the key or billing)", json.dumps(two)[:300])
 rpc_as(km2, "report_map_state", {"p_google_ok": True, "p_reason": "", "p_at": iso(dt.datetime.now(dt.timezone.utc)), "p_app_version": "1.3.0"})
 tool("update_settings", {"key": "map_package", "value": "open"})
 code, ds = rpc_as(km, "get_driver_settings", {})

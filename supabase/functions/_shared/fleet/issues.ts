@@ -800,7 +800,9 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       wanted.push({
         kind: "map_fallback",
         ref_key: `map_fallback:${e.id}`,
-        severity: "info",
+        // Item 8: one phone failing again falls back to the free map by itself (info); two phones within the hour point at
+        // the key or billing, which someone must act on (warning).
+        severity: why === "again" ? "info" : "warning",
         title: `Google map failed on ${e.name}'s phone; using the free map`,
         detail: [
           r.reason === "timeout" ? "Google's map did not finish loading while the phone was online" : "Google's map reported an error",
