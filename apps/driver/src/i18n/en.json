@@ -3456,6 +3456,7 @@
         "issue_events": "resolved issues' history",
         "issues_resolved": "resolved or dismissed issues",
         "location_points": "location points (each day kept as a summary)",
+        "route_matched": "road-snapped route lines",
         "heartbeats": "phone heartbeats",
         "google_calls": "Google usage counters",
         "routing_calls": "routing usage counters",

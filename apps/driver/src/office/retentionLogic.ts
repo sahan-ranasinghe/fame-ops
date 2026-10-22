@@ -78,7 +78,7 @@ export function previewLines(p: Pick<RetentionPreview, 'rules' | 'would_remove'>
 /** The server's rule keys (supabase/functions/_shared/fleet/retention.ts RULES), each with its words in both languages. */
 export const RULE_KEYS = [
   'inbox_read', 'inbox_unread', 'delivery', 'push_log', 'audit_routine', 'audit_changes', 'issue_events', 'issues_resolved', 'location_points',
-  'heartbeats', 'google_calls', 'routing_calls', 'api_minute_calls', 'app_errors',
+  'route_matched', 'heartbeats', 'google_calls', 'routing_calls', 'api_minute_calls', 'app_errors',
 ] as const;
 /** The i18n key of a rule's words, or null for a rule this app does not know (its server words are shown). */
 export const ruleKey = (key: string): string | null => ((RULE_KEYS as readonly string[]).includes(key) ? `office.retention.rule.${key}` : null);

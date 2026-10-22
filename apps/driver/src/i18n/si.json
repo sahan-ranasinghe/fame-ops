@@ -3456,6 +3456,7 @@
         "issue_events": "විසඳූ ගැටලුවල ඉතිහාසය",
         "issues_resolved": "විසඳූ හෝ ඉවත දැමූ ගැටලු",
         "location_points": "ස්ථාන ලක්ෂ්‍ය (සෑම දිනයක්ම සාරාංශයක් ලෙස රැඳේ)",
+        "route_matched": "මාර්ගයට ගැලපූ ගමන් රේඛා",
         "heartbeats": "දුරකථන තත්ත්ව සංඥා",
         "google_calls": "Google භාවිත ගණන්",
         "routing_calls": "මාර්ග භාවිත ගණන්",
