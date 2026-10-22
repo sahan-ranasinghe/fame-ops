@@ -972,6 +972,20 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 32. Design pass parked (Sahan, 22 October 2026)
+
+Design pass parked 22 Oct; pilot on phase9-rd, not shipped.
+
+- `phase9-rd` stays as it is (not deleted, not merged): the inventory (`docs/design-pass-inventory.md`), the rules and patterns
+  (`docs/design-pass.md`), the six pilot screens and the screenshot spec. No design change goes to main or to any deploy.
+- What Part B made that is not design goes on `phase9-r3b` (from main): the trip rules as one source (`scripts/shared-logic.mjs`
+  and its check), M5 (the server's relative words in the person's language), two fixes of those two found during the pilot
+  (an old edit draft's who-drives read the new way; the request lines on Home and Approve say their day in words) and the
+  site's Live card asking `live_drivers` at once when a driver stops sharing (the duty chip's "by the office").
+- Next, each round with its checkpoint: Round 4 (the vehicle check, with self-drive and someone-else trips, §31) → Round 5
+  (the fuel card at Start task, advisory) → Round 6 (passengers on trips) → Round 7 (someone else has that driver or
+  vehicle) → `docs/voice-calls-plan.md` (doc only) → the connector suite on a fixed date and clock.
+
 ## 31. Queued after Round 3 (Sahan, 22 October 2026, after Checkpoint 3)
 
 The order: **Part B** (Round D, the design pass) → **Round 4** (the vehicle check) → Round 5 (the fuel card) → Round 6
