@@ -47,6 +47,20 @@ OPTIONAL = {
     "availability": {
         "drivers[].next_task_start": "availability.ts:186 next_task_start: next ? hhmm(next.start_at) : undefined "
                                      "(only a driver with an assigned task after the window's start)",
+        # Round 4–7 (7): the holder only on a busy row while holder_contact is on (office-api's check runs before the
+        # suite's Round 4–7 section; a key ending in "." covers every field under it).
+        "drivers[].holder.": "tools/availability.ts:83 holder: holding ? holders.get(holding.id) : undefined (a busy driver)",
+        "vehicles.groups.busy[].holder.": "tools/availability.ts holder on a busy vehicle (holdersOf; absent while holder_contact is off)",
+    },
+    "list_vehicles": {
+        "vehicles[].check_today.": "tools/vehicles.ts:267 check_today: checks.get(v.id) (only a vehicle checked today, feature 4)",
+        "vehicles[].fuel_type": "tools/vehicles.ts:167 fuel_type: v.fuel_type ?? undefined (only a vehicle with its fuel type set)",
+    },
+    "list_issues": {
+        "issues[].pre_trip": "tools/issues.ts:83 pre_trip only on a vehicle report made by a pre-trip check (feature 4)",
+    },
+    "issue_history": {
+        "report.office_note": "tools/issues.ts:454 office_note only when the office wrote a note on the driver's report",
     },
     "list_requests": {
         "requests[].fields.start.passengers": "tools/requests.ts:342-346 startStopFields: {} unless a stop is_start "
@@ -324,6 +338,13 @@ def main():
 
     # Photo links and ids change every run: keep the field, drop the value.
     if mode == "--write":
+        # The contract only grows: a field this run's data does not carry (an optional one) stays recorded.
+        prior = json.loads(SHAPES_FILE.read_text()) if SHAPES_FILE.exists() else {}
+        for label, fields in prior.items():
+            if label in shapes and not any(str(f).startswith("ERROR") for f in shapes[label]):
+                shapes[label] = sorted(set(shapes[label]) | set(fields))
+            elif label not in shapes:
+                shapes[label] = fields
         SHAPES_FILE.write_text(json.dumps(shapes, indent=1, sort_keys=True) + "\n")
         print(f"wrote {SHAPES_FILE.name}: {len(shapes)} calls, {sum(len(v) for v in shapes.values())} fields")
         return
@@ -344,7 +365,8 @@ def main():
             continue
         before, after = set(expected.get(label, [])), set(shapes.get(label, []))
         optional = OPTIONAL.get(label.split(" ", 1)[0], {})
-        absent_ok = {f for f in before - after if f in optional or f.split(": ")[0] in optional}
+        absent_ok = {f for f in before - after if f in optional or f.split(": ")[0] in optional
+                     or any(k.endswith(".") and f.startswith(k) for k in optional)}
         missing, new = (before - after) - absent_ok, after - before
         note = f" ({len(absent_ok)} optional, absent this run: {', '.join(sorted(absent_ok))})" if absent_ok else ""
         if not missing and not new:

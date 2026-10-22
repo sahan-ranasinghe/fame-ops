@@ -1535,6 +1535,8 @@ if CHANNEL == "api":
     ms = tool("my_notification_settings")
     check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.vehicle_needed",
                                                  "task.running_late", "ask.answered", "trip.personal", "task.stop_skipped", "issue.opened", "issue.assigned",
+                                                 "vehicle.check_urgent", "vehicle.check_problem", "passenger.trip", "passenger.moving", "holder.asked",
+                                                 "holder.answered", "trip.finish_ask",
                                                  "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed",
                                                  "request.not_decided", "request.late", "request.on_the_way", "request.running_late", "request.arrived",
                                                  "request.stop_arrived", "request.driver_changed", "request.cancelled"]
@@ -2787,7 +2789,7 @@ if CHANNEL == "api":
     shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
                             env={**os.environ, "CHANNEL": "api", "API_TOKEN": API_TOKEN}, capture_output=True, text=True)
     check(shapes.returncode == 0, "every read tool's JSON through office-api has the same shape as the connector's contract (scripts/tool-shapes.json)",
-          "\n".join(l for l in shapes.stdout.splitlines() if "FAIL" in l or "missing:" in l or "new:" in l)[:1500] + shapes.stderr[-300:])
+          "\n".join(l for l in shapes.stdout.splitlines() if "FAIL" in l or "missing:" in l or "new:" in l)[:6000] + shapes.stderr[-300:])
 
     print("\n== 8. Roles: a staff member on office-api ==")
     staff_email = f"staff.{uuid.uuid4().hex[:6]}@fame.test"
@@ -2801,12 +2803,13 @@ if CHANNEL == "api":
     staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["view", "request"]
-          and sorted(me.get("tools", [])) == ["cancel_request", "create_request", "find_project", "fleet_overview", "get_settings", "google_place",
+          and sorted(me.get("tools", [])) == ["answer_holder_ask", "ask_for_it", "cancel_request", "create_request", "day_timeline", "find_people",
+                                             "find_project", "finish_my_trip", "fleet_overview", "get_settings", "google_place", "holder_asks",
                                              "list_drivers", "list_places", "list_requests", "list_vehicles", "live_drivers", "mark_inbox_read",
-                                             "my_inbox", "my_notification_settings", "my_prefs", "my_trips", "place_detail", "plan_task",
-                                             "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
+                                             "my_inbox", "my_notification_settings", "my_prefs", "my_trip", "my_trip_check", "my_trips", "place_detail",
+                                             "plan_task", "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
                                              "set_my_notification_settings", "set_my_prefs", "task_detail", "update_my_profile", "update_request",
-                                             "watch_drivers"]
+                                             "vehicle_checks", "watch_drivers"]
           and me.get("map") == {"package": "open", "places": False},
           "a requester signs in without a second step and sees the request tools plus view's (any permission implies view, Phase 7 §12; the map: open with no keys)",
           f"{code} {str(me)[:200]}")
@@ -2815,7 +2818,8 @@ if CHANNEL == "api":
     code, body = api_call(staff_token, "get_settings", {})
     check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True, "a requester reads the fleet settings (the request form needs the self-drive switch)", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "my_notification_settings", {})
-    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "task.declined", "task.not_accepted", "vehicle.booked", "vehicle.booking_cancelled",
+    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "task.declined", "task.not_accepted", "passenger.trip", "passenger.moving",
+                                                                          "holder.asked", "holder.answered", "trip.finish_ask", "vehicle.booked", "vehicle.booking_cancelled",
                                                                           "request.redecided", "booking.changed", "request.not_decided",
                                                                           "request.on_the_way", "request.running_late", "request.arrived", "request.stop_arrived", "request.driver_changed",
                                                                           "request.cancelled"],
@@ -3499,7 +3503,8 @@ if CHANNEL == "api":
         TS = apd.get("task_id") or psql(f"select task_id from vehicle_requests where id = '{rs['request']['id']}'")
         ok_, mt = call_as(A, "api", "my_trip", {"task_id": TS})
         check(ok_ and mt["state"] == "to_check" and mt["window"]["open"] and mt["last_odometer_km"] == 20010,
-              "my_trip: her trip, to check, the window open, the vehicle's last reading", json.dumps(mt)[:300])
+              "my_trip: her trip, to check, the window open, the vehicle's last reading",
+              json.dumps({k: mt.get(k) for k in ("state", "window", "last_odometer_km", "checks", "viewer")})[:400])
         ok_, b_try = call_as(B, "api", "my_trip", {"task_id": TS})
         check(not ok_, "B cannot open A's trip", str(b_try)[:120])
         ok_, low = call_as(A, "api", "my_trip_check", {"task_id": TS, "result": "ok", "odometer_km": 19000})
