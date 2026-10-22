@@ -134,7 +134,7 @@ export function taskOutcome(p: CreateTaskResult): Outcome {
 }
 
 /** The outcome of book_vehicle: booked, with the task when it was made. */
-export function bookOutcome(p: { task_id?: string; request_id?: string; leave_by?: string; when?: string; vehicle?: string; vehicle_used?: { reg_no: string; why: string }; vehicle_changed?: string; warnings?: string[]; request?: { requested_by?: string; on_behalf_of?: string } }): Outcome {
+export function bookOutcome(p: { task_id?: string; request_id?: string; leave_by?: string; when?: string; vehicle?: string; vehicle_used?: { reg_no: string; why: string }; vehicle_changed?: string; warnings?: string[]; conflicts?: Conflict[]; request?: { requested_by?: string; on_behalf_of?: string } }): Outcome {
   return {
     kind: 'booked',
     who: p.request?.on_behalf_of ?? p.request?.requested_by,
@@ -144,7 +144,8 @@ export function bookOutcome(p: { task_id?: string; request_id?: string; leave_by
     leaveBy: p.leave_by?.slice(-5),
     vehicle: p.vehicle_changed ?? (p.vehicle_used ? `${p.vehicle_used.reg_no} · ${p.vehicle_used.why === 'chosen' ? '' : p.vehicle_used.why}`.replace(/ · $/, '') : p.vehicle),
     warnings: p.warnings ?? [],
-    conflicts: [],
+    // Round 4–7 (7): book_vehicle answers the conflicts too (with who holds the driver or vehicle).
+    conflicts: p.conflicts ?? [],
   };
 }
 

@@ -2,13 +2,16 @@
 // Notifications: decision 3). my_inbox's last 30 days, 50 at a time, All / Unread, grouped Today / Yesterday / Earlier;
 // "Mark all read" while anything is unread. A tap marks the item read (optimistic, the badge follows at once; put back
 // if the server refused) and opens the screen its link maps to (office/nav.ts routeForUrl) when the app has one; an item
-// whose link has no screen in O1 is only marked read and shows no Open pill: no button that does nothing.
+// whose link has no screen in O1 is only marked read and shows no Open pill: no button that does nothing. Round 4–7 (7): an
+// item with buttons (an Ask for it's Yes / No) shows them under it: a tap calls the tool as the server gave it, the item is
+// read, and the buttons become "You said Yes"; a holder.* item the person cannot open as a task opens the Asks page.
 
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Check, ChevronRight, ClipboardCheck, type LucideIcon, TriangleAlert, Van } from '@/components/icons';
+import { InboxActions } from '@/components/office/HolderParts';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
@@ -16,6 +19,7 @@ import { whenWords } from '@/lib/dateWords';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
 import { appendInbox, filterInbox, groupByDay, inboxArgs, inboxHistory, inboxChoice, inboxFilterDefs, inboxLine, kindTone, markRead, unreadAfter } from '@/office/inboxLogic';
+import { holderAsksRoute } from '@/office/holderLogic';
 import { routeForUrl } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, Inbox, InboxItem } from '@/office/types';
@@ -87,7 +91,14 @@ export default function AlertsTab() {
   }
 
   function open(item: InboxItem) {
-    const route = routeForUrl(item.url, me.permissions);
+    const route = routeForUrl(item.url, me.permissions) ?? holderAsksRoute(item);
+    markItemRead(item);
+    if (route) router.push(route as never);
+  }
+
+  /** The item read (optimistic: the badge follows at once; put back if the server refused). Opening it or answering one
+   *  of its buttons does this. */
+  function markItemRead(item: InboxItem) {
     if (!item.read) {
       q.patch((p) => ({ ...p, unread: unreadAfter(p.unread, 1), items: markRead(p.items, [item.id]) }));
       setUnread(unreadAfter(unread, 1));
@@ -97,7 +108,6 @@ export default function AlertsTab() {
         reloadUnread();
       });
     }
-    if (route) router.push(route as never);
   }
 
   return (
@@ -129,32 +139,35 @@ export default function AlertsTab() {
             {g.items.map((item) => {
               const Icon = ICONS[item.kind] ?? Check;
               const tile = TILE[kindTone(item.kind)];
-              const route = routeForUrl(item.url, me.permissions);
+              const route = routeForUrl(item.url, me.permissions) ?? holderAsksRoute(item);
               return (
-                <Pressable
-                  key={item.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: !item.read }}
-                  onPress={() => open(item)}
-                  style={({ pressed }) => [styles.card, !item.read && styles.unreadCard, pressed && { opacity: 0.8 }]}
-                >
-                  <View style={[styles.tile, { backgroundColor: tile.bg }]}>
-                    <Icon size={22} color={tile.ink} strokeWidth={2.2} />
-                  </View>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Txt variant={item.read ? 'body' : 'strong'} size={17}>{item.title}</Txt>
-                    {item.body ? <Txt variant="muted" size={15}>{item.body}</Txt> : null}
-                    <View style={styles.foot}>
-                      <Txt variant="small" style={{ flex: 1 }} numberOfLines={1}>{inboxLine({ ...item, ago: whenWords(t, item.ago) }, today, names)}</Txt>
-                      {route && (
-                        <View style={styles.open}>
-                          <Txt variant="strong" size={14}>{t('office.alerts.open')}</Txt>
-                          <ChevronRight size={16} color={colors.ink} strokeWidth={2.4} />
-                        </View>
-                      )}
+                <View key={item.id} style={{ gap: 6 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: !item.read }}
+                    onPress={() => open(item)}
+                    style={({ pressed }) => [styles.card, !item.read && styles.unreadCard, pressed && { opacity: 0.8 }]}
+                  >
+                    <View style={[styles.tile, { backgroundColor: tile.bg }]}>
+                      <Icon size={22} color={tile.ink} strokeWidth={2.2} />
                     </View>
-                  </View>
-                </Pressable>
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Txt variant={item.read ? 'body' : 'strong'} size={17}>{item.title}</Txt>
+                      {item.body ? <Txt variant="muted" size={15}>{item.body}</Txt> : null}
+                      <View style={styles.foot}>
+                        <Txt variant="small" style={{ flex: 1 }} numberOfLines={1}>{inboxLine({ ...item, ago: whenWords(t, item.ago) }, today, names)}</Txt>
+                        {route && (
+                          <View style={styles.open}>
+                            <Txt variant="strong" size={14}>{t('office.alerts.open')}</Txt>
+                            <ChevronRight size={16} color={colors.ink} strokeWidth={2.4} />
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </Pressable>
+                  {/* Round 4–7 (7): an item's buttons (an Ask for it's Yes / No, Gmail / Slack actionable notifications). */}
+                  {item.actions?.length ? <InboxActions item={item} onRead={markItemRead} /> : null}
+                </View>
               );
             })}
           </View>

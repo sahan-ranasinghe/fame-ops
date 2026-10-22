@@ -21,6 +21,7 @@ import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MapPin } from '@/components/icons';
 import { TaskDriverCard } from '@/components/office/DriverRows';
+import { TaskAsksLink } from '@/components/office/HolderParts';
 import { TaskCheckLines } from '@/components/office/VehicleChecks';
 import { StopTimeline } from '@/components/office/StopTimeline';
 import { StopArrival, SwapSegments, TaskMoreDetails, TaskWarnings, TripPurposeCard } from '@/components/office/TaskDetailParts';
@@ -188,6 +189,8 @@ export default function TaskDetailScreen() {
         {/* Round 3: a missed task says so ("Missed · not started (leave by 08:30)"), never "Cancelled:". */}
         {task && task.status === 'missed' && task.status_line ? <Txt variant="muted" testID="missed-line">{sentenceText(t, task.status_line)}</Txt> : null}
         {p && task && <TaskWarnings p={p} />}
+        {/* Round 4–7 (7): the asks for this trip's driver or vehicle, when there are any. */}
+        {task && <TaskAsksLink taskId={task.id} />}
         {task && (
           <View style={styles.card}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

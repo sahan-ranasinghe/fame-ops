@@ -15,6 +15,7 @@ import { showSnackbar } from '@/components/patterns/Snackbar';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { MoreDetails, Stepper } from '@/components/office/Controls';
 import { DriverRows } from '@/components/office/DriverRows';
+import { HolderStrip } from '@/components/office/HolderParts';
 import { TripDayPicker } from '@/components/patterns/Calendar';
 import { TimeField } from '@/components/patterns/TimeField';
 import { DepartureNote } from '@/components/office/TripShell';
@@ -22,6 +23,7 @@ import { ChoiceChip, ChoiceRow } from '@/components/patterns/Select';
 import { Button, Field, Plate, Txt } from '@/components/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { askTargets } from '@/office/askLogic';
+import { holderOf, wantedOfWindow } from '@/office/holderLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { type ChangeFields, changeFieldsOf, changeTaskInput, timeLocked } from '@/office/taskExtrasLogic';
@@ -30,7 +32,7 @@ import { checkDeparture, departurePlan } from '@/office/trip/departureLogic';
 import { groupRows, vehicleLine } from '@/office/trip/formsLogic';
 import { departureText } from '@/office/trip/words';
 import { ANY_TYPES, anyValue, ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
-import type { Availability, FleetError, SettingsResult, SuggestedVehicle, TaskDetail, UpdateTaskResult } from '@/office/types';
+import type { Availability, Conflict, FleetError, SettingsResult, SuggestedVehicle, TaskDetail, UpdateTaskResult } from '@/office/types';
 import { BackHeader, ErrorNotice, Screen, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -96,8 +98,10 @@ export default function ChangeTaskScreen() {
       const out = await api.call<UpdateTaskResult & { warnings?: string[] }>('update_task', r.input);
       allowLeave();
       const warnings = out.warnings ?? [];
-      // Hotfix O2-H2, Part 1b: back to the task, a snackbar ("The driver is told."), the warnings wait on the task.
-      setSavedNotice(`task:${id}`, warnings);
+      const conflicts = (out as { conflicts?: Conflict[] }).conflicts;
+      // Hotfix O2-H2, Part 1b: back to the task, a snackbar ("The driver is told."), the warnings wait on the task. Round 4–7
+      // (7): with the conflicts that name who holds the driver or vehicle (Call, WhatsApp, Ask for it).
+      setSavedNotice(`task:${id}`, [...warnings, ...(conflicts ?? []).map((c) => c.text)], undefined, conflicts);
       if (back === '1' && router.canGoBack()) router.back();
       else router.dismissTo({ pathname: '/office/task/[id]', params: { id } });
       showSnackbar({ text: [driverName && r.input.driver ? t('office.task.changedSentTitle', { name: driverName }) : t('office.task.changedTitle'), t('office.task.timeSavedBody')].join(' · ') });
@@ -115,6 +119,11 @@ export default function ChangeTaskScreen() {
       {v.assigned_to ? <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt> : null}
     </ChoiceRow>
   );
+  // Round 4–7 (7): a busy vehicle's holder under its row (never this task's own), with Ask for it for the new time.
+  const vehicleHolder = (v: SuggestedVehicle) => {
+    const h = holderOf(v);
+    return h && task && h.task_id !== task.id ? <HolderStrip key={`${v.reg_no}-holder`} holder={h} resource="vehicle" what={v.reg_no} wanted={wantedOfWindow(avail.data?.window)} testID={`vehicle-holder-${v.reg_no}`} /> : null;
+  };
   // The shared chip (patterns/Select): the check, the tint and the border when picked.
   const chip = (key: string, on: boolean, label: string, onPress: () => void, plate?: string) => (
     <ChoiceChip key={key} selected={on} label={label} onPress={onPress} before={plate ? <Plate regNo={plate} /> : undefined} />
@@ -161,7 +170,7 @@ export default function ChangeTaskScreen() {
             </View>
 
             {!locked && (
-              <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => { set({ driver: x.username ?? '', vehicle: '' }); setDriverName(x.name); }} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk ? () => setAsking(true) : undefined} noWindow={!availArgs} onDay={onDay} />
+              <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => { set({ driver: x.username ?? '', vehicle: '' }); setDriverName(x.name); }} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk ? () => setAsking(true) : undefined} noWindow={!availArgs} onDay={onDay} ignoreTask={task.id} />
             )}
 
             {!locked && <View style={styles.card}>
@@ -184,7 +193,7 @@ export default function ChangeTaskScreen() {
                   {rows.map((g) => (
                     <View key={g.key} style={{ gap: 2 }}>
                       <Txt variant="label" color={colors.muted} style={{ marginTop: 6 }}>{t(`office.trip.group_${g.key}`).toUpperCase()}</Txt>
-                      <View accessibilityRole="radiogroup" style={{ gap: 6 }}>{g.rows.map((v) => vehicleRow(v, g.disabled, g.disabled ? t(`office.trip.group_${g.key}`) : undefined))}</View>
+                      <View accessibilityRole="radiogroup" style={{ gap: 6 }}>{g.rows.map((v) => [vehicleRow(v, g.disabled, g.disabled ? t(`office.trip.group_${g.key}`) : undefined), vehicleHolder(v)])}</View>
                     </View>
                   ))}
                 </View>
