@@ -107,14 +107,13 @@ export default function OfficeHome() {
       <TopBar greeting={t(`office.home.${greeting()}`, { name: firstName(me.name) })} date={shortDate(names, Date.now())} />
       <Screen refreshing={refreshing} onRefresh={refresh} bottom={actions.length > 0 ? 96 : 24}>
         <SavedNotice noticeKey="/office" />
-        {/* Part B pilot (docs/design-pass.md §5 c): the StatsRow on the site's rules (Free now leaves out the garage, as the
-            site's Overview does), the requests waiting beside them for someone who approves; each cell opens its list. */}
+        {/* Part B pilot (docs/design-pass.md §5 c): the StatsRow with design 04's three (on the road, free, in garage), on the
+            site's rule (Free now leaves out the garage, as the site's Overview does); each cell opens its list. */}
         {ov && (
           <StatsRow testID="stat-tiles" cells={[
             ...(chips.includes('road') ? [{ key: 'road', value: String(ov.vehicles.on_the_road), label: t('office.home.tileRoad'), tone: 'blue' as const, onPress: go('road') }] : []),
             ...(chips.includes('free') ? [{ key: 'free', value: String(Math.max(0, ov.vehicles.parked - (ov.vehicles.in_garage ?? 0))), label: t('office.home.tileFree'), onPress: go('free') }] : []),
             ...(chips.includes('garage') && ov.vehicles.in_garage !== undefined ? [{ key: 'garage', value: String(ov.vehicles.in_garage), label: t('office.home.tileGarage'), onPress: go('garage') }] : []),
-            ...(sections.includes('requests') ? [{ key: 'requests', value: String(ov.requests.waiting), label: t('office.home.tileRequests'), tone: ov.requests.waiting ? 'amber' as const : 'ink' as const, onPress: () => router.push('/office/(tabs)/approve') }] : []),
           ]} />
         )}
         {overview.error && <ListFailed stale={!!ov} error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}

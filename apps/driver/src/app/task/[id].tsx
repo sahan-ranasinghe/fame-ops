@@ -30,10 +30,13 @@
 // Round 2b: the card also asks about a stop driven past ("Did you stop at …?": Yes, I was there / Skip it, the skip sheet);
 // a stop whose Arrived was undone and marked again reads "Arrived 10:52 · corrected"; while this screen is in front the
 // background arrival notification stays quiet for this task (lib/arrival.ts setTaskOnScreen).
+// Part B pilot (docs/design-pass.md §5 d): under way the sheet is components/RunningSheet.tsx, as designed: three numbers
+// (Distance left, Arrive about, Start odo), Navigate and Call contact right under them, then the stops as the compact
+// RouteStepper (the current stop with its slide), the rest, Complete task, Report a problem.
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronLeft, MapPin, Navigation, Phone, Plus } from '@/components/icons';
+import { ChevronLeft } from '@/components/icons';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,6 +44,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrivalButton, useHere, useStopSlides } from '@/components/ArrivalButton';
 import { GeofenceCard } from '@/components/GeofenceCard';
 import { SlideToConfirm } from '@/components/patterns/SlideToConfirm';
+import { type Step } from '@/components/patterns/RouteStepper';
+import { RunningSheet } from '@/components/RunningSheet';
 import { StopProgressLine } from '@/components/StopProgressLine';
 import { ApprovedLine, CallButtons } from '@/components/CallButtons';
 import { GoogleCredit } from '@/components/GoogleCredit';
@@ -54,7 +59,7 @@ import { leaveTime, nextStop, StopTimeline, useDateLabel, useDurations, usePeopl
 import { shownTaskKm, stopLabel, stopTimeAt, taskTitle } from '@/components/taskLines';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
-import { arrivalCheck, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/dayRules';
+import { arrivalCheck, canMarkDone, lastStopOpen, stopNumber, stretchStartKm } from '@/lib/dayRules';
 import { approvedBy, taskCalls } from '@/lib/contacts';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { canReportLate } from '@/lib/late';
@@ -174,6 +179,55 @@ export default function TaskScreen() {
   const ordered = task.task_stops.filter((s) => s.status !== 'removed').sort((a, b) => a.seq - b.seq);
   const lastId = ordered[ordered.length - 1]?.id;
   const undone = arrivalUndoneStops();
+  // The stop being driven to: its estimate once something was confirmed, else its planned arrival ("Arrive about").
+  const arriveAbout = stop ? progress.get(stop.id)?.estimate?.arrive ?? progress.get(stop.id)?.planned_arrive ?? null : null;
+  // Part B (§4.5): each stop as a step of the compact RouteStepper; the current one with its slide (the arrive slide by the
+  // distance rule, then the leave slide; the last stop's finishes the task), a stop further down with its slides when
+  // they apply (visited out of order), Skip beside every stop still open.
+  const steps: Step[] = ordered.map((item) => {
+    const done = item.status === 'done';
+    const skipped = item.status === 'skipped';
+    const current = stop?.id === item.id;
+    const timeAt = stopTimeAt(t, item);
+    const detail = [
+      timeAt,
+      item.arrive_by ? t('task.arriveBy', { time: colomboTime(item.arrive_by) }) : null,
+      timeAt === null && item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min, duration: duration(item.dwell_min) }) : null,
+      item.is_start ? t('stop.start') : null,
+    ].filter(Boolean).join(' · ');
+    const nearHere = !done && !skipped && !current && !canMarkDone(item) ? arrivalCheck(item, here.fix) : null;
+    const outOfOrder = !current && !done && !skipped && (canMarkDone(item) || nearHere?.state === 'ok');
+    return {
+      key: item.id,
+      mark: item.is_start ? 'S' : String(stopNumber(task, item.id)),
+      state: done ? 'done' : skipped ? 'skipped' : current ? (item.status === 'arrived' ? 'here' : 'next') : 'todo',
+      place: item.place_name,
+      type: stopLabel(t, task, item),
+      time: item.planned_arrive_at ? colomboTime(item.planned_arrive_at) : undefined,
+      times: detail || undefined,
+      note: item.note ?? undefined,
+      noteTone: 'amber',
+      keepOpen: outOfOrder,
+      aside: !done && !skipped ? (
+        <Pressable accessibilityRole="button" onPress={() => setSkipping(item)} hitSlop={8} style={styles.skip}>
+          <Txt variant="small" color={colors.red}>{t('task.skip')}</Txt>
+        </Pressable>
+      ) : undefined,
+      extra: (
+        <View style={{ gap: 8, paddingTop: 4 }}>
+          <GoogleCredit show={!!item.google_place_id} />
+          {!skipped && <StopProgressLine progress={progress.get(item.id)} corrected={undone.includes(item.id)} />}
+          {!done && !skipped && current && <ArrivalButton key={item.id} stop={item} here={here} last={item.id === lastId} onFinish={finishTask} />}
+          {!current && canMarkDone(item) && (
+            <SlideToConfirm tone="dark" label={t('task.slideLeave', { stop: item.place_name })} onConfirm={() => slides.leave(item)} testID={`slide-leave-${item.id}`} />
+          )}
+          {nearHere?.state === 'ok' && (
+            <SlideToConfirm label={t('task.slideArrive', { stop: item.place_name })} onConfirm={() => slides.arrive(item, nearHere)} testID={`slide-arrive-${item.id}`} />
+          )}
+        </View>
+      ),
+    };
+  });
 
   // Complete task (and the last stop's "Slide to finish", which closes that stop on the way): open stops left = the
   // question first; then Log mileage.
@@ -222,149 +276,76 @@ export default function TaskScreen() {
 
       <ScrollView style={styles.sheet} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 24, gap: 16 }}>
         <View style={styles.grabber} />
-        {running && lineNote(task, engine === 'google') && (
-          <Txt variant="small" style={{ marginTop: -6 }}>{t(lineNote(task, engine === 'google') === 'googleOnly' ? 'task.lineGoogleOnly' : 'task.noRouteLine')}</Txt>
-        )}
-
-        <View style={styles.topRow}>
-          <Txt variant="label" color={running ? colors.blue : colors.amberText}>
-            {t(running ? 'today.inProgress' : task.status === 'assigned' ? 'today.nextTask' : task.status === 'cancelled' ? 'task.cancelled' : task.status === 'declined' ? 'task.declined' : 'task.completed')}
-          </Txt>
-          {running && task.started_at
-            ? <Mono size={16} color={colors.muted}>{t('task.started', { time: colomboTime(task.started_at) })}</Mono>
-            : <Mono size={18} bold>{`${dateLabel(task.start_at)} ${colomboTime(leaveTime(task))}`}</Mono>}
-        </View>
-
-        <View>
-          <Txt variant="title" size={28}>{running ? stop?.place_name ?? taskTitle(t, task) : taskTitle(t, task)}</Txt>
-          {running && <GoogleCredit show={!!stop?.google_place_id} />}
-          {running && <Txt variant="muted" size={18}>{[taskTitle(t, task), people].filter(Boolean).join(' · ')}</Txt>}
-        </View>
-
-        {/* A trip or stop the phone kept and the server refused (Phase 7 §13): why, until tapped. */}
-        {app.tripProblem && (
-          <Pressable accessibilityRole="button" onPress={app.clearTripProblem}>
-            <Notice tone="danger" text={t(app.tripProblem.key, { reason: app.tripProblem.reason })} />
-          </Pressable>
-        )}
-
         {running ? (
-          <>
-            <TrackingNotice />
-            <GeofenceCard task={task} here={here} onSkip={setSkipping} />
-            <SwapCard task={task} />
-            <View style={styles.stats}>
-              <View style={{ flex: 1 }}>
-                {roadKm !== null ? (
-                  <>
-                    <Txt variant="muted" size={15}>{t('task.distanceLeftRoad')}</Txt>
-                    <Txt variant="heading" size={24}>{`${kmText(roadKm)} ${t('common.km')}`}</Txt>
-                  </>
-                ) : (
-                  <>
-                    <Txt variant="muted" size={15}>{t('task.distanceLeft')}</Txt>
-                    <Txt variant="heading" size={24}>{km === null ? '–' : `≈ ${kmText(km)} ${t('common.km')}`}</Txt>
-                    {km !== null && <Txt variant="small">{t('task.straightLine')}</Txt>}
-                  </>
+          // Part B pilot (docs/design-pass.md §5 d): the sheet as designed, the stops as the compact RouteStepper.
+          <RunningSheet
+            lineNote={lineNote(task, engine === 'google') ? t(lineNote(task, engine === 'google') === 'googleOnly' ? 'task.lineGoogleOnly' : 'task.noRouteLine') : undefined}
+            startedLine={task.started_at ? t('task.started', { time: colomboTime(task.started_at) }) : undefined}
+            title={stop?.place_name ?? taskTitle(t, task)}
+            googleCredit={!!stop?.google_place_id}
+            subtitle={[taskTitle(t, task), people].filter(Boolean).join(' · ')}
+            notices={(
+              <>
+                {/* A trip or stop the phone kept and the server refused (Phase 7 §13): why, until tapped. */}
+                {app.tripProblem && (
+                  <Pressable accessibilityRole="button" onPress={app.clearTripProblem}>
+                    <Notice tone="danger" text={t(app.tripProblem.key, { reason: app.tripProblem.reason })} />
+                  </Pressable>
                 )}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Txt variant="muted" size={15}>{t('task.startOdo')}</Txt>
-                <Mono size={23} bold>{startOdo === null ? '–' : thousands(startOdo)}</Mono>
-              </View>
-            </View>
-            {gpsKm.taskId === task.id && (
+                <TrackingNotice />
+                <GeofenceCard task={task} here={here} onSkip={setSkipping} />
+                <SwapCard task={task} />
+              </>
+            )}
+            stats={[
+              roadKm !== null
+                ? { key: 'left', label: t('task.distanceLeft'), value: `${kmText(roadKm)} ${t('common.km')}`, sub: t('task.byRoad') }
+                : { key: 'left', label: t('task.distanceLeft'), value: km === null ? '–' : `≈ ${kmText(km)} ${t('common.km')}`, sub: km !== null ? t('task.straightLine') : undefined },
+              { key: 'arrive', label: t('task.arriveAbout'), value: arriveAbout ? colomboTime(arriveAbout) : '–' },
+              { key: 'odo', label: t('task.startOdo'), value: startOdo === null ? '–' : thousands(startOdo) },
+            ]}
+            gpsLine={gpsKm.taskId === task.id ? (
               <View style={styles.gpsLine}>
                 <Txt variant="muted" size={15}>{t('tracking.gpsKm')}</Txt>
                 <Txt variant="strong">{`≈ ${gpsKm.taskKm < 10 ? gpsKm.taskKm.toFixed(1) : Math.round(gpsKm.taskKm)} ${t('common.km')}`}</Txt>
                 <Txt variant="small">{t('tracking.approx')}</Txt>
               </View>
+            ) : undefined}
+            steps={steps}
+            focus={stop?.id}
+            onNavigate={navigate ? () => void Linking.openURL(navigate) : undefined}
+            onCall={call ? () => void Linking.openURL(call) : undefined}
+            // Phase 7 §13: a trip of the driver's own takes stops on the way (the new one comes last).
+            onAddStop={canAddStop(task) ? () => router.push({ pathname: '/add-stop', params: { taskId: task.id } }) : undefined}
+            onAllStops={allStops ? openAllStops : undefined}
+            more={(
+              <>
+                {/* Hotfix 2 (F): the contact's WhatsApp (Call contact is beside Navigate), then the requester, the fleet admin, the office. */}
+                <CallButtons calls={calls} callHidden={['contact']} />
+                {/* Hotfix 2 (K): who approved the task, with Call (the office when they have no number). */}
+                {approvedText && <ApprovedLine text={approvedText} call={approved?.call ?? null} />}
+                {/* Part 3b (H4): running late during the task (not on a trip the driver started). */}
+                {canReportLate(task) && <RunningLate task={task} />}
+              </>
             )}
-
-            <View style={{ gap: 8 }}>
-              {task.task_stops.map((item) => {
-                const done = item.status === 'done' || item.status === 'skipped';
-                const current = stop?.id === item.id;
-                // "09:00–10:30 at Kurunegala site" when the plan has the times; else the place and "15 min there".
-                const timeAt = stopTimeAt(t, item);
-                const detail = [
-                  item.arrive_by ? t('task.arriveBy', { time: colomboTime(item.arrive_by) }) : null,
-                  timeAt === null && item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min, duration: duration(item.dwell_min) }) : null,
-                  item.status === 'skipped' ? t('task.skipped') : null,
-                ].filter(Boolean).join(' · ');
-                // A stop further down (visited out of order): the leave slide once arrived, the arrive slide only when the phone is there.
-                const nearHere = !done && !current && !canMarkDone(item) ? arrivalCheck(item, here.fix) : null;
-                return (
-                  <View key={item.id} style={[styles.stopCard, current && styles.stopRowCurrent, done && { opacity: 0.6 }]}>
-                    <View style={styles.stopRow}>
-                      <View style={{ flex: 1 }}>
-                        <Txt variant="muted" size={14}>
-                          {current ? `${t('task.currentStop')} · ` : ''}{stopLabel(t, task, item)}
-                        </Txt>
-                        <Txt variant="strong">{timeAt ?? item.place_name}</Txt>
-                        <GoogleCredit show={!!item.google_place_id} />
-                        {item.is_start && <Txt variant="small">{t('stop.start')}</Txt>}
-                        {detail !== '' && <Txt variant="small">{detail}</Txt>}
-                        {item.status !== 'skipped' && <StopProgressLine progress={progress.get(item.id)} corrected={undone.includes(item.id)} />}
-                        {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
-                      </View>
-                      {done ? (
-                        <View style={styles.doneBadge}><Check size={18} color={colors.blue} strokeWidth={3} /></View>
-                      ) : (
-                        <View style={{ gap: 6, alignItems: 'flex-end' }}>
-                          <Pressable accessibilityRole="button" onPress={() => setSkipping(item)} hitSlop={8} style={styles.skip}>
-                            <Txt variant="small" color={colors.red}>{t('task.skip')}</Txt>
-                          </Pressable>
-                        </View>
-                      )}
-                    </View>
-                    {/* The current stop: the arrive slide by the distance rule, then the leave slide (keyed by stop: the GPS wait
-                        starts again per stop); the last stop's leave slide finishes the task. */}
-                    {!done && current && <ArrivalButton key={item.id} stop={item} here={here} last={item.id === lastId} onFinish={finishTask} />}
-                    {/* A stop further down, visited out of order: the same slides, only when they apply. */}
-                    {!current && canMarkDone(item) && (
-                      <SlideToConfirm tone="dark" label={t('task.slideLeave', { stop: item.place_name })} onConfirm={() => slides.leave(item)} testID={`slide-leave-${item.id}`} />
-                    )}
-                    {nearHere?.state === 'ok' && (
-                      <SlideToConfirm label={t('task.slideArrive', { stop: item.place_name })} onConfirm={() => slides.arrive(item, nearHere)} testID={`slide-arrive-${item.id}`} />
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Phase 7 §13: a trip of the driver's own takes stops on the way (the new one comes last). */}
-            {canAddStop(task) && (
-              <Button kind="outline" icon={Plus} label={t('trip.addStop')} onPress={() => router.push({ pathname: '/add-stop', params: { taskId: task.id } })} />
-            )}
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Button kind="outline" icon={Navigation} label={t('task.navigate')} disabled={!navigate} onPress={() => navigate && Linking.openURL(navigate)} style={{ flex: 1 }} />
-              <Button kind="outline" icon={Phone} label={t('task.callContact')} disabled={!call} onPress={() => call && Linking.openURL(call)} style={{ flex: 1 }} />
-            </View>
-            {allStops && <Button kind="outline" icon={MapPin} label={t('task.allStops')} onPress={openAllStops} />}
-            {/* Hotfix 2 (F): the contact's WhatsApp (Call contact is beside Navigate), then the requester, the fleet admin, the office. */}
-            <CallButtons calls={calls} callHidden={['contact']} />
-            {/* Hotfix 2 (K): who approved the task, with Call (the office when they have no number). */}
-            {approvedText && <ApprovedLine text={approvedText} call={approved?.call ?? null} />}
-            {/* Part 3b (H4): running late during the task (not on a trip the driver started). */}
-            {canReportLate(task) && <RunningLate task={task} />}
-            {lastOpen && <Notice tone="warn" text={t('complete.needsLastStop')} />}
-            <Button
-              kind="dark"
-              icon={Check}
-              label={t('task.complete')}
-              disabled={lastOpen !== null}
-              onPress={() => finishTask()}
-            />
-            <Button
-              kind="danger-text"
-              label={t('task.reportProblem')}
-              onPress={() => router.push({ pathname: '/report-problem', params: { taskId: task.id, ...(task.vehicle_id ? { vehicleId: task.vehicle_id } : {}) } })}
-            />
-          </>
+            lastOpen={lastOpen !== null}
+            onComplete={() => finishTask()}
+            onReport={() => router.push({ pathname: '/report-problem', params: { taskId: task.id, ...(task.vehicle_id ? { vehicleId: task.vehicle_id } : {}) } })}
+          />
         ) : (
           <>
+            <View style={styles.topRow}>
+              <Txt variant="label" color={colors.amberText}>
+                {t(task.status === 'cancelled' ? 'task.cancelled' : task.status === 'declined' ? 'task.declined' : 'task.completed')}
+              </Txt>
+              <Mono size={18} bold>{`${dateLabel(task.start_at)} ${colomboTime(leaveTime(task))}`}</Mono>
+            </View>
+            <Txt variant="title" size={28}>{taskTitle(t, task)}</Txt>
+            {app.tripProblem && (
+              <Pressable accessibilityRole="button" onPress={app.clearTripProblem}>
+                <Notice tone="danger" text={t(app.tripProblem.key, { reason: app.tripProblem.reason })} />
+              </Pressable>
+            )}
             <StopTimeline stops={task.task_stops} />
             {people && <Txt variant="muted">{people}</Txt>}
             {task.notes && <Txt variant="body">{task.notes}</Txt>}
@@ -416,11 +397,6 @@ const styles = StyleSheet.create({
   sheet: { flex: 1, marginTop: -22, backgroundColor: colors.card, borderTopLeftRadius: 26, borderTopRightRadius: 26 },
   grabber: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: '#dcd9d0', marginTop: -6 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  stats: { backgroundColor: colors.page, borderRadius: 14, padding: 16, flexDirection: 'row', gap: 12 },
   gpsLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingHorizontal: 4, marginTop: -6 },
-  stopCard: { gap: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 12 },
-  stopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   skip: { minHeight: 32, justifyContent: 'center' },
-  stopRowCurrent: { borderColor: colors.blue, borderWidth: 2, backgroundColor: colors.blueChip },
-  doneBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.blueChip, alignItems: 'center', justifyContent: 'center' },
 });

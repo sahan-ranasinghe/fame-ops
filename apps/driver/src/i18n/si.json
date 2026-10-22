@@ -203,7 +203,9 @@
       "corrected": "නිවැරදි කළා",
       "confirmedLater": "පසුව තහවුරු කළා",
       "timeNotRecorded": "ගියා · වේලාව සටහන් නොවුණා"
-    }
+    },
+    "arriveAbout": "ළඟා වීම ආසන්නව",
+    "byRoad": "මාර්ගයේ"
   },
   "log": {
     "title": "ධාවන දුර සටහන් කරන්න",
@@ -962,8 +964,7 @@
       "remindersRow": "සිහිකැඳවීම් {n}",
       "remindersRowOne": "සිහිකැඳවීම් 1",
       "newTrip": "නව ගමනක්",
-      "needsYouNow": "ඔබගෙන් දැන් අවශ්‍යයි",
-      "tileRequests": "ඉල්ලීම්"
+      "needsYouNow": "ඔබගෙන් දැන් අවශ්‍යයි"
     },
     "status": {
       "assigned": "යවා ඇත",

@@ -204,7 +204,9 @@ console.log('\nThe screens');
   check(!/onPress=\{\(\) => app\.markStop(Arrived|Done)/.test(screen) && !/onPress=\{\(\) => markStop(Arrived|Done)/.test(button), 'no tap marks a stop Arrived or Left any more');
   check(/<SlideToConfirm[^>]*label=\{t\('task\.slideArrive'/.test(button) && /label=\{t\('task\.slideLeave'/.test(button) && /label=\{t\('task\.slideFinish'\)\}/.test(button) && /label=\{t\('arrive\.override'\)\}/.test(button),
     'the current stop: arrive, override, leave and finish are all slides');
-  check(/<ArrivalButton key=\{item\.id\} stop=\{item\} here=\{here\} last=\{item\.id === lastId\} onFinish=\{finishTask\} \/>/.test(screen) && /onPress=\{\(\) => finishTask\(\)\}/.test(screen),
+  // Part B: Complete task is drawn by components/RunningSheet.tsx, which calls the screen's onComplete.
+  const sheet = code('components/RunningSheet.tsx');
+  check(/<ArrivalButton key=\{item\.id\} stop=\{item\} here=\{here\} last=\{item\.id === lastId\} onFinish=\{finishTask\} \/>/.test(screen) && /onComplete=\{\(\) => finishTask\(\)\}/.test(screen) && /label=\{t\('task\.complete'\)\} disabled=\{!!p\.lastOpen\} onPress=\{p\.onComplete\}/.test(sheet),
     'Slide to finish and Complete task share one finish (the question about open stops, then Log mileage)');
   check(/pathname: '\/log-mileage', params: \{ mode: 'finish', taskId: task\.id \}/.test(screen), 'the finish opens Log mileage as before');
   check(/slides\.leave\(item\)/.test(screen) && /slides\.arrive\(item, nearHere\)/.test(screen), 'a stop visited out of order: the same slides (with Undo)');

@@ -35,6 +35,10 @@ export interface Step {
   legAfter?: string;
   /** The step's own parts (a slide, a button, the arrival point). */
   extra?: ReactNode;
+  /** One small action at the right of the place (the driver's Skip). */
+  aside?: ReactNode;
+  /** Shown in full also when compact (a stop visited out of order, whose slide applies now). */
+  keepOpen?: boolean;
 }
 
 const MARK: Record<StepState, { bg: string; border: string; ink: string; ring?: boolean }> = {
@@ -59,7 +63,7 @@ export function RouteStepper({ steps, compact = false, focus, testID = 'route-st
       {steps.map((s, i) => {
         const last = i === steps.length - 1;
         const m = MARK[s.state];
-        const full = !compact || s.key === inFocus;
+        const full = !compact || s.key === inFocus || !!s.keepOpen;
         return (
           <View key={s.key} style={styles.row} testID={`${testID}-step-${s.key}`} accessibilityLabel={[s.mark, s.place, s.time].filter(Boolean).join(', ')}>
             <View style={styles.timeCol}>
@@ -73,7 +77,10 @@ export function RouteStepper({ steps, compact = false, focus, testID = 'route-st
               {!last && <View style={[styles.line, s.state === 'done' && { backgroundColor: colors.green }]} />}
             </View>
             <View style={[styles.body, last && { paddingBottom: 0 }]}>
-              <Txt variant="strong" numberOfLines={full ? 2 : 1}>{s.place}</Txt>
+              <View style={styles.head}>
+                <Txt variant="strong" numberOfLines={full ? 2 : 1} style={{ flex: 1 }}>{s.place}</Txt>
+                {s.aside}
+              </View>
               {s.type && full ? <Txt variant="small">{s.type}</Txt> : null}
               {s.times && full ? <Txt variant="muted" size={15}>{s.times}</Txt> : null}
               {s.delta ? <Txt variant="strong" size={14} color={s.delta.tone === 'late' ? colors.amberText : colors.green}>{s.delta.text}</Txt> : null}
@@ -96,5 +103,6 @@ const styles = StyleSheet.create({
   ring: { borderWidth: 3 },
   line: { flex: 1, width: 2, minHeight: 14, backgroundColor: colors.line, marginVertical: 2 },
   body: { flex: 1, gap: 2, paddingBottom: 14, paddingTop: 4 },
+  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   leg: { marginTop: 6 },
 });

@@ -261,7 +261,7 @@ async function main() {
   check(/allowLeave\(\);[\s\S]*router\.replace\(\{ pathname: '\/log-mileage', params: \{ mode: 'start', taskId: outcome\.taskId/.test(startTrip), 'after Start: the normal Start task flow takes the page\'s place (no question asked)');
   check(/requireLocation\('start'/.test(startTrip), 'Location first (like Start task): "Not now" makes nothing');
   check(/useLeaveGuard\(dirty, busy\)/.test(addStop) && /allowLeave\(\);[\s\S]*router\.back\(\)/.test(addStop), 'Add a stop: pushed on the task screen, back returns there; after adding, no question');
-  check(/canAddStop\(task\) && \([\s\S]*pathname: '\/add-stop'/.test(taskScreen), 'the task screen offers Add a stop only on a self trip under way');
+  check(/onAddStop=\{canAddStop\(task\) \? \(\) => router\.push\(\{ pathname: '\/add-stop'/.test(taskScreen), 'the task screen offers Add a stop only on a self trip under way (RunningSheet\'s onAddStop, Part B)');
   // Part 3b (H4): the link reads "Can't make it" once accepted (lib/late.ts declineKey, null on a self trip; test:asks).
   check(/!isSelfTrip\(task\) && decline && <Button kind="danger-text" label=\{t\(decline\)\}/.test(taskScreen)
     && /!isSelfTrip\(next\) && decline && <Button kind="danger-text" label=\{t\(decline\)\}/.test(today), "no \"Can't do this task\" on a trip the driver started");

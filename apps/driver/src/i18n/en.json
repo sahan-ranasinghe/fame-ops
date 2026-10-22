@@ -203,7 +203,9 @@
       "corrected": "corrected",
       "confirmedLater": "confirmed later",
       "timeNotRecorded": "Visited · time not recorded"
-    }
+    },
+    "arriveAbout": "Arrive about",
+    "byRoad": "by road"
   },
   "log": {
     "title": "Log mileage",
@@ -962,8 +964,7 @@
       "remindersRow": "{n} reminders",
       "remindersRowOne": "1 reminder",
       "newTrip": "New trip",
-      "needsYouNow": "Needs you now",
-      "tileRequests": "Requests"
+      "needsYouNow": "Needs you now"
     },
     "status": {
       "assigned": "sent",
