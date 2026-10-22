@@ -2,8 +2,10 @@
 // audit"): the rules that let a list row say each fact once. A word the filter, the column or the group already says is
 // left out of the row; a fact the row alone carries (a time, a size, who decided) always stays. Pure (lists2.test.tsx).
 import type { BoardFilter, NowStatus, TripLive, VideoCard } from "../data/types";
+import { dayWords } from "../lib/when";
 import { clockOf, megabytes } from "./fuelLogic";
 import type { RequestsFilter } from "./requestsListLogic";
+import { docTone } from "./vehicleLogic";
 
 // ---- Fuel ----------------------------------------------------------------------------------------------------------
 
@@ -22,6 +24,28 @@ export function videoCellWords(v: Pick<VideoCard, "duration_s" | "bytes" | "inte
 }
 
 // ---- Vehicles ------------------------------------------------------------------------------------------------------
+
+/** A vehicle's three roadside documents on the board (list_vehicles' `documents`: Lic, Ins, Emi). */
+type BoardDocs = Partial<Record<"lic" | "ins" | "emi", { chip?: string; expiry?: string }>>;
+const DOC_NAMES: ["lic" | "ins" | "emi", string][] = [["lic", "licence"], ["ins", "insurance"], ["emi", "emission test"]];
+
+/**
+ * Round 4–7 (the list audit's proposed removal, approved by Sahan 22 October 2026): the three documents valid and none
+ * missing = ONE quiet line "Documents valid" instead of three chips. Any expiring, expired or not set document, or a
+ * missing one ("no document"), keeps the chips as before.
+ */
+export function docsAllValid(v: { documents?: BoardDocs; documents_missing?: readonly string[] }): boolean {
+  const d = v.documents ?? {};
+  return DOC_NAMES.every(([k]) => docTone(d[k]?.chip) === "ok") && !v.documents_missing?.length;
+}
+
+/** What follows "Documents valid" for the screen reader (and on hover): "licence to Fri 12 Mar 2027, insurance to …". */
+export function validDocsWords(docs: BoardDocs | undefined, now?: Date): string {
+  return DOC_NAMES.map(([k, name]) => {
+    const expiry = docs?.[k]?.expiry;
+    return expiry ? `${name} to ${dayWords(expiry, { inline: true, now })}` : name;
+  }).join(", ");
+}
 
 /**
  * The board's one status (Samsara's and Fleetio's vehicle lists: one status line). The availability line says it ("Free",

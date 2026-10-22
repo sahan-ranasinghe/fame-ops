@@ -1017,7 +1017,8 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   await expect(page.getByRole("status")).toHaveText("Issue resolved");
   await expect(page.getByTestId("issue-page")).toHaveCount(0);
   await expect(page).toHaveURL(/status=in_progress/);
-  await applyFilter(page, "Status", "Resolved");
+  // Round 4–7 (Sahan's OK, 22 October 2026): Resolved is the tab (the Filter's Status keeps only the Open tab's choices).
+  await page.getByRole("tab", { name: "Resolved" }).click();
   await ourRow().click();
   await expect(page.getByText(/Resolved by E2E Fleet Admin/)).toBeVisible();
   await expect(page.getByTestId("issue-report")).toContainText("closed");
@@ -2210,4 +2211,96 @@ test("Round 2: the task page follows the driver live: Arrived at a stop shows wi
   await expect(first.getByTestId("stop-delta")).toHaveText(/^(On time|\d[\d hmind]* (late|early))$/);
   await expect(first).toContainText("Here now");
   expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload)).toBe(true);
+});
+
+// Round 4–7 (Sahan, 22 October 2026): a height-only resize never reloads or remounts a page (a phone's address bar shows
+// and hides, and phones still use the desktop site). And a full-page picture neither: Chromium's full-page capture lays
+// the page out for a moment at a viewport a few pixels wide, so every max-width query fires; CI's mockup picture of this
+// page caught it back at "Loading the task…" with the board's skeletons (ui/phone.ts, ui/PullToRefresh.tsx, ui/Page.tsx).
+test("a height-only resize, and a full-page picture, never reload or remount the task page: nothing is asked again", async ({ page }) => {
+  test.setTimeout(120_000);
+  const email = `e2e.resize.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Resize", email, permissions: ["view", "assign_tasks"] });
+  const driver = { name: `E2E Resize ${stamp}`, code: `E2RS-${stamp}`, username: `e2rs.${stamp}`, pin: "246814", phone: "0771234523" };
+  await tool("create_driver", driver);
+  const plate = `WP RS-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
+  const now = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+  const t = await tool<{ task_id: string }>("create_task", {
+    title: `E2E resize ${stamp}`, date: colomboDay(0), start_time: now, driver: driver.username, vehicle: plate,
+    stops: [
+      { type: "pickup", what: "people", place: "Head office", lat: 6.9022, lng: 79.8612 },
+      { type: "drop", what: "people", place: "Nugegoda", lat: 6.8649, lng: 79.8997 },
+    ],
+  });
+  // The driver accepts and starts it, as the app does: the page shows its "On the way" banner, the board its card.
+  const app = await driverRest(driver.username, driver.pin);
+  expect(await app.post("rpc/accept_task", { p_task_id: t.task_id, p_at: new Date().toISOString() })).toBe(200);
+  expect(await app.patch(`tasks?id=eq.${t.task_id}`, { status: "in_progress", started_at: new Date().toISOString(), start_odometer_km: 1000 })).toBe(200);
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Resize for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // Every call to task_detail and task_board, with its time (the board is watched every 30 s, a running task's page asks
+  // again every 60 s: only those may fall in the window below).
+  const calls: { tool: string; at: number }[] = [];
+  page.on("request", (r) => {
+    const m = r.url().match(/\/office-api\/tools\/(task_detail|task_board)(?:\?|$)/);
+    if (m) calls.push({ tool: m[1], at: Date.now() });
+  });
+  let loads = 0;
+  page.on("load", () => { loads++; });
+
+  // The task page beside the board at a desktop's width, loaded.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/tasks/${t.task_id}`);
+  await expect(page.getByTestId("task-detail")).toBeVisible();
+  await expect(page.getByTestId("task-banner")).toBeVisible();
+  await expect(page.getByTestId("board-col-in_progress").locator(".tcard", { hasText: `E2E resize ${stamp}` })).toBeVisible();
+  await expect(page.getByText(/Loading the task/)).toHaveCount(0);
+  await expect(page.getByText(/Loading tasks/)).toHaveCount(0);
+  await page.waitForTimeout(1_000);
+
+  // Marks: on the document (a reload loses it) and on the page's nodes (a remount makes new ones without them).
+  await page.evaluate(() => {
+    (window as unknown as { __marker?: string }).__marker = "kept";
+    document.querySelector<HTMLElement>("[data-testid='task-detail']")!.dataset.e2eMark = "kept";
+    document.querySelector<HTMLElement>("[data-testid='board-col-in_progress']")!.dataset.e2eMark = "kept";
+  });
+  const loadsBefore = loads;
+  const start = Date.now();
+
+  // Only the height changes: 900 → 600 → 1400 → 900.
+  for (const height of [600, 1400, 900]) {
+    await page.setViewportSize({ width: 1440, height });
+    await page.waitForTimeout(400);
+    await expect(page.getByText(/Loading the task/)).toHaveCount(0);
+  }
+  // Then photographed whole, as the mockup spec did.
+  await page.screenshot({ path: test.info().outputPath("task-page-full.png"), fullPage: true });
+  await page.waitForTimeout(1_000); // past ui/phone.ts's settle time; a remount's calls would have gone by now
+  const end = Date.now();
+
+  expect(end - start).toBeLessThan(25_000);
+  expect(loads).toBe(loadsBefore);
+  expect(await page.evaluate(() => (window as unknown as { __marker?: string }).__marker)).toBe("kept");
+  await expect(page.getByTestId("task-detail")).toHaveAttribute("data-e2e-mark", "kept");
+  await expect(page.getByTestId("board-col-in_progress")).toHaveAttribute("data-e2e-mark", "kept");
+  await expect(page.getByTestId("task-banner")).toBeVisible();
+  await expect(page.getByText(/Loading the task/)).toHaveCount(0);
+  await expect(page.getByText(/Loading tasks/)).toHaveCount(0);
+  // No call asked again by the resizes or the picture: one in the window is only a scheduled refresh, as long after the
+  // one before it as its watch waits.
+  const every: Record<string, number> = { task_board: 25_000, task_detail: 55_000 };
+  for (const c of calls.filter((x) => x.at >= start && x.at <= end)) {
+    const prev = calls.filter((x) => x.tool === c.tool && x.at < c.at).at(-1);
+    expect(prev, `${c.tool} asked again during the resizes`).toBeTruthy();
+    expect(c.at - prev!.at, `${c.tool} asked again ${c.at - prev!.at} ms after the call before it`).toBeGreaterThanOrEqual(every[c.tool]);
+  }
 });

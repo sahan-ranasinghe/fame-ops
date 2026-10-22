@@ -11,7 +11,7 @@ import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
 import type { Issue } from "../data/types";
 import type { Me, Transport, WatchEvent } from "../transport/types";
-import { colomboDay, monthOf, rangeText } from "../ui/dateRange";
+import { colomboDay, monthOf } from "../ui/dateRange";
 import { ToastProvider } from "../ui/Toast";
 import IssuePage from "./IssuePage";
 import Issues from "./Issues";
@@ -144,6 +144,19 @@ function expectFilterChoice(section: string, choice: string) {
   expect(within(g).getByLabelText(choice)).toBeTruthy();
   fireEvent.keyDown(document, { key: "Escape" });
 }
+/** The section is there, without that choice. */
+function expectNoFilterChoice(section: string, choice: string | RegExp) {
+  fireEvent.click(screen.getByTestId("filter-button"));
+  const g = within(screen.getByTestId("filter-panel")).getByRole("group", { name: section });
+  expect(within(g).queryByLabelText(choice)).toBeNull();
+  fireEvent.keyDown(document, { key: "Escape" });
+}
+/** The Filter panel has no such section. */
+function expectNoFilterSection(section: string) {
+  fireEvent.click(screen.getByTestId("filter-button"));
+  expect(within(screen.getByTestId("filter-panel")).queryByRole("group", { name: section })).toBeNull();
+  fireEvent.keyDown(document, { key: "Escape" });
+}
 const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
 const realMatchMedia = window.matchMedia;
 
@@ -155,9 +168,9 @@ describe("the Open tab: grouped by kind (Round 4–7, item 8)", () => {
   const odo = (n: number) => Array.from({ length: n }, (_, k) => card({ id: `o${k + 1}`, kind: "odometer_flag", kind_text: "Odometer check", severity: "warning", title: `Odometer check: reading ${k + 1}`, headline: `Odometer reading ${k + 1} could not be read`, vehicle: `WP KV-${7700 + k}`, meta: `WP KV-${7700 + k} · Nimal · ${k + 1} h ago` }));
   const rows = () => [...odo(5), card({}), card({ id: "n1", kind: "documents_missing", kind_text: "Documents missing", severity: "info", title: "Documents missing: 2", headline: "CAP-2207: 2 documents missing", vehicle: "CAP-2207", meta: "CAP-2207 · 3 d ago" })];
 
-  it("asks for the groups (the snoozed left out, this month as before); the most urgent group first; 3 newest; Gmail's rows", async () => {
+  it("asks for the groups (the snoozed left out, any time: Sahan's OK, 22 October 2026); the most urgent group first; 3 newest; Gmail's rows", async () => {
     const t = await mount("/issues", rows());
-    expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", from: month.from, to: month.to, snoozed: false, group: true });
+    expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", snoozed: false, group: true });
     await screen.findByTestId("issue-group-vehicle_report");
     const order = [...screen.getByTestId("issues-list").querySelectorAll("[data-kind]")].map((e) => (e as HTMLElement).dataset.kind);
     expect(order).toEqual(["vehicle_report", "odometer_flag", "documents_missing"]);
@@ -183,7 +196,7 @@ describe("the Open tab: grouped by kind (Round 4–7, item 8)", () => {
     fireEvent.click(within(group("odometer_flag")).getByTestId("group-show-all"));
     await flush();
     expect(screen.getByTestId("where").textContent).toBe("/issues?kind=odometer_flag");
-    expect(t.argsOf("list_issues").at(-1)).toEqual({ status: "active", from: month.from, to: month.to, sort: "urgent", snoozed: false, kind: "odometer_flag", limit: 25 });
+    expect(t.argsOf("list_issues").at(-1)).toEqual({ status: "active", sort: "urgent", snoozed: false, kind: "odometer_flag", limit: 25 });
     await screen.findByText("Odometer reading 5 could not be read");
     const list = screen.getByTestId("issues-list");
     expect(within(list).getAllByTestId("issue-line")).toHaveLength(5);
@@ -192,7 +205,7 @@ describe("the Open tab: grouped by kind (Round 4–7, item 8)", () => {
     expect(screen.getByTestId("where").textContent).toBe("/issues");
   });
 
-  it("the tabs: Snoozed (its rows say until when) and Resolved (the newest first); the Status filter keeps every status", async () => {
+  it("the tabs: Snoozed (its rows say until when) and Resolved (the newest first); the Filter's Status is the Open tab's own", async () => {
     const t = await mount("/issues", [...rows(), card({ id: "z", title: "Documents missing", headline: "WP PH-2087: 3 documents missing", kind: "documents_missing", severity: "info", snoozed_until: "2026-10-19 07:00", snoozed_by: "Sahan" })]);
     await screen.findByTestId("issue-group-vehicle_report");
     fireEvent.click(screen.getByRole("tab", { name: "Snoozed · 1" }));
@@ -207,7 +220,24 @@ describe("the Open tab: grouped by kind (Round 4–7, item 8)", () => {
     expect(screen.getByTestId("where").textContent).toBe("/issues?status=resolved");
     expect(t.argsOf("list_issues").at(-1)).toEqual({ status: "resolved", from: month.from, to: month.to, sort: "newest", limit: 25 });
     expect(await screen.findByText(/^Nothing resolved/)).toBeTruthy();
-    for (const s of ["Active", "Open", "In progress", "Snoozed · 1", "Resolved", "Dismissed", "All"]) expectFilterChoice("Status", s);
+    // Round 4–7 (Sahan's OK, 22 October 2026): Snoozed, Resolved, Dismissed and All repeated the tabs and left the Filter;
+    // under Snoozed and Resolved the tab says the status (no Status section); the Open tab's Filter keeps its own three.
+    expect(screen.getByTestId("date-range-button").textContent).toMatch(/^This month/);
+    // Resolved keeps its date range as before: no "Any time" among its presets.
+    fireEvent.click(screen.getByTestId("date-range-button"));
+    expect(within(screen.getByTestId("date-range-sheet")).queryByRole("button", { name: "Any time" })).toBeNull();
+    expect(within(screen.getByTestId("date-range-sheet")).getByRole("button", { name: "This month" })).toBeTruthy();
+    fireEvent.click(screen.getByTestId("date-range-button"));
+    expectNoFilterSection("Status");
+    for (const s of ["Kind", "Vehicle", "Severity"]) expectFilterSection(s);
+    fireEvent.click(screen.getByRole("tab", { name: "Snoozed · 1" }));
+    await flush();
+    expectNoFilterSection("Status");
+    fireEvent.click(screen.getByRole("tab", { name: /^Open/ }));
+    await flush();
+    expect(screen.getByTestId("date-range-button").textContent).toBe("Any time");
+    for (const s of ["Active", "Open", "In progress"]) expectFilterChoice("Status", s);
+    for (const s of [/^Snoozed/, "Resolved", "Dismissed", "All"]) expectNoFilterChoice("Status", s);
   }, 20_000);
 
   it("bulk: tick rows, Resolve with a reason (required), one update_issues call; the bar and the ticks go", async () => {
@@ -235,7 +265,7 @@ describe("the Open tab: grouped by kind (Round 4–7, item 8)", () => {
     fireEvent.click(within(group("odometer_flag")).getByTestId("group-tick"));
     expect(screen.getByTestId("bulk-bar").textContent).toContain("3 selected");
     await act(async () => { fireEvent.click(within(screen.getByTestId("group-select-all")).getByRole("button", { name: "Select all 5 in this group" })); });
-    expect(t.argsOf("list_issues").at(-1)).toEqual({ status: "active", from: month.from, to: month.to, sort: "urgent", snoozed: false, kind: "odometer_flag", limit: 5 });
+    expect(t.argsOf("list_issues").at(-1)).toEqual({ status: "active", sort: "urgent", snoozed: false, kind: "odometer_flag", limit: 5 });
     expect(screen.getByTestId("bulk-bar").textContent).toContain("5 selected");
     fireEvent.click(within(screen.getByTestId("bulk-bar")).getByRole("button", { name: "Dismiss" }));
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Test phone, not real" } });
@@ -302,7 +332,18 @@ describe("the Open tab: grouped by kind (Round 4–7, item 8)", () => {
 
   it("nothing open: the empty state with its icon", async () => {
     await mount("/issues", []);
-    expect((await screen.findByTestId("issues-empty")).textContent).toBe("Nothing needs attention (" + rangeText(month.from, month.to) + "). The fleet is in order.");
+    // Any time (the Open tab's default since Round 4–7): no days in brackets, and no "opened outside these dates" note.
+    expect((await screen.findByTestId("issues-empty")).textContent).toBe("Nothing needs attention. The fleet is in order.");
+    expect(screen.queryByText(/outside these dates/)).toBeNull();
+  });
+
+  it("a range picked on the Open tab is asked with its days; no note about the issues outside them", async () => {
+    const t = await mount("/issues?range=month", rows());
+    await screen.findByTestId("issue-group-vehicle_report");
+    expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", from: month.from, to: month.to, snoozed: false, group: true });
+    expect(screen.getByTestId("date-range-button").textContent).toMatch(/^This month/);
+    expect(screen.queryByText(/outside these dates/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show the last 12 months" })).toBeNull();
   });
 });
 

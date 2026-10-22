@@ -12,7 +12,7 @@ import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
 import type { Availability, AvailableDriver, Conflict, DayTimeline, Holder, HolderAsks as HolderAsksData, Suggestions } from "../data/types";
 import type { FleetError, Me, Transport, WatchEvent } from "../transport/types";
-import { forgetAsked } from "../ui/holderLogic";
+import { forgetAsked, requesterOnHolderLine } from "../ui/holderLogic";
 import { ToastProvider } from "../ui/Toast";
 import { AvailabilityPanel } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
@@ -122,21 +122,45 @@ describe("the conflict card with its holder", () => {
     expect(pickDriver).toHaveBeenCalledTimes(1);
     expect(within(first).getByRole("link", { name: "Call Kamal Silva (driver of that task)" }).getAttribute("href")).toBe("tel:+94772222222");
     expect(within(first).getByRole("link", { name: "WhatsApp Kamal Silva (driver of that task)" })).toBeTruthy();
-    // The holder (here the requester too: the requester's own Call / WhatsApp stay as before).
+    // The holder (here the requester too: Sahan's OK, 22 October 2026, their Call / WhatsApp once, on the holder line).
     const line = within(first).getByTestId("holder-line");
     expect(within(line).getByTestId("holder-name").textContent).toBe("Anoja Perera · Staff");
     expect(within(line).getByTestId("holder-when").textContent).toBe("Asked for it · 08:00–11:00");
     expect(within(line).getByText("077 123 4567")).toBeTruthy();
     expect(within(line).getByRole("link", { name: /WhatsApp/ }).getAttribute("href")).toContain("94771234567");
     expect(within(line).getByRole("button", { name: "Ask for it: ask Anoja Perera" })).toBeTruthy();
-    expect(within(first).getByRole("link", { name: "Call Anoja Perera (asked for that task)" }).getAttribute("href")).toBe("tel:+94771234567");
-    expect(within(first).getByRole("link", { name: "WhatsApp Anoja Perera (asked for that task)" })).toBeTruthy();
+    expect(within(first).queryByRole("link", { name: "Call Anoja Perera (asked for that task)" })).toBeNull();
+    expect(within(first).queryByRole("link", { name: "WhatsApp Anoja Perera (asked for that task)" })).toBeNull();
+    // Anoja's WhatsApp once (the holder line's), Kamal's once (the driver's).
+    const wa = within(first).getAllByRole("link", { name: /WhatsApp/ }).map((a) => a.getAttribute("href") ?? "");
+    expect(wa).toHaveLength(2);
+    expect(wa[0]).toContain("94771234567");
+    expect(wa[1]).toBe("https://wa.me/94772222222");
     // Assigned, no end, no number: no Call / WhatsApp, Ask still.
     const two = within(second).getByTestId("holder-line");
     expect(within(two).getByTestId("holder-name").textContent).toBe("Nimal Fernando · Fleet admin");
     expect(within(two).getByTestId("holder-when").textContent).toBe("Assigned it · from 09:00");
     expect(within(two).queryByTestId("holder-contact")).toBeNull();
     expect(within(two).getByTestId("holder-ask")).toBeTruthy();
+  });
+
+  // Round 4–7 (approved by Sahan 22 October 2026): the requester's own pair only when the holder line does not carry it.
+  it("the requester's Call / WhatsApp: gone when they are the holder with a number; kept for anyone else, or a holder line without one", () => {
+    const other = mount(<ConflictCards conflicts={[vehicleCard({ holder: holder({ name: "Nimal Fernando", by: "assigned" }) })]} />, new FakeTransport());
+    expect(screen.getByRole("link", { name: "Call Anoja Perera (asked for that task)" }).getAttribute("href")).toBe("tel:+94771234567");
+    expect(screen.getByRole("link", { name: "WhatsApp Anoja Perera (asked for that task)" })).toBeTruthy();
+    other.unmount();
+    const noNumber = mount(<ConflictCards conflicts={[vehicleCard({ holder: holder({ phone: undefined, call: undefined, whatsapp: undefined }) })]} />, new FakeTransport());
+    expect(screen.queryByTestId("holder-contact")).toBeNull();
+    expect(screen.getByRole("link", { name: "Call Anoja Perera (asked for that task)" })).toBeTruthy();
+    noNumber.unmount();
+    // The rule itself.
+    expect(requesterOnHolderLine(vehicleCard())).toBe(true);
+    expect(requesterOnHolderLine(vehicleCard(), "Anoja Perera")).toBe(false);
+    expect(requesterOnHolderLine(vehicleCard({ holder: undefined }))).toBe(false);
+    expect(requesterOnHolderLine(vehicleCard({ kind: "garage" }))).toBe(false);
+    expect(requesterOnHolderLine(vehicleCard({ requester: undefined }))).toBe(false);
+    expect(requesterOnHolderLine(vehicleCard({ holder: holder({ name: " anoja perera " }) }))).toBe(true);
   });
 
   it("Ask for it: the sheet, an optional note, Send → ask_for_it with the trip's window, the toast says what happens next", async () => {

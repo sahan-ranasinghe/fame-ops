@@ -129,10 +129,12 @@ afterEach(() => {
 });
 
 describe("the issues list (§9)", () => {
-  it("asks for this month's active issues, the most urgent first, snoozed left out; the status and the dates are filters in the URL", async () => {
+  it("asks for the active issues of any time, the most urgent first, snoozed left out; the status and the dates are filters in the URL", async () => {
     const t = await mount("/issues");
     // Round 4–7 (item 8): the Open tab asks for the groups (by kind); the row's grey line is the plate · when (who opened it is on the issue's page).
-    expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", from: month.from, to: month.to, snoozed: false, group: true });
+    // Round 4–7 (Sahan's OK, 22 October 2026): the Open tab is any time by default (no "this month"): no dates are sent.
+    expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", snoozed: false, group: true });
+    expect(screen.getByTestId("date-range-button").textContent).toBe("Any time");
     await screen.findByText("Vehicle problem: breakdown");
     expect(rowOf("Vehicle problem: breakdown").textContent).toContain(`WP CAB-4521${datesInWords(`${month.from} 08:00`)}`);
     expect(rowOf("Vehicle problem: breakdown").textContent).not.toContain("System");
@@ -140,16 +142,32 @@ describe("the issues list (§9)", () => {
     expect(screen.queryByTestId("filter-chips")).toBeNull();
     expect(within(screen.getByTestId("issues-list")).getByRole("heading").textContent).toContain("Active");
 
-    applyFilter("Status", "Dismissed");
+    // The Filter's Status is the Open tab's own (Snoozed, Resolved, Dismissed and All are the tabs: Sahan's OK).
+    applyFilter("Status", "In progress");
     await flush();
-    expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "dismissed" });
-    expect(screen.getByTestId("where").textContent).toBe("/issues?status=dismissed");
-    expect(await screen.findByText(/^Nothing dismissed/)).toBeTruthy();
+    expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "in_progress" });
+    expect(t.argsOf("list_issues").at(-1)).not.toHaveProperty("from");
+    expect(screen.getByTestId("where").textContent).toBe("/issues?status=in_progress");
+    expect(await screen.findByText("Nothing in progress.")).toBeTruthy();
 
     pickPreset("Today");
     await flush();
-    expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "dismissed", from: colomboDay(), to: colomboDay() });
+    expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "in_progress", from: colomboDay(), to: colomboDay() });
+    // Back to Any time from the same picker.
+    pickPreset("Any time");
+    await flush();
+    expect(t.argsOf("list_issues").at(-1)).not.toHaveProperty("from");
+    expect(screen.getByTestId("where").textContent).toBe("/issues?status=in_progress");
   }, 20_000);
+
+  it("a link's Dismissed (or All) still opens under the Resolved tab, this month as before; its Filter has no Status", async () => {
+    const t = await mount("/issues?status=dismissed");
+    expect(t.argsOf("list_issues")[0]).toMatchObject({ status: "dismissed", from: month.from, to: month.to });
+    expect(await screen.findByText(/^Nothing dismissed \(/)).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Resolved" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByTestId("filter-button"));
+    expect(within(screen.getByTestId("filter-panel")).queryByRole("group", { name: "Status" })).toBeNull();
+  });
 
   it("an issue opens beside the list with what it shows; the X and Esc close it, the filters kept", async () => {
     await mount("/issues/x?status=all");
@@ -219,8 +237,8 @@ describe("the issues list (§9)", () => {
     expect(within(screen.getByTestId("issues-list")).queryByRole("link", { name: /Vehicle problem/ })).toBeNull();
     expect(rowOf("Service due")).toBeTruthy();
 
-    // Under Resolved it shows who resolved it and when.
-    applyFilter("Status", "Resolved");
+    // Under Resolved it shows who resolved it and when (the Resolved tab: the Filter's Resolved choice is gone).
+    fireEvent.click(screen.getByRole("tab", { name: "Resolved" }));
     fireEvent.click(await screen.findByRole("link", { name: /Vehicle problem: breakdown/ }));
     const panel = await screen.findByTestId("issue-page");
     expect((await within(panel).findByTestId("issue-facts")).textContent).toContain(`Resolved${datesInWords(`${month.from} 11:00 by Sahan`)}`);
@@ -294,7 +312,7 @@ describe("the issues list a page at a time (Hotfix 3, L3)", () => {
     const t = await mount("/issues", rows);
     await screen.findByText("Vehicle problem: breakdown");
     expect(within(screen.getByTestId("issues-list")).queryByText("Documents missing")).toBeNull();
-    applyFilter("Status", "Snoozed · 1");
+    fireEvent.click(screen.getByRole("tab", { name: "Snoozed · 1" }));
     await flush();
     expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "active", snoozed: true });
     expect(screen.getByTestId("where").textContent).toBe("/issues?status=snoozed");

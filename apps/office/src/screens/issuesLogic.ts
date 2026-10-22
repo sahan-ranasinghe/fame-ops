@@ -21,6 +21,12 @@ export const STATUS_FILTERS: [IssueStatusFilter, string][] = [
   ["dismissed", "Dismissed"],
   ["all", "All"],
 ];
+/**
+ * The Filter's Status choices (Round 4–7, approved by Sahan 22 October 2026): the Open tab's own (Active, Open, In
+ * progress). Snoozed, Resolved, Dismissed and All repeated the tabs Open · Snoozed · Resolved and are gone from the Filter;
+ * a link with ?status=dismissed or ?status=all still opens them (STATUS_FILTERS reads the URL), under the Resolved tab.
+ */
+export const OPEN_STATUS_FILTERS: [IssueStatusFilter, string][] = STATUS_FILTERS.filter(([k]) => k === "active" || k === "open" || k === "in_progress");
 /** The page opens on everything that still needs attention (open or in progress), the most urgent group first. */
 export const DEFAULT_STATUS: IssueStatusFilter = "active";
 /** The issues page's store entry (the panel patches it after a change) and the bell's (navBadges.ts). */
@@ -28,9 +34,8 @@ export const ISSUES_KEY = "issuesAll";
 export const BELL_KEY = "issues";
 
 /**
- * The three tabs (Round 4–7, item 8; Gmail's Inbox · Snoozed · Done): shortcuts to the statuses. The Filter panel's
- * Status keeps every status (Active, Open, In progress, Snoozed, Resolved, Dismissed, All); Resolved, Dismissed and All
- * light the Resolved tab.
+ * The three tabs (Round 4–7, item 8; Gmail's Inbox · Snoozed · Done). The Filter panel's Status is the Open tab's own
+ * (Active, Open, In progress: OPEN_STATUS_FILTERS); a link's Resolved, Dismissed and All light the Resolved tab.
  */
 export type IssueTab = "open" | "snoozed" | "resolved";
 export const TABS: [IssueTab, string][] = [["open", "Open"], ["snoozed", "Snoozed"], ["resolved", "Resolved"]];
@@ -51,6 +56,7 @@ export const defaultSort = (status: IssueStatusFilter): IssueSort => (ACTIVE_FIL
 /** Everything the list asks for besides the page. */
 export interface IssueListFilters {
   status: IssueStatusFilter;
+  /** The opened days; empty = any time (the Open tab's default, Round 4–7): no dates are sent. */
   from: string;
   to: string;
   sort: IssueSort;
@@ -123,8 +129,7 @@ export function issuesArgs(f: IssueListFilters): Record<string, unknown> {
   const snoozed = f.status === "snoozed" ? { snoozed: true } : ACTIVE_FILTERS.has(f.status) ? { snoozed: false } : {};
   return {
     status: f.status === "snoozed" ? "active" : f.status,
-    from: f.from,
-    to: f.to,
+    ...(f.from && f.to ? { from: f.from, to: f.to } : {}),
     sort: f.sort,
     ...snoozed,
     ...(f.kind ? { kind: f.kind } : {}),
@@ -321,21 +326,6 @@ export function filterOptions(issues: Issue[], chosen: { kind?: string; vehicle?
   return { kinds: [...kinds.entries()].sort((a, b) => a[1].localeCompare(b[1])), vehicles: [...vehicles].sort() };
 }
 
-/**
- * The active issues opened outside the chosen days (the server's open / in-progress counts cover every day and leave
- * the snoozed out, as the Active tabs do), in a sentence. Only for the unnarrowed Active, Open and In progress tabs: the
- * list's `total` (else its count) is how many of them the days hold.
- */
-export function outsideNote(d: Pick<IssuesList, "open" | "in_progress" | "count" | "total">, status: IssueStatusFilter, narrowed = false): string | undefined {
-  if (narrowed || (status !== "active" && status !== "open" && status !== "in_progress")) return undefined;
-  const inRange = d.total ?? d.count;
-  const all = status === "open" ? d.open : status === "in_progress" ? d.in_progress : d.open + d.in_progress;
-  const n = all - inRange;
-  if (n <= 0) return undefined;
-  const what = status === "open" ? "open" : status === "in_progress" ? "in progress" : "active";
-  return n === 1 ? `1 more ${what} issue was opened outside these dates.` : `${n} more ${what} issues were opened outside these dates.`;
-}
-
 /** "Snoozed until 2026-10-19 07:00 · by Sahan" on a snoozed row (none when it is not snoozed). */
 export function snoozeLine(i: Pick<Issue, "snoozed_until" | "snoozed_by">): string | undefined {
   if (!i.snoozed_until) return undefined;
@@ -344,24 +334,25 @@ export function snoozeLine(i: Pick<Issue, "snoozed_until" | "snoozed_by">): stri
 
 /** Nothing to list, in words that fit the filter, the words searched for and the days. */
 export function emptyText(status: IssueStatusFilter, from: string, to: string, narrowed: boolean, search = ""): string {
-  const days = rangeText(from, to);
-  if (search) return `No issue matches "${search}"${narrowed ? " with the filters chosen" : ""} (${days}).`;
-  if (narrowed) return `No issue matches the filters chosen (${days}).`;
+  // Any time (no dates): no days in brackets.
+  const days = from && to ? ` (${rangeText(from, to)})` : "";
+  if (search) return `No issue matches "${search}"${narrowed ? " with the filters chosen" : ""}${days}.`;
+  if (narrowed) return `No issue matches the filters chosen${days}.`;
   switch (status) {
     case "active":
-      return `Nothing needs attention (${days}). The fleet is in order.`;
+      return `Nothing needs attention${days}. The fleet is in order.`;
     case "snoozed":
-      return `Nothing is snoozed (${days}).`;
+      return `Nothing is snoozed${days}.`;
     case "open":
-      return `Nothing open (${days}). The fleet is in order.`;
+      return `Nothing open${days}. The fleet is in order.`;
     case "in_progress":
-      return `Nothing in progress (${days}).`;
+      return `Nothing in progress${days}.`;
     case "resolved":
-      return `Nothing resolved (${days}).`;
+      return `Nothing resolved${days}.`;
     case "dismissed":
-      return `Nothing dismissed (${days}).`;
+      return `Nothing dismissed${days}.`;
     default:
-      return `No issues were opened (${days}).`;
+      return `No issues were opened${days}.`;
   }
 }
 

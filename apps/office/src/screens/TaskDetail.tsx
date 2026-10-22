@@ -23,7 +23,8 @@ import { MapView } from "../map/MapView";
 import { useGoogleMap } from "../map/google/useGoogleMap";
 import { snapAllowed } from "../map/mapChoice";
 import type { RoutePoint } from "../map/types";
-import { GapsList, useGaps } from "./GapsList";
+import { useGaps } from "./GapsList";
+import { noGpsLine } from "./dayLogic";
 import { LateReportLine } from "./LateReport";
 import { StopArrival } from "./StopArrival";
 import { StopProgress } from "./StopProgress";
@@ -45,7 +46,7 @@ import type { Conflict } from "../data/types";
 import { ConflictCards } from "./ConflictCards";
 import { TaskAsksLine } from "./HolderAsks";
 import { findDriverPath } from "./needsDriverLogic";
-import { dwellNote, fuelCardWords, needsDriverText, segmentRows, segmentsTotal, taskTone, whatOf } from "./taskDetailLogic";
+import { dwellNote, fuelCardWords, locationWords, needsDriverText, segmentRows, segmentsTotal, taskTone, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
 import { datesInWords, whenText } from "../lib/when";
 import { finishChip } from "./myTripLogic";
@@ -230,7 +231,6 @@ export function TaskDetail() {
               {segments.length > 1 && <div className="sub" style={{ fontWeight: 400 }}>Swapped during the task: {segments.map((g) => g.vehicle).join(" → ")}</div>}
             </dd>
           </div>
-          <div><dt>Status</dt><dd>{t.status_line || cap(t.status)}</dd></div>
           {t.accepted && <div><dt>Accepted</dt><dd>{whenText(t.accepted)}</dd></div>}
           <div><dt>Leave by</dt><dd className="mono">{t.leave_by ? `${hhmm(t.leave_by)} (${t.leave_by_source === "plan" ? "planned" : "typed"})` : "—"}</dd></div>
           {eta && (
@@ -482,15 +482,17 @@ export function TaskDetail() {
 /**
  * The task's status banner while it is on the way (the approved mockup 4): "On the way to <stop>", arrives about, back
  * about, the late chip; a click opens Live with the driver on this task selected (/live?task=<id>). In the other states the
- * page's top already says the state (the pill and the Status line), so no second banner says it again.
+ * page's top already says the state (the pill), so no second banner says it again. Round 4–7 (the Status row gone): the
+ * driver's location when it is not live ("not sharing location", "location 12 min old") is on its line.
  */
 function TaskBanner({ t }: { t: TaskDetailData["task"] }) {
   const eta = t.eta;
   if (t.status !== "in_progress") return null;
+  const times = joinDots([eta?.next ? `Arrives about ${eta.next}` : "", eta?.final ? `back about ${eta.final}` : ""]) || "On the way now";
   return (
     <StatusBanner tone="live" icon="navigation" to={liveForTask(t.id)} testId="task-banner"
       title={`On the way${eta?.next_stop ? ` to ${eta.next_stop}` : ""}`}
-      line={joinDots([eta?.next ? `Arrives about ${eta.next}` : "", eta?.final ? `back about ${eta.final}` : ""]) || "On the way now"}
+      line={joinDots([times, locationWords(t)])}
       chip={eta?.late_min ? { text: `${duration(eta.late_min)} late`, tone: "warn" } : null} />
   );
 }
@@ -611,7 +613,7 @@ function ReopenTask({ id, onDone }: { id: string; onDone: () => Promise<void> })
 /**
  * The route between Start task and Save & finish (or now), on the same map as the driver page, with GPS km next to the
  * odometer. Snapped to roads by default where the server allows it (§26), "Recorded points" shows the raw line; the gaps
- * as markers with the Gaps list under the map (§21).
+ * as markers on the map (§21) and one "No GPS for …" line under it (Round 4–7: the Gaps list went, as on a driver's day).
  */
 function TaskRoute({ id, started }: { id: string; started?: string | null }) {
   const { transport } = useFleet();
@@ -636,6 +638,7 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
   const mapRoute = useMemo(() => mapRouteOf(route, null, snap), [route, snap]);
   const gaps = useGaps(route, snap, setFocus);
   if (!started) return null;
+  const noGps = route ? noGpsLine(route.gaps) : null;
   const line = route && !route.note
     ? joinDots([`GPS ${num(route.km)} km`, `driving ${minutesText(route.drivingMinutes)}`, `stopped ${minutesText(route.stoppedMinutes)}`, route.stopsCount ? `${route.stopsCount} stop${route.stopsCount > 1 ? "s" : ""} of 10 min or more` : "no stops of 10 min or more"])
     : route?.note;
@@ -656,7 +659,9 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
           </label>
         )}
         {estimatedLegend(route) && <p className="muted small" style={{ margin: 0 }} data-testid="estimated-legend">{estimatedLegend(route)}</p>}
-        <GapsList rows={gaps.rows} open={gaps.open} onOpen={gaps.pick} bare />
+        {/* Round 4–7 (approved by Sahan 22 October 2026; the driver's day page's way, §33.6): the gaps as ONE line, "No GPS for
+            2 h 10 min" (driver_route's gaps added up), in place of the Gaps list; each gap keeps its marker on the map. */}
+        {noGps && <p className="day-gaps" data-testid="route-gaps"><Icon name="alert" />{noGps}{route && route.gaps.length > 1 ? ` · ${route.gaps.length} gaps` : ""}</p>}
       </div>
     </>
   );

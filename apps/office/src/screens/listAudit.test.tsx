@@ -1,6 +1,6 @@
 // Round 4–7 (item 8, §33.7, rule 7: the list audit): the site's other long lists. The Activity log pages by number on a
 // desktop (before, only a phone's Load more reached past the first 25); the actions stay (the date range, the person
-// search, routine actions, a row's words and its outcome).
+// search, routine actions, a row's words and its outcome: Refused, Failed and In progress; a done row has no pill).
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,7 +47,7 @@ afterEach(() => vi.useRealTimers());
 describe("the Activity log (the list audit)", () => {
   const entries: ActivityEntry[] = Array.from({ length: 30 }, (_, i) => ({
     id: 30 - i, at: `2026-10-21 09:${String(59 - i).padStart(2, "0")}`, person: "Sahan", channel: "Website or app", action: `Change ${i + 1}`,
-    outcome: i === 1 ? "refused" : "done", ...(i === 1 ? { reason: "Not allowed" } : {}),
+    outcome: i === 1 ? "refused" : i === 2 ? "failed" : i === 3 ? "running" : "done", ...(i === 1 ? { reason: "Not allowed" } : {}),
   }));
 
   it("a desktop: 25 a page with page numbers (page 2 reachable); every control and the outcome stay", async () => {
@@ -61,8 +61,13 @@ describe("the Activity log (the list audit)", () => {
     expect(screen.getAllByTestId("activity-row")).toHaveLength(25);
     expect(screen.getByTestId("list-count").textContent).toBe(" · 30");
     const rows = screen.getAllByTestId("activity-row");
-    expect(within(rows[0]).getByText("Done")).toBeTruthy();
+    // Round 4–7 (Sahan's OK, 22 October 2026): a done row has no "Done" pill; Refused, Failed and In progress keep theirs.
+    expect(within(rows[0]).queryByText("Done")).toBeNull();
+    expect(rows[0].querySelector(".pill")).toBeNull();
     expect(within(rows[1]).getByText("Refused")).toBeTruthy();
+    expect(within(rows[2]).getByText("Failed")).toBeTruthy();
+    expect(within(rows[3]).getByText("In progress")).toBeTruthy();
+    expect(screen.queryAllByText("Done")).toHaveLength(0);
     // The controls: the date range, the person search, the routine switch.
     expect(screen.getByTestId("date-range-button")).toBeTruthy();
     expect(screen.getByLabelText("Search")).toBeTruthy();

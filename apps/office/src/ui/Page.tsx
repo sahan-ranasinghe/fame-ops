@@ -92,15 +92,18 @@ export function StickyActions({ children }: { children: ReactNode }) {
 /**
  * A list page with a routed detail: the detail route renders in the panel on
  * a desktop (the list stays), and alone, full screen, on a phone.
+ * The detail is the same element in the same place on both (the <aside>, after the list's place), so a switch between the
+ * layouts never remounts it (ui/phone.ts: a window made narrower, or Chromium's full-page capture); before, the phone's
+ * page was another element and the detail was made again (a task page back to "Loading the task…").
  */
 export function ListWithDetail({ children }: { children: ReactNode }) {
   const outlet = useOutlet();
   const phone = useIsPhone();
-  if (outlet && phone) return <div className="detail-page" data-testid="detail">{outlet}</div>;
+  const detailOnly = !!outlet && phone;
   return (
-    <div className={outlet ? "split has-detail" : "split"}>
-      <div className="split-list">{children}</div>
-      {outlet && <aside className="split-detail" aria-label="Detail" data-testid="detail">{outlet}</aside>}
+    <div className={detailOnly ? "split detail-only" : outlet ? "split has-detail" : "split"}>
+      {detailOnly ? null : <div className="split-list">{children}</div>}
+      {outlet && <aside className={detailOnly ? "detail-page" : "split-detail"} aria-label="Detail" data-testid="detail">{outlet}</aside>}
     </div>
   );
 }

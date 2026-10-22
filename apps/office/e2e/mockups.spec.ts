@@ -92,6 +92,20 @@ async function contentHeight(page: Page): Promise<number> {
   });
 }
 
+/**
+ * The website's page photographed whole without Chromium's full-page capture: that capture lays the page out for a moment at
+ * a viewport a few pixels wide (every max-width query fires), which once put the task page back to "Loading the task…" in
+ * CI's picture (ui/phone.ts). Instead the window is made as tall as the content (a height-only change, as the phone's
+ * pictures above), photographed as a window, and given back its size.
+ */
+async function wholePage(page: Page, path: string): Promise<void> {
+  const size = page.viewportSize() ?? { width: 1440, height: 900 };
+  await page.setViewportSize({ width: size.width, height: await contentHeight(page) });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path });
+  await page.setViewportSize(size);
+}
+
 /** The report: each mockup beside the pictures that exist (written after every test, from the files in the folder). */
 function writeReport(): void {
   mkdirSync(OUT, { recursive: true });
@@ -208,7 +222,7 @@ test("the website at a desktop's width: the Overview, a task on the way, a reque
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await expect(page.getByText("Vehicles on the road").first()).toBeVisible();
   await settled(page);
-  await page.screenshot({ path: join(OUT, "site-overview.png"), fullPage: true });
+  await wholePage(page, join(OUT, "site-overview.png"));
 
   await page.goto(`/tasks/${task.task_id}`);
   await expect(page.getByTestId("task-detail")).toBeVisible();
@@ -217,12 +231,12 @@ test("the website at a desktop's width: the Overview, a task on the way, a reque
   // The first CI run photographed it while it loaded again: wait until no part of the page is still loading.
   await expect(page.getByText(/Loading the task/)).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByTestId("task-banner")).toBeVisible();
-  await page.screenshot({ path: join(OUT, "site-task.png"), fullPage: true });
+  await wholePage(page, join(OUT, "site-task.png"));
 
   await page.goto(`/requests/${rq.request.id}/decide`);
   await expect(page.getByTestId("decide-banner")).toBeVisible();
   await settled(page);
-  await page.screenshot({ path: join(OUT, "site-request.png"), fullPage: true });
+  await wholePage(page, join(OUT, "site-request.png"));
   await context.close();
   writeReport();
 });

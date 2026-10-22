@@ -7,6 +7,7 @@ import type { TaskDetail as TaskDetailData } from "../data/types";
 import type { Me, Transport, WatchEvent } from "../transport/types";
 import { ToastProvider } from "../ui/Toast";
 import { TaskDetail } from "./TaskDetail";
+import { locationWords } from "./taskDetailLogic";
 
 class Detail implements Transport {
   readonly kind = "api" as const;
@@ -122,7 +123,8 @@ describe("the task page (Round 3: who drives, a missed task)", () => {
     expect(card.querySelector("[data-testid=vehicle-chip]")?.textContent).toBe("WP CAB-4521");
     expect(card.querySelector("img")).toBeNull();
     expect(screen.getByText("Who drives")).toBeTruthy();
-    expect(screen.getByText("Someone else drives · no app")).toBeTruthy();
+    // Round 4–7 (Sahan's OK, 22 October 2026): no Status row repeating it; the card's "Someone else" says it.
+    expect(screen.queryByText("Someone else drives · no app")).toBeNull();
     expect(screen.getByTestId("call-driver").textContent).toContain("077 123 4567");
   });
 
@@ -131,10 +133,45 @@ describe("the task page (Round 3: who drives, a missed task)", () => {
     expect(screen.getByTestId("driver-line").querySelector("[data-testid=driven-by]")?.textContent).toBe("Drives themselves");
   });
 
-  it("a missed task: the pill in red and the server's line", async () => {
-    await mount({ ...base, task: { ...base.task, status: "missed", status_line: "Missed · not started (leave by 08:00)" } }, approver);
+  it("a missed task: the pill in red; its leave-by in its own row (the Status row that repeated the pill is gone)", async () => {
+    await mount({ ...base, task: { ...base.task, status: "missed", status_line: "Missed · not started (leave by 08:00)", leave_by: "2026-10-16 08:00", leave_by_source: "plan" } }, approver);
     const pill = screen.getByText("Missed");
     expect(pill.className).toContain("bad");
-    expect(screen.getByText("Missed · not started (leave by 08:00)")).toBeTruthy();
+    expect(screen.queryByText("Missed · not started (leave by 08:00)")).toBeNull();
+    expect(screen.getByText("Leave by").nextElementSibling?.textContent).toBe("08:00 (planned)");
+  });
+});
+
+// Round 4–7 (approved by Sahan 22 October 2026): the Status row repeated the top's pill and banner, so it is gone in every
+// state; the one thing only it said, a running task's location when it is not live, is on the "On the way" banner.
+describe("the task page without its Status row", () => {
+  const states: [string, Partial<TaskDetailData["task"]>][] = [
+    ["assigned", { status: "assigned", status_line: "Accepted 08:12", accepted: "2026-10-16 08:12" }],
+    ["in_progress", { status: "in_progress", status_line: "Started 08:20 · sharing location", started: "2026-10-16 08:20" }],
+    ["completed", { status: "completed", status_line: "Done 11:05 · 52 km logged", started: "2026-10-16 08:20", completed: "2026-10-16 11:05", km: 52 }],
+    ["cancelled", { status: "cancelled", status_line: "Cancelled: Client postponed", cancelled_reason: "Client postponed" }],
+  ];
+  it.each(states)("%s: no Status row; the facts it repeated are in their own rows", async (_name, over) => {
+    await mount({ ...base, task: { ...base.task, ...over } }, dispatcher);
+    const facts = [...screen.getByTestId("task-detail").querySelectorAll("dt")].map((d) => d.textContent);
+    expect(facts).not.toContain("Status");
+    expect(screen.queryByText(over.status_line!)).toBeNull();
+    if (over.accepted) expect(screen.getByText("Accepted").nextElementSibling?.textContent).toContain("08:12");
+    if (over.completed) expect(screen.getByText("Started · done").nextElementSibling?.textContent).toBe("08:20 · 11:05");
+    if (over.cancelled_reason) expect(screen.getByText("Cancelled because").nextElementSibling?.textContent).toBe("Client postponed");
+  });
+
+  it("a running task whose location is not live says so on the banner; shared live, nothing more", async () => {
+    await mount({ ...base, task: { ...base.task, status: "in_progress", status_line: "Started 08:20 · not sharing location", eta: { next_stop: "Kurunegala site", next: "09:40", final: "11:00", as_of: "09:00" } } }, dispatcher);
+    expect(screen.getByTestId("task-banner-line").textContent).toBe("Arrives about 09:40 · back about 11:00 · not sharing location");
+  });
+
+  it("the location words: only a running task's, only when not live", () => {
+    expect(locationWords({ status: "in_progress", status_line: "Started 08:20 · location 12 min old" })).toBe("location 12 min old");
+    expect(locationWords({ status: "in_progress", status_line: "Started 08:20 · not sharing location" })).toBe("not sharing location");
+    expect(locationWords({ status: "in_progress", status_line: "Started 08:20 · sharing location" })).toBeNull();
+    expect(locationWords({ status: "in_progress", status_line: "Started ? · sharing location" })).toBeNull();
+    expect(locationWords({ status: "in_progress" })).toBeNull();
+    expect(locationWords({ status: "assigned", status_line: "Accepted 08:12" })).toBeNull();
   });
 });

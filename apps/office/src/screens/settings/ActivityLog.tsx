@@ -5,6 +5,8 @@
 // Round 3 (Google Workspace's and GitHub's audit logs): routine actions (watching drivers, reading a notification, loading
 // a map) are hidden unless "Show routine actions" is on (off by default, kept in the URL as ?routine=1); refused and
 // failed ones always show. A routine row is quieter (muted).
+// Round 4–7 (the list audit's proposed removal, approved by Sahan 22 October 2026): a done row carries no "Done" pill (nearly
+// every row is done: the pill said it on each); Refused, Failed and In progress keep theirs.
 import type { ActivityEntry, ActivityLog as ActivityLogData } from "../../data/types";
 import { errText } from "../../transport/errors";
 import { Notice, Pill, SwitchLine } from "../../ui/basics";
@@ -13,11 +15,11 @@ import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, SkeletonRows, usePag
 import { PageTop } from "../../ui/Page";
 import { whenText } from "../../lib/when";
 
-/** The outcome's words and tone. */
-export function outcomePill(e: Pick<ActivityEntry, "outcome">): { text: string; tone: "ok" | "bad" | "warn" | "" } {
+/** The outcome's words and tone; none for a done row (the row says it by having no pill). */
+export function outcomePill(e: Pick<ActivityEntry, "outcome">): { text: string; tone: "bad" | "warn" | "" } | null {
   switch (e.outcome) {
     case "done":
-      return { text: "Done", tone: "ok" };
+      return null;
     case "refused":
       return { text: "Refused", tone: "warn" };
     case "failed":
@@ -66,7 +68,7 @@ export default function ActivityLogPage() {
                     <div className="sub">{[e.person, e.channel].filter(Boolean).join(" · ")}</div>
                     {e.reason && <div className="sub" style={{ color: "var(--warn)" }}>{e.reason}</div>}
                   </div>
-                  <Pill tone={o.tone || undefined}>{o.text}</Pill>
+                  {o && <Pill tone={o.tone || undefined}>{o.text}</Pill>}
                 </div>
               );
             })}

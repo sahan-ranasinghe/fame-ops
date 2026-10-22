@@ -20,7 +20,7 @@ import { filterFromWord, VEHICLE_FILTER_WORDS, VEHICLE_FILTERS as FILTERS, type 
 import { docTone, fuelLine } from "./vehicleLogic";
 import { dayWords } from "../lib/when";
 import { Icon } from "../ui/icons";
-import { vehicleStatusShown } from "./lists2Logic";
+import { docsAllValid, validDocsWords, vehicleStatusShown } from "./lists2Logic";
 
 /**
  * A document's chip. Round 4–7 (item 8): `quiet` (the board's rows) draws a valid document as its name with a tick and no
@@ -38,6 +38,19 @@ export function DocChip({ name, d, quiet = false }: { name: string; d?: { chip?:
     );
   }
   return <span className={`doc ${tone}`} title={title}>{name}</span>;
+}
+
+/**
+ * Round 4–7 (the list audit's proposed removal, approved by Sahan 22 October 2026): the three documents valid = one quiet
+ * line, a tick and "Documents valid", in place of the three chips; each one's expiry for the screen reader and on hover.
+ */
+export function DocsValid({ docs }: { docs: VehicleCard["documents"] }) {
+  const words = validDocsWords(docs);
+  return (
+    <span className="doc" style={{ background: "transparent", display: "inline-flex", alignItems: "center", gap: 3, paddingLeft: 2 }} title={`Valid: ${words}`} data-testid="docs-valid">
+      <span aria-hidden="true" style={{ display: "inline-block", width: 13, height: 13, flex: "none", color: "var(--ok)" }}><Icon name="check" /></span>Documents valid<span className="sr-only">: {words}</span>
+    </span>
+  );
 }
 
 /** Phase 7 (§28): a grey "no document" chip and what is missing ("3 documents missing: insurance, emission test, CR"). */
@@ -180,7 +193,7 @@ export function Vehicles() {
                             </td>
                             <td data-label="Km this month"><KmThisMonth v={v} /></td>
                             <td data-label="Next service"><span className={svc.includes("overdue") ? "status bad" : svc.includes("soon") || svc.includes("due") ? "status warn" : ""}>{v.next_service || "—"}</span></td>
-                            <td data-label="Documents"><span><DocChip name="Lic" d={docs.lic} quiet /><DocChip name="Ins" d={docs.ins} quiet /><DocChip name="Emi" d={docs.emi} quiet /><MissingDocs v={v} /></span></td>
+                            <td data-label="Documents">{docsAllValid(v) ? <DocsValid docs={docs} /> : <span><DocChip name="Lic" d={docs.lic} quiet /><DocChip name="Ins" d={docs.ins} quiet /><DocChip name="Emi" d={docs.emi} quiet /><MissingDocs v={v} /></span>}</td>
                             {/* Round 4–7 (item 8): one status. The availability line says it; the pill only for In garage. */}
                             <td data-label="Status">
                               <span>{shown.pill && <Pill tone={/task/i.test(shown.pill) ? "live" : /garage/i.test(shown.pill) ? "warn" : ""}>{shown.pill}</Pill>}
@@ -196,7 +209,7 @@ export function Vehicles() {
               <ListFooter list={list} />
             </div>
           )}
-          <p className="muted small">Document chips: Lic = revenue licence, Ins = insurance, Emi = emission test. A tick = valid, orange = expires within 30 days, red = within 7 days or expired. Grey "no document" = a paper the vehicle should have is not uploaded.</p>
+          <p className="muted small">Document chips: Lic = revenue licence, Ins = insurance, Emi = emission test. "Documents valid" = all three valid. A tick = valid, orange = expires within 30 days, red = within 7 days or expired. Grey "no document" = a paper the vehicle should have is not uploaded.</p>
         </ListWithDetail>
       </VehiclesShown.Provider>
     </section>

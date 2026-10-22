@@ -14,6 +14,18 @@ import { whenText } from "../lib/when";
  */
 export const taskTone = (status: string): Tone => STATUS_TONE[status] ?? "";
 
+/**
+ * Round 4–7 (the Status row is gone, approved by Sahan 22 October 2026: it repeated the top's pill and banner): the one
+ * thing it said that nothing else on the page does, a running task's location when it is not live ("location 12 min old",
+ * "not sharing location"), is now on the "On the way" banner. Read from the server's line ("Started 08:05 · not sharing
+ * location"); nothing when the location is shared live, nothing in any other state.
+ */
+export function locationWords(t: Pick<TaskDetail["task"], "status" | "status_line">): string | null {
+  if (t.status !== "in_progress" || !t.status_line) return null;
+  const where = t.status_line.match(/^Started [^·]* · (.+)$/)?.[1]?.trim();
+  return where && where !== "sharing location" ? where : null;
+}
+
 /** A time at a stop: "45 min", "1 h", "1 h 30 min", "2 h 5 min". */
 export function stayText(minutes: number | null | undefined): string {
   if (minutes == null || !Number.isFinite(minutes)) return "";

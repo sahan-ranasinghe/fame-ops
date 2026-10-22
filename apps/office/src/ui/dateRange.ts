@@ -5,7 +5,7 @@
 // draw them.
 import { addDays, TZ } from "../lib/format";
 
-export type RangeKey = "today" | "yesterday" | "last7" | "week" | "month" | "last_month" | "custom";
+export type RangeKey = "any" | "today" | "yesterday" | "last7" | "week" | "month" | "last_month" | "custom";
 
 export const RANGE_OPTIONS: [RangeKey, string][] = [
   ["today", "Today"],
@@ -18,6 +18,11 @@ export const RANGE_OPTIONS: [RangeKey, string][] = [
 ];
 /** The picker's presets (every range but Custom, which is days tapped on the calendar). */
 export const PRESETS = RANGE_OPTIONS.filter(([k]) => k !== "custom") as [Exclude<RangeKey, "custom">, string][];
+/**
+ * Round 4–7: "Any time" (no dates at all), offered only by a page whose default it is (the Issues page's Open tab: an open
+ * issue is open whenever it was opened). Its from and to are empty: such a page sends no dates.
+ */
+export const ANY_TIME: [Exclude<RangeKey, "custom">, string] = ["any", "Any time"];
 /** One-day mode (the Route): a route is one day. */
 export const ONE_DAY_OPTIONS: [RangeKey, string][] = [["today", "Today"], ["yesterday", "Yesterday"], ["custom", "Custom day"]];
 
@@ -57,6 +62,8 @@ export function monthOf(day: string): { from: string; to: string } {
 /** The dates a range means on a given Colombo day (custom keeps its own). */
 export function rangeDates(range: Exclude<RangeKey, "custom">, today: string): { from: string; to: string } {
   switch (range) {
+    case "any":
+      return { from: "", to: "" };
     case "today":
       return { from: today, to: today };
     case "yesterday": {
@@ -94,9 +101,12 @@ export function tooLong(from: string, to: string, maxDays?: number): string | un
   return daysIn(from, to) > maxDays ? `At most ${maxDays} days at a time: pick a shorter range.` : undefined;
 }
 
-/** Reads ?range=&from=&to=; anything missing or wrong falls back to the page's default. One-day mode keeps To = From. */
+/**
+ * Reads ?range=&from=&to=; anything missing or wrong falls back to the page's default. One-day mode keeps To = From.
+ * "any" is read only on a page whose default it is.
+ */
 export function readRange(params: Pick<URLSearchParams, "get">, def: RangeKey, today: string, oneDay = false): DayRange {
-  const allowed = (oneDay ? ONE_DAY_OPTIONS : RANGE_OPTIONS).map(([k]) => k);
+  const allowed: RangeKey[] = [...(oneDay ? ONE_DAY_OPTIONS : RANGE_OPTIONS).map(([k]) => k), ...(def === "any" && !oneDay ? ["any" as const] : [])];
   const fallback = def === "custom" || !allowed.includes(def) ? "today" : def;
   const asked = params.get("range") as RangeKey | null;
   const range = asked && allowed.includes(asked) ? asked : fallback;
@@ -154,6 +164,7 @@ export const dayText = (d: string, year = false): string => short(d, year);
  * "28 Sep – 4 Oct", "28 Dec 2026 – 3 Jan 2027". The year only when it is not this year's (or the range crosses one).
  */
 export function pickerText(range: RangeKey, from: string, to: string, today: string): string {
+  if (range === "any") return ANY_TIME[1];
   const preset = RANGE_OPTIONS.find(([k]) => k === range && k !== "custom")?.[1];
   const year = from.slice(0, 4) !== to.slice(0, 4) || from.slice(0, 4) !== today.slice(0, 4);
   let days: string;
