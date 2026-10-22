@@ -402,7 +402,7 @@ export const searchPlaces = tool({
   readOnly: true,
   input: z.object({
     text: z.string().trim().max(500).optional().describe('What was typed or pasted: a name, a site id, "lat, lng" or a Google Maps link'),
-    suggest: z.boolean().optional().describe("With no text: suggestions for an empty box (recent, our places, the nearest towns)"),
+    suggest: z.boolean().optional().describe("With no text: suggestions for an empty box (Saved: the company's places; Recent: the person's own)"),
     near: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).optional()
       .describe("Where the person is (the phone's position): the suggestions are nearest to it, else to the base place"),
     limit: z.number().int().min(1).max(20).optional().describe("Our places at most (default 8)"),

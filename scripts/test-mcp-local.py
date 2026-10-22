@@ -357,14 +357,17 @@ pin = tool("search_places", {"text": "6.9271, 79.8612"})
 check(pin["pin"]["from"] == "coordinates" and pin["pin"]["lat"] == 6.9271 and pin["results"] == [], "pasted coordinates answer a pin", json.dumps(pin))
 link = tool("search_places", {"text": "https://www.google.com/maps/place/Galle+Face+Green/@6.9271,79.8450,17z/data=!3m1!4b1!4m6!3m5!8m2!3d6.92708!4d79.84452"})
 check(link["pin"] == {"lat": 6.92708, "lng": 79.84452, "name": "Galle Face Green", "from": "link", "maps": link["pin"]["maps"]}, "a Google Maps link answers the place's own pin and name", json.dumps(link))
-# Hotfix O2-H1 (Part A): an empty box asks for suggestions (recent, our places, the nearest towns), nearest to `near`.
+# Hotfix O2-H1 (Part A): an empty box asks for suggestions, nearest to `near`. Round 4–7 (item 10, §33.9): the empty box is
+# Saved (the company's places, nearest first, with their distance) and the person's own Recent; the towns are no longer
+# suggested (they are found by typing).
 sg = tool("search_places", {"suggest": True, "near": {"lat": 6.9271, "lng": 79.8612}})
-check(sg.get("suggested") is True and sg["text"] == "" and any(r["layer"] == "town" and r["badge"] == "Town" and r["pinned"] for r in sg["results"]),
-      "search_places {suggest, near}: suggestions with the nearest towns as their own layer", json.dumps(sg)[:300])
-towns = [r for r in sg["results"] if r["layer"] == "town"]
-kms = [float(r["detail"].split(" ")[0]) for r in towns]
-check(0 < len(towns) <= 5 and all(r["detail"].endswith(" km") for r in towns) and kms == sorted(kms),
-      "at most 5 towns, each with its distance, nearest first (the local towns table is a sample)", json.dumps(towns)[:300])
+saved = [r for r in sg["results"] if r.get("group") == "saved"]
+check(sg.get("suggested") is True and sg["text"] == "" and len(saved) > 0 and all(r.get("group_label") == "Saved" for r in saved)
+      and all(r.get("group") in ("saved", "recent", "for") for r in sg["results"]),
+      "search_places {suggest, near}: the suggestions in groups, Saved first", json.dumps(sg)[:300])
+kms = [float(r["detail"].split(" · ")[-1].split(" ")[0]) for r in saved if r.get("detail", "").endswith(" km")]
+check(not any(r["layer"] == "town" for r in sg["results"]) and len(sg["results"]) <= 7 and kms == sorted(kms),
+      "no towns in an empty box, about 5 rows, the saved places nearest first with their distance", json.dumps(sg["results"])[:300])
 check(any(r["layer"] == "place" and r["badge"] == "Office" for r in sg["results"]) and all(r["layer"] != "map" for r in sg["results"]),
       "our office is among the suggestions; the map search is never asked for suggestions")
 sg2 = tool("search_places", {"suggest": True})
