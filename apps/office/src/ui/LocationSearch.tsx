@@ -15,7 +15,10 @@
 // An empty box (Round 1 item 6, docs/ui-patterns.md "Where suggestions"): on focus it asks search_places {suggest} once
 // and shows at most 5 rows, our places (offices first) then the 3 used most recently, each with a building or a clock
 // icon and no badge, no towns; "More places" under them shows the rest in place (ui/placeSuggestLogic.ts).
-import { useEffect, useId, useRef, useState } from "react";
+// Round 4–7 (item 10, Uber / Google Maps): the server answers each row's group, shown under small headers "Saved",
+// "Recent" (the person's own) and, when someone else's request is edited or decided (<SuggestFor request>), "<Name>'s
+// recent" (search_places for_request / for_person).
+import { createContext, Fragment, type ReactNode, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import type { GooglePlaceAnswer, PastedPin, PlaceDetail, SearchAnswer, SearchResult } from "../data/types";
 import { PinMap } from "../map/PinMap";
@@ -23,7 +26,7 @@ import type { FleetError } from "../transport/types";
 import { errText } from "../transport/errors";
 import { Pill } from "./basics";
 import { Icon } from "./icons";
-import { splitSuggestions, type WhereIcon, whereRows } from "./placeSuggestLogic";
+import { groupedWhere, startsGroup, suggestArgs, type SuggestForWhom } from "./placeSuggestLogic";
 import { badgeTone, DEBOUNCE_MS, inLanka, looksPasted, type Picked, pickedOf, shouldSearch } from "./locationLogic";
 
 interface Confirming {
@@ -34,6 +37,17 @@ interface Confirming {
   ref?: string;
   attribution?: string;
   address?: string;
+}
+
+const SuggestForContext = createContext<SuggestForWhom | null>(null);
+
+/**
+ * Round 4–7 (item 10): the place boxes under it belong to someone else's trip (an approver editing or deciding another
+ * person's request): an empty box adds that person's recent places. Nothing for one's own request.
+ */
+export function SuggestFor({ request, person, children }: SuggestForWhom & { children: ReactNode }) {
+  const value = useMemo(() => (request || person ? { request, person } : null), [request, person]);
+  return <SuggestForContext.Provider value={value}>{children}</SuggestForContext.Provider>;
 }
 
 export function LocationSearch({ id, value, onText, onPick, placeholder, label, google = false }: {
@@ -50,6 +64,7 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
   google?: boolean;
 }) {
   const { me, transport } = useFleet();
+  const forWhom = useContext(SuggestForContext);
   const canSearch = me.tools.includes("search_places");
   const useGoogle = google && !!me.map?.places && me.tools.includes("google_place");
   /** One token per typing session; a pick ends it (the next key starts another). */
@@ -76,11 +91,11 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
     if (!canSearch || !open || !empty || suggestAsked.current) return;
     suggestAsked.current = true;
     setSuggestBusy(true);
-    transport.call<SearchAnswer>("search_places", { suggest: true })
+    transport.call<SearchAnswer>("search_places", suggestArgs(forWhom))
       .then((a) => setSuggested(a))
       .catch(() => { suggestAsked.current = false; })
       .finally(() => setSuggestBusy(false));
-  }, [canSearch, open, empty, transport]);
+  }, [canSearch, open, empty, transport, forWhom]);
 
   useEffect(() => {
     if (!canSearch || !typed.current) return;
@@ -107,12 +122,9 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
     return () => clearTimeout(timer);
   }, [value, canSearch, transport, useGoogle]);
 
-  const where = empty && suggested ? (() => {
-    const { ours, recent } = splitSuggestions(suggested.results);
-    return whereRows(ours, recent, (r) => r.name);
-  })() : null;
+  const where = empty && suggested ? groupedWhere(suggested.results, (r) => r.name) : null;
   const whereShown = where ? (moreOpen ? [...where.top, ...where.more] : where.top) : [];
-  const icons = new Map<SearchResult, WhereIcon>(whereShown.map((r) => [r.item, r.icon]));
+  const icons = new Map(whereShown.map((r) => [r.item, r.icon]));
   const typedAnswer = empty ? null : answer;
   const pin = typedAnswer?.pin;
   const rows: (SearchResult | { layer: "pin"; pin: PastedPin })[] = empty
@@ -223,7 +235,11 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
       {showList && (
         <ul className="ls-list" id={listId} role="listbox" onMouseDown={(e) => e.preventDefault()}>
           {rows.map((row, i) => (
-            <li key={row.layer === "pin" ? "pin" : `${row.layer}-${row.id ?? row.ref ?? row.name}-${i}`} id={`${listId}-${i}`} role="option" aria-selected={i === active}
+            <Fragment key={row.layer === "pin" ? "pin" : `${row.layer}-${row.id ?? row.ref ?? row.name}-${i}`}>
+            {empty && startsGroup(whereShown, i) && (
+              <li role="presentation" className="ls-group" data-testid="where-group">{whereShown[i].label}</li>
+            )}
+            <li id={`${listId}-${i}`} role="option" aria-selected={i === active}
               className={`ls-row${i === active ? " on" : ""}`} onClick={() => choose(i)}>
               {row.layer === "pin" ? (
                 <>
@@ -239,6 +255,7 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
                 </>
               )}
             </li>
+            </Fragment>
           ))}
           {empty && suggestBusy && rows.length === 0 && <li className="ls-note">Loading…</li>}
           {empty && !moreOpen && where && where.more.length > 0 && (

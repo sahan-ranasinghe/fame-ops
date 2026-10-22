@@ -83,7 +83,7 @@ export function homeChips(permissions: readonly string[]): HomeChip[] {
   return chips;
 }
 
-export type MoreItem = 'tasks' | 'task_history' | 'approve' | 'drivers' | 'timeline' | 'asks' | 'holder_asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'places' | 'maintenance' | 'people_drivers' | 'people_users' | 'settings' | 'activity';
+export type MoreItem = 'tasks' | 'task_history' | 'approve' | 'drivers' | 'timeline' | 'asks' | 'holder_asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'places' | 'maintenance' | 'people_drivers' | 'people_users' | 'settings' | 'activity' | 'retention';
 
 /** What More lists under Work: the screens built so far that are not on the bar. */
 export function moreFor(permissions: readonly string[]): MoreItem[] {
@@ -115,6 +115,8 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     { key: 'settings', need: ['users'] },
     // Round 2b: who changed what and when (activity_log).
     { key: 'activity', need: ['users'] },
+    // Round 4–7 (item 9): Data retention (the periods, Run now).
+    { key: 'retention', need: ['users'] },
   ];
   // Stage 1 (O3 item 3): Tasks → History is the Tasks tab's own button; with Tasks under More, History sits beside it.
   return all.filter((i) => has(permissions, ...i.need) && !onBar.has(i.key) && (i.key !== 'task_history' || !onBar.has('tasks'))).map((i) => i.key);
@@ -124,7 +126,7 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
 export type MoreSection = 'work' | 'people' | 'settings';
 export const MORE_SECTION: Record<MoreItem, MoreSection> = {
   approve: 'work', tasks: 'work', task_history: 'work', drivers: 'work', timeline: 'work', asks: 'work', holder_asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work', maintenance: 'work', places: 'work',
-  people_drivers: 'people', people_users: 'people', settings: 'settings', activity: 'settings',
+  people_drivers: 'people', people_users: 'people', settings: 'settings', activity: 'settings', retention: 'settings',
 };
 
 /** A notification's link on the site (InboxItem.url) → the office screen in the app, or null when O1 has no such screen. */

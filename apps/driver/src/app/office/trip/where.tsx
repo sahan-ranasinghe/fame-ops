@@ -19,7 +19,7 @@ import { Field, Mono, Txt } from '@/components/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
-import { draftWorthKeeping, getDraft, newDraft, requestAgainDraft, setDraft, type TripMode, updateDraft, useTripDraft, withDriver } from '@/office/trip/draft';
+import { draftWorthKeeping, getDraft, newDraft, requestAgainDraft, setDraft, setDraftKeepDays, type TripMode, updateDraft, useTripDraft, withDriver } from '@/office/trip/draft';
 import { pinText, placeBoxState, typedPatch } from '@/office/trip/locationLogic';
 import { editFields } from '@/office/trip/requestLogic';
 import { moveStop, newStop, pickupAtStart, type StopDraft, stopsInput, type StopType, tickStart, type What } from '@/office/trip/stopsLogic';
@@ -44,6 +44,8 @@ export default function TripWhere() {
   const d = useTripDraft();
   const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
   const base = settings.data?.base_place ?? null;
+  // Round 4–7 (item 9): the drafts' keep period (retention.drafts_days), remembered for the draft store.
+  useEffect(() => setDraftKeepDays(settings.data?.settings.retention?.drafts_days), [settings.data]);
   const [editing, setEditing] = useState<string | null>(null); // the stop key whose search is open, or 'start'
   const [asked, setAsked] = useState(false);
   // edit: the request as list_requests answers it now.
@@ -78,11 +80,13 @@ export default function TripWhere() {
     const { behalf, project, need, tools, note, requesterPhone, who, ...trip } = f;
     setDraft({
       mode: 'edit', requestId: id, version: card.version ?? 0, was: f, wasApproved: card.status === 'approved', step: 'where', at: Date.now(), rows: [],
+      // Round 4–7 (item 10): someone else's request: the place boxes add the requester's recent places.
+      ...(card.requested_by !== me.name ? { forRequest: id } : {}),
       fields: { ...trip, title: '', buffer: '', driver: '', vehicle: '', cname: '', cphone: '', notes: '', whatsapp: false },
       // Round 3: who drives, as the request asks it (the old custodian path reads as a driver, as on the site).
       req: { behalf, project, need, tools, note, requesterPhone: requesterPhone ?? '', who },
     });
-  }, [mode, id, req.data]);
+  }, [mode, id, req.data, me.name]);
 
   useEffect(() => {
     if (mode !== 'request' || !again || getDraft()?.againOf === again) return;
@@ -175,7 +179,7 @@ export default function TripWhere() {
         <View style={styles.card}>
           <Txt variant="label" color={colors.muted}>{t('office.trip.startFrom').toUpperCase()}</Txt>
           {editing === 'start' || (f.start.trim() && !startPicked) ? (
-            <PlaceSearch value={f.start} placeholder={t('office.trip.searchPlace')} onText={(text) => updateDraft((x) => ({ ...x, fields: { ...x.fields, start: text, startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined } }))} onPick={pickStart} myLocation autoFocus={editing === 'start'} editing={editing === 'start'} />
+            <PlaceSearch value={f.start} placeholder={t('office.trip.searchPlace')} onText={(text) => updateDraft((x) => ({ ...x, fields: { ...x.fields, start: text, startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined } }))} onPick={pickStart} myLocation autoFocus={editing === 'start'} editing={editing === 'start'} forRequest={d.forRequest} />
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={[styles.mark, { backgroundColor: colors.amber }]}><Mono size={14} bold>S</Mono></View>
@@ -238,7 +242,7 @@ export default function TripWhere() {
                 {s.placeId && s.placePinned === false && <Txt variant="small" color={colors.red}>{t('office.trip.noPinWarning', { place: s.place })}</Txt>}
                 {s.googlePlaceId && <Txt variant="small">{t('office.trip.googleStop')}</Txt>}
                 {open ? (
-                  <PlaceSearch value={s.place} placeholder={t('office.trip.searchPlace')} onText={(text) => patchStop(s.key, typedPatch(text))} onPick={(p) => pickFor(s.key, p)} editing={editing === s.key} autoFocus={editing === s.key} />
+                  <PlaceSearch value={s.place} placeholder={t('office.trip.searchPlace')} onText={(text) => patchStop(s.key, typedPatch(text))} onPick={(p) => pickFor(s.key, p)} editing={editing === s.key} autoFocus={editing === s.key} forRequest={d.forRequest} />
                 ) : (
                   <Pressable accessibilityRole="button" onPress={() => setEditing(s.key)} hitSlop={8} style={{ minHeight: 40, justifyContent: 'center' }}>
                     <Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.changePlace')}</Txt>

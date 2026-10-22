@@ -197,6 +197,12 @@ places, then the rest of the recent ones, at most 50; no towns); it is not shown
 typing, the results are as above, and every badge word the server sends is shown in the person's language (the app maps
 it to a `where.badge.*` key, an unknown word to its layer's; never the server's English word raw; the website is English).
 
+**Groups (Round 4–7, item 10; Uber, Google Maps).** search_places {suggest} answers each row's group: **Saved** (the
+company's places), **Recent** (the person's OWN places only) and, when someone else's request is edited or decided
+(`for_request`), **"<Name>'s recent"**. The empty box shows them in that order under small uppercase headers (at most 7
+rows; the rest under More places), the same icons. An answer without groups keeps the rows above, with no headers; the
+driver's box has no headers. Rules: `groupedWhere` in both `placeSuggestLogic.ts` files.
+
 | Codebase | Component | Rules |
 |---|---|---|
 | App (Office mode and /m/) | `components/patterns/WhereSuggestions.tsx` inside `components/office/PlaceSearch.tsx` (search_places `{suggest}`) | `lib/placeSuggestLogic.ts` |

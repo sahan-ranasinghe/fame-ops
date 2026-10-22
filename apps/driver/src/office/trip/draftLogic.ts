@@ -37,6 +37,8 @@ export interface TripDraft {
   requestId?: string;
   version?: number;
   was?: RequestFields;
+  /** Round 4–7 (item 10): edit of someone else's request: the request id, so the place boxes add the requester's recent. */
+  forRequest?: string;
   /** stops: the task whose stops are changed, the plan version it was shown with, and the stops already reached (they keep their numbers). */
   taskId?: string;
   planVersion?: number;

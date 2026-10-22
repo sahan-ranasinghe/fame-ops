@@ -16,7 +16,7 @@ import { supabase } from '../lib/supabase';
 import { signedOut } from './api';
 import { officeApi } from './client';
 import { getOfficeMe, OFFICE_KEYS, setOfficeMe } from './store';
-import { setDraft } from './trip/draft';
+import { forgetDraftCache } from './trip/draft';
 import type { FleetError, Me } from './types';
 import { setJson } from '../lib/kv';
 
@@ -52,8 +52,9 @@ export async function signInOffice(email: string, password: string): Promise<Off
   if (error) return error.status !== undefined && error.status >= 400 && error.status < 500 ? 'wrong' : 'network';
   const outcome = await loadMe(officeApi);
   if (outcome.kind === 'ok') {
-    // Another person on this phone: the previous person's trip draft goes (one draft for the phone).
-    if (getJson<string>(OFFICE_KEYS.email) !== email.trim().toLowerCase()) setDraft(null);
+    // Round 4–7 (item 10): the trip draft is per person (office/trip/draft.ts): another person's stays on the phone, never
+    // shown here; this person's own comes back (within its 30 days).
+    forgetDraftCache();
     setOfficeMe(outcome.me);
     setJson(OFFICE_KEYS.email, email.trim().toLowerCase());
     // Item 9: the office's notifications on this phone (register_device_token; only when notifications are allowed).
@@ -91,5 +92,6 @@ export async function signOutOffice(): Promise<void> {
   await unregisterPush();
   await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
   setOfficeMe(null);
-  setDraft(null);
+  // Round 4–7 (item 10): the draft is the person's own and stays for their next sign-in; nothing of it is shown now.
+  forgetDraftCache();
 }

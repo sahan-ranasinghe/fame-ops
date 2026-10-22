@@ -42,6 +42,7 @@ import { TaskStops } from "../screens/TaskStops";
 import { FleetSettings, FleetSettingsRoute } from "../screens/settings/FleetSettings";
 import AppErrorsPage from "../screens/settings/AppErrors";
 import ActivityLogPage from "../screens/settings/ActivityLog";
+import DataRetention from "../screens/settings/DataRetention";
 import { MyProfile } from "../screens/settings/MyProfile";
 import { UserForm } from "../screens/settings/UserForm";
 import { UserManage } from "../screens/settings/UserManage";
@@ -194,6 +195,8 @@ export const routes: RouteObject[] = [
       { path: "settings/app-errors", element: <Guard need={["users"]}><AppErrorsPage /></Guard> },
       // Round 2b: who changed what and when (activity_log).
       { path: "settings/activity", element: <Guard need={["users"]}><ActivityLogPage /></Guard> },
+      // Round 4–7 (item 9): Data retention (the periods, Run now).
+      { path: "settings/retention", element: <Guard need={["users"]}><DataRetention /></Guard> },
       { path: "settings/import-sites", element: <Guard need={["vehicles"]}><ImportRoute /></Guard> },
       { path: "settings/notifications", element: <Suspense fallback={<div className="loading">Opening notifications…</div>}><Notifications /></Suspense> },
       // Hotfix O2-H2 (Part 2): the sounds and each group of events on their own page (a static segment outranks :group).
