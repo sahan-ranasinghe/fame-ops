@@ -309,6 +309,10 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .drawer-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px }
 .drawer-top h2 { font: 800 28px/1.1 var(--font-display) }
 .kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px }
+/* A cell never grows past its column; a driver (avatar, name, the plate chip that never wraps) takes the whole row, so a
+   long name never runs into the next column (the task page's narrow right column at 1440 px). */
+.kv > div { min-width: 0 }
+.kv > div:has(> dd .dline) { grid-column: 1 / -1 }
 .kv dt { color: var(--muted); font-size: 13px } .kv dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere }
 .section-t { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 4px 0 -6px }
 .stop { display: flex; gap: 12px; align-items: flex-start }
@@ -1186,10 +1190,11 @@ input[type="checkbox"]:disabled, input[type="radio"]:disabled { opacity: .5; cur
 .vchip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap }
 .vchip.none { border: 1px dashed var(--line-strong); border-radius: 999px; padding: 0 9px; line-height: 1.6 }
 .vchip-note { font-size: 12px }
-.dline { display: inline-flex; align-items: flex-start; gap: 10px; min-width: 0 }
+.dline { display: inline-flex; align-items: flex-start; gap: 10px; min-width: 0; max-width: 100% }
 .dline > .avatar { margin-top: 1px }
 .dline-text { display: grid; gap: 4px; min-width: 0 }
-.dline-text .name { font-weight: 600 }
+/* A long name wraps inside its cell (it ran into the next column on the task page at 1440 px). */
+.dline-text .name { font-weight: 600; overflow-wrap: anywhere }
 .dline-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px }
 .dline-facts .pill { padding: 1px 9px; font-size: 12px; line-height: 1.5 }
 .tcard .who .dline { flex: 1 1 auto }

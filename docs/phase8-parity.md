@@ -783,3 +783,29 @@ function is where it was or one tap away (⋯ More). The rows that moved, and wh
 
 Kept behaviour checked: tests/driverToday.test.tsx (9), tests/taskSheet.test.tsx (7), tests/driverStops.test.tsx,
 scripts/test-driver-3.ts, test-stop-slides, test-vehicle-check, test-part-a. Proposed removals: none.
+
+## Round 4–7: the proposed removals, as decided (Sahan, 22 October 2026)
+
+All approved and done, with his two conditions:
+- **Office mode's Warning / Info chip on issue rows:** gone only inside a group, whose heading shows its severity with an
+  icon (octagon, triangle, info) and the word for the screen reader. Critical keeps its chip; a flat list keeps every chip;
+  a warning row in a critical group keeps its own.
+- **Office mode's five-steps card:** gone, because its lines moved onto the timeline card: "Approved by X · at · plan vN",
+  then "Sent HH:MM · Seen HH:MM · Accepted HH:MM" (and "Left HH:MM" when no start row shows it).
+
+The others:
+- **Issues (site):** the Filter's Snoozed / Resolved / All choices. The Resolved tab's Filter offers Resolved and
+  Dismissed, so Dismissed (no tab of its own) stays a tap away. The Open tab is any time, with no "outside these dates"
+  note.
+- **Activity log (both):** no "Done" pill.
+- **Drivers (site):** no "· 0 declined".
+- **Reminders (site):** the "Also needs attention" group and `dueFromVehicles` are deleted (dead code).
+- **Vehicles list (both):** one "Documents valid" line when all three are valid. Each document stays on the vehicle's own
+  page with its date.
+- **Tasks tab (Office mode):** no always-on Waiting chip; a red "Late" chip in words when the request is late.
+- **The site's task page:** no Status row (its location words moved to the banner). The Gaps list is one line, "No GPS for
+  30 min · N gaps", with the markers kept on the map.
+- **Review (Office mode):** no vehicle-used line for a chosen plate already on the driver's row.
+- **The holder's conflict card (both):** the requester's own Call / WhatsApp is not drawn again when the holder line shows
+  that number.
+- **Kept:** the Pre-trip tag when the vehicle_check switch is off.
