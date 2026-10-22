@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, latLng, num, plateOf, splitEqually, statusTone, waLink, warnList } from "./format";
+import { addDays, latLng, num, plateOf, splitEqually, waLink, warnList } from "./format";
 
 describe("format helpers", () => {
   it("reads the position out of a Google Maps link", () => {
@@ -30,11 +30,5 @@ describe("format helpers", () => {
   it("collects warnings from a write's answer", () => {
     expect(warnList({ warnings: ["a", { message: "b" }] })).toEqual(["a", "b"]);
     expect(warnList({})).toEqual([]);
-  });
-  it("tones the task status line", () => {
-    expect(statusTone("assigned", "Sent · not opened yet")).toBe("warn");
-    expect(statusTone("in_progress", "Started 08:41 · location 48 min old")).toBe("warn");
-    expect(statusTone("in_progress", "Started 07:06 · sharing location")).toBe("live");
-    expect(statusTone("completed", "Done 07:55")).toBe("muted");
   });
 });

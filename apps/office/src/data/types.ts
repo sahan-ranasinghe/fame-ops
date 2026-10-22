@@ -1935,7 +1935,7 @@ export interface TripPurposeResult {
 
 /** Hotfix 3 (L1, L5): a person's page preferences, kept on the server (my_prefs, set_my_prefs merges what it is given). */
 export interface OfficePrefs {
-  /** The Overview's collapsed sections: "requests", "needs_driver", "critical", "tiles", "road", "attention", "my_trips". */
+  /** The Overview's collapsed sections: "requests", "needs_driver", "critical", "road", "attention", "my_trips" (an older "tiles" is ignored). */
   overview_collapsed?: string[];
   /** The side menu's collapsed sections: "today", "fleet", "reports", "admin". */
   menu_collapsed?: string[];

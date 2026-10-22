@@ -8,7 +8,7 @@ import { ChoiceChip } from "./Select";
 import { datesInWords } from "../lib/when";
 
 export const Plate = ({ v }: { v?: string | null }) => v ? <span className="plate">{plateOf(v)}</span> : null;
-export const Pill = ({ tone = "", children }: { tone?: Tone; children: ReactNode }) => <span className={`pill ${tone}`}>{children}</span>;
+export const Pill = ({ tone = "", title, children }: { tone?: Tone; title?: string; children: ReactNode }) => <span className={`pill ${tone}`} title={title}>{children}</span>;
 export const Dot = ({ tone = "" }: { tone?: Tone }) => <i className={`dot ${tone}`} />;
 export const Loading = ({ children }: { children: ReactNode }) => <div className="loading">{children}</div>;
 export const Empty = ({ children }: { children: ReactNode }) => <div className="empty">{children}</div>;

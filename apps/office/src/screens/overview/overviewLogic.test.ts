@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Attention, AttentionGroup, Overview } from "../../data/types";
-import { attentionOf, criticalOf, groupRow, inLines, myTripsArgs, overviewSections, requestsLine, rowsFor, tripRow, viewAll, withoutIssues } from "./overviewLogic";
+import { attentionOf, criticalOf, freeNow, groupRow, inLines, myTripsArgs, overviewSections, requestsLine, rowsFor, tripRow, viewAll, withoutIssues } from "./overviewLogic";
 
 const me = (permissions: string[], tools: string[] = ["my_trips"]) => ({ permissions: permissions as never, tools });
 const a = (id: string, extra: Partial<Attention> = {}): Attention => ({ what: `Item ${id}`, issue_id: id, severity: "warning", kind: "odometer_flag", ...extra });
@@ -18,28 +18,40 @@ const base: Overview = {
 };
 
 describe("the sections by role", () => {
+  // The tiles are no section (the design pass, pilot e): the StatsRow sits above them all, for everyone.
   it("action first: approver, dispatcher, requester, viewer", () => {
-    expect(overviewSections(me(["view", "request", "approve", "assign_tasks", "vehicles", "issues"]))).toEqual(["requests", "needs_driver", "critical", "tiles", "road", "attention"]);
-    expect(overviewSections(me(["view", "request", "assign_tasks"]))).toEqual(["needs_driver", "critical", "tiles", "road", "attention"]);
-    expect(overviewSections(me(["view", "request"]))).toEqual(["my_trips", "tiles"]);
-    expect(overviewSections(me(["view"]))).toEqual(["tiles", "road"]);
+    expect(overviewSections(me(["view", "request", "approve", "assign_tasks", "vehicles", "issues"]))).toEqual(["requests", "needs_driver", "critical", "road", "attention"]);
+    expect(overviewSections(me(["view", "request", "assign_tasks"]))).toEqual(["needs_driver", "critical", "road", "attention"]);
+    expect(overviewSections(me(["view", "request"]))).toEqual(["my_trips"]);
+    expect(overviewSections(me(["view"]))).toEqual(["road"]);
   });
   it("mixed: an approver without issues has no issue sections; a requester without the my_trips tool gets the viewer's", () => {
-    expect(overviewSections(me(["view", "approve"]))).toEqual(["requests", "needs_driver", "tiles", "road"]);
-    expect(overviewSections(me(["view", "request"], []))).toEqual(["tiles", "road"]);
-    expect(overviewSections(me(["view", "issues"]))).toEqual(["critical", "tiles", "road", "attention"]);
+    expect(overviewSections(me(["view", "approve"]))).toEqual(["requests", "needs_driver", "road"]);
+    expect(overviewSections(me(["view", "request"], []))).toEqual(["road"]);
+    expect(overviewSections(me(["view", "issues"]))).toEqual(["critical", "road", "attention"]);
   });
-  it("lines on a desktop: pairs, a wide one alone, an odd one out alone", () => {
-    expect(inLines(["requests", "needs_driver", "critical", "tiles", "road", "attention"])).toEqual([["requests", "needs_driver"], ["critical"], ["tiles"], ["road", "attention"]]);
-    expect(inLines(["requests", "tiles", "road", "attention"])).toEqual([["requests"], ["tiles"], ["road", "attention"]]);
-    expect(inLines(["my_trips", "tiles"])).toEqual([["my_trips"], ["tiles"]]);
-    expect(inLines(["tiles", "road"])).toEqual([["tiles"], ["road"]]);
+  it("lines on a desktop: pairs of the same kind (the person's work, the fleet's state), a wide one alone, an odd one out alone", () => {
+    expect(inLines(["requests", "needs_driver", "critical", "road", "attention"])).toEqual([["requests", "needs_driver"], ["critical"], ["road", "attention"]]);
+    // On the road and Needs attention stay side by side, whatever is above them.
+    expect(inLines(["requests", "road", "attention"])).toEqual([["requests"], ["road", "attention"]]);
+    expect(inLines(["needs_driver", "road", "attention"])).toEqual([["needs_driver"], ["road", "attention"]]);
+    expect(inLines(["my_trips", "attention"])).toEqual([["my_trips"], ["attention"]]);
+    expect(inLines(["my_trips"])).toEqual([["my_trips"]]);
+    expect(inLines(["critical", "road"])).toEqual([["critical"], ["road"]]);
   });
   it("5 rows on a desktop, 3 on a phone; View all with the count", () => {
     expect(rowsFor(false)).toBe(5);
     expect(rowsFor(true)).toBe(3);
     expect(viewAll(12)).toBe("View all (12)");
     expect(viewAll(undefined)).toBe("View all");
+  });
+});
+
+describe("Free now", () => {
+  it("the vehicles parked and not in the garage (the server's parked counts the garage)", () => {
+    expect(freeNow({ parked: 3, in_garage: 1 })).toBe(2);
+    expect(freeNow({ parked: 3 })).toBe(3);
+    expect(freeNow({ parked: 1, in_garage: 2 })).toBe(0);
   });
 });
 

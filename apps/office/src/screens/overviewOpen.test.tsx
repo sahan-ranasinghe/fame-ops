@@ -120,7 +120,7 @@ async function mount(url: string, who: Me = admin) {
   return transport;
 }
 
-const tile = (label: string) => within(document.querySelector(".tiles") as HTMLElement).getByText(label).closest(".tile") as HTMLElement;
+const tile = (label: string) => within(screen.getByTestId("stats-tiles")).getByText(label).closest(".tile") as HTMLElement;
 
 /** A phone (the one breakpoint, 768 px) for one test. */
 function asPhone() {
