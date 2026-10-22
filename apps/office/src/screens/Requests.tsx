@@ -28,6 +28,7 @@ import { LATE_BADGE, proposalLine, requestView } from "./approvalLogic";
 import { ReviewingLine } from "./approvers";
 import { RequestStatusPill } from "./requestParts";
 import { timelineSteps } from "./requestLogic";
+import { requestPillShown, requestStepWords } from "./lists2Logic";
 import { DEFAULT_REQUESTS_FILTER, filterTitle, REQUEST_FILTER_KEYS, REQUEST_FILTERS, requestsArgs, requestsEmptyText, REQUESTS_KEY, type RequestsFilter } from "./requestsListLogic";
 
 export function Requests() {
@@ -108,13 +109,15 @@ export function Requests() {
                               return who ? <div className="sub" data-testid="row-asked">{who}</div> : null;
                             })()}</td>
                             <td data-label="Status">
-                              <RequestStatusPill status={q.status} />
+                              {/* Round 4–7 (item 8): the status pill only when the filter does not say it (every row under All). */}
+                              {requestPillShown(filter, q.status) && <RequestStatusPill status={q.status} />}
                               {q.late && <> <Pill tone="bad">{LATE_BADGE}</Pill></>}
                               {(() => {
                                 const last = timelineSteps(q).filter((s) => s.done).pop();
                                 const at = datesInWords(last?.at);
-                                const words = q.one_step ? "booked directly" : last && last.label !== "Sent" ? `${last.label}${at ? ` · ${at}` : ""}` : at ? `sent ${at}` : "";
-                                return words ? <div className="sub" style={{ marginTop: 4 }}>{words}</div> : null;
+                                // Round 4–7 (item 8): a step that is the row's status ("Approved") says only its when and who.
+                                const words = requestStepWords(last, at, q.status, q.one_step);
+                                return words ? <div className="sub" style={{ marginTop: 4 }} data-testid="request-step">{words}</div> : null;
                               })()}
                               {/* Hotfix 2 (K): another approver has its decide page open. */}
                               {(q.status === "waiting" || q.status === "changed") && <ReviewingLine list={q.reviewing} block />}

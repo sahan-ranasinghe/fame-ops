@@ -47,6 +47,7 @@ import {
 import { assignLink, countsLine } from "./asks/askLogic";
 import { AnswerLine, AskSheet, useAskAnswers, usePageAsk } from "./asks/AskSheet";
 import { SearchBox, useSearchBox } from "./listLocal";
+import { boardStatusShown } from "./lists2Logic";
 import { UnavailabilityEditor } from "./UnavailabilityEditor";
 import { entryChip, shortDay } from "./unavailabilityLogic";
 
@@ -152,7 +153,8 @@ export function DriversBoard() {
                 return (
                 <DriverRow
                   key={driverKey(d)}
-                  d={{ ...d, now_status: d.status }}
+                  // Round 4–7 (item 8): under On a task, Off duty or Not available the chip says only what the filter does not ("Since 07:40").
+                  d={{ ...d, now_status: boardStatusShown(d.status, filter) }}
                   phone={toPhoneLinks(d.links)}
                   right={assign
                     ? <Link className="btn small primary" to={assign} data-testid="board-assign">Assign →</Link>

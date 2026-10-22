@@ -15,7 +15,7 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import type { CreatedTaskCard, MyTrips as MyTripsData, RequestCard } from "../data/types";
+import type { CreatedTaskCard, MyTrips as MyTripsData, RequestCard, TripLive } from "../data/types";
 import { errText } from "../transport/errors";
 import { Segmented, Notice, Pill, VehicleThumb } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
@@ -44,12 +44,14 @@ import {
   TRIP_SHOW_OPTIONS,
   TRIP_STATUS_OPTIONS,
   totalsLine,
+  type TripShow,
   type TripStatus,
   vehicleOf,
 } from "./myTripsLogic";
 import { TripCardsContext, TRIPS_KEY, TRIPS_PATH, useMyTripsArgs } from "./myTripsQuery";
 import { ExpiredBadge, RequestAgain } from "./requestParts";
 import { TRIP_ACTION_TEXT, tripTaskId } from "./myTripLogic";
+import { createdTagShown, tripStatusShown } from "./lists2Logic";
 
 type Trip = RequestCard | CreatedTaskCard;
 
@@ -87,6 +89,26 @@ function DriverCell({ a, waiting }: { a: RequestCard["assigned"]; waiting: boole
   );
 }
 
+/**
+ * Round 4–7 (item 8): the trip's status said once (Uber's trip list): the pill, what the live text adds ("14:20" after
+ * Done, nothing after Waiting), and the decision with the pill's verb beside it ("by Palitha · 10:42" after Approved; the
+ * verb is read to the screen reader). "Approved" was up to three times.
+ */
+function TripStatus({ live, decisions, badge }: { live: TripLive; decisions: string[]; badge: ReactNode }) {
+  const word = live.state === "expired" ? "Expired" : liveWord(live.state);
+  const s = tripStatusShown(word, live, decisions);
+  return (
+    <>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }} data-testid="trip-live">
+        {badge}
+        {s.merged.map((d) => <span key={d.text} className="sub" data-testid="trip-decision"><span className="sr-only">{d.verb}</span>{d.text}</span>)}
+        {s.rest && <span className="sub" data-testid="trip-live-rest">{s.rest}</span>}
+      </div>
+      {s.lines.map((l) => <div key={l} className="sub" data-testid="trip-decision">{l}</div>)}
+    </>
+  );
+}
+
 function StatusCell({ q, search }: { q: RequestCard; search: string }) {
   const live = liveOf(q);
   const lines = decisionLines(q);
@@ -94,9 +116,7 @@ function StatusCell({ q, search }: { q: RequestCard; search: string }) {
   const approver = q.approved_by && !q.cancelled_by && !q.declined_by ? personPhone(q.approved_by) : null;
   return (
     <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
-      {live.state === "expired" ? <ExpiredBadge /> : <Pill tone={liveTone(live.state)}>{liveWord(live.state)}</Pill>}
-      <span className="sub" data-testid="trip-live">{live.text}</span>
-      {lines.map((l) => <div key={l} className="sub" data-testid="trip-decision">{l}</div>)}
+      <TripStatus live={live} decisions={lines} badge={live.state === "expired" ? <ExpiredBadge /> : <Pill tone={liveTone(live.state)}>{liveWord(live.state)}</Pill>} />
       {approver && <Inside><ContactButtons phone={approver} label="Call fleet admin" testId="call-approver" /></Inside>}
       {/* Round 3 (A6): an expired request is asked again from its row (everything copied but the day). */}
       <Inside><RequestAgain q={q} className="btn small" /></Inside>
@@ -132,7 +152,7 @@ function RequestRow({ t, search }: { t: RequestCard; search: string }) {
 }
 
 /** A task the person created directly: its title, when, route, live state and driver; it opens the task. */
-function CreatedTaskRow({ t, search }: { t: CreatedTaskCard; search: string }) {
+function CreatedTaskRow({ t, search, show }: { t: CreatedTaskCard; search: string; show: TripShow }) {
   const navigate = useNavigate();
   const riding = isPassengerCard(t);
   const to = createdTaskLink(t, search);
@@ -144,7 +164,8 @@ function CreatedTaskRow({ t, search }: { t: CreatedTaskCard; search: string }) {
       </td>
       <td data-label="Trip">
         <div>
-          <div className="name">{riding ? <Pill tone="live">Passenger</Pill> : <Pill tone="">Task I created</Pill>}<Link to={to} onClick={(e) => e.stopPropagation()}>{t.title}</Link></div>
+          {/* Round 4–7 (item 8): "Task I created" only where the list mixes it with requests (not under that filter); Passenger always. */}
+          <div className="name">{riding ? <Pill tone="live">Passenger</Pill> : createdTagShown(show) ? <Pill tone="">Task I created</Pill> : null}<Link to={to} onClick={(e) => e.stopPropagation()}>{t.title}</Link></div>
           {t.route && <div className="sub">{t.route}</div>}
           {t.stops_count && t.stops_count > 2 ? <div className="sub">{t.stops_count} stops</div> : null}
           {t.label && <div className="sub">{t.label}</div>}
@@ -152,9 +173,7 @@ function CreatedTaskRow({ t, search }: { t: CreatedTaskCard; search: string }) {
       </td>
       <td data-label="Status">
         <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
-          <Pill tone={liveTone(live.state)}>{liveWord(live.state)}</Pill>
-          <span className="sub" data-testid="trip-live">{live.text}</span>
-          {t.approved_by && <div className="sub" data-testid="trip-decision">{decisionLines({ approved_by: t.approved_by })[0]}</div>}
+          <TripStatus live={live} decisions={t.approved_by ? decisionLines({ approved_by: t.approved_by }) : []} badge={<Pill tone={liveTone(live.state)}>{liveWord(live.state)}</Pill>} />
           <TripActionButton t={t} search={search} />
         </div>
       </td>
@@ -233,7 +252,7 @@ export function MyTrips() {
                       <table data-testid="trips-table">
                         <thead><tr><th>When</th><th>Trip</th><th>Status</th><th>Driver and vehicle</th></tr></thead>
                         <tbody>
-                          {trips.map((t) => isCreatedTask(t) ? <CreatedTaskRow key={`task:${t.id}`} t={t} search={query} /> : <RequestRow key={t.id} t={t} search={query} />)}
+                          {trips.map((t) => isCreatedTask(t) ? <CreatedTaskRow key={`task:${t.id}`} t={t} search={query} show={show} /> : <RequestRow key={t.id} t={t} search={query} />)}
                         </tbody>
                       </table>
                     </div>

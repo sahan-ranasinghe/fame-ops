@@ -110,6 +110,13 @@ async function mount(person: Me = requester, url = "/my-trips", created: Created
 
 afterEach(() => vi.useRealTimers());
 
+/** What a status line shows (Round 4–7, item 8): its parts' words with a space between, the screen reader's own words left out. */
+function shownWords(e: HTMLElement): string {
+  const copy = e.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll(".sr-only").forEach((x) => x.remove());
+  return Array.from(copy.children).map((c) => (c.textContent ?? "").trim()).filter(Boolean).join(" ");
+}
+
 describe("My trips", () => {
   it("this month and All by default: every trip with its live state, who decided it, the driver with Call driver", async () => {
     const t = await mount();
@@ -117,7 +124,9 @@ describe("My trips", () => {
     expect(screen.getByRole("heading", { name: "My trips" })).toBeTruthy();
     const rows = screen.getAllByTestId("trip-row");
     expect(rows).toHaveLength(3);
-    expect(screen.getAllByTestId("trip-live").map((e) => e.textContent)).toEqual(["On the way · 09:30", "Declined · no vehicle that day", "Waiting"]);
+    // Round 4–7 (item 8): the status said once: the pill, what the live text adds, the decision with the pill's verb beside it
+    // (the verb read to the screen reader only); "Declined · no vehicle that day" is not said again over the decision line.
+    expect(screen.getAllByTestId("trip-live").map(shownWords)).toEqual(["On the way 09:30", "Declined by Palitha · Sat 17 Oct 08:10 · no vehicle that day", "Waiting"]);
     expect(screen.getAllByTestId("trip-decision").map((e) => e.textContent)).toEqual(["Approved by Palitha · 08:42", "Declined by Palitha · Sat 17 Oct 08:10 · no vehicle that day"]);
     // The approved trip: the driver, the plate, Call driver (on a computer: the number, Copy, WhatsApp web) and the approver.
     const first = within(rows[0]);
@@ -210,7 +219,7 @@ describe("My trips: the tasks I created (Hotfix 3, Hotfix 2's decision 2)", () =
     expect(row.textContent).toContain("Mon 19 Oct 08:00");
     expect(row.textContent).toContain("Head office → Kandy site");
     expect(row.textContent).toContain("3 stops");
-    expect(within(row).getByTestId("trip-live").textContent).toBe("On the way · 08:10");
+    expect(shownWords(within(row).getByTestId("trip-live"))).toBe("On the way 08:10");
     expect(within(row).getByTestId("trip-driver").textContent).toContain("Ruwan Silva");
     expect(within(within(row).getByTestId("call-driver")).getByText("077 111 2223")).toBeTruthy();
     // The Call button does its own thing; the row opens the task (not the request page).

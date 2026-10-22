@@ -25,6 +25,7 @@ import { LoadMore, PAGE_SIZE, type PagedList, SkeletonRows } from "../ui/ListKit
 import { ListWithDetail } from "../ui/Page";
 import { decidedText } from "./approversLogic";
 import { finishChip } from "./myTripLogic";
+import { boardFinishText } from "./lists2Logic";
 import { LateReportLine } from "./LateReport";
 import { NeedsDriverList } from "./NeedsDriverList";
 import { TripTags } from "./TripPurpose";
@@ -62,7 +63,8 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
       {/* Round 4–7 (4b): a trip nobody drives with the app, closed without its odometer: Completed · not confirmed (grey). */}
       {(() => {
         const chip = finishChip(t.finish_flag);
-        return chip && <span><span className={`pill ${chip.tone}`} title={t.finish_flag?.text} data-testid="card-finish-flag">{chip.text}</span></span>;
+        // Round 4–7 (item 8): in the Completed column the chip says "Not confirmed" (the column says Completed).
+        return chip && <span><span className={`pill ${chip.tone}`} title={t.finish_flag?.text} data-testid="card-finish-flag">{boardFinishText(chip.text, col)}</span></span>;
       })()}
     </button>
   );

@@ -19,10 +19,25 @@ import { ListFooter, ListStale, ListWaiting, SearchBox, useSearchBox } from "./l
 import { filterFromWord, VEHICLE_FILTER_WORDS, VEHICLE_FILTERS as FILTERS, type VehicleFilter as Filter, withParam } from "./overviewLinks";
 import { docTone, fuelLine } from "./vehicleLogic";
 import { dayWords } from "../lib/when";
+import { Icon } from "../ui/icons";
+import { vehicleStatusShown } from "./lists2Logic";
 
-export function DocChip({ name, d }: { name: string; d?: { chip?: string; expiry?: string } }) {
+/**
+ * A document's chip. Round 4–7 (item 8): `quiet` (the board's rows) draws a valid document as its name with a tick and no
+ * fill (Fleetio's renewal list: the ok ones quiet, the due ones coloured), so the expiring, expired and missing ones stand
+ * out; a valid one still says so (the tick, "valid" to the screen reader, the expiry on hover).
+ */
+export function DocChip({ name, d, quiet = false }: { name: string; d?: { chip?: string; expiry?: string }; quiet?: boolean }) {
   const title = d?.expiry ? `${name} expires ${dayWords(d.expiry, { inline: true })}` : `${name}: ${d?.chip ?? "not set"}`;
-  return <span className={`doc ${docTone(d?.chip)}`} title={title}>{name}</span>;
+  const tone = docTone(d?.chip);
+  if (quiet && tone === "ok") {
+    return (
+      <span className="doc" style={{ background: "transparent", display: "inline-flex", alignItems: "center", gap: 3, paddingLeft: 2 }} title={title} data-testid="doc-ok">
+        <span aria-hidden="true" style={{ display: "inline-block", width: 13, height: 13, flex: "none", color: "var(--ok)" }}><Icon name="check" /></span>{name}<span className="sr-only"> valid</span>
+      </span>
+    );
+  }
+  return <span className={`doc ${tone}`} title={title}>{name}</span>;
 }
 
 /** Phase 7 (§28): a grey "no document" chip and what is missing ("3 documents missing: insurance, emission test, CR"). */
@@ -140,7 +155,7 @@ export function Vehicles() {
                       {list.items.map((v) => {
                         const svc = String(v.service_state || "").toLowerCase();
                         const docs = v.documents ?? {};
-                        const st = String(v.status || "");
+                        const shown = vehicleStatusShown(v);
                         return (
                           <tr key={v.reg_no} className="click" data-testid="vehicle-row" onClick={() => navigate({ pathname: vehiclePath(v.reg_no), search: params.toString() ? `?${params}` : "" })}>
                             <td data-label="Vehicle"><span><span className="with-photo"><VehicleThumb src={v.thumb_url} /><span className="plate">{v.reg_no}</span></span><div className="sub" style={{ marginTop: 6 }}>{joinDots([v.make_model, v.seats ? `${v.seats} seats` : "", v.type && !v.make_model ? v.type : "", v.fuel_type ? v.fuel_text : ""])}</div>{!v.fuel_type && v.fuel_text && <div className="sub"><FuelText v={v} edit={canEdit} /></div>}</span></td>
@@ -165,10 +180,11 @@ export function Vehicles() {
                             </td>
                             <td data-label="Km this month"><KmThisMonth v={v} /></td>
                             <td data-label="Next service"><span className={svc.includes("overdue") ? "status bad" : svc.includes("soon") || svc.includes("due") ? "status warn" : ""}>{v.next_service || "—"}</span></td>
-                            <td data-label="Documents"><span><DocChip name="Lic" d={docs.lic} /><DocChip name="Ins" d={docs.ins} /><DocChip name="Emi" d={docs.emi} /><MissingDocs v={v} /></span></td>
+                            <td data-label="Documents"><span><DocChip name="Lic" d={docs.lic} quiet /><DocChip name="Ins" d={docs.ins} quiet /><DocChip name="Emi" d={docs.emi} quiet /><MissingDocs v={v} /></span></td>
+                            {/* Round 4–7 (item 8): one status. The availability line says it; the pill only for In garage. */}
                             <td data-label="Status">
-                              <span><Pill tone={/task/i.test(st) ? "live" : /garage/i.test(st) ? "warn" : ""}>{st || "—"}</Pill>
-                                {v.availability && <div className={`sub status ${vehicleAvailabilityTone(v.availability)}`} style={{ marginTop: 4 }}>{v.availability}</div>}</span>
+                              <span>{shown.pill && <Pill tone={/task/i.test(shown.pill) ? "live" : /garage/i.test(shown.pill) ? "warn" : ""}>{shown.pill}</Pill>}
+                                {shown.line && <div className={`status ${vehicleAvailabilityTone(shown.line)}`} style={shown.pill ? { marginTop: 4 } : undefined} data-testid="vehicle-availability">{shown.line}</div>}</span>
                             </td>
                           </tr>
                         );
@@ -180,7 +196,7 @@ export function Vehicles() {
               <ListFooter list={list} />
             </div>
           )}
-          <p className="muted small">Document chips: Lic = revenue licence, Ins = insurance, Emi = emission test. Orange = expires within 30 days, red = within 7 days or expired. Grey "no document" = a paper the vehicle should have is not uploaded.</p>
+          <p className="muted small">Document chips: Lic = revenue licence, Ins = insurance, Emi = emission test. A tick = valid, orange = expires within 30 days, red = within 7 days or expired. Grey "no document" = a paper the vehicle should have is not uploaded.</p>
         </ListWithDetail>
       </VehiclesShown.Provider>
     </section>

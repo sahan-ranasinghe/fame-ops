@@ -18,7 +18,9 @@ import { DateRangePicker, type DateRangeValue, useDateRange } from "../ui/DateRa
 import type { FilterValues } from "../ui/filterLogic";
 import { EmptyLine, ListHeader, SkeletonRows, usePagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
-import { amountsLine, megabytes, videoChip, videoTone, videoWords } from "./fuelLogic";
+import { amountsLine, megabytes, videoChip, videoTone } from "./fuelLogic";
+import { Icon } from "../ui/icons";
+import { videoCellWords } from "./lists2Logic";
 import { ListFooter, ListStale, ListWaiting } from "./listLocal";
 import { useVehicleDriver, VehicleDriverFilter } from "./Mileage";
 import { fuelLabel, fuelMonthLine, rangeArgs } from "./mileageLogic";
@@ -104,7 +106,15 @@ export function Fuel() {
                             {/* Round 4–7 (§33.6): no amount given is "–", never LKR 0. */}
                             <td data-label="LKR" className="num">{e.lkr != null ? num(e.lkr) : "–"}</td>
                             <td data-label="Odometer" className="num">{e.odometer_km != null ? `${num(e.odometer_km)} km` : "—"}</td>
-                            <td data-label="Video"><Pill tone={videoTone(e.video.status)}>{videoChip(e.video.status, e.video.interrupted)}</Pill>{e.video.status === "uploaded" && <div className="sub">{videoWords(e.video)}</div>}</td>
+                            {/* Round 4–7 (item 8): "Video" once (the column): an uploaded one is its icon ("Video uploaded" to the screen
+                                reader) with its length and size; a fill without its video keeps its pill (On the phone, No video…). */}
+                            <td data-label="Video">{e.video.status === "uploaded"
+                              ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }} data-testid="fuel-video-ok">
+                                  <span title="Video uploaded" style={{ display: "inline-block", width: 16, height: 16, flex: "none", color: "var(--ok)" }}><Icon name="video" /></span>
+                                  <span className="sr-only">Video uploaded</span>
+                                  <span>{videoCellWords(e.video)}</span>
+                                </span>
+                              : <Pill tone={videoTone(e.video.status)}>{videoChip(e.video.status, e.video.interrupted)}</Pill>}</td>
                           </tr>
                         ))}
                       </tbody>

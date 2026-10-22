@@ -22,6 +22,7 @@ import { ListWithDetail } from "../ui/Page";
 import { badgeTone } from "../ui/locationLogic";
 import { useToast } from "../ui/Toast";
 import { ListFooter, ListStale, ListWaiting, SearchBox, useSearchBox } from "./listLocal";
+import { placeKindShown } from "./lists2Logic";
 import { listArgs, removedLine, type RemovedPlace, type Who, whoOf, whoOptions } from "./placeRemoveLogic";
 
 export const PLACES_CHANGED = "fame:places-changed";
@@ -79,6 +80,7 @@ export function Places() {
   }, { replace: true });
   const search = params.toString() ? `?${params.toString()}` : "";
   const title = whoOptions(me.tools).find(([k]) => k === who)?.[1] ?? "Places";
+  const kindShown = placeKindShown(who);
 
   async function restore(p: RemovedPlace) {
     if (!p.id) return;
@@ -125,13 +127,14 @@ export function Places() {
                   <thead>
                     {removedView
                       ? <tr><th>Place</th><th>Kind</th><th>Site id</th><th>Removed</th><th></th></tr>
-                      : <tr><th>Place</th><th>Kind</th><th>Site id</th><th>District</th><th>Pin</th></tr>}
+                      : <tr><th>Place</th>{kindShown && <th>Kind</th>}<th>Site id</th><th>District</th><th>Pin</th></tr>}
                   </thead>
                   <tbody>
                     {list.items.map((p) => (
                       <tr key={p.id ?? p.name} className={`click${p.id === id ? " selected" : ""}`} onClick={() => p.id && navigate(`/places/${p.id}${search}`)} aria-current={p.id === id ? "true" : undefined} data-testid="place-row">
                         <td data-label="Place"><b>{p.name}</b>{p.address && <div className="sub">{p.address}</div>}</td>
-                        <td data-label="Kind"><Pill tone={badgeTone(placeBadge(p))}>{placeBadge(p)}</Pill></td>
+                        {/* Round 4–7 (item 8): no Kind under Dialog sites / Mobitel sites (every row would say the filter). */}
+                        {kindShown && <td data-label="Kind"><Pill tone={badgeTone(placeBadge(p))}>{placeBadge(p)}</Pill></td>}
                         <td data-label="Site id" className="mono">{p.site_id ?? "—"}</td>
                         {removedView ? (
                           <>
