@@ -734,3 +734,52 @@ function is where it was or one tap away (⋯ More). The rows that moved, and wh
 | No-app trip: its stops | lines | the compact stepper |
 | Site task page | | (new) the banner on the way (a link to Live) or needing a driver (Find a driver); (new) the holder card; the map and the stops left, the people and the rest right when the page is wide (≥ 1360 px the panel takes more room); the rest unchanged |
 | Site passenger's trip | a notice with the live pill | the status banner; the stops on the rail |
+
+## Round 4–7, item 12: the driver's two screens (inventory, from the code at 1dceefc)
+
+**Today (driver app, `app/(tabs)/index.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Date, greeting | dark header | thin top bar ("Good morning / afternoon") |
+| සිංහල / English | header pill | the same pill, light, top right (where the mockup draws a bell: drivers have no notification centre) |
+| Off duty, hint, Start work | dark duty card | grey tile |
+| On duty since, Office can see you | duty card line | the tile's subtitle |
+| Plate, model; Change vehicle (not during a task) | duty card | vehicle tile, "· Change" |
+| Finish work (asked first; not during a task) | duty card button | the tile's switch (the same question) |
+| "Finish the task first." | under the buttons | under the tiles |
+| Vehicle check card / Check now | a card under the notices | the vehicle tile: "Check needed" (amber; the same route and parameters), "✓ Checked" (green), "Problem reported" (red) |
+| Offline line, vehicle taken, duty ended, notices, refused trip, tracking notice, the office's question, points waiting | under the header | under the tiles (unchanged) |
+| NEXT TASK / IN PROGRESS | the card's label | the section head "Next task" / "In progress" with its chip (Leave in 25 min, Leave now, 12 min late, Tomorrow, a day) |
+| Leave time, "Leave by · in 45 min", another day | the card's top | the big mono time + the chip |
+| Title, Changed tag | card | the same |
+| Stops (up to 4, Show all, Arrive by, the Google credit) | StopTimeline | the shared RouteStepper (S / numbers / B "Back at base", the plan's times, "by 11:00" as a chip; the credit under it) |
+| "5 passengers · Contact: name number" | a muted line | "3 people · 197 km" + a call link to the first person; every person with WhatsApp under ⋯; a contact with no phone by name; the full line is the card's screen-reader label |
+| Riders' names; the task's vehicle (only when not the held one); Not sent yet; swap; Accepted ✓ | card | the same |
+| Accept + Start task / Start task / Open task; Running late; Can't do this task / Can't make it (+ the reasons sheet) | card | the same (56 px buttons) |
+| The card opens the preview / the task; the empty state | card | the same |
+| Start a trip | dark button | outline button (amber when nothing is next) |
+| Later today / Coming up rows | rows | "Later today · N" list rows (time, title, people · km · From …, one chip, Changed, the credit) |
+| All today's tasks + "N more later today"; pull to refresh; seen marks; contacts | screen | unchanged |
+
+**The running task (driver app, `app/task/[id].tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Map (both engines, the fallbacks, the note) | top 40 % | top 50 % |
+| Back | top left | the same (its screen-reader name "Back") |
+| On duty / Off duty pill (a tap starts work) | top right | "● In progress since 08:21" (red with a tap that starts work when off duty) |
+| IN PROGRESS + Started 08:21 | sheet head | the pill |
+| Stop name, Google credit, title · people | sheet | the same, with "Next stop · n of N" |
+| Refused trip, tracking notice, arrival card, swap card | sheet | the same, at the top |
+| Fill up on the way · Log fuel | sheet | the same |
+| Distance left (road or straight line) | stats | the grey stats box (+ "arrive about", "be there by") |
+| Start odo, GPS km; the stop list (progress, Skip, the out-of-order slides, notes); Add a stop; All stops in Google Maps; passengers; every call with WhatsApp; Approved by; Running late | sheet | the stops sheet (the stops button) |
+| The current stop's slide (arrive, override, waiting, leave, finish, Undo) | in the list | on the sheet ("Slide when you arrive"; the stop's name for the screen reader) |
+| Navigate, Call contact | two buttons | Navigate (blue) + the call square |
+| Complete task (disabled until the last stop) + its reason | sheet | the stops sheet; on the sheet too once the last stop is done |
+| Report a problem | red text | "Problem with the vehicle?" (the same route and parameters) |
+| Skip sheet, finish question, Log mileage; completed / cancelled / declined views; preview; missing / loading | — | unchanged |
+
+Kept behaviour checked: tests/driverToday.test.tsx (9), tests/taskSheet.test.tsx (7), tests/driverStops.test.tsx,
+scripts/test-driver-3.ts, test-stop-slides, test-vehicle-check, test-part-a. Proposed removals: none.
