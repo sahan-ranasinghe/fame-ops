@@ -56,7 +56,8 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   // Round 2b: More lists its screens in groups (Today, Fleet, Reports, Admin) under the profile card.
   const more = page.locator("[data-testid^='more-list-']");
   // Hotfix 3 (L5): in the menu's section order: Today, Fleet, Reports, Admin.
-  await expect(more.getByRole("link")).toHaveText(["Task history", "My trips", /^Issues\d*$/, "Drivers board", "Vehicles", "Drivers", "Places", "Maintenance", "Mileage", "Fuel", "Duty log", "Projects"]);
+  // Round 4–7 (7): Timeline and Asks follow the Drivers board.
+  await expect(more.getByRole("link")).toHaveText(["Task history", "My trips", /^Issues\d*$/, "Drivers board", "Timeline", "Asks", "Vehicles", "Drivers", "Places", "Maintenance", "Mileage", "Fuel", "Duty log", "Projects"]);
 
   // The big action opens its page; Assign a task is a page of its own, its stops rows numbered within their type.
   await tabs(page).filter({ hasText: "Home" }).click();
@@ -141,7 +142,8 @@ test("a requester on a phone: four tabs, New request as the big action, the requ
   await expect(page.getByTestId("home-action")).toHaveText("New request");
   await tabs(page).filter({ hasText: "More" }).click();
   // Round 2b: Settings is on the profile card at the top (once), not in the list.
-  await expect(page.locator("[data-testid^='more-list-']").getByRole("link")).toHaveText(["Requests", "Drivers", "Projects"]);
+  // Round 4–7 (7): Timeline (view) and Asks (request).
+  await expect(page.locator("[data-testid^='more-list-']").getByRole("link")).toHaveText(["Requests", "Timeline", "Asks", "Drivers", "Projects"]);
 
   // The request page from the big action; a draft survives leaving through the tab bar.
   await tabs(page).filter({ hasText: "Home" }).click();

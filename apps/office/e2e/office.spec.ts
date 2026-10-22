@@ -423,7 +423,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   // 6b. Settings → Notifications (Hotfix O2-H2 Part 2): this browser's state in words, Pause all and the six groups of an
   // admin, each a row opening its own page; one event switched off there is kept and the group's summary follows.
   await page.goto("/settings");
-  await page.getByRole("link", { name: "Notifications" }).click();
+  // Round 4–7: Data retention's tile mentions notifications too; the Notifications row by its own title.
+  await page.getByRole("link", { name: /^Notifications/ }).click();
   await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
   await expect(page.getByTestId("notifications")).toContainText(/in this browser|not switched on for the office/);
   for (const g of ["requests", "tasks", "drivers", "issues", "vehicles", "mine"]) await expect(page.getByTestId(`notif-group-${g}`)).toBeVisible();
@@ -570,7 +571,11 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   for (const g of ["requests", "tasks", "vehicles", "mine"]) await expect(page.getByTestId(`notif-group-${g}`)).toBeVisible();
   for (const g of ["drivers", "issues"]) await expect(page.getByTestId(`notif-group-${g}`)).toHaveCount(0);
   await page.goto("/settings/notifications/mine");
-  await expect(page.getByRole("switch")).toHaveCount(8);
+  // Round 4–7: eight, plus "Trip finished? Enter the odometer" and the two of a trip one rides in.
+  await expect(page.getByRole("switch")).toHaveCount(11);
+  for (const name of ["Trip finished? Enter the odometer", "A trip I ride in changes", "A trip I ride in moves"]) {
+    await expect(page.getByRole("switch", { name })).toBeChecked();
+  }
   await expect(page.getByRole("switch", { name: "Driver on the way" })).toBeChecked();
   await expect(page.getByRole("switch", { name: "Request decided", exact: true })).toBeChecked();
   await page.goto("/settings/notifications/sounds");
@@ -1289,7 +1294,8 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   await expect(detail).toContainText("the link works for 1 hour");
   // The interrupted fill: its chip says so, the detail lists the two pieces and plays them one after another.
   const interrupted = table.locator("tr", { hasText: plate }).filter({ hasText: "5:12" });
-  await expect(interrupted).toContainText("Video · interrupted");
+  // Item 8 (part 2): an uploaded video is its icon ("Video uploaded" for the screen reader), its length and size.
+  await expect(interrupted).toContainText("Video uploaded");
   await expect(interrupted).toContainText("interrupted, 2 pieces");
   await interrupted.click();
   await expect(page).toHaveURL(new RegExp(`/fuel/${twoId}`));
