@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import { useWatch } from "./hooks";
-import { applyLatest, type LatestRow, refreshStates } from "./live";
+import { applyLatest, type LatestRow, refreshStates, stoppedSharing } from "./live";
 import type { Entry } from "./store";
 import type { LiveDrivers } from "./types";
 
@@ -22,10 +22,14 @@ export function useLiveDrivers(onRow?: (row: LatestRow) => void): { live: Entry<
     // down (React runs effects twice in development) must not report "live".
     let alive = true;
     const stop = realtime?.driverLatest((row) => {
+      const before = store.get<LiveDrivers>("live").data;
       store.patch<LiveDrivers>("live", (data) => {
         const drivers = applyLatest(data.drivers, row, new Date());
         return drivers === data.drivers ? data : { ...data, drivers };
       });
+      // Off duty: how and since when come with the tool's answer. Asked here, not through the watch: a poll already
+      // running when the office clocked the driver out would make the watch skip it, and its answer is from before.
+      if (before && stoppedSharing(before.drivers, row)) void store.fetch("live", "live_drivers", { filter: "all" }, true);
       handler.current?.(row);
     }, (s) => { if (alive) setRt(s); });
     const tick = setInterval(() => store.patch<LiveDrivers>("live", (data) => {

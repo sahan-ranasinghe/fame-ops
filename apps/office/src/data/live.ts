@@ -174,7 +174,19 @@ function dutyAfter(d: LiveDriver, sharing: boolean): Partial<LiveDriver> {
   return {};
 }
 
-const DUTY_TEXT: Record<DutyState, string> = { on_task: "On a task", on_duty: "On duty", off_duty: "Off duty" };
+/**
+ * A Realtime row saying a sharing driver stopped (clocked out by the phone, the office or the cut-off): the card goes off
+ * duty at once, but how it ended and since when come only with live_drivers, so the screen asks for it at once rather
+ * than at the next 30 s poll. Only the change asks: later rows of a driver already off are left to the poll.
+ */
+export function stoppedSharing(drivers: LiveDriver[], row: LatestRow): boolean {
+  if (row.sharing) return false;
+  const d = drivers.find((x) => x.employee_id === row.employee_id);
+  if (!d) return false;
+  return d.signal ? d.signal.sharing : dutyOf(d) !== "off_duty";
+}
+
+const DUTY_TEXT: Record<DutyState, string> ={ on_task: "On a task", on_duty: "On duty", off_duty: "Off duty" };
 
 /** The duty chip: "On a task · since 08:12", "On duty · since 08:02", "Off duty · since 17:40 · auto at the cut-off". */
 export function dutyLine(d: Pick<LiveDriver, "duty" | "duty_text" | "duty_since" | "off_duty_how" | "task" | "state" | "signal">): string {

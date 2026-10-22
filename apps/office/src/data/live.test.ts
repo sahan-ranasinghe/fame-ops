@@ -18,6 +18,7 @@ import {
   statusFields,
   statusLine,
   statusTone,
+  stoppedSharing,
 } from "./live";
 import type { LiveDriver } from "./types";
 import { projection } from "../map/DrawnMap";
@@ -116,6 +117,17 @@ describe("duty (Phase 7)", () => {
   it("a row for a driver already on duty leaves the duty alone", () => {
     const out = applyLatest([onDuty], { employee_id: "emp-1", lat: 7, lng: 80, speed_mps: 5, battery_pct: 50, recorded_at: ago(0.5), sharing: true }, now);
     expect(out[0]).toMatchObject({ duty: "on_duty", duty_since: "08:02", vehicle_since: "08:40", vehicle: card.vehicle });
+  });
+  it("a sharing driver whose row says sharing off asks live_drivers again (how and since come only with it); nothing else does", () => {
+    const off = { employee_id: "emp-1", lat: 7, lng: 80, speed_mps: 0, battery_pct: 50, recorded_at: ago(0), sharing: false };
+    expect(stoppedSharing([onDuty], off)).toBe(true);
+    expect(stoppedSharing([{ ...onTask, employee_id: "emp-1" }], off)).toBe(true);
+    expect(stoppedSharing([onDuty], { ...off, sharing: true })).toBe(false);
+    expect(stoppedSharing([offDuty], { ...off, employee_id: "emp-3" })).toBe(false);
+    expect(stoppedSharing(applyLatest([onDuty], off, now), off)).toBe(false);
+    expect(stoppedSharing([onDuty], { ...off, employee_id: "emp-9" })).toBe(false);
+    expect(stoppedSharing([{ ...onDuty, signal: undefined }], off)).toBe(true);
+    expect(stoppedSharing([{ ...offDuty, signal: undefined }], { ...off, employee_id: "emp-3" })).toBe(false);
   });
   it("an answer from before Phase 7 (no duty) keeps its fields; the duty is read from the task and sharing", () => {
     const out = applyLatest([card], { employee_id: "emp-1", lat: 7, lng: 80, speed_mps: 0, battery_pct: 50, recorded_at: ago(0), sharing: false }, now);
