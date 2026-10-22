@@ -120,13 +120,21 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "register_web_push",
     "remove_web_push",
     "update_request",
-    // Hotfix 2: My trips, the notification centre, my phone number.
     "my_trips",
     "my_inbox",
     "mark_inbox_read",
     "update_my_profile",
     "my_prefs",
     "set_my_prefs",
+    "vehicle_checks",
+    "my_trip",
+    "my_trip_check",
+    "finish_my_trip",
+    "find_people",
+    "ask_for_it",
+    "answer_holder_ask",
+    "holder_asks",
+    "day_timeline",
   ]);
   assertEquals(toolsFor(PRESETS.viewer.permissions, names), [
     "fleet_overview",
@@ -145,17 +153,26 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "set_my_notification_settings",
     "register_web_push",
     "remove_web_push",
+    "my_trips",
     "my_inbox",
     "mark_inbox_read",
     "update_my_profile",
     "my_prefs",
     "set_my_prefs",
+    "vehicle_checks",
+    "my_trip",
+    "my_trip_check",
+    "finish_my_trip",
+    "find_people",
+    "answer_holder_ask",
+    "holder_asks",
+    "day_timeline",
   ]);
   assertEquals(allows(PRESETS.dispatcher.permissions, "plan_task"), true);
-  // Hotfix 2: "reviewing" is the approvers'; My trips is for those who ask or assign.
+  // Hotfix 2: "reviewing" is the approvers'. Round 4–7 (6): My trips is everyone's (a passenger may hold only view).
   assertEquals(allows(["approve"], "reviewing"), true);
   assertEquals(allows(["assign_tasks"], "reviewing"), false);
-  assertEquals(allows(["view"], "my_trips"), false);
+  assertEquals(allows(["view"], "my_trips"), true);
   assertEquals(allows(PRESETS.dispatcher.permissions, "update_task_stops"), true);
   assertEquals(allows(["approve"], "plan_task"), true);
   assertEquals(allows(["approve"], "update_task_stops"), false);

@@ -57,7 +57,7 @@ import {
   suggestVehicles,
   updateRequest,
 } from "./tools/requests.ts";
-import { issueHistory, listIssues, updateIssue } from "./tools/issues.ts";
+import { issueHistory, listIssues, updateIssue, updateIssues } from "./tools/issues.ts";
 import {
   markInboxRead,
   myInbox,
@@ -156,6 +156,8 @@ export const TOOLS: AnyTool[] = [
   listAppErrors,
   listIssues,
   updateIssue,
+  // Round 4–7 (item 8): many at once.
+  updateIssues,
   issueHistory,
   myNotificationSettings,
   setMyNotificationSettings,

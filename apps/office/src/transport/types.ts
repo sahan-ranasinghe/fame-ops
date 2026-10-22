@@ -122,4 +122,6 @@ export const ALL_TOOLS = [
   "find_people",
   // Round 4–7 (7): someone else has that driver or vehicle.
   "ask_for_it", "answer_holder_ask", "holder_asks", "day_timeline",
+  // Round 4–7 (item 8): resolve or dismiss many issues at once.
+  "update_issues",
 ];

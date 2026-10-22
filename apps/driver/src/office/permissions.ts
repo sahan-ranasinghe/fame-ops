@@ -1,5 +1,5 @@
 // Office mode (Phase 8, O1): the server's permission table, copied from supabase/functions/_shared/fleet/permissions.ts at
-// phase9-r47 (Round 4–7: the vehicle checks, a no-app trip's own tools, find_people, My trips for everyone, the holder tools; the site imports that very file). Copy again when it changes, never edit this one alone.
+// phase9-r47 (Round 4–7: the vehicle checks, a no-app trip's own tools, find_people, My trips for everyone, the holder tools, update_issues; the site imports that very file). Copy again when it changes, never edit this one alone.
 
 // Who may call which tool: the permissions a person holds (employees.permissions)
 // against the permission each tool needs. One table, applied by office-mcp (Claude)
@@ -165,6 +165,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   list_issues: ["issues", "assign_tasks"],
   issue_history: ["issues", "assign_tasks"],
   update_issue: ["issues"],
+  update_issues: ["issues"],
   // Round 4–7 (4): the vehicle checks (anyone who sees the fleet; photo links for vehicles or issues, in the tool); a
   // no-app trip's own page, check and close (personal: the tool checks the trip is the person's).
   vehicle_checks: ["view"],

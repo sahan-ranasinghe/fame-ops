@@ -192,6 +192,9 @@ export const NO_FIX_MIN = 30;
 const ms = (days: number) => days * 86400000;
 /** Hotfix 3 (L2): a missed task keeps its issue this long (a person resolving it quiets it for 30 days). */
 const MISSED_KEEP_DAYS = 30;
+/** Round 4–7 (item 8): information closes by itself after this many days ("closed automatically"), unless someone took it. */
+export const AUTO_CLOSE_DAYS = 7;
+export const AUTO_CLOSED_NOTE = "closed automatically";
 /** An issue about a task that is over (completed, cancelled, missed) expires this long after its leave-by. */
 const EXPIRE_AFTER_MS = 24 * 3600_000;
 const OVER = new Set(["completed", "cancelled", "missed"]);
@@ -374,7 +377,9 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       wanted.push({
         kind: "odometer_flag",
         ref_key: `odometer:${l.id}`,
-        severity: "warning",
+        // Round 4–7 (item 8): typed because the photo could not be read is information; a reading that disagrees with its
+        // photo, or was changed, is a warning.
+        severity: l.flag === "typed_unreadable" || l.flag === "ai_failed" || !l.flag ? "info" : "warning",
         title: `Odometer check: ${odometerCheck(l) ?? l.flag}`,
         detail: [
           refs.veh.get(l.vehicle_id)?.reg_no,
@@ -521,11 +526,13 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     if (scope.task_id) q = q.eq("id", scope.task_id);
     for (const t of unwrap(await q, "missed tasks")) {
       const leaveBy = t.leave_by ?? t.start_at;
+      // Round 4–7 (item 8): one specific line; a warning for 7 days, then information (closed by itself unless taken).
+      const missedDays = t.missed_at ? (now.getTime() - new Date(t.missed_at).getTime()) / ms(1) : 0;
       wanted.push({
         kind: "missed_task",
         ref_key: `missed:${t.id}`,
-        severity: "warning",
-        title: "Missed task",
+        severity: missedDays >= AUTO_CLOSE_DAYS ? "info" : "warning",
+        title: `${refs.emp.get(t.employee_id)?.name ?? "The driver"} missed "${t.title}"`,
         detail: [refs.emp.get(t.employee_id)?.name, t.title].filter(Boolean).join(" · "),
         due: `was to leave ${colomboDayTime(leaveBy)}`,
         sort_key: -1,
@@ -661,7 +668,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       wanted.push({
         kind: "arrival_override",
         ref_key: `arrival:${st.id}`,
-        severity: "warning",
+        severity: "info",
         title: st.arrival_flag === "no_gps" ? "Arrived with no GPS fix" : "Arrived away from the stop",
         detail: [
           who(t),
@@ -793,7 +800,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       wanted.push({
         kind: "map_fallback",
         ref_key: `map_fallback:${e.id}`,
-        severity: "warning",
+        severity: "info",
         title: `Google map failed on ${e.name}'s phone; using the free map`,
         detail: [
           r.reason === "timeout" ? "Google's map did not finish loading while the phone was online" : "Google's map reported an error",
@@ -962,6 +969,15 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
       scope,
     ),
   ]);
+  // Round 4–7 (item 8): information closed automatically stays closed (unless it comes back worse), with no time limit.
+  const autoClosed = unwrap(
+    await scoped(
+      db.from("issues").select("ref_key, severity").eq("status", "resolved").eq("resolved_by", "system")
+        .eq("resolution_note", AUTO_CLOSED_NOTE),
+      scope,
+    ),
+    "issues",
+  );
   const active = unwrap(activeRes, "issues") as (ActiveRow & { task_id: string | null })[];
   // Hotfix 3 (L2): an issue about a task that is over and left over a day ago expires (resolved by the system, "Expired"):
   // the task kinds only (a vehicle problem reported during a task, an odometer check, stay until a person closes them),
@@ -970,6 +986,7 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
   const wanted = wantedAll.filter((w) => !(w.task_id && expired.has(w.task_id) && expiresWithTask(w.kind)));
   const muted = new Map<string, Severity>();
   for (const r of unwrap(mutedRes, "issues")) if (!muted.has(r.ref_key)) muted.set(r.ref_key, r.severity as Severity);
+  for (const r of autoClosed) if (!muted.has(r.ref_key)) muted.set(r.ref_key, r.severity as Severity);
 
   const plan = reconcile(active, wanted, muted);
   const nowIso = now.toISOString();
@@ -1045,6 +1062,30 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
       ...(note && { note }),
     });
     resolved += 1;
+  }
+  // Round 4–7 (item 8): information open for 7 days that nobody took closes by itself ("closed automatically", listed
+  // under Resolved); it stays closed unless it comes back worse.
+  if (full) {
+    const cut = new Date(now.getTime() - ms(AUTO_CLOSE_DAYS)).toISOString();
+    const stale = unwrap(
+      await db.from("issues").select("id").eq("status", "open").eq("severity", "info").is("assigned_to", null).lt("opened_at", cut),
+      "issues",
+    );
+    for (const row of stale) {
+      const done = unwrap(
+        await db.from("issues").update({
+          status: "resolved",
+          resolved_at: nowIso,
+          resolved_by: "system",
+          resolution_note: AUTO_CLOSED_NOTE,
+          updated_at: nowIso,
+        }).eq("id", row.id).eq("status", "open").select("id"),
+        "issues",
+      );
+      if (!done.length) continue;
+      await writeEvent(db, row.id, "auto_resolved", { actor: "system", from_status: "open", to_status: "resolved", note: AUTO_CLOSED_NOTE, at: now });
+      resolved += 1;
+    }
   }
   // A critical issue (opened so, or raised to it) tells the people with the issues permission.
   if (critical.length > 0) {

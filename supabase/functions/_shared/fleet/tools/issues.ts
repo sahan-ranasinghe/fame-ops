@@ -16,6 +16,7 @@ import { addDays, colomboDate, colomboDateTime, colomboDayTime, utcIso } from ".
 import { daySpan, tool, zDate, zId, zPaging, zSearch, zText } from "../tool.ts";
 import { pageInfo, pageWindow } from "../paging.ts";
 import { driverPhotoLinks } from "../media.ts";
+import { whenText } from "../durations.ts";
 
 const STATUS = z.enum(["open", "in_progress", "resolved", "dismissed"]);
 const KINDS = Object.keys(KIND_TEXT) as [string, ...string[]];
@@ -80,8 +81,52 @@ function issueCard(
     vehicle_report_id: i.vehicle_report_id ?? undefined,
     // Round 4–7 (4a): a problem found by a vehicle check before work.
     pre_trip: i.vehicle_report_id && preTrip?.has(i.vehicle_report_id) ? true : undefined,
+    // Round 4–7 (item 8, Gmail's rows): ONE specific line (never the kind again) and ONE grey line (plate · driver · when).
+    headline: headlineOf(i),
+    meta: [
+      i.vehicle_id ? refs.veh.get(i.vehicle_id)?.reg_no : undefined,
+      driver?.name,
+      i.due ?? whenText(i.opened_at, now),
+    ].filter(Boolean).join(" · "),
     driver_links: driver ? contactLinks(driver.phone) : undefined,
   };
+}
+
+/** The row's one specific line: the title without its kind in front ("Vehicle problem: tyre" → "Tyre"). */
+export function headlineOf(i: Pick<IssueRow, "kind" | "title">): string {
+  const words = (KIND_TEXT[i.kind] ?? "").toLowerCase();
+  const m = /^([^:]{2,40}):\s+(.+)$/.exec(i.title);
+  if (m && (m[1].toLowerCase() === words || m[1].toLowerCase().startsWith(words.split(" ")[0]))) {
+    return m[2].charAt(0).toUpperCase() + m[2].slice(1);
+  }
+  return i.title;
+}
+
+const RANK_OF: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+
+/** Round 4–7 (item 8): the rows grouped by kind, the most urgent group first, each with its count and its 3 newest. */
+async function groupsOf(
+  db: Db,
+  rows: IssueRow[],
+  refs: Refs,
+  whoOf: (id: string) => WhoDid,
+  now: Date,
+) {
+  const kinds = [...new Set(rows.map((r) => r.kind))];
+  const preTrip = await preTripReports(db, rows);
+  return kinds.map((k) => {
+    const mine = rows.filter((r) => r.kind === k);
+    const severity = mine.reduce((best, r) => (RANK_OF[r.severity] < RANK_OF[best] ? r.severity : best), "info");
+    return {
+      kind: k,
+      kind_text: KIND_TEXT[k] ?? k,
+      severity,
+      count: mine.length,
+      newest: mine.slice(0, 3).map((i) => issueCard(i, refs, whoOf(i.id), now, undefined, preTrip)),
+      latest_at: mine[0]?.opened_at,
+    };
+  }).sort((a, b) => RANK_OF[a.severity] - RANK_OF[b.severity] || (b.latest_at ?? "").localeCompare(a.latest_at ?? ""))
+    .map(({ latest_at: _l, ...g }) => g);
 }
 
 /** Round 4–7 (4a): which of these reports came from a vehicle check (a pre-trip problem). */
@@ -121,8 +166,8 @@ export const listIssues = tool({
     "kinds are listed.",
   readOnly: true,
   input: z.object({
-    status: z.enum(["active", "open", "in_progress", "resolved", "dismissed", "all"]).optional().describe(
-      "Default active (open + in progress)",
+    status: z.enum(["active", "open", "in_progress", "snoozed", "resolved", "dismissed", "all"]).optional().describe(
+      "Default active (open + in progress); snoozed = the active ones snoozed now (the Snoozed tab)",
     ),
     kind: z.enum(KINDS).optional(),
     vehicle: zText(20).optional().describe("A number plate"),
@@ -136,8 +181,10 @@ export const listIssues = tool({
     from: zDate.optional().describe("Opened on or after this Colombo day, YYYY-MM-DD (with to)"),
     to: zDate.optional().describe("Opened on or before this day"),
     sort: z.enum(["urgent", "newest"]).optional().describe("urgent (the default: most urgent, then newest) or newest first"),
+    // Round 4–7 (item 8): grouped by kind (Samsara / Sentry / GitHub): each kind with its count and its 3 newest.
+    group: z.boolean().optional().describe("true: answer groups (kind, count, the 3 newest) instead of one list; Show all = kind"),
   }),
-  async run({ status = "active", kind, vehicle, assigned_to, limit = 50, cursor, from, to, sort = "urgent", severity, snoozed, search }, {
+  async run({ status = "active", kind, vehicle, assigned_to, limit = 50, cursor, from, to, sort = "urgent", severity, snoozed, search, group }, {
     db,
     actor,
     now,
@@ -157,6 +204,7 @@ export const listIssues = tool({
     }
     if (span) q = q.gte("opened_at", span.start).lt("opened_at", span.end);
     if (status === "active") q = q.in("status", ACTIVE);
+    else if (status === "snoozed") q = q.in("status", ACTIVE).gt("snoozed_until", nowIso);
     else if (status !== "all") q = q.eq("status", status);
     if (kind) q = q.eq("kind", kind);
     if (vehicle) q = q.eq("vehicle_id", findVehicle(refs, vehicle).id);
@@ -166,9 +214,10 @@ export const listIssues = tool({
       q = q.eq("assigned_to", id);
     }
     if (kinds !== "all") q = q.in("kind", kinds);
-    const res =
-      await (sort === "newest" ? q.order("opened_at", { ascending: false }) : q.order("sort_key").order("opened_at", { ascending: false }))
-        .order("id").range(w.offset, w.offset + (w.limit ?? 50) - 1);
+    const ordered = sort === "newest" || group
+      ? q.order("opened_at", { ascending: false })
+      : q.order("sort_key").order("opened_at", { ascending: false });
+    const res = await ordered.order("id").range(group ? 0 : w.offset, group ? 999 : w.offset + (w.limit ?? 50) - 1);
     const rows = unwrap(res, "issues");
     const total = res.count ?? rows.length;
     // Who opened and who took each listed issue (one query for all).
@@ -192,7 +241,7 @@ export const listIssues = tool({
       };
     };
     // The counts of everything active the person may see, whatever the filters (the bell); a snoozed one is not counted.
-    let countQ = db.from("issues").select("status, snoozed_until").in("status", ACTIVE);
+    let countQ = db.from("issues").select("status, snoozed_until, severity").in("status", ACTIVE);
     if (kinds !== "all") countQ = countQ.in("kind", kinds);
     const all = unwrap(await countQ, "issues");
     const isSnoozed = (r: { snoozed_until: string | null }) => !!r.snoozed_until && Date.parse(r.snoozed_until) > now.getTime();
@@ -204,6 +253,9 @@ export const listIssues = tool({
         open: counts.filter((r) => r.status === "open").length,
         in_progress: counts.filter((r) => r.status === "in_progress").length,
         snoozed: all.filter(isSnoozed).length,
+        // Round 4–7 (item 8): what the badge counts: active, not snoozed, critical or warning (information never).
+        needs_action: counts.filter((r) => r.severity !== "info").length,
+        critical: counts.filter((r) => r.severity === "critical").length,
         ...pageInfo(w, rows.length, total),
         from: span?.from,
         to: span?.to,
@@ -216,8 +268,10 @@ export const listIssues = tool({
             assignees.length ? driverPhotoLinks(db, assignees, now) : new Map<string, string>(),
             preTripReports(db, rows),
           ]);
-          return rows.map((i) => issueCard(i, refs, whoOf(i.id), now, photos, preTrip));
+          const cards = rows.map((i) => issueCard(i, refs, whoOf(i.id), now, photos, preTrip));
+          return group ? [] : cards;
         })(),
+        groups: group ? await groupsOf(db, rows, refs, whoOf, now) : undefined,
       },
       summary: `${rows.length} issues (${status}); ${counts.length} active`,
     };
@@ -418,6 +472,36 @@ export const issueHistory = tool({
           : undefined,
       },
       summary: `issue ${id} (${issue.kind}, ${issue.status})`,
+    };
+  },
+});
+
+/** Round 4–7 (item 8, Gmail's bulk actions): resolve or dismiss many issues with one reason; never deletes. */
+export const updateIssues = tool({
+  name: "update_issues",
+  title: "Resolve or dismiss issues",
+  description: "Resolves or dismisses several issues at once with one reason (e.g. \"test data\"), as update_issue does for one: " +
+    "a vehicle problem issue closes its report. Nothing is deleted; the call is audited once with every id. At most 100.",
+  readOnly: false,
+  input: z.object({
+    ids: z.array(zId).min(1).max(100),
+    status: z.enum(["resolved", "dismissed"]),
+    note: zText(500).describe("The reason, written on each"),
+  }),
+  async run({ ids, status, note }, ctx) {
+    const done: string[] = [];
+    const failed: { id: string; error: string }[] = [];
+    for (const id of [...new Set(ids)]) {
+      try {
+        await updateIssue.run({ id, status, note }, ctx);
+        done.push(id);
+      } catch (error) {
+        failed.push({ id, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    return {
+      result: { status, done: done.length, failed: failed.length ? failed : undefined, note },
+      summary: `${done.length} issues ${status} (${note})${failed.length ? `; ${failed.length} not` : ""}: ${done.join(", ")}`,
     };
   },
 });

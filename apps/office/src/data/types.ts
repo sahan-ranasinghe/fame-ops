@@ -1771,9 +1771,17 @@ export interface Issue {
   vehicle_report_id?: string;
   /** Round 4–7 (4): a problem found by a vehicle check before work. */
   pre_trip?: boolean;
+  /** Round 4–7 (item 8): the row's ONE specific line (never the kind again) and ONE grey line (plate · driver · when). */
+  headline?: string;
+  meta?: string;
   driver_links?: Links;
 }
 export interface IssuesList {
+  /** Round 4–7 (item 8): what the badge counts (active, not snoozed, critical or warning) and the critical among them. */
+  needs_action?: number;
+  critical?: number;
+  /** With group: true, the kinds with their counts and 3 newest (the most urgent first); issues is then empty. */
+  groups?: { kind: string; kind_text: string; severity: "critical" | "warning" | "info"; count: number; newest: Issue[] }[];
   status: string;
   from?: string;
   to?: string;

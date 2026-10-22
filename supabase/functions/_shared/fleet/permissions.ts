@@ -162,6 +162,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   list_issues: ["issues", "assign_tasks"],
   issue_history: ["issues", "assign_tasks"],
   update_issue: ["issues"],
+  update_issues: ["issues"],
   // Round 4–7 (4): the vehicle checks (anyone who sees the fleet; photo links for vehicles or issues, in the tool); a
   // no-app trip's own page, check and close (personal: the tool checks the trip is the person's).
   vehicle_checks: ["view"],

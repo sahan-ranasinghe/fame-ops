@@ -52,11 +52,25 @@ Deno.test("a booking goes to the custodian, not when they booked it", () => {
 Deno.test("the Settings page shows a person the events their permissions can bring", () => {
   // Phase 7 (§13): a personal trip goes to approve and assign_tasks.
   // Every office person can be a vehicle's custodian: the booking events are for everyone.
-  assertEquals(relevantEvents(["view"]).map((e) => e.event), ["vehicle.booked", "vehicle.booking_cancelled", "booking.changed"]);
+  // Round 4–7: a passenger and a holder may hold only view.
+  assertEquals(relevantEvents(["view"]).map((e) => e.event), [
+    "passenger.trip",
+    "passenger.moving",
+    "holder.asked",
+    "holder.answered",
+    "vehicle.booked",
+    "vehicle.booking_cancelled",
+    "booking.changed",
+  ]);
   assertEquals(relevantEvents(["request"]).map((e) => e.event), [
     "request.decided",
     "task.declined",
     "task.not_accepted",
+    "passenger.trip",
+    "passenger.moving",
+    "holder.asked",
+    "holder.answered",
+    "trip.finish_ask",
     "vehicle.booked",
     "vehicle.booking_cancelled",
     "request.redecided",
@@ -78,6 +92,11 @@ Deno.test("the Settings page shows a person the events their permissions can bri
     "ask.answered",
     "trip.personal",
     "task.stop_skipped",
+    "passenger.trip",
+    "passenger.moving",
+    "holder.asked",
+    "holder.answered",
+    "trip.finish_ask",
     "vehicle.booked",
     "vehicle.booking_cancelled",
     "request.redecided",
