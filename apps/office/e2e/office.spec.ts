@@ -976,7 +976,8 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   const before = Number(await page.getByTestId("nav-badge-issues").first().textContent());
   expect(before).toBeGreaterThan(0);
   await page.goto("/issues");
-  await page.getByText(/Vehicle problem: breakdown/).first().click();
+  // Round 4–7 (item 8): the Open tab groups by kind; the row's one line is the server's headline ("Breakdown", never the kind again).
+  await page.getByTestId("issue-group-vehicle_report").getByRole("link").filter({ hasText: plate }).first().click();
   await expect(page.getByTestId("issue-page")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Vehicle problem: breakdown" })).toBeVisible();
   await expect(page.getByTestId("issue-report")).toContainText("Engine stalls at idle");
@@ -987,7 +988,7 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("issue-page")).toHaveCount(0);
   await expect(page).toHaveURL(/\/issues(\?.*)?$/);
-  const ourRow = () => page.getByTestId("issues-list").getByRole("link").filter({ hasText: plate }).filter({ hasText: "Vehicle problem" });
+  const ourRow = () => page.getByTestId("issues-list").getByRole("link").filter({ hasText: plate }).filter({ hasText: "Breakdown" });
   await ourRow().click();
   await expect(page.getByTestId("issue-page")).toBeVisible();
   await page.getByRole("button", { name: "Close" }).click();
@@ -1022,12 +1023,12 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
 
   // The Issues page: the resolved tab has it; the open tab no longer.
   await page.goto("/issues?status=resolved");
-  await expect(page.getByTestId("issues-list")).toContainText("Vehicle problem: breakdown");
+  await expect(page.getByTestId("issues-list").getByRole("link").filter({ hasText: plate })).toContainText("Breakdown");
   await page.goto("/issues");
   await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
   // Only the vehicle problem: the new vehicle may also have "Documents missing" (Part 3, §28) once a full sync has run.
   const open = page.getByTestId("issues-list").getByRole("link").filter({ hasText: plate });
-  await expect(open.filter({ hasText: "Vehicle problem" })).toHaveCount(0);
+  await expect(open.filter({ hasText: "Breakdown" })).toHaveCount(0);
 });
 
 test("an approver books a vehicle in one step from the Free group; the task is on the board with Leave by; the booking is cancelled", async ({ page }) => {
@@ -1989,8 +1990,9 @@ test("Hotfix 3 (L7): with 100 open issues and 50 waiting requests the Overview f
     const desktop = await page.evaluate(() => document.scrollingElement!.scrollHeight);
     expect(desktop, "the desktop Overview's height").toBeLessThanOrEqual(Math.round(2.2 * 768));
 
-    // Lists: 25 rows a page with page numbers; the count in the header.
-    await page.goto("/issues");
+    // Lists: 25 rows a page with page numbers; the count in the header. Round 4–7 (item 8): the Open tab groups by kind,
+    // so the seeded issues are found as one list (a search lists its results flat).
+    await page.goto("/issues?q=L7%20seeded");
     await expect(page.getByTestId("list-count").first()).toContainText(/\d{3}|1\d\d/);
     await expect(page.getByTestId("issues-list").locator(".issue-row")).toHaveCount(25);
     await expect(page.getByTestId("pager")).toBeVisible();
@@ -2009,7 +2011,7 @@ test("Hotfix 3 (L7): with 100 open issues and 50 waiting requests the Overview f
     await expect(phone.locator('[data-section="attention"]')).toBeVisible();
     const tall = await phone.evaluate(() => document.scrollingElement!.scrollHeight);
     expect(tall, "the phone Overview's height").toBeLessThanOrEqual(Math.round(2.2 * 915));
-    await phone.goto("/issues");
+    await phone.goto("/issues?q=L7%20seeded");
     await expect(phone.getByTestId("issues-list").locator(".issue-row")).toHaveCount(25);
     await phone.getByTestId("load-more").getByRole("button", { name: "Load more" }).click();
     await expect(phone.getByTestId("issues-list").locator(".issue-row")).toHaveCount(50);

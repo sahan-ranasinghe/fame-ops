@@ -316,7 +316,8 @@ function Duty({ from, to, by }: { from: string; to: string; by: Record<string, s
                     <Mono size={14} color={colors.muted}>{dateWords(t, p.day)}</Mono>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <Mono size={16} bold>{p.clock_in}</Mono>
+                    {/* Round 4–7 (item 8): the day is said once (above, in words): the clock-in is its time. */}
+                    <Mono size={16} bold>{p.clock_in.match(/(\d{2}:\d{2})$/)?.[1] ?? datesInWords(t, p.clock_in)}</Mono>
                     <Txt variant="muted">→</Txt>
                     {out.onDuty ? <Pill text={t('office.reports.onDuty')} tone="blue" /> : <Mono size={16} bold>{out.time}</Mono>}
                     {!out.onDuty && out.how ? <Txt variant="small">{t(`office.reports.out_${outHowKey(out.how)}`, { how: out.how })}</Txt> : null}

@@ -41,7 +41,7 @@ export function useIssuesCountWatch(): void {
   }, [store, show, realtime]);
 }
 
-/** The badge per menu key: requests (waiting, for approvers) and issues (open or in progress). 0 = no badge. */
+/** The badge per menu key: requests (waiting, for approvers) and issues (needs_action: critical and warning, not snoozed; Round 4–7 item 8). 0 = no badge. */
 export function useNavBadges(): Record<string, number> {
   const { me } = useFleet();
   const overview = useEntry<Overview>("overview");

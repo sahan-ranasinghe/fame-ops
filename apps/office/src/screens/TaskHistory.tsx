@@ -125,7 +125,7 @@ export function TaskHistory() {
                             <td data-label="Driver">{t.driver ?? "—"}</td>
                             <td data-label="Vehicle">{t.vehicle ? <Plate v={t.vehicle} /> : "—"}</td>
                             <td data-label="Route" className="muted">{routeText(t)}</td>
-                            <td data-label="Status"><div><Pill tone={st.tone}>{st.text}</Pill>{st.sub && <div className="sub" style={{ marginTop: 4 }}>{st.sub}</div>}</div></td>
+                            <td data-label="Status"><div>{/* Round 4–7 (item 8): the pill only when the Status filter does not say it already. */}{f.status && f.status === t.status ? null : <Pill tone={st.tone}>{st.text}</Pill>}{st.sub && <div className="sub" style={{ marginTop: 4 }}>{st.sub}</div>}</div></td>
                             <td data-label="Km" className="r num">{t.km != null ? `${num(t.km)} km` : "—"}</td>
                           </tr>
                         );

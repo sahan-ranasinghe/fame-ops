@@ -64,7 +64,8 @@ export default function DriversPeople() {
         line2={driverLine2(x, t)}
         right={
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
-            <StatusChip text={t(`office.people.${pill.key}`)} tone={pill.tone} />
+            {/* Round 4–7 (item 8): "active" is every row's (the list's default): only a switched-off driver says so. */}
+            {pill.key !== 'active' && <StatusChip text={t(`office.people.${pill.key}`)} tone={pill.tone} />}
             <StatusChip text={licence} tone={x.licence?.expiry ? licenceTone(x.licence.chip) : 'muted'} />
           </View>
         }

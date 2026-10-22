@@ -9,7 +9,7 @@ import type { ActivityEntry, ActivityLog as ActivityLogData } from "../../data/t
 import { errText } from "../../transport/errors";
 import { Notice, Pill, SwitchLine } from "../../ui/basics";
 import { DateRangePicker, useDateRange } from "../../ui/DateRangePicker";
-import { EmptyLine, ListHeader, LoadMore, SearchBox, SkeletonRows, usePagedList, useUrlFilter, useUrlSearch } from "../../ui/ListKit";
+import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, SkeletonRows, usePagedList, useUrlFilter, useUrlSearch } from "../../ui/ListKit";
 import { PageTop } from "../../ui/Page";
 import { whenText } from "../../lib/when";
 
@@ -71,6 +71,8 @@ export default function ActivityLogPage() {
               );
             })}
             <LoadMore list={list} />
+            {/* Round 4–7 (item 8): a desktop pages by number (before, only a phone could reach past the first 25). */}
+            <Pager list={list} />
           </div>
         )}
       </div>

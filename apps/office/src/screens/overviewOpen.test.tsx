@@ -156,7 +156,9 @@ describe("the Overview's tiles (desktop)", () => {
     await act(async () => { await Promise.resolve(); });
     expect(where()).toBe("/?open=reminders");
     expect(screen.getByTestId("overview-panel").dataset.open).toBe("reminders");
-    expect(within(screen.getByTestId("overview-panel")).getAllByTestId("reminder-row").map((r) => r.getAttribute("href"))).toEqual(["/vehicles/WP%20CAB-4521", "/issues/i2"]);
+    // Round 4–7 (item 8): the reminders are service and documents (each to its vehicle); the late start is counted in the line to Issues.
+    expect(within(screen.getByTestId("overview-panel")).getAllByTestId("reminder-row").map((r) => r.getAttribute("href"))).toEqual(["/vehicles/WP%20CAB-4521"]);
+    expect(within(screen.getByTestId("overview-panel")).getByTestId("reminders-issues").getAttribute("href")).toBe("/issues");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await act(async () => { await Promise.resolve(); });
@@ -266,13 +268,15 @@ describe("the Reminders page", () => {
   it("documents and services due first, each to its vehicle; the rest to its issue; back to the Overview", async () => {
     await mount("/reminders");
     const page = screen.getByTestId("reminders-page");
-    expect(within(page).getByText("Documents and services due")).toBeTruthy();
-    expect(within(page).getByText("Also needs attention")).toBeTruthy();
+    // Round 4–7 (item 8, §33.7): one card per vehicle (the plate on the card), the rest of the overview's list in one line to Issues.
+    expect(within(page).getByText("Vehicles: service and documents due")).toBeTruthy();
+    expect(within(page).getByTestId("reminders-issues").textContent).toContain("1 more needs attention");
     const rows = within(page).getAllByTestId("reminder-row");
     expect(rows[0].textContent).toContain("Service overdue");
-    expect(rows[0].textContent).toContain("WP CAB-4521");
+    expect(within(page).getByTestId("reminder-card").textContent).toContain("WP CAB-4521");
     expect(rows[0].textContent).toContain("now");
-    expect(rows.map((r) => r.getAttribute("href"))).toEqual(["/vehicles/WP%20CAB-4521", "/issues/i2"]);
+    expect(rows.map((r) => r.getAttribute("href"))).toEqual(["/vehicles/WP%20CAB-4521"]);
+    expect(within(page).getByTestId("reminders-issues").getAttribute("href")).toBe("/issues");
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     await act(async () => { await Promise.resolve(); });
     expect(where()).toBe("/");

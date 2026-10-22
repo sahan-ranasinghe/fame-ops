@@ -216,6 +216,30 @@ async function main() {
     check(lists.length >= 10 && bad.length === 0, `every Load more hands back the key it asked with (${lists.length} lists)`, bad.map((f) => path.relative(root, f)));
   }
 
+
+  console.log('\nRound 4–7, item 8: the list audit (every control kept, no word repeated on every row):');
+  {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const root = path.join(__dirname, '..', 'src', 'app', 'office');
+    const read = (f: string) => fs.readFileSync(path.join(root, f), 'utf8');
+    const drivers = read('people/drivers.tsx');
+    const users = read('people/users.tsx');
+    const activity = read('people/activity.tsx');
+    check(drivers.includes("pill.key !== 'active' && <StatusChip") && users.includes("chip={pill.key !== 'active' ?") && drivers.includes("pathname: '/office/people/driver/[username]'") && drivers.includes('<FilterBar') && drivers.includes('<LoadMore'),
+      'Drivers and Office users: "active" no longer on every row (a switched-off one says so); the row, the filter and Load more kept');
+    check(activity.includes("chip={{ text: t(`office.activity.${e.outcome}`)") && activity.includes('<LoadMore'), 'Activity log: the outcome chip and Load more kept (hiding "Done" is a proposed removal)');
+    const asks = read('asks/index.tsx');
+    check(asks.includes('datesInWords(t, `${a.asked_day ?? \'\'} ${a.asked}`.trim())') && asks.includes('!a.expired && a.counts.yes > 0 ? { ...a.counts, yes: 0 } : a.counts') && asks.includes("pathname: '/office/asks/[id]'") && asks.includes('<LoadMore'),
+      'Questions: the day with the time in words, "N yes" once; a row opens its question, Load more kept');
+    const history = read('task-history.tsx');
+    check(history.includes('chip={choice.status && choice.status === x.status ? null :') && history.includes("pathname: '/office/task/[id]'"), 'Task history: the status chip only when the filter does not say it; a row opens its task');
+    const places = read('places/index.tsx');
+    check(places.includes("p.operator && p.operator !== who ?") && places.includes("t('office.places.noPin')"), 'Places: the operator only outside its own section; "No pin" kept');
+    const reports = read('reports/index.tsx');
+    check(reports.includes('p.clock_in.match(/(\\d{2}:\\d{2})$/)?.[1] ?? datesInWords(t, p.clock_in)') && reports.includes('dateWords(t, p.day)'), 'Duty log: the day once (in words), the clock-in its time');
+  }
+
   console.log(failures === 0 ? '\nAll office tests passed.' : `\n${failures} office test(s) failed.`);
   process.exit(failures === 0 ? 0 : 1);
 }

@@ -5,6 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Platform, StyleSheet, View } from 'react-native';
 
+import type { LucideIcon } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -39,10 +40,11 @@ export function SkeletonRows({ rows = 4, lines = 2, testID = 'skeleton-rows' }: 
   );
 }
 
-/** What to do when there is nothing: the sentence and, when there is one, the action. */
-export function ListEmpty({ text, action, onAction }: { text: string; action?: string; onAction?: () => void }) {
+/** What to do when there is nothing: the sentence and, when there is one, the action; `icon` above it (Round 4–7, item 8). */
+export function ListEmpty({ text, action, onAction, icon: Icon }: { text: string; action?: string; onAction?: () => void; icon?: LucideIcon }) {
   return (
     <View style={styles.empty} testID="list-empty">
+      {Icon ? <View style={{ alignItems: 'center' }} testID="list-empty-icon"><Icon size={32} color={colors.muted} strokeWidth={2} /></View> : null}
       <Txt variant="muted" style={{ textAlign: 'center' }}>{text}</Txt>
       {action && onAction ? <Button kind="outline" label={action} onPress={onAction} style={{ minHeight: 48, alignSelf: 'center', paddingHorizontal: 18 }} /> : null}
     </View>

@@ -112,6 +112,23 @@ const VEHICLE_KINDS = new Set(["document", "documents_missing", "service_due", "
 /** Documents and services due (and the driver's licence): the reminders proper, first on the page. */
 const DUE_KINDS = new Set([...VEHICLE_KINDS, "licence"]);
 
+/**
+ * Round 4–7 (item 8, §33.7): Reminders and Maintenance hold only service and documents (Fleetio). These kinds are the
+ * reminders shown per vehicle and counted on the tile; the driver's licence is a document too (its own rows); everything
+ * else (the km allowance, missed tasks, odometer checks…) is in Issues, counted on the page's link there.
+ */
+export const CARE_KINDS = new Set(["document", "documents_missing", "service_due", "rental", "garage_booked"]);
+export const isReminderKind = (kind?: string): boolean => !!kind && (CARE_KINDS.has(kind) || kind === "licence");
+
+/**
+ * The Reminders tile's numbers (Round 4–7, item 8): the service and document reminders the page shows (and how many are
+ * red), not every issue the overview lists (those are counted on Issues' badge).
+ */
+export function reminderTile(items: readonly Pick<Attention, "kind" | "level">[] | undefined): { count: number; red: number } {
+  const mine = (items ?? []).filter((a) => isReminderKind(a.kind));
+  return { count: mine.length, red: mine.filter((a) => a.level === "red").length };
+}
+
 export interface ReminderRow {
   what: string;
   /** The vehicle's plate, when the reminder is about one. */

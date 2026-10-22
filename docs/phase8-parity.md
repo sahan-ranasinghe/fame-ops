@@ -277,3 +277,139 @@ used), **decision** (cannot be done the same way on a phone: Sahan decides).
 | **Change stops** (Task detail): the start with passengers / what / note, the stops, a leave time by hand | update_task_stops with `plan_version` | Where · When · Review in mode stops | in (the start's what / note with the row above) |
 | **Approve** (design 10): another day / leave-by / back-by, the start, the minutes at From and To on approval | decide_request `date`, `leave_by`, `back_by`, `start`, `from/to_dwell_min` | Approve (10): "Change time" | O3 |
 | Times with the native picker | — | the HH:MM field (mono, the colon added as typed; the site's control) | decision: a native picker needs `@react-native-community/datetimepicker` (a new native module = a 1.4.0 build); the typed field stays until then |
+
+## Round 4–7, item 8: the list audit
+
+Branch `r47-lists` (22 October 2026), from `docs/phase8-plan.md` §33.7 and the Round 4–7 UI rules (restructure, never
+rebuild; remove nothing; every item mapped to its place; a test per reworked screen). Surfaces: **S** = the website
+(`apps/office`), **O** = Office mode in the app, which is also **/m/** (its web build: the same screens). Status: **done**
+(this branch), **described** (the file is another agent's in this round: the fix is written here for them), **later** (a
+proposal, not built).
+
+### The audit
+
+| Page | Surface | Rows today (before) | Repeated text | Grouping | Paging | Bulk | Fix | Status |
+|---|---|---|---|---|---|---|---|---|
+| Issues | S | title / kind · detail · due / "Opened … · System · kind · taken by …" / snooze; plate, taker, status pill | the kind twice ("System · Vehicle problem"), the status pill = the filter | none | 25 a page (Load more / page numbers) | none | tabs Open · Snoozed · Resolved; Open grouped by kind (most urgent first, 3 newest, Show all N, collapsible); Gmail's row (kind icon tinted by severity, ONE title = headline, ONE grey line = plate chip · driver · when); status only when not implied; ticks + Resolve / Dismiss with one reason (update_issues); the badge = needs_action | done |
+| Issues | O | tile / title / kind · detail · due / plate, taker, "Opened … · System · kind · taken by …" / snooze; Pre-trip, severity and status chips | the kind twice, severity twice (tile + chip), status = the section | none | 50, Load more | none | the same as S (tabs, groups in the shared Section with a severity dot and collapse, the icon is the tick, a long press ticks, the bar at the bottom, the reason sheet); the header counts needs_action | done |
+| Maintenance | S | the drivers' problem reports (cards with their form) + "Reminders" rows from the overview (missed tasks and odometer checks included) | the reminders repeat Reminders and Issues | none | reports 25 a page; reminders 25 local | none | reports unchanged; "Service and documents" = one card per vehicle (service by km and date with its bar, document chips ok / expiring / expired / missing, the rental's end), the summary first, Need attention \| All vehicles; the rest counted in one line to Issues | done |
+| Maintenance | O | the problem reports only | the status chip = the section | none | 25, Load more | none | first view Service and documents (the same cards), second view Problem reports (unchanged; the Issues header opens it) | done |
+| Reminders | S | "Documents and services due" rows, "Also needs attention" rows (each issue) | every issue counted as a reminder; the tile counted all active issues | two groups | 25 local per group | none | one card per vehicle with its reminders (each to the vehicle), the licences as rows, the rest counted in one line to Issues; the Overview tile counts these reminders only; the panel the same | done |
+| Reminders | O | the same two sections | the same | two groups | all at once | none | the same as S; Home's reminders row counts service and documents only | done |
+| Home / Overview "Needs attention" | O | the server's attention groups | — | by kind | 5 rows | Snooze a group | the count is needs_action (as the Issues header and the site's badge) | done |
+| Overview | S | sections of 5 (3 on a phone) + View all; tiles | Reminders tile = every active issue | by kind | View all | Snooze / Dismiss a group | the Reminders tile counts service and document reminders | done |
+| Task history | S | when / task + tags / driver / plate / route / status pill + times / km | the status pill = the Status filter | none | 25 a page | none | the pill only when the filter does not say it | done |
+| Task history | O | time + day / title / driver · plate · route / label · times · km / chip | the chip = the Status filter; "Task history" in the header and the section | none | 25, Load more | none | the chip only when the filter does not say it | done (the title: later) |
+| Activity log | S | when / action · about / person · channel / reason / outcome pill | "Done" on nearly every row | none | **bug: 25 only on a desktop** (no page numbers) | none | page numbers on a desktop | done; hiding "Done" is a proposed removal |
+| Activity log | O | time / action · about / day · person · channel / reason / chip | "Done" on nearly every row; the title twice | none | 50, Load more | none | — | proposed removal ("Done") |
+| Notification inbox | S | dot / who · title / body / "ago · unread" | "· unread" on every unread row (the dot says it) | none (the tray: Today / Yesterday / Earlier) | 25 a page | Mark all read | "· unread" for the screen reader only (the dot shows it) | done |
+| Alerts (the inbox) | O | tile / title / body / time / "Open ›" | "Open ›" on nearly every row | Today / Yesterday / Earlier | 50, Load more | Mark all read | later: the chevron alone (an item with no screen shows none, as today); the Unread filter asked of the server (my_inbox `unread`) | later |
+| Requests | S | requester / project / when / route / need / status + steps / Review | the status pill = the filter (Waiting) | none | 25 a page | none | later: the pill only when the filter holds one status (RequestStatusPill is shared with the request page) | later |
+| Approve (requests) | O | avatar / title / requester · when · need · proposed / reviewing / chips | the requester up to three times; the chip = the section | none | 25, Load more | none | later: the title never the requester's name when the avatar and the line carry it | later |
+| Fuel | S (`Fuel.tsx`, another agent) | when / plate / driver / litres / LKR / odometer / video pill + "Video 0:47 · 16 MB" | "Video" twice | none | 25 a page | none | the video pill only for a fill without its video (missing / on the phone); "0:47 · 16 MB" alone for an uploaded one | described |
+| Fuel | O (reports) | date + plate + Video / driver · litres · LKR · km · length / Watch video | — | none | 25, Load more | none | — | fine |
+| Mileage | S | five tables (by vehicle, allowance, gaps, unlogged, checks) | — | by table | 25 local per table | none | — | fine |
+| Mileage | O (reports) | the same five sections | — | by section | all at once | none | later: 5 rows per section with See all (Load more 25) | later |
+| Duty log | S | driver / clock in (with the day) / out / hours / vehicles / tasks / km | — | none | 25 a page, totals row | none | — | fine |
+| Duty log | O (reports) | driver + day / clock in (with the day again) → out / vehicles · tasks · km | the day twice | none | 25, Load more | none | the day once (in words), the clock-in its time | done |
+| Drivers | S | avatar · name / code / username / phone / licence / vehicle / status / "N accepted · 0 declined" / Manage | "· 0 declined" on most rows | none | 25 a page | none | later: "· 0 declined" off (a proposed removal) | later |
+| Drivers board | S | avatar / name / status pill + vehicle / last seen / Next / New task, Call | the pill echoes the Show filter | Attendance groups | all at once | Ask drivers (sheet) | later: the pill only when the filter holds more than one state | later |
+| Drivers (tab) | O | avatar + dot / name / vehicle / status sentence / Next · last seen / Call | the state twice (dot and sentence) | Attendance groups | all at once | Ask drivers (sheet) | later | later |
+| Drivers (People) | O | avatar / name / code · phone / on duty · plate / "active" + licence chips | "active" on every row (the filter's default) | none | 25, Load more | none | "active" only off the default (a switched-off driver keeps its chip) | done |
+| Vehicles | S (`Vehicles.tsx`, another agent) | thumb + plate / make · seats / rented / regular driver / assigned / km bar / next service / Lic Ins Emi / status + availability | Lic / Ins / Emi on every row; the status pill and the availability line say the same; the status = the filter | none | 25 a page | none | one status (the availability line, the pill only for In garage); the document chips only when not ok (Maintenance holds every date) | described |
+| Vehicles | O (`vehicles/**`, another agent) | plate / make · seats / availability · holder · km / status pill + Lic / Ins / Emi | the status twice, the chips on every row, the plate twice without a make | none | 25, Load more | none | the same as S; the second line without the plate | described |
+| Places | S | name / address / kind pill / site id / district / "Pinned" or "no pin" | "Pinned" on nearly every row; the kind pill = the filter | none | 25 a page | none | Pin: a check named Pinned, the words for "no pin"; the kind pill: later | done (the kind pill: later) |
+| Places | O | name / site · address · district / removed / "No pin" or operator | the operator = the section ("Dialog sites") | by section | 50, Load more | none | the operator only outside its own section | done |
+| Projects | S | a search page (find_project), not a list | — | — | — | — | — | fine |
+| Projects | O | none (the pickers in Who and Purpose) | — | — | — | — | — | n/a |
+| Office users | S | avatar / e-mail / phone / permissions / since / keys / Manage | — | none | 25 a page | none | — | fine |
+| Office users | O | avatar / name / e-mail · phone / permissions / "active" | "active" on every row | none | 25, Load more | none | "active" only off the default | done |
+| Questions (Asks) | S | question / day time · by · counts / note / open pill | — | none | 25 a page | none | — | fine |
+| Questions (Asks) | O | question / name · time (no day) / counts with "N yes" / "N yes" pill | "N yes" twice; no day | none | 20, Load more | none | the day with the time in words; "N yes" once (the pill) | done |
+| My trips | S (`MyTrips.tsx`, another agent) | when / trip / status pill + live text + approved by / driver | "Approved" up to three times; "Task I created" under that filter | none | 25 a page | none | the live text OR the pill (never both with the same word); the decision line only when it adds who and when | described |
+| My trips | O (`(tabs)/trips.tsx`, another agent) | cards in Waiting / Coming up / Done / Expired | the chip = the group | by state | 100 at once | none | the chip only when it differs from the group; 25 with Load more | described |
+| Tasks board | S | columns with cards (status sentence) | the sentence echoes the column | by column | 25 per column | none | later | later |
+| Tasks (tab) | O | sections with rows (line + chip) | "Done" three times in DONE; the line and the chip say the same | by section | 50 per column | none | later (`office/statusWords.ts` is shared with Home and the task page) | later |
+| Today | driver app | next task, later today (3), All tasks | — | — | — | — | — | done (another agent, §33.6) |
+| Fuel / Mileage / Report | driver app | summary, Recent 5, See all (by month, 20 at a time) | — | by month | Load more | — | — | done (another agent, §33.6) |
+
+### Inventory: every item of the reworked screens and its place (from the code at 1dceefc, the same as this branch's base)
+
+**Issues (S, `screens/Issues.tsx`, `IssuePage.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Status filter: Active, Open, In progress, Snoozed (with its count), Resolved, Dismissed, All | Filter panel · Status | Filter panel · Status (all seven, the Snoozed count) **and** the tabs Open · Snoozed · Resolved as shortcuts (Resolved, Dismissed, All light Resolved) |
+| Kind, Vehicle, Severity filters | Filter panel | Filter panel (unchanged) |
+| Date range (Opened, this month by default) and "N more were opened outside these dates · Show the last 12 months" | top card; notice above the list | unchanged, on every tab (the notice also over the groups) |
+| Search (title, plate, driver, detail) | top card | unchanged; words searched for list their results as one list |
+| Order (Most urgent first / Newest first) | Sort menu | Sort menu on a list (the groups keep the most urgent first) |
+| The list's title and count ("Active · 24") | list header | list header over the groups or the list ("Active · N", a kind's name on its list) |
+| Row: the kind ("Vehicle problem · …") | first grey line | the icon (named for the screen reader, the kind as its tooltip) and the group's heading |
+| Row: the title | title | the issue page's heading; the row shows the server's headline (the specific line) |
+| Row: the detail | first grey line | the issue's page (the headline carries the specific) |
+| Row: the due words | first grey line | the grey line's "when" (the server's meta uses the due words when there are some) |
+| Row: "Opened … · System · kind · taken by … · closed …" | second grey line | the issue's page (Opened, Opened by, Taken by, Resolved / Dismissed with when and by); the taker's avatar on the row; on Resolved "by Sahan" / "closed automatically" |
+| Row: the snooze ("Snoozed until … · by …") | third line | unchanged |
+| Row: the plate | a chip at the right | the plate chip at the start of the grey line |
+| Row: the taker's photo | right | right (unchanged) |
+| Row: the status pill | every row | only when the filter does not say it (Active: In progress only; All: every row) |
+| Row: Pre-trip | after the title | unchanged |
+| Open an issue (panel on a desktop, a page on a phone; X, Esc, Back keep the filters) | row | unchanged |
+| Take, Add note, Resolve (with the resolution), Dismiss, Reopen; the task, driver, call, WhatsApp, request links; the report with photos; the history | the issue's panel | unchanged |
+| Loading skeleton, the error with Try again, "Couldn't refresh" over rows, Updating… | the list | unchanged (also for the groups) |
+| Empty states (by status, search, filters, days) | the list | unchanged words, with an icon |
+| Realtime reload within a second; 60 s watch | the page | unchanged (the groups too) |
+| Load more (phone) / page numbers (desktop), 25 a page | the list | the lists (a kind's, Snoozed, Resolved, a search); the groups show 3 each with Show all N |
+| The menu badge (open + in progress) | menu / More / tab bar | the same badge, counting needs_action (critical and warning, not snoozed); patched when an issue closes |
+| new: ticks, "Select all N in this group", the bar (N selected · Resolve · Dismiss · Clear), the reason sheet (required, chips), update_issues | — | the list (with update_issues) |
+| new: "N need action · N critical" | — | under the page's title |
+
+**Issues (O, `app/office/issues/index.tsx`)**
+
+| Item | Old place | New place |
+|---|---|---|
+| Header "Issues · N" (open + in progress) | dark header | dark header, N = needs_action |
+| Chips: N open, N in progress (tap = that status), N snoozed | dark header | unchanged; N snoozed now opens the Snoozed tab |
+| "Vehicle problems reported by drivers ›" (with list_vehicle_reports) | dark header | unchanged; opens Maintenance on its Problem reports view |
+| Search (sent half a second after the last key) | FilterBar | unchanged |
+| Filter sheet: Status (Active, Open, In progress, Resolved, Dismissed, with counts), Severity (with counts), Kind, Vehicle, Opened | Filter sheet | unchanged (the severity's row counts on a list; the groups ask the server for the severity) and the tabs Open · Snoozed · Resolved |
+| Sort (most urgent / newest) | FilterBar | unchanged (it orders the groups' rows too) |
+| Row: severity tile | left | left: the kind's icon tinted by severity (the tick with update_issues) |
+| Row: title; "kind · detail · due"; plate + taker + "Opened … · System · …"; snooze | the row | ONE title (headline); ONE grey line (plate chip · driver · when, in words); the taker's avatar at the right; the snooze line; the kind → the icon's label and the group's heading; the detail and who opened it → the issue's page |
+| Row chips: Pre-trip, severity, status | right | Pre-trip, severity (kept; its removal is proposed), status only when the tab does not say it |
+| A row opens its issue (Take, note, Resolve, Dismiss, Reopen there) | row | unchanged (while rows are ticked, a tap ticks) |
+| Skeletons, the error with Try again, "Couldn't refresh", pull to refresh, read again on focus | the screen | unchanged |
+| Load more (50, the cursor) | the list | unchanged on a list; the groups: Show all N |
+| Empty states | the list | unchanged words, with an icon; Snoozed has its own |
+
+**Maintenance (S)**: the problem reports (status in the URL, search, Status filter, each report's photos, Open task, Call driver, Status, Note for the driver, Also take off the road, Save, 25 a page) — unchanged. "Service and documents · Reminders" rows → each vehicle's card (documents, service, rental end, garage booking); the rows that were not service or documents (km allowance, licences, missed tasks, odometer checks, km gaps, late starts and the rest of the overview's list) → Issues (one line here counts them and opens Issues; the licences are also on Reminders); the empty line → the cards' empty line; the 25-at-a-time paging → the cards' Load more / page numbers. A person with vehicles but not issues: the reminders read off the vehicles list → the same cards (from list_vehicles).
+
+**Maintenance (O)**: the problem reports list (search, Filter: Not closed / Open / In garage / Closed / All, 25 with Load more, a row to its report: photos, Open task, Call, the status, the note, off the road, Save) → the Problem reports view, one tap from the screen's segmented control, and opened directly from the Issues header. More shows Maintenance with vehicles or issues (before: issues).
+
+**Reminders (S page and the Overview's panel; O)**: "Documents and services due" rows (each to its vehicle) → the vehicle's card, its rows (each to the vehicle), with the service bar from list_vehicles; the driver licences → their rows (each to its issue); "Also needs attention" / "Also counted" rows (each to its issue) → one line "N more need attention · Open Issues" (every one of them is in Issues); the back link, the window ("Due in the next 14 days"), the empty states and the note kept. The tile (S) and Home's row (O) count the service and document reminders (before: every active issue).
+
+**Home (O)**: Needs attention's groups, their expand, Snooze (tomorrow / a week) with Undo, View all → unchanged; its count = needs_action (before: the groups' count).
+
+### Behaviour changes (with the reason)
+
+- Issues open grouped by kind; the badge, the Office mode header and Home's Needs attention count needs_action (critical and warning, not snoozed), not every open issue (§33.7 rule 3: the badge said 24 when a few needed action).
+- The Office mode Open tab leaves the snoozed out (they are on the Snoozed tab), as the site's Active did.
+- Office mode Maintenance opens on Service and documents; the problem reports are its second view (one job per screen, §16; the Issues header opens the reports).
+- The Reminders tile / row and page hold service and documents only; the rest is counted in one line to Issues (§33.7 rule 6; the evidence: Reminders repeated the missed tasks and odometer checks of Issues).
+- The site's Activity log pages by number on a desktop (a bug: only 25 rows were reachable).
+- Repeated words that the filter, the section or the tab already says are shown only where they add something: the status pill on Issues and Task history, "active" on People, the operator on Places, "Pinned" on the site's Places (a check named Pinned), "· unread" (for the screen reader), the day on the Duty log, "N yes" on Questions.
+
+### Proposed removals (kept for now)
+
+- Issues (S): the Filter's Status choices Snoozed, Resolved, Dismissed, All duplicate the tabs; remove them from the Filter once the tabs are accepted.
+- Issues (S, O): the date range / Opened filter on the Open tab (this month by default): propose "any time" for the Open tab (an open issue is open whenever it was opened), which also makes the "outside these dates" note unnecessary.
+- Issues (O): the Warning / Info severity chip on each row (the tile's tint, the group's dot and the screen reader's label say it; Critical keeps its chip).
+- Activity log (S, O): the "Done" pill / chip on every done row (Refused, Failed and In progress keep theirs).
+- Drivers (S): "· 0 declined" on the Last 30 days column.
+- `ReminderList`'s "Also needs attention" group (S) and `dueFromVehicles` (S, `maintenanceLogic.ts`): no longer reached from the screens (kept with their tests).
+
+### Tests
+
+- S: `issuesLogic.test.ts` and `issuesPages.test.tsx` kept (4 assertions updated where the default view or the row legitimately changed: the first call is the groups', the row's grey line, the taker as the avatar, the paging tests on a kind's list); `issuesGroups.test.tsx` (groups, tabs, bulk, every action still there), `vehicleCare.test.tsx` (the rules, Maintenance's cards and actions, Reminders' cards), `listAudit.test.tsx`; `overviewOpen.test.tsx`'s two Reminders expectations updated; the e2e's issue row text and the L7 list (now a search) updated (CI runs them).
+- O: `test:issues`, `test:maintenance`, `test:overview`, `test:office` keep every check and add the new ones; `tests/officeLists.test.tsx` (7).

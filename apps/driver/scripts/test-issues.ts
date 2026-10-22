@@ -4,13 +4,16 @@
 //
 //   npm run test:issues          (from apps/driver)
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
   activeCount, appendPage, DEFAULT_STATUS, defaultSort, ISSUE_SORTS, issuesChoice, issuesFilterDefs, eventParts, fitsStatus, isActive, isSeverityFilter, isStatusFilter, issueActions, issueFacts, issuesArgs, kindText, LIMIT,
   linksFor, listRows, mergeIssue, noteRequired, patchHistory, REPORT_STATUS_KEYS, reportCategoryKey, rowLine, SEVERITY_FILTERS, severityCounts, severityTone, snoozeParts,
   STATUS_FILTERS, statusTone, updateInput, whoLine, type WhoWords,
+} from '../src/office/issuesLogic';
+import {
+  bulkCalls, groupText, groupTick, ISSUE_TABS, metaParts, needsAction, rowTitle, showsGroups, statusShown, TAB_STATUS, tabExtra, tabFor, toggled, withoutIssues,
 } from '../src/office/issuesLogic';
 import type { Issue, IssueHistory, IssuesList } from '../src/office/types';
 
@@ -235,6 +238,78 @@ console.log('\n== The driver\'s report words ==');
   check(REPORT_STATUS_KEYS.open === 'report.open' && REPORT_STATUS_KEYS.in_garage === 'report.in_garage' && REPORT_STATUS_KEYS.closed === 'report.closed', 'the report statuses use the driver\'s own keys');
   check(reportCategoryKey('breakdown') === 'report.breakdown' && reportCategoryKey('warning_light') === 'report.warning_light', 'the categories use the driver\'s own keys');
   check(reportCategoryKey('something_else') === undefined, 'an unknown category: the server\'s word is shown');
+}
+
+
+console.log('\n== Round 4–7, item 8: the tabs, the groups, Gmail\'s rows, the bulk actions ==');
+{
+  check(same(ISSUE_TABS, ['open', 'snoozed', 'resolved']), 'three tabs: Open, Snoozed, Resolved');
+  check(tabFor('active', false) === 'open' && tabFor('in_progress', false) === 'open' && tabFor('resolved', false) === 'resolved' && tabFor('dismissed', false) === 'resolved' && tabFor('active', true) === 'snoozed',
+    'the tab follows the sheet\'s status; Snoozed is its own');
+  check(TAB_STATUS.open === 'active' && TAB_STATUS.resolved === 'resolved', 'a tab opens on its status');
+  check(showsGroups('open', undefined, '') && !showsGroups('open', 'km_gap', '') && !showsGroups('open', undefined, 'CAB') && !showsGroups('snoozed', undefined, '') && !showsGroups('resolved', undefined, ''),
+    'Open groups by kind until a kind is chosen or words are searched for');
+  check(same(tabExtra('open', true, 'all'), { snoozed: false, group: true }) && same(tabExtra('open', true, 'critical'), { snoozed: false, group: true, severity: 'critical' })
+    && same(tabExtra('open', false, 'warning'), { snoozed: false }) && same(tabExtra('snoozed', false, 'all'), { snoozed: true }) && same(tabExtra('resolved', false, 'all'), {}),
+    'what each tab adds: the snoozed left out or alone, the groups with the severity asked of the server');
+  check(same(issuesArgs('active', '', undefined, undefined, { snoozed: false, group: true }), { status: 'active', sort: 'urgent', limit: 50, snoozed: false, group: true }), 'list_issues with the groups');
+  check(same(issuesArgs('active', '', 'c2', undefined, { snoozed: true }), { status: 'active', sort: 'urgent', limit: 50, snoozed: true, cursor: 'c2' }), 'the Snoozed tab pages as before');
+  const tr = (k: string) => (k === 'office.issues.group.missed_task' ? 'Missed tasks' : k === 'office.issues.kind.brand_new' ? 'brand' : k);
+  check(groupText({ kind: 'missed_task', kind_text: 'Missed task' }, tr) === 'Missed tasks' && groupText({ kind: 'new_kind', kind_text: 'New kind' }, tr) === 'New kind', 'a group\'s heading: its plural words, else the kind\'s');
+  const i = issue({ kind: 'missed_task', title: 'Missed task: Trip · Head office', headline: "Test Driver missed 'Trip · Head office'", meta: 'CAP-2207 · Test Driver · 2 h ago', vehicle: 'CAP-2207', driver: 'Test Driver' });
+  check(rowTitle(i) === "Test Driver missed 'Trip · Head office'" && rowTitle(issue()) === 'Breakdown · WP CAB-4521', 'ONE title: the headline, else the title');
+  check(same(metaParts(i), { plate: 'CAP-2207', rest: 'Test Driver · 2 h ago' }) && same(metaParts(issue({ vehicle: undefined })), { rest: '2026-10-18 09:12' }), 'ONE grey line: the plate apart (its chip), the rest in words');
+  check(!statusShown('active', 'open') && statusShown('active', 'in_progress') && !statusShown('resolved', 'resolved') && statusShown('open', 'in_progress'), 'the status chip only when the tab does not say it');
+  check(needsAction({ open: 24, in_progress: 0, needs_action: 4 }) === 4 && needsAction({ open: 3, in_progress: 2 }) === 5 && needsAction(null) === 0, 'the header counts what needs action (an older server: the active ones)');
+  check(same(bulkCalls(['a', 'b', 'a'], 'resolved', ' Test data '), [{ ids: ['a', 'b'], status: 'resolved', note: 'Test data' }]) && bulkCalls(['a'], 'dismissed', '  ').length === 0
+    && same(bulkCalls(Array.from({ length: 230 }, (_, n) => `i${n}`), 'dismissed', 'x').map((c) => c.ids.length), [100, 100, 30]), 'update_issues: one reason (required), 100 a call, each id once');
+  check(same([...toggled(new Set(['a']), ['b', 'c'], true)].sort(), ['a', 'b', 'c']) && groupTick(new Set(['a']), ['a', 'b']) === 'mixed' && groupTick(new Set(['a', 'b']), ['a', 'b']) === 'on', 'the ticks: a row, a group\'s rows');
+  const grouped: IssuesList = { status: 'active', count: 0, open: 3, in_progress: 0, issues: [], groups: [{ kind: 'missed_task', kind_text: 'Missed task', severity: 'warning', count: 5, newest: [issue({ id: 'a' }), issue({ id: 'b' })] }, { kind: 'km_gap', kind_text: 'Km', severity: 'warning', count: 1, newest: [issue({ id: 'c' })] }] };
+  const after = withoutIssues(grouped, ['a', 'c']);
+  check(same(after.groups?.map((g) => [g.kind, g.count, g.newest.map((x) => x.id)]), [['missed_task', 4, ['b']]]), 'after the bulk action: the rows leave, the counts drop, an empty group goes');
+
+  // Every action the screen had is still there (Round 4–7 UI rules, 4).
+  const screen = readFileSync(join(__dirname, '..', 'src', 'app', 'office', 'issues', 'index.tsx'), 'utf8');
+  const has = (x: string) => screen.includes(x);
+  check(has('<Segmented') && has('ISSUE_TABS.map') && has("t('office.issues.chip_open')") && has("t('office.issues.chip_in_progress')") && has("t('office.issues.chip_snoozed')") && has('testID="issues-maintenance"'),
+    'the tabs, the header\'s open / in progress / snoozed chips and the link to Maintenance');
+  check(has("pathname: '/office/issues/[id]'") && has('onLongPress=') && has('testID="issue-tick"') && has('testID="group-tick"') && has('testID="group-select-all"') && has("api.call<{ done: number; failed?: { id: string; error: string }[] }>('update_issues', c)"),
+    'a row opens its issue; the ticks (the icon, a long press, a group, all of a group) and update_issues');
+  check(has('testID="bulk-bar"') && has('testID="bulk-sheet"') && has("t('office.issues.bulk.resolve')") && has("t('office.issues.bulk.dismiss')") && has('disabled={!reason.trim()}') && has('busy={bulk.busy}'),
+    'the bar: Resolve and Dismiss; the reason sheet: required, the button\'s own spinner');
+  check(has('showKind(g.kind)') && has("t('office.issues.showAll'") && has("t('office.issues.allKinds')") && has('onToggle='), 'Show all N (the kind), All kinds back, a group collapses');
+  check(has('<ListEmpty icon='), 'the empty states have an icon');
+  const page = readFileSync(join(__dirname, '..', 'src', 'app', 'office', 'issues', '[id].tsx'), 'utf8');
+  check(page.includes('issueActions(') && same(issueActions(issue(), ['update_issue']), ['take', 'note', 'resolve', 'dismiss']), 'the issue\'s page keeps Take, Add a note, Resolve, Dismiss (Reopen when closed)');
+
+  // The words: en.json / si.json with the strings sidecar (src/i18n/parts/*.json) merged in while it exists.
+  const words = mergedWords();
+  const asked = [...screen.matchAll(/t\(\s*'(office\.issues\.[A-Za-z_.]+)'/g)].map((m) => m[1]);
+  const lookup = (o: unknown, k: string) => k.split('.').reduce<unknown>((n, p) => (n && typeof n === 'object' ? (n as Record<string, unknown>)[p] : undefined), o);
+  check(asked.length > 10 && asked.every((k) => typeof lookup(words.en, k) === 'string' && typeof lookup(words.si, k) === 'string'), 'every office.issues word the screen asks for, in English and Sinhala', asked.filter((k) => typeof lookup(words.si, k) !== 'string'));
+  const kinds = Object.keys((lookup(words.en, 'office.issues.kind') as Record<string, string>) ?? {});
+  check(kinds.every((k) => typeof lookup(words.en, `office.issues.group.${k}`) === 'string' && typeof lookup(words.si, `office.issues.group.${k}`) === 'string'), 'every kind has its group heading in both languages');
+}
+
+/** en.json and si.json with every sidecar (src/i18n/parts/*.json, { en, si }) deep-merged in while one exists. */
+function mergedWords(): { en: Record<string, unknown>; si: Record<string, unknown> } {
+  const dir = join(__dirname, '..', 'src', 'i18n');
+  const out = { en: JSON.parse(readFileSync(join(dir, 'en.json'), 'utf8')), si: JSON.parse(readFileSync(join(dir, 'si.json'), 'utf8')) };
+  const merge = (a: Record<string, unknown>, b: Record<string, unknown>) => {
+    for (const [k, v] of Object.entries(b)) {
+      if (v && typeof v === 'object' && !Array.isArray(v)) merge((a[k] ??= {}) as Record<string, unknown>, v as Record<string, unknown>);
+      else a[k] = v;
+    }
+  };
+  const parts = join(dir, 'parts');
+  if (existsSync(parts)) {
+    for (const f of readdirSync(parts).filter((n) => n.endsWith('.json'))) {
+      const part = JSON.parse(readFileSync(join(parts, f), 'utf8'));
+      merge(out.en, part.en ?? {});
+      merge(out.si, part.si ?? {});
+    }
+  }
+  return out;
 }
 
 console.log(failures === 0 ? '\nAll issue checks passed.' : `\n${failures} issue check(s) FAILED.`);
