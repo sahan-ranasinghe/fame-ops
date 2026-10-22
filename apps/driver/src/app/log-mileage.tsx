@@ -28,6 +28,10 @@
 // above) has no check by this driver today, the check (app/vehicle-check.tsx) is pushed on top at once, once per vehicle;
 // after it this screen goes on to the odometer with its state kept. Back from the check without answering leaves the
 // "Vehicle check" card here in place of the odometer step (components/VehicleCheckCard.tsx): the start cannot go on.
+// Round 4–7 (§33.2): Start task shows the "Trip info" card above the odometer (components/FuelCard.tsx: about 180 km,
+// roughly 12–15 L petrol, "Enough fuel?"); the answer is optional and goes with the start. Log fuel (and the fill at the
+// end of a task) asks what was filled: petrol or diesel preselected from the vehicle (a hybrid fills petrol), and the
+// grade when the vehicle has one, both changeable.
 
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -36,13 +40,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FuelCard } from '@/components/FuelCard';
 import { useLeaveGuard } from '@/components/navigation';
+import { ChoiceChips } from '@/components/patterns/Select';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { PlateText } from '@/components/PlateText';
 import { VehicleCheckCard } from '@/components/VehicleCheckCard';
 import { VehicleConfirm } from '@/components/VehicleConfirm';
 import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/ui';
 import { earlyFinish, stretchStartKm, swapReadingsWaiting, taskKmSoFar } from '@/lib/dayRules';
+import { FILL_TYPES, type FillChoice, fillPreselect, type FuelAnswer, GRADES, withFillType, withGrade } from '@/lib/fuelCard';
 import { parseDecimal, parseWhole, thousands } from '@/lib/format';
 import { readOdometerPhoto, type ReadStatus } from '@/lib/odometerAi';
 import { discardPhoto, type LocalPhoto, takePhoto } from '@/lib/photos';
@@ -134,6 +141,9 @@ export default function LogMileageScreen() {
   const [receipt, setReceipt] = useState<LocalPhoto | null>(null);
   // The video of the fill (Phase 6): recorded on its own screen, required for every fuel entry.
   const [video, setVideo] = useState<RecordedVideo | null>(null);
+  // Round 4–7 (§33.2): what was filled, preselected from the vehicle; the fuel card's answer at Start task (optional).
+  const [fill, setFill] = useState<FillChoice>(() => fillPreselect(vehicle));
+  const [fuelAnswer, setFuelAnswer] = useState<FuelAnswer | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -233,7 +243,7 @@ export default function LogMileageScreen() {
     const bad = (litres.trim() !== '' && (litresValue === null || litresValue <= 0)) || (amount.trim() !== '' && amountValue === null);
     if (bad || (litresValue === null && amountValue === null)) return 'invalid';
     if (!video) return 'no_video';
-    return { litres: litresValue, amountCents: amountValue === null ? null : Math.round(amountValue * 100), receipt, video };
+    return { litres: litresValue, amountCents: amountValue === null ? null : Math.round(amountValue * 100), receipt, video, fill };
   }
 
   /** The driver changed the number the photo shows: say so, and ask once. */
@@ -292,7 +302,7 @@ export default function LogMileageScreen() {
     setSaving(true);
     if (mode === 'start' && task) {
       // Location must be on: the cover asks for it; "Not now" leaves the form as it is.
-      if (!(await app.startTask(task, reading))) {
+      if (!(await app.startTask(task, reading, fuelAnswer))) {
         setSaving(false);
         return;
       }
@@ -362,6 +372,9 @@ export default function LogMileageScreen() {
         {checkFirst && checkVehicleId && task && (
           <VehicleCheckCard vehicleId={checkVehicleId} how={checkHow} taskId={task.id} body="vehicleCheck.startWaits" />
         )}
+
+        {/* Round 4–7 (§33.2): the trip's km and roughly how many litres; never holds the start. */}
+        {mode === 'start' && task && needsOdometer && <FuelCard task={task} vehicle={vehicle} answer={fuelAnswer} onAnswer={setFuelAnswer} />}
 
         {needsOdometer && step.kind === 'none' && (
           <Pressable accessibilityRole="button" onPress={photographOdometer} style={styles.photoCard}>
@@ -494,6 +507,25 @@ export default function LogMileageScreen() {
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <Field label={t('log.litres')} mono value={litres} onChangeText={setLitres} keyboardType="decimal-pad" maxLength={7} />
                   <Field label={t('log.amount')} mono value={amount} onChangeText={setAmount} keyboardType="decimal-pad" maxLength={10} />
+                </View>
+                {/* Round 4–7 (§33.2): petrol or diesel (the vehicle's, preselected), then its grade when known. */}
+                <View style={{ gap: 8 }}>
+                  <Txt variant="strong" size={16}>{t('fuelKind.label')}</Txt>
+                  <ChoiceChips
+                    options={FILL_TYPES.map((type) => ({ key: type, label: t(`fuelKind.${type}`) }))}
+                    value={fill.type}
+                    onChange={(type) => setFill((c) => withFillType(c, type))}
+                    testID="fill-type"
+                  />
+                  {fill.type && (
+                    <ChoiceChips
+                      options={GRADES[fill.type].map((grade) => ({ key: grade, label: t(`fuelKind.${grade}`) }))}
+                      value={fill.grade}
+                      onChange={(grade) => setFill((c) => withGrade(c, grade))}
+                      small
+                      testID="fill-grade"
+                    />
+                  )}
                 </View>
                 <Button kind="outline" label={t(receipt ? 'log.receiptAdded' : 'log.addReceipt')} onPress={photographReceipt} />
                 {video ? (

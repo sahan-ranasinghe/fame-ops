@@ -19,6 +19,7 @@
 // "Running late" and "Can't make it" (H4; never on a trip the driver started).
 // Round 4–7 (§33.1): on duty with a vehicle that has no check by this driver today, the "Vehicle check · WP CAB-4521" card
 // with Check now (components/VehicleCheckCard.tsx) under the duty notices, until it is answered (lib/vehicleCheck.ts).
+// Round 4–7 (§33.3): under the card's "5 passengers · Contact: …" the riders' names ("Nimal Perera, Kamal Silva +3 more").
 
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -46,6 +47,7 @@ import { taskCalls } from '@/lib/contacts';
 import { firstName } from '@/lib/format';
 import { canReportLate, declineKey } from '@/lib/late';
 import { todayLists } from '@/lib/lists';
+import { namesLine } from '@/lib/passengers';
 import { stopProgress } from '@/lib/stopProgress';
 import { nextAbout } from '@/lib/stopProgressWords';
 import { hasChanges, vehicleLine, vehicleWords } from '@/lib/taskPreview';
@@ -98,6 +100,8 @@ export default function TodayScreen() {
   }
 
   const people = next ? peopleLine(next) : null;
+  // Round 4–7 (§33.3): who rides, under the count ("Nimal Perera, Kamal Silva +3 more").
+  const riders = next ? namesLine(t, next.task_passengers, app.settings.passengers) : null;
   const nextVehicle = next ? app.vehicles.find((v) => v.id === next.vehicle_id) ?? null : null;
   // J: a task made without a vehicle says "Your vehicle on the day" or "Any van" where the plate would be.
   const noVehicleWords = next && !nextVehicle ? vehicleWords(t, vehicleLine(next, app.vehicles)) : null;
@@ -194,6 +198,7 @@ export default function TodayScreen() {
                 <Txt variant="strong" color={colors.blue} style={{ marginTop: 12 }} testID="today-next-about">{t('today.nextStopAbout', { stop: nextEta.place, time: nextEta.time })}</Txt>
               )}
               {people && <Txt variant="muted" style={{ marginTop: 14 }}>{people}</Txt>}
+              {riders && <Txt variant="muted" numberOfLines={2} style={{ marginTop: people ? 2 : 14 }} testID="today-riders">{riders}</Txt>}
               {/* Phase 7 §6: the task's vehicle, with its photo when it has one. */}
               {nextVehicle && (
                 <View style={styles.vehicleLine}>

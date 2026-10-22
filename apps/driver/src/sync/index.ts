@@ -335,4 +335,4 @@ export function maybeRetryRejected(reason: 'refresh' | 'start', updateId: string
   return n;
 }
 
-export { opsBeforeTrip, pendingFuelLogs, pendingVehiclePhotos, queueCounts, retryVideo, videoUploads, waitingAskAnswers } from './store';
+export { opsBeforeTrip, pendingFuelLogs, pendingOdometerLogs, pendingVehiclePhotos, queueCounts, retryVideo, videoUploads, waitingAskAnswers } from './store';

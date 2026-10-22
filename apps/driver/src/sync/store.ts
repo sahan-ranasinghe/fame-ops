@@ -12,7 +12,7 @@
 
 import * as SQLite from 'expo-sqlite';
 
-import type { FuelInsert, HeartbeatRow } from '../lib/api';
+import type { FuelInsert, HeartbeatRow, OdometerInsert } from '../lib/api';
 import type { Op, QueueStore, StoredHeartbeat, StoredOp, StoredPoint, VehiclePhotoOp, VideoUploadOp } from './engine';
 
 export const HEARTBEAT_LOG_KEEP_DAYS = 30;
@@ -225,6 +225,13 @@ export function pendingFuelLogs(): FuelInsert[] {
   return db
     .getAllSync<{ op: string }>("SELECT op FROM ops WHERE failed = 0 AND op LIKE '{\"kind\":\"fuel_log\"%' ORDER BY seq")
     .map((row) => (JSON.parse(row.op) as { row: FuelInsert }).row);
+}
+
+/** Round 4–7 (§33.6): odometer readings still on the phone (Mileage's Recent card and the history show them at once). */
+export function pendingOdometerLogs(): OdometerInsert[] {
+  return db
+    .getAllSync<{ op: string }>("SELECT op FROM ops WHERE failed = 0 AND op LIKE '{\"kind\":\"odometer_log\"%' ORDER BY seq")
+    .map((row) => (JSON.parse(row.op) as { row: OdometerInsert }).row);
 }
 
 /** Vehicle photos still on the phone (Phase 7 §6): vehicle id → the thumbnail's file, so the picker shows it at once. */

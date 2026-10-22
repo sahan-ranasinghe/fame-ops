@@ -11,6 +11,7 @@ import type { Database, Json } from './database.types';
 import { ASK_SELECT, type AskAnswer, type AskReply, type AskRow, parseAskRow } from './asks';
 import { type AvailArgs, parseAvailAnswer, type UnavailabilityRow } from './availability';
 import { type OfficeContacts, parseOfficeContacts, parseTaskContacts, type TaskContacts } from './contacts';
+import { type FuelAnswer, type FuelAnswerReply, type FuelEstimate, parseFuelEstimate } from './fuelCard';
 import type { LateReply } from './late';
 import type { LicenceSide } from './profile';
 import { parsePersonalTrips, type PersonalTrips } from './trips';
@@ -25,10 +26,11 @@ export const DRIVER_EMAIL_DOMAIN = 'drivers.fame.invalid';
 /**
  * The vehicle columns a driver is allowed to read. Always select exactly these
  * by name: `select *` on vehicles is refused by the database. The photo's two
- * paths (Phase 7 §6) are signed by the app itself (lib/signedUrls.ts).
+ * paths (Phase 7 §6) are signed by the app itself (lib/signedUrls.ts). Round 4–7
+ * (§33.2): the fuel type and grade (Log fuel preselects them; the fuel card).
  */
 export const VEHICLE_COLUMNS =
-  'id, reg_no, make_model, vehicle_type, seats, current_odometer_km, monthly_km_allowance, in_garage, active, photo_path, photo_thumb_path' as const;
+  'id, reg_no, make_model, vehicle_type, seats, current_odometer_km, monthly_km_allowance, in_garage, active, photo_path, photo_thumb_path, fuel_type, fuel_grade' as const;
 
 /** The private buckets the app reads or writes. */
 export const BUCKETS = { driverPhotos: 'driver-photos', vehiclePhotos: 'vehicle-photos', vehicleDocs: 'vehicle-docs' } as const;
@@ -216,7 +218,7 @@ export async function fetchTasks(client: Client, since: Date): Promise<TaskWithS
   const tasks = check(
     await client
       .from('tasks')
-      .select('*, task_stops(*), task_vehicle_segments(*)')
+      .select(`*, task_stops(*), task_vehicle_segments(*), task_passengers(${PASSENGER_COLUMNS})`)
       .or(`status.in.(assigned,in_progress),start_at.gte."${since.toISOString()}"`)
       .neq('status', 'missed')
       .order('start_at'),
@@ -224,12 +226,17 @@ export async function fetchTasks(client: Client, since: Date): Promise<TaskWithS
   );
   // A stop the office edited out stays in the table as 'removed' and is shown nowhere.
   // A vehicle swap during the task (Phase 7) keeps each vehicle's stretch, in order.
+  // Round 4–7 (§33.3): a passenger the office removed stays in the table (removed_at) and is shown nowhere.
   return tasks.map((task) => ({
     ...task,
     task_stops: task.task_stops.filter((stop) => stop.status !== 'removed').sort((a, b) => a.seq - b.seq),
     task_vehicle_segments: [...(task.task_vehicle_segments ?? [])].sort((a, b) => a.seq - b.seq),
+    task_passengers: (task.task_passengers ?? []).filter((p) => !p.removed_at),
   }));
 }
+
+/** Round 4–7 (§33.3): the passenger columns a driver may read (the column grant on task_passengers). */
+export const PASSENGER_COLUMNS = 'id, name, phone, removed_at' as const;
 
 /** Our own places (offices, stores, saved places; not the operators' sites), for Start a trip with no connection (Phase 7 §13). */
 export type OurPlace = Pick<Tables['places']['Row'], 'id' | 'name' | 'address' | 'lat' | 'lng' | 'site_id' | 'kind'>;
@@ -312,6 +319,48 @@ export async function fetchMileage(client: Client, vehicleId: string | null, mon
     odometer: check(inMonth, 'odometer'),
     fuel: check(fuel, 'fuel'),
   };
+}
+
+/** Round 4–7 (§33.6): where the history's next page starts (below the oldest row held: logged_at, then id). */
+export interface LogCursor {
+  at: string;
+  id: string;
+}
+
+/** The filter for the rows below `before`, newest first (logged_at, then id): the history's order. */
+export function logsOlderThan(before: LogCursor): string {
+  return `logged_at.lt."${before.at}",and(logged_at.eq."${before.at}",id.lt.${before.id})`;
+}
+
+/**
+ * Round 4–7 (§33.6): my fills, every vehicle, newest first, `limit` at a time below `before` (from the newest when null);
+ * `more` when the server has older ones (one row more is asked to know it).
+ */
+export async function fetchFuelBefore(client: Client, before: LogCursor | null, limit: number): Promise<{ rows: FuelLog[]; more: boolean }> {
+  const query = client.from('fuel_logs').select('*')
+    .order('logged_at', { ascending: false }).order('id', { ascending: false }).limit(limit + 1);
+  const rows = check(await (before ? query.or(logsOlderThan(before)) : query), 'fuel');
+  return { rows: rows.slice(0, limit), more: rows.length > limit };
+}
+
+/** Round 4–7 (§33.6): my odometer readings, every vehicle, newest first, as fetchFuelBefore. */
+export async function fetchOdometerBefore(client: Client, before: LogCursor | null, limit: number): Promise<{ rows: OdometerLog[]; more: boolean }> {
+  const query = client.from('odometer_logs').select('*')
+    .order('logged_at', { ascending: false }).order('id', { ascending: false }).limit(limit + 1);
+  const rows = check(await (before ? query.or(logsOlderThan(before)) : query), 'odometer');
+  return { rows: rows.slice(0, limit), more: rows.length > limit };
+}
+
+/** Round 4–7 (§33.2): the fuel card's estimate for my task (null: not mine, or no answer). */
+export async function fetchFuelEstimate(client: Client, taskId: string): Promise<FuelEstimate | null> {
+  const res = await client.rpc('fuel_estimate', { p_task_id: taskId });
+  return parseFuelEstimate(check(res, 'fuel estimate'));
+}
+
+/** Round 4–7 (§33.2): "Enough fuel?" at Start task, at the phone's time (queued: op fuel_answer). */
+export async function answerFuelCard(client: Client, taskId: string, answer: FuelAnswer, at: string): Promise<FuelAnswerReply> {
+  const res = await client.rpc('answer_fuel_card', { p_task_id: taskId, p_answer: answer, p_at: at });
+  return check(res, 'fuel answer') as FuelAnswerReply;
 }
 
 // ---------------------------------------------------------------------------

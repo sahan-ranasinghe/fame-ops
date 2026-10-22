@@ -57,7 +57,14 @@ export interface SearchResult {
   attribution?: string;
   /** google: Google's place id (no pin on the phone: the server fetches it through its counted gate). */
   google_place_id?: string;
+  /**
+   * Round 4–7 (item 10): an empty box's group: saved (the company's places) or recent (the driver's OWN trips' places,
+   * personal ones too). Absent on a typed search's results.
+   */
+  group?: SuggestGroup;
 }
+
+export type SuggestGroup = 'saved' | 'recent';
 
 export interface SearchAnswer {
   text: string;
@@ -95,6 +102,7 @@ export function parseSearchAnswer(body: unknown): SearchAnswer {
       lng: lat !== undefined && lng !== undefined ? lng : undefined,
       attribution: str(r.attribution),
       google_place_id: str(r.google_place_id),
+      ...(r.group === 'saved' || r.group === 'recent' ? { group: r.group } : {}),
     });
   }
   const pinLat = num(b.pin?.lat);
@@ -105,6 +113,28 @@ export function parseSearchAnswer(body: unknown): SearchAnswer {
     pin: pinLat !== undefined && pinLng !== undefined ? { lat: pinLat, lng: pinLng } : undefined,
     map_note: str(b.map_note),
   };
+}
+
+/**
+ * Round 4–7 (item 10): an empty box's answer in its two groups, as Uber's "Saved" and "Recent": the company's places,
+ * then the driver's own (each name once; a recent one that is also saved shows as saved). An answer with groups shows only
+ * those two (never another person's); a server before item 10 sent no group: our places count as saved, the used-before
+ * ones as recent.
+ */
+export function suggestGroups(results: readonly SearchResult[]): { saved: SearchResult[]; recent: SearchResult[] } {
+  const grouped = results.some((r) => r.group !== undefined);
+  const savedRow = (r: SearchResult) => (grouped ? r.group === 'saved' : r.layer === 'place');
+  const recentRow = (r: SearchResult) => (grouped ? r.group === 'recent' : r.layer === 'recent');
+  const saved = results.filter(savedRow);
+  const names = new Set(saved.map((r) => r.name.trim().toLowerCase()));
+  const recent = results.filter((r) => {
+    if (!recentRow(r)) return false;
+    const n = r.name.trim().toLowerCase();
+    if (names.has(n)) return false;
+    names.add(n);
+    return true;
+  });
+  return { saved, recent };
 }
 
 /** Whether to ask the server for this text (from 2 characters). Never one request per key press: the box waits 300 ms. */

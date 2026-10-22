@@ -99,6 +99,16 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
       return;
     }
     if (!taskId) return;
+    // Round 4–7 (§33.2): "Fill up on the way? Log fuel" opens Log fuel for the task (Today underneath, as a task's tap; a
+    // form with unsaved input stays underneath instead).
+    if (data.kind === 'fuel') {
+      if (!anyFormDirty()) {
+        if (router.canGoBack()) router.dismissAll();
+        router.navigate('/');
+      }
+      router.push({ pathname: '/log-mileage', params: { mode: 'fuel', taskId } });
+      return;
+    }
     // Hotfix 2 (I): a "Task changed" push's changes are kept first, so the task opens with them marked.
     rememberPush(data);
     // A form with unsaved input stays underneath (back returns to it); otherwise Today does.

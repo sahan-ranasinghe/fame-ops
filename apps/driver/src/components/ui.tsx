@@ -146,10 +146,11 @@ export function Field({ label, mono = false, style, ...input }: TextInputProps &
 }
 
 /** Two choices side by side, as in "Did you add fuel?  Yes | No". The picked one: a check, the blue chip tint and a 2 px
- *  blue border (Material 3's segmented button; the selection rules in components/patterns/Select.tsx). */
+ *  blue border (Material 3's segmented button; the selection rules in components/patterns/Select.tsx). `value` null: none
+ *  picked yet (an optional question, Round 4–7's "Enough fuel?"); a longer label wraps inside its half. */
 export function Segmented<T extends string>({ options, value, onChange }: {
   options: { value: T; label: string }[];
-  value: T;
+  value: T | null;
   onChange: (value: T) => void;
 }) {
   return (
@@ -165,7 +166,7 @@ export function Segmented<T extends string>({ options, value, onChange }: {
             style={(state) => [styles.segment, on && styles.segmentOn, hoverStyle(state)]}
           >
             {on && <Check size={20} color={colors.blue} strokeWidth={3} />}
-            <Txt variant="button" size={18} color={on ? colors.blue : colors.ink}>{option.label}</Txt>
+            <Txt variant="button" size={18} color={on ? colors.blue : colors.ink} style={{ flexShrink: 1, textAlign: 'center' }}>{option.label}</Txt>
           </Pressable>
         );
       })}
@@ -229,7 +230,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.card,
   },
-  segment: { flex: 1, minHeight: 56, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  segment: { flex: 1, minHeight: 56, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, borderWidth: 2, borderColor: 'transparent' },
   segmentOn: { backgroundColor: colors.blueChip, borderColor: colors.blue },
   notice: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
 });

@@ -30,10 +30,12 @@
 // Round 2b: the card also asks about a stop driven past ("Did you stop at …?": Yes, I was there / Skip it, the skip sheet);
 // a stop whose Arrived was undone and marked again reads "Arrived 10:52 · corrected"; while this screen is in front the
 // background arrival notification stays quiet for this task (lib/arrival.ts setTaskOnScreen).
+// Round 4–7: "Fill up on the way · Log fuel" while the driver said so at the start and no fill is logged on the task
+// (§33.2, lib/fuelCard.ts); the passengers' names with Call for those with a phone (§33.3, components/Passengers.tsx).
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronLeft, MapPin, Navigation, Phone, Plus } from '@/components/icons';
+import { Check, ChevronLeft, Fuel, MapPin, Navigation, Phone, Plus } from '@/components/icons';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,6 +46,7 @@ import { SlideToConfirm } from '@/components/patterns/SlideToConfirm';
 import { StopProgressLine } from '@/components/StopProgressLine';
 import { ApprovedLine, CallButtons } from '@/components/CallButtons';
 import { GoogleCredit } from '@/components/GoogleCredit';
+import { PassengerList } from '@/components/Passengers';
 import { RunningLate } from '@/components/LateSheet';
 import { SkipSheet } from '@/components/SkipSheet';
 import { TaskMap, useMapEngine } from '@/components/TaskMap';
@@ -58,6 +61,7 @@ import { arrivalCheck, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/d
 import { approvedBy, taskCalls } from '@/lib/contacts';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { canReportLate } from '@/lib/late';
+import { namesLine } from '@/lib/passengers';
 import { isMissed } from '@/lib/lists';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { stopProgress } from '@/lib/stopProgress';
@@ -154,6 +158,8 @@ export default function TaskScreen() {
   };
   const call = telLink(task.contact_phone);
   const people = peopleLine(task);
+  // Round 4–7 (§33.3): a finished task names who rode (no Call: the trip is over).
+  const names = namesLine(t, task.task_passengers, app.settings.passengers);
   const contacts = app.taskContacts[task.id] ?? null;
   const calls = taskCalls(task, contacts);
   const approved = approvedBy(contacts);
@@ -253,6 +259,19 @@ export default function TaskScreen() {
             <TrackingNotice />
             <GeofenceCard task={task} here={here} onSkip={setSkipping} />
             <SwapCard task={task} />
+            {/* Round 4–7 (§33.2): "I'll fill up on the way" at the start, and no fill logged on the task yet. */}
+            {app.fillOnWay(task) && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'fuel', taskId: task.id } })}
+                style={({ pressed }) => [styles.fillLine, pressed && { opacity: 0.85 }]}
+                testID="fill-on-way"
+              >
+                <Fuel size={22} color={colors.amberText} strokeWidth={2.4} />
+                <Txt variant="strong" color={colors.amberText} style={{ flex: 1 }}>{t('fuelCard.fillLine')}</Txt>
+                <Txt variant="strong" color={colors.blue}>{t('log.titleFuel')}</Txt>
+              </Pressable>
+            )}
             <View style={styles.stats}>
               <View style={{ flex: 1 }}>
                 {roadKm !== null ? (
@@ -343,6 +362,8 @@ export default function TaskScreen() {
               <Button kind="outline" icon={Phone} label={t('task.callContact')} disabled={!call} onPress={() => call && Linking.openURL(call)} style={{ flex: 1 }} />
             </View>
             {allStops && <Button kind="outline" icon={MapPin} label={t('task.allStops')} onPress={openAllStops} />}
+            {/* Round 4–7 (§33.3): who rides, each with Call when they have a phone. */}
+            <PassengerList task={task} />
             {/* Hotfix 2 (F): the contact's WhatsApp (Call contact is beside Navigate), then the requester, the fleet admin, the office. */}
             <CallButtons calls={calls} callHidden={['contact']} />
             {/* Hotfix 2 (K): who approved the task, with Call (the office when they have no number). */}
@@ -367,6 +388,7 @@ export default function TaskScreen() {
           <>
             <StopTimeline stops={task.task_stops} />
             {people && <Txt variant="muted">{people}</Txt>}
+            {names && <Txt variant="muted">{names}</Txt>}
             {task.notes && <Txt variant="body">{task.notes}</Txt>}
             {task.status === 'completed' && finishedKm !== null && (
               <View style={{ gap: 6 }}>
@@ -423,4 +445,5 @@ const styles = StyleSheet.create({
   skip: { minHeight: 32, justifyContent: 'center' },
   stopRowCurrent: { borderColor: colors.blue, borderWidth: 2, backgroundColor: colors.blueChip },
   doneBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.blueChip, alignItems: 'center', justifyContent: 'center' },
+  fillLine: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 14, borderRadius: 14, backgroundColor: colors.amberChip },
 });

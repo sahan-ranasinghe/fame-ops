@@ -61,3 +61,6 @@ export { default as Building } from 'lucide-react-native/icons/building';
 // Round 3 Part A: the day timeline's driving icon (A1), Request again on an expired request (A6).
 export { default as Car } from 'lucide-react-native/icons/car';
 export { default as RotateCcw } from 'lucide-react-native/icons/rotate-ccw';
+// Round 4–7 (§33.7, the driver's reports): a report's category as its row's icon (tyre, accident).
+export { default as CircleDot } from 'lucide-react-native/icons/circle-dot';
+export { default as Siren } from 'lucide-react-native/icons/siren';

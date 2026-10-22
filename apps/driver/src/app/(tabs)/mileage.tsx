@@ -2,6 +2,9 @@
 // tasks with their km, and the two buttons to log a reading or fuel.
 // A task the office moved to another vehicle (Phase 7 Part 2) shows each vehicle's km under its title.
 // Hotfix 3 (L6): today's tasks 20 at a time with "Load more" (the phone's own list: works offline); never a missed one.
+// Round 4–7, §33.6 (Google Pay / Revolut / PickMe's history): after today's tasks ONE "Recent" card with the last 5
+// readings and fills (an odometer gauge or a fuel pump, the km or the litres, the plate and the date in words; the ones
+// still on the phone too) and "See all": the history (app/history.tsx) with the chips All · Odometer · Fuel.
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -12,15 +15,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LoadMore } from '@/components/patterns/ListState';
 import { Stretches } from '@/components/SwapCard';
-import { useDateLabel, useNow } from '@/components/task';
+import { LogRow, RecentCard, uploadsByFill } from '@/components/LogRows';
+import { useNow } from '@/components/task';
 import { shownTaskKm, taskTitle } from '@/components/taskLines';
 import { Button, Card, Mono, Plate, Txt } from '@/components/ui';
 import { fetchMileage, type Mileage } from '@/lib/api';
 import { thousands } from '@/lib/format';
+import { fuelEntry, mergeEntries, odometerEntry, recentEntries } from '@/lib/history';
 import { getJson, setJson } from '@/lib/kv';
 import { loadMore, PAGE, pageInfo, visibleTasks, windowOf } from '@/lib/lists';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboMonth } from '@/lib/time';
+import { pendingFuelLogs, pendingOdometerLogs } from '@/sync';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -32,7 +38,6 @@ export default function MileageScreen() {
   const { t, workVehicle: vehicle, tasks } = app;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const dateLabel = useDateLabel();
   const [mileage, setMileage] = useState<Mileage | null>(() => getJson<Mileage>(CACHE_KEY));
   const [shown, setShown] = useState(PAGE);
   const now = useNow();
@@ -69,15 +74,14 @@ export default function MileageScreen() {
   const todayTasks = visibleTasks(tasks, now)
     .filter((task) => colomboDate(task.start_at) === today || (task.completed_at && colomboDate(task.completed_at) === today));
 
-  const entries = [
-    ...readings.map((log) => ({ at: log.logged_at, title: t('mileage.odometer'), value: thousands(log.reading_km) })),
-    ...(mileage?.fuel ?? []).map((log) => ({
-      at: log.logged_at,
-      title: t('mileage.fuel'),
-      value: [log.litres !== null ? `${Number(log.litres)} L` : null, log.amount_cents !== null ? `LKR ${thousands(log.amount_cents / 100)}` : null]
-        .filter(Boolean).join(' · '),
-    })),
-  ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8);
+  // The last 5 readings and fills: the ones still on the phone first, then this month's from the server.
+  const recent = recentEntries(mergeEntries(
+    pendingOdometerLogs().map((log) => odometerEntry(log, true)),
+    pendingFuelLogs().map((log) => fuelEntry(log, true)),
+    readings.map((log) => odometerEntry(log)),
+    (mileage?.fuel ?? []).map((log) => fuelEntry(log)),
+  ));
+  const uploads = uploadsByFill();
 
   return (
     <View style={styles.page}>
@@ -144,21 +148,9 @@ export default function MileageScreen() {
           {pageInfo(shown, todayTasks.length).more && <LoadMore shown={pageInfo(shown, todayTasks.length).n} total={todayTasks.length} busy={false} onPress={() => setShown(loadMore(shown, todayTasks.length, null).shown)} />}
         </View>
 
-        <View style={{ gap: 10 }}>
-          <Txt variant="heading" style={{ marginLeft: 6 }}>{t('mileage.recent')}</Txt>
-          <Card style={{ padding: 0 }}>
-            {entries.length === 0 && <Txt variant="muted" style={{ padding: 18 }}>{t('mileage.nothingYet')}</Txt>}
-            {entries.map((entry, index) => (
-              <View key={`${entry.at}-${entry.title}`} style={[styles.row, index > 0 && styles.divider]}>
-                <View style={{ flex: 1 }}>
-                  <Txt variant="strong">{entry.title}</Txt>
-                  <Txt variant="small">{`${dateLabel(entry.at)} ${colomboTime(entry.at)}`}</Txt>
-                </View>
-                <Mono size={17} bold>{entry.value}</Mono>
-              </View>
-            ))}
-          </Card>
-        </View>
+        <RecentCard entries={recent} empty={t('mileage.nothingYet')} seeAll="all">
+          {(entry, index) => <LogRow key={entry.id} entry={entry} first={index === 0} upload={uploads.get(entry.id)} />}
+        </RecentCard>
       </ScrollView>
     </View>
   );

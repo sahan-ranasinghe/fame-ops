@@ -22,6 +22,8 @@
 //               none of them tried again by itself). Round 4–7 (§33.1): the vehicle check before work
 //               (vehicle_check), put in the queue before the report it made and before its photos (the report
 //               names the check; a photo names the report or the check), so the server always has what is named.
+//               Round 4–7 (§33.2): the fuel card's "Enough fuel?" (fuel_answer: answer_fuel_card at the phone's
+//               time, after the task's start; 'ok' and 'not_yours' are done, 'bad' refused and kept).
 //   points      location points. Sent in batches of up to 500, oldest first,
 //               once no op is waiting, so the sharing period they belong to is
 //               already on the server. A batch that gets no answer is sent
@@ -45,6 +47,7 @@ import * as realApi from '../lib/api';
 import { ApiError, type Client } from '../lib/api';
 import type { Json } from '../lib/database.types';
 import { type AskAnswerOp, type AskReply, replyDone } from '../lib/asks';
+import { type FuelAnswerOp, fuelAnswerDone } from '../lib/fuelCard';
 import type { TripsApi } from '../lib/driverApi';
 import type { LateReply, TaskLateOp } from '../lib/late';
 import { vehiclePhotoDone } from '../lib/photoRules';
@@ -101,9 +104,11 @@ export type Op =
   /** Part 3b (H4): "Running late" (report_running_late at the phone's time; the server keeps the latest). */
   | TaskLateOp
   /** Part 3b (H3): an answer to the office's question (answer_ask at the phone's time; the last answer given wins). */
-  | AskAnswerOp;
+  | AskAnswerOp
+  /** Round 4–7 (§33.2): "Enough fuel?" at Start task (answer_fuel_card at the phone's time; the latest answer wins). */
+  | FuelAnswerOp;
 
-export type { AskAnswerOp, TaskLateOp, TripCreateOp, TripStopOp };
+export type { AskAnswerOp, FuelAnswerOp, TaskLateOp, TripCreateOp, TripStopOp };
 
 export interface VideoUploadOp {
   kind: 'video_upload';
@@ -510,6 +515,12 @@ export function createSync(deps: SyncDeps) {
         // 'expired': the question closed before the answer was given (the screen says so); never sent again.
         if (replyDone(reply)) return;
         throw new ApiError(`answer: ${reply || 'no answer'}`, true, reply);
+      }
+      case 'fuel_answer': {
+        // 'not_yours' (the task went to someone else): nothing to do. 'bad' is a refusal, kept for the record.
+        const reply = await api.answerFuelCard(client, op.id, op.answer, op.at);
+        if (fuelAnswerDone(reply)) return;
+        throw new ApiError(`fuel answer: ${reply || 'no answer'}`, true, reply);
       }
     }
   }

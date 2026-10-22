@@ -35,6 +35,10 @@
 //   - the shift nudge (Phase 6): "At work? Switch On duty" at the fleet's
 //     shift_start on each of shift_days, armed while the driver is off duty
 //     and disarmed when On duty is switched on. Tapping it opens Today.
+//   - Round 4–7 (§33.2): "Fill up on the way? Log fuel", 30 minutes after a
+//     start where the driver said "I'll fill up on the way" (the reminders
+//     channel; on a build before 1.3.0 the task changes one). Its tap opens Log
+//     fuel for the task; a fill logged (or the task finished) cancels it.
 
 import * as Application from 'expo-application';
 import * as Notifications from 'expo-notifications';
@@ -348,6 +352,40 @@ export async function armWatchdog(title: string, body: string): Promise<void> {
     setJson(KEYS.watchdogAt, Date.now() + WATCHDOG_AFTER_MS);
   } catch {
     // Without notifications the in-app check still restarts sharing when the app is opened.
+  }
+}
+
+const FUEL_REMINDER_ID = 'fuel-reminder';
+
+/**
+ * Round 4–7 (§33.2): "Fill up on the way? Log fuel" `afterMs` from now (one at a time: the running task's). The tap's data
+ * (kind fuel, the task) opens Log fuel for the task (app/_layout.tsx).
+ */
+export async function armFuelReminder(taskId: string, texts: { title: string; body: string }, afterMs: number): Promise<void> {
+  try {
+    if (!(await notificationsAllowed())) return;
+    const ready = await ensureChannels();
+    await Notifications.scheduleNotificationAsync({
+      identifier: FUEL_REMINDER_ID,
+      content: { title: texts.title, body: texts.body, data: { kind: 'fuel', taskId } },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(60, Math.round(afterMs / 1000)),
+        channelId: ready.reminders ? REMINDERS_CHANNEL : CHANNELS.tasksChanged,
+      },
+    });
+  } catch {
+    // Notifications not allowed: the task screen's "Fill up on the way · Log fuel" says the same.
+  }
+}
+
+/** Cancels the fill-up reminder (a fill was logged, or the task finished), and takes it out of the tray. */
+export async function disarmFuelReminder(): Promise<void> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(FUEL_REMINDER_ID);
+    await Notifications.dismissNotificationAsync(FUEL_REMINDER_ID);
+  } catch {
+    // Nothing was scheduled.
   }
 }
 

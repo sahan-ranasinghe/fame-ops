@@ -1,0 +1,98 @@
+{
+  "en": {
+    "fuelCard": {
+      "title": "Trip info",
+      "km": "About {km} km",
+      "litres": "roughly {range} L {fuel} (approx.)",
+      "litresNoType": "roughly {range} L (approx.)",
+      "battery": "check the battery",
+      "fromHistory": "From this vehicle's last fills",
+      "fromDefault": "A rough figure for this kind of vehicle",
+      "question": "Enough fuel?",
+      "fillOnWay": "I'll fill up on the way",
+      "reminderHint": "We'll remind you in 30 min to log the fill.",
+      "reminderTitle": "Fill up on the way?",
+      "reminderBody": "Tap to log fuel.",
+      "fillLine": "Fill up on the way"
+    },
+    "fuelKind": {
+      "label": "Fuel type",
+      "petrol": "Petrol",
+      "diesel": "Diesel",
+      "petrol_92": "Petrol 92",
+      "petrol_95": "Petrol 95",
+      "auto_diesel": "Auto Diesel",
+      "super_diesel": "Super Diesel",
+      "word": {
+        "petrol": "petrol",
+        "diesel": "diesel"
+      }
+    },
+    "logHistory": {
+      "recent": "Recent",
+      "seeAll": "See all",
+      "title": "Odometer and fuel",
+      "fuelTitle": "Fuel history",
+      "all": "All",
+      "empty": "Nothing logged yet.",
+      "emptyFuel": "No fuel logged yet.",
+      "emptyOdometer": "No odometer readings yet.",
+      "failed": "Couldn't load the history.",
+      "noAmount": "{n} fills without an amount",
+      "noAmountOne": "1 fill without an amount"
+    },
+    "pax": {
+      "title": "Passengers",
+      "more": "+{n} more",
+      "call": "Call {name}"
+    }
+  },
+  "si": {
+    "fuelCard": {
+      "title": "ගමනේ තොරතුරු",
+      "km": "කි.මී. {km} ක් පමණ",
+      "litres": "{fuel} ලීටර් {range} ක් පමණ (ආසන්න)",
+      "litresNoType": "ලීටර් {range} ක් පමණ (ආසන්න)",
+      "battery": "බැටරිය පරීක්ෂා කරන්න",
+      "fromHistory": "මෙම වාහනයේ අවසන් පිරවීම් අනුව",
+      "fromDefault": "මෙවැනි වාහනයක් සඳහා දළ අගයක්",
+      "question": "ඉන්ධන ප්‍රමාණවත්ද?",
+      "fillOnWay": "යන අතරතුර පුරවන්නම්",
+      "reminderHint": "මිනිත්තු 30 කින් ඉන්ධන සටහන් කිරීමට මතක් කරන්නම්.",
+      "reminderTitle": "යන අතරතුර ඉන්ධන පුරවනවාද?",
+      "reminderBody": "ඉන්ධන සටහන් කිරීමට තට්ටු කරන්න.",
+      "fillLine": "යන අතරතුර ඉන්ධන පුරවන්න"
+    },
+    "fuelKind": {
+      "label": "ඉන්ධන වර්ගය",
+      "petrol": "පෙට්‍රල්",
+      "diesel": "ඩීසල්",
+      "petrol_92": "පෙට්‍රල් 92",
+      "petrol_95": "පෙට්‍රල් 95",
+      "auto_diesel": "ඔටෝ ඩීසල්",
+      "super_diesel": "සුපර් ඩීසල්",
+      "word": {
+        "petrol": "පෙට්‍රල්",
+        "diesel": "ඩීසල්"
+      }
+    },
+    "logHistory": {
+      "recent": "මෑත",
+      "seeAll": "සියල්ල බලන්න",
+      "title": "මීටරය සහ ඉන්ධන",
+      "fuelTitle": "ඉන්ධන ඉතිහාසය",
+      "all": "සියල්ල",
+      "empty": "තවම කිසිවක් සටහන් කර නැත.",
+      "emptyFuel": "තවම ඉන්ධන සටහන් නැත.",
+      "emptyOdometer": "තවම මීටර කියවීම් නැත.",
+      "failed": "ඉතිහාසය ලබා ගත නොහැකි විය.",
+      "noAmount": "මුදල නැති පිරවීම් {n}",
+      "noAmountOne": "මුදල නැති පිරවීම් 1"
+    },
+    "pax": {
+      "title": "මගීන්",
+      "more": "තවත් {n} දෙනෙක්",
+      "call": "{name} ට අමතන්න"
+    }
+  }
+}

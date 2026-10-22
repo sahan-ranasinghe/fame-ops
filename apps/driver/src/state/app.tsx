@@ -17,7 +17,9 @@ import { getJson, KEYS, remove, setJson } from '@/lib/kv';
 import { sendHeartbeat, startHeartbeatLoop } from '@/lib/heartbeat';
 import { checkTracking, getSharing, readiness, type StartResult, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
 import {
+  armFuelReminder,
   armShiftNudge,
+  disarmFuelReminder,
   disarmShiftNudge,
   ensureChannels,
   notifyNewTask,
@@ -47,6 +49,17 @@ import {
   type VehicleCheck,
 } from '@/lib/vehicleCheck';
 import { type DutyEnded, onDutyEnded } from '@/lib/duty';
+import {
+  FUEL_REMINDER_AFTER_MS,
+  type FillChoice,
+  fillColumns,
+  fillOnWayPending,
+  type FuelAnswer,
+  fuelAnswerOp,
+  type FuelMemos,
+  rememberAnswer,
+  rememberFilled,
+} from '@/lib/fuelCard';
 import { type ArrivalFlag, canMarkDone, taskKmSoFar, withSwapReading } from '@/lib/dayRules';
 import { noteArrivalUndone } from '@/lib/stopCorrections';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
@@ -148,6 +161,8 @@ export interface FuelEntry {
   receipt: LocalPhoto | null;
   /** The video of the fill (Phase 6, Part 3): required for every fuel entry. */
   video: RecordedVideo | null;
+  /** Round 4–7 (§33.2): what was filled (petrol or diesel, and the grade), preselected from the vehicle; none = not given. */
+  fill?: FillChoice | null;
 }
 
 /** How an odometer reading was arrived at (see app/log-mileage.tsx). The server adds what it read. */
@@ -319,8 +334,11 @@ export interface AppValue {
   /** An i18n key to show once (e.g. "This task was already given to another driver."), or null. */
   notice: string | null;
   clearNotice: () => void;
-  /** false when Location stayed off and the driver chose "Not now": nothing was started. */
-  startTask: (task: TaskWithStops, reading: OdometerEntry) => Promise<boolean>;
+  /**
+   * false when Location stayed off and the driver chose "Not now": nothing was started. Round 4–7 (§33.2): `fuelAnswer`,
+   * the fuel card's "Enough fuel?" (optional), queued after the start; "I'll fill up on the way" arms the reminder.
+   */
+  startTask: (task: TaskWithStops, reading: OdometerEntry, fuelAnswer?: FuelAnswer | null) => Promise<boolean>;
   completeTask: (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => void;
   /**
    * A manual reading for the vehicle held (or held last); with `swap`, one of the two readings of a vehicle swap during
@@ -328,6 +346,8 @@ export interface AppValue {
    */
   logOdometer: (reading: OdometerEntry, swap?: SwapReading) => void;
   logFuel: (fuel: FuelEntry, odometerKm: number | null) => void;
+  /** Round 4–7 (§33.2): the running task's "Fill up on the way · Log fuel" (the driver said so at the start, no fill yet). */
+  fillOnWay: (task: TaskWithStops) => boolean;
   /** Phase 7 §5, "Add your photo" and Change photo: sent at once (not queued); the photo stays on the phone for Me. */
   saveProfilePhoto: (photo: LocalProfilePhoto) => Promise<ProfilePhotoOutcome>;
   /** Phase 7 §6: vehicle photos waiting on the phone (vehicle id → the thumbnail's file). */
@@ -438,6 +458,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   checksRef.current = checks;
   const [sharing, setSharingState] = useState(() => getSharing() !== null);
   const [shift, setShift] = useState<api.DriverSettings>(() => ({ ...api.DEFAULT_DRIVER_SETTINGS, ...(getJson<Partial<api.DriverSettings>>(KEYS.shift) ?? {}) }));
+  const shiftRef = useRef(shift);
+  shiftRef.current = shift;
+  // Round 4–7 (§33.2): "Enough fuel?" as answered on this phone, and the fills logged since (the line and the reminder).
+  const [fuelMemos, setFuelMemos] = useState<FuelMemos>(() => getJson<FuelMemos>(KEYS.fuelMemos) ?? {});
+  const fuelMemosRef = useRef(fuelMemos);
+  fuelMemosRef.current = fuelMemos;
+  const saveFuelMemos = useCallback((next: FuelMemos) => {
+    fuelMemosRef.current = next;
+    setFuelMemos(next);
+    setJson(KEYS.fuelMemos, next);
+  }, []);
   const [wifiOnly, setWifiOnlyState] = useState<boolean>(() => getJson<boolean>(KEYS.videoWifiOnly) === true);
   const setWifiOnly = useCallback((on: boolean) => {
     setWifiOnlyState(on);
@@ -562,6 +593,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     remove(KEYS.heldHow);
     checksRef.current = [];
     setChecks([]);
+    remove(KEYS.fuelEstimates);
+    remove(KEYS.fuelMemos);
+    fuelMemosRef.current = {};
+    setFuelMemos({});
+    void disarmFuelReminder();
     saveTasks([]);
     setVehicles([]);
     setReports([]);
@@ -1350,7 +1386,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }), [refresh]);
 
   const startTask = useCallback(
-    (task: TaskWithStops, reading: OdometerEntry) => {
+    (task: TaskWithStops, reading: OdometerEntry, fuelAnswer?: FuelAnswer | null) => {
       // Hotfix 2 (J): a task made without a vehicle starts only once one is confirmed (the phone's copy has it then).
       const vehicleId = task.vehicle_id ?? tasksRef.current.find((item) => item.id === task.id)?.vehicle_id ?? null;
       if (!vehicleId) return Promise.resolve(false);
@@ -1379,6 +1415,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           },
           { kind: 'task_patch', id: task.id, patch: { status: 'in_progress', start_odometer_km: odometerKm, started_at: now } },
         );
+        // Round 4–7 (§33.2): the fuel card's answer after the start (the latest answer wins); "I'll fill up on the way"
+        // reminds the driver 30 min on, until a fill is logged on the task. Nothing with the switch off.
+        const answer = shiftRef.current.fuel_card ? fuelAnswer ?? null : null;
+        if (answer) {
+          enqueue(fuelAnswerOp(task.id, answer, now));
+          saveFuelMemos(rememberAnswer(fuelMemosRef.current, task.id, answer, now));
+          if (answer === 'fill_on_way') {
+            void armFuelReminder(task.id, { title: tRef.current('fuelCard.reminderTitle'), body: tRef.current('fuelCard.reminderBody') }, FUEL_REMINDER_AFTER_MS);
+          } else void disarmFuelReminder();
+        }
         // The start stop (passengers get in where the trip starts) is arrived with the start, as the server marks it
         // (trigger tasks_start_stop_arrived): no Arrived button and no arrival nudge for it.
         patchLocalTask(task.id, (item) => ({
@@ -1387,6 +1433,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           status: 'in_progress',
           start_odometer_km: odometerKm,
           started_at: now,
+          ...(answer ? { fuel_answer: answer, fuel_answer_at: now } : {}),
           task_stops: item.task_stops.map((stop) => (stop.is_start && stop.status === 'pending' ? { ...stop, status: 'arrived', arrived_at: now } : stop)),
         }));
         bumpOdometer(vehicleId, odometerKm);
@@ -1407,7 +1454,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         void flushNow();
       });
     },
-    [bumpOdometer, patchLocalTask, saveMe, serviceTexts, checkTrackingNow, requireLocation, noteHeld],
+    [bumpOdometer, patchLocalTask, saveMe, serviceTexts, checkTrackingNow, requireLocation, noteHeld, saveFuelMemos],
   );
 
   const queueFuel = useCallback((fuel: FuelEntry, vehicleId: string, taskId: string | null, odometerKm: number | null, at: string) => {
@@ -1428,6 +1475,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         receipt_photo_id: fuel.receipt?.id ?? null,
         odometer_km: odometerKm,
         logged_at: at,
+        // Round 4–7 (§33.2): petrol or diesel and the grade (none when not given).
+        ...fillColumns(fuel.fill),
         ...(fuel.video
           ? {
             video_path: videoStoragePath(current.id, id, fuel.video.recordedAt),
@@ -1442,7 +1491,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
     });
     if (fuel.video) queueVideoUpload(fuel.video, id, current.id);
-  }, []);
+    // Round 4–7 (§33.2): a fill on the task ends its "Fill up on the way" (the line and the reminder).
+    if (taskId) {
+      saveFuelMemos(rememberFilled(fuelMemosRef.current, taskId, at));
+      void disarmFuelReminder();
+    }
+  }, [saveFuelMemos]);
 
   const completeTask = useCallback(
     (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => {
@@ -1493,6 +1547,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }));
       bumpOdometer(vehicleId, odometerKm);
       void playSound('done');
+      // The task is over: no "Fill up on the way" reminder after it.
+      void disarmFuelReminder();
       endTaskKm();
       setGpsKm(kmCounters());
       void flushNow();
@@ -1583,6 +1639,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     void flushNow();
   }, []);
+
+  // --- Round 4–7 (§33.2): the fuel card's "Fill up on the way" ---------------------------------------------------------
+  const fillOnWay = useCallback((task: TaskWithStops) => fillOnWayPending(task, fuelMemos, shift.fuel_card), [fuelMemos, shift.fuel_card]);
 
   // --- Round 4–7 (§33.1): the vehicle check before work ----------------------------------------------------------------
   const checkNeeded = useCallback(
@@ -1903,7 +1962,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, undoStopStep, markStopPassed, skipStop,
     dutySince, startWork, changeVehicle, finishWork, loadVehicleChoices, vehicleTaken, dismissVehicleTaken, dutyEnded, clearDutyEnded,
     acceptTask, declineTask, notice, clearNotice,
-    startTask, completeTask, logOdometer, logFuel, sendReport,
+    startTask, completeTask, logOdometer, logFuel, fillOnWay, sendReport,
     vehicleChecks: checks, checkNeeded, heldHow, answerVehicleCheck, addCheckPhotos,
     saveProfilePhoto, pendingVehiclePhotos: vehiclePhotos, addVehiclePhoto,
     knownPlaces, loadKnownPlaces, startTrip, addTripStop, cancelTrip, tripProblem, clearTripProblem,

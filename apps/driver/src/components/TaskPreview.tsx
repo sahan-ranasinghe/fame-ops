@@ -12,6 +12,8 @@
 //   - Accept / Can't do this task at the bottom; once accepted, Start task.
 //   - Part 3b (H4): once accepted, "Running late" (components/LateSheet.tsx) and "Can't make it" (the same reasons sheet:
 //     a decline after accepting); never on a trip the driver started.
+//   - Round 4–7: the passengers' names under the count, each with Call when they have a phone (§33.3); the fuel card's
+//     estimate asked ahead and kept on the phone, so Start task shows it offline too (§33.2, components/FuelCard.tsx).
 // It works offline from the copy on the phone (the tasks and the contacts are kept), and says so.
 
 import { keyExists } from '@/i18n/keys';
@@ -23,6 +25,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApprovedLine, CallButtons } from '@/components/CallButtons';
 import { DeclineSheet } from '@/components/DeclineSheet';
+import { prefetchFuelEstimate } from '@/components/FuelCard';
+import { PassengerList } from '@/components/Passengers';
 import { RunningLate } from '@/components/LateSheet';
 import { Check, ChevronLeft, Play } from '@/components/icons';
 import { Thumb, useVehicleThumbs } from '@/components/Photos';
@@ -64,6 +68,12 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
   useEffect(() => {
     loadTaskContacts(task.id, true);
   }, [task.id, loadTaskContacts]);
+  // Round 4–7 (§33.2): the fuel card's estimate, asked now and kept (Start task may come without a connection).
+  const fuelCardOn = app.settings.fuel_card;
+  const online = !app.offline && app.dataAvailable;
+  useEffect(() => {
+    if (fuelCardOn && online) void prefetchFuelEstimate(task.id);
+  }, [task.id, fuelCardOn, online]);
 
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const goHome = () => {
@@ -156,6 +166,7 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
             <Txt variant="strong">{task.passengers === 1 ? t('common.onePassenger') : t('preview.passengers', { n: task.passengers })}</Txt>
           </Marked>
         )}
+        <PassengerList task={task} />
         {task.contact_name && (
           <Marked on={mark('contact')}>
             <Txt variant="body">{`${t('today.contact', { name: task.contact_name })} ${task.contact_phone ? phoneDisplay(task.contact_phone) : ''}`.trim()}</Txt>

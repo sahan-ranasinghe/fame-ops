@@ -1,7 +1,9 @@
 // The driver app's own server, the Edge Function driver-api (Phase 7, §13): what the phone cannot do with its
 // row-level access alone. POST with JSON, the session's token and the publishable key; the server checks the driver.
-//   /places/search {text, session?}       the office's search box: our places, used before, the map's (Google's under
-//                                          the google package, credit "Google Maps")
+//   /places/search {text, session?}       the office's search box: our places, the driver's own recent places, the map's
+//                                          (Google's under the google package, credit "Google Maps")
+//   /places/search {suggest, near?}        Round 4–7 (item 10): an empty box: Saved (the company's places) and Recent
+//                                          (the driver's OWN trips' places, personal ones too), about 5 rows
 //   /trips {id, purpose, destination, …}   Start a trip (idempotent by the phone's id: the queue can send it again)
 //   /trips/:id/stops {id, destination}     a stop added on the way
 //   /profile {phone?, whatsapp?, …}         Part 3b (G): the driver's own profile (only the fields that changed; null
@@ -97,6 +99,9 @@ export function createDriverApi(deps: DriverApiDeps) {
   return {
     searchPlaces: async (text: string, session?: string | null): Promise<SearchAnswer> =>
       parseSearchAnswer(await post('/places/search', { text, ...(session ? { session } : {}) }, 'search', SEARCH_TIMEOUT_MS)),
+    /** An empty box's suggestions (Saved, then the driver's own Recent), nearest to `near` when the phone knows where it is. */
+    suggestPlaces: async (near?: { lat: number; lng: number } | null): Promise<SearchAnswer> =>
+      parseSearchAnswer(await post('/places/search', { suggest: true, ...(near ? { near } : {}) }, 'suggestions', SEARCH_TIMEOUT_MS)),
     createTrip: (request: TripRequest): Promise<TripAnswer> => trip('/trips', request, 'trip'),
     addTripStop: (taskId: string, request: StopRequest): Promise<TripAnswer> => trip(`/trips/${taskId}/stops`, request, 'trip stop'),
     /** A trip started by mistake, cancelled before it starts (online only: it must be on the server). */
