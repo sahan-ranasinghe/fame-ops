@@ -15,7 +15,7 @@ describe("menu from permissions", () => {
     expect(keys(allowed(NAV, me(["assign_tasks"])))).toContain("my_trips");
   });
   it("a viewer opens the counts, live locations, drivers, vehicles and own requests; a fleet admin everything", () => {
-    expect(keys(allowed(NAV, me(PRESETS.viewer.permissions)))).toEqual(["overview", "live", "requests", "vehicles", "drivers", "projects", "settings"]);
+    expect(keys(allowed(NAV, me(PRESETS.viewer.permissions)))).toEqual(["overview", "live", "requests", "timeline", "vehicles", "drivers", "projects", "settings"]);
     expect(keys(allowed(NAV, me(PRESETS.fleet_admin.permissions)))).toEqual(keys(NAV));
     expect(ROUTES_NEED.some((p) => PRESETS.dispatcher.permissions.includes(p))).toBe(true);
     expect(ROUTES_NEED.some((p) => PRESETS.viewer.permissions.includes(p))).toBe(false);
@@ -30,7 +30,7 @@ describe("the desktop menu in sections (Hotfix 3, L5)", () => {
     expect(new Set(inSections).size).toBe(inSections.length);
     const admin = menuFor(me(PRESETS.fleet_admin.permissions));
     expect(admin.map((s) => [s.key, keys(s.items)])).toEqual([
-      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board"]],
+      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board", "timeline"]],
       ["fleet", ["vehicles", "drivers", "places", "maintenance"]],
       ["reports", ["mileage", "fuel", "duty"]],
       ["admin", ["projects"]],
@@ -38,12 +38,12 @@ describe("the desktop menu in sections (Hotfix 3, L5)", () => {
   });
   it("each person sees only what their permissions allow; an empty section is left out", () => {
     expect(menuFor(me(PRESETS.viewer.permissions)).map((s) => [s.key, keys(s.items)])).toEqual([
-      ["today", ["overview", "live", "requests"]],
+      ["today", ["overview", "live", "requests", "timeline"]],
       ["fleet", ["vehicles", "drivers"]],
       ["admin", ["projects"]],
     ]);
     expect(menuFor(me(PRESETS.dispatcher.permissions)).map((s) => [s.key, keys(s.items)])).toEqual([
-      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board"]],
+      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board", "timeline"]],
       ["fleet", ["vehicles", "drivers"]],
       ["reports", ["duty"]],
       ["admin", ["projects"]],
@@ -58,6 +58,16 @@ describe("the desktop menu in sections (Hotfix 3, L5)", () => {
     expect(keys(allowed(NAV, me(PRESETS.viewer.permissions)))).not.toContain("drivers_board");
     expect(keys(allowed(NAV, me(PRESETS.requester.permissions)))).not.toContain("drivers_board");
     for (const preset of Object.values(PRESETS)) expect(keys(tabsFor(me(preset.permissions)))).not.toContain("drivers_board");
+  });
+});
+
+describe("Round 4–7 (7): the Timeline and the Asks", () => {
+  it("Timeline in Today for view (never a phone tab); Asks under More after it for the people who ask or hold a trip", () => {
+    expect(NAV.find((n) => n.key === "timeline")).toEqual({ key: "timeline", label: "Timeline", need: ["view"], path: "/schedule" });
+    for (const preset of Object.values(PRESETS)) expect(keys(tabsFor(me(preset.permissions)))).not.toContain("timeline");
+    expect(keys(NAV)).not.toContain("holder_asks");
+    expect(moreFor(me(["request"])).find((n) => n.key === "holder_asks")).toEqual({ key: "holder_asks", label: "Asks", need: ["request", "approve", "assign_tasks"], path: "/tasks/asks" });
+    expect(keys(moreFor(me(["view"])))).not.toContain("holder_asks");
   });
 });
 
@@ -93,15 +103,15 @@ describe("the phone tab bar: Home, the four most used for the role, More", () =>
       expect(bar[bar.length - 1]).toBe("more");
     }
     // In the menu's order; Task history sits where Tasks is. An approver finds My trips under More.
-    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["task_history", "my_trips", "issues", "drivers_board", "vehicles", "drivers", "places", "maintenance", "mileage", "fuel", "duty", "projects", "settings"]);
-    expect(keys(moreFor(me(PRESETS.dispatcher.permissions)))).toEqual(["task_history", "requests", "my_trips", "drivers_board", "vehicles", "drivers", "duty", "projects", "settings"]);
+    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["task_history", "my_trips", "issues", "drivers_board", "timeline", "holder_asks", "vehicles", "drivers", "places", "maintenance", "mileage", "fuel", "duty", "projects", "settings"]);
+    expect(keys(moreFor(me(PRESETS.dispatcher.permissions)))).toEqual(["task_history", "requests", "my_trips", "drivers_board", "timeline", "holder_asks", "vehicles", "drivers", "duty", "projects", "settings"]);
     expect(moreFor(me(PRESETS.dispatcher.permissions)).find((n) => n.key === "task_history")).toEqual({ key: "task_history", label: "Task history", need: ["assign_tasks"], path: "/tasks/history" });
     // Not in the rail: the desktop opens it from the Tasks page.
     expect(keys(NAV)).not.toContain("task_history");
     // The Requests list stays reachable for a requester, under More (no task history without assign_tasks).
-    expect(keys(moreFor(me(PRESETS.requester.permissions)))).toEqual(["requests", "drivers", "projects", "settings"]);
-    expect(keys(moreFor(me(PRESETS.viewer.permissions)))).toEqual(["requests", "projects", "settings"]);
-    expect(keys(moreFor(me(["request"])))).toEqual(["requests", "projects", "settings"]);
+    expect(keys(moreFor(me(PRESETS.requester.permissions)))).toEqual(["requests", "timeline", "holder_asks", "drivers", "projects", "settings"]);
+    expect(keys(moreFor(me(PRESETS.viewer.permissions)))).toEqual(["requests", "timeline", "projects", "settings"]);
+    expect(keys(moreFor(me(["request"])))).toEqual(["requests", "holder_asks", "projects", "settings"]);
   });
   it("the big Home action is the one thing the person does most", () => {
     expect(homeAction(me(PRESETS.requester.permissions))).toEqual({ label: "New request", path: "/requests/new" });

@@ -213,7 +213,7 @@ export function NewTask() {
         </div>
 
         <TripPlanCard trip={trip}>
-          <ConflictCards conflicts={preview?.conflicts} onPickVehicle={focusVehicle} onPickDriver={scrollToAvailability} />
+          <ConflictCards conflicts={preview?.conflicts} onPickVehicle={focusVehicle} onPickDriver={scrollToAvailability} wanted={{ date: f.date, from: leave, until: f.end }} />
         </TripPlanCard>
 
         <div className="card card-b form">

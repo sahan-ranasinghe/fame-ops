@@ -16,8 +16,8 @@ import { type FormEvent, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import { flashWarnings } from "../data/flash";
-import type { BookResult, Suggestions } from "../data/types";
+import { flashConflicts, flashWarnings } from "../data/flash";
+import type { BookResult, Conflict, Suggestions } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { hhmm, joinDots, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
@@ -41,6 +41,8 @@ import { TripEditor, useTrip } from "./TripEditor";
 import { tripPlanInput } from "./tripLogic";
 import { isChoice, knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 import { SkeletonRows } from "../ui/ListKit";
+import { wantedOfArgs } from "../ui/holderLogic";
+import { ConflictCards } from "./ConflictCards";
 
 interface Form extends RequestFields {
   /** The vehicle picked; "" = the one the driver brings. */
@@ -48,8 +50,8 @@ interface Form extends RequestFields {
   pickedDriver: string;
 }
 
-/** book_vehicle's answer with the Phase 7 fields (the vehicle the driver brought). */
-type Booked = BookResult;
+/** book_vehicle's answer with the Phase 7 fields (the vehicle the driver brought) and, Round 4–7 (7), its conflict cards. */
+type Booked = BookResult & { conflicts?: Conflict[] };
 
 export function NewRequest() {
   const { me, store, transport } = useFleet();
@@ -147,9 +149,15 @@ export function NewRequest() {
       const requestId = r.request_id ?? r.request?.id;
       const to = r.task_id && canOpenTask(me) ? `/tasks/${r.task_id}` : requestId && can(me, "approve") ? `/requests/${requestId}` : null;
       if (to) {
-        const notice = [...warnList(r), ...((r as { conflicts?: { text: string }[] }).conflicts ?? []).map((c) => c.text)];
-        if (r.task_id) flashWarnings(r.task_id, notice);
-        navigate(to, { replace: true, state: r.task_id && to.startsWith("/tasks/") ? { warnings: notice } : undefined });
+        // Round 4–7 (7): on the task page the conflicts are cards (who holds it, Ask for it); elsewhere their words.
+        const onTask = !!r.task_id && to.startsWith("/tasks/");
+        const conflicts = r.conflicts ?? [];
+        const notice = [...warnList(r), ...(onTask ? [] : conflicts.map((c) => c.text))];
+        if (r.task_id) {
+          flashWarnings(r.task_id, notice);
+          flashConflicts(r.task_id, conflicts);
+        }
+        navigate(to, { replace: true, state: onTask ? { warnings: notice, conflicts } : undefined });
         toast("Booking saved");
         return;
       }
@@ -173,6 +181,7 @@ export function NewRequest() {
             </p>
           )}
           <WarningsNote warnings={warnList(booked)} />
+          <ConflictCards conflicts={booked.conflicts} />
           <div className="acts">
             {booked.task_id && can(me, "assign_tasks") && <Link className="btn" to={`/tasks/${booked.task_id}`}>Open task →</Link>}
             <Link className="btn dark" to="/requests" replace>Done</Link>
@@ -250,7 +259,7 @@ export function NewRequest() {
                   </p>
                 )}
                 {onDay && !noApp && <VehicleChoiceRadios name="nr-veh" value={vehicle} dayDefault={dayDefault} onPick={(v) => set("vehicle", v)} />}
-                <VehicleGroups sug={sug} name="nr-veh" vehicle={vehicle} onPick={(reg) => set("vehicle", reg)} greyGarage />
+                <VehicleGroups sug={sug} name="nr-veh" vehicle={vehicle} onPick={(reg) => set("vehicle", reg)} greyGarage wanted={wantedOfArgs(availArgs)} />
                 {sug.vehicles.length === 0 && <Empty>No vehicles registered yet.</Empty>}
               </div>
             )}

@@ -4,9 +4,10 @@
 // proposed task's title with its driver and vehicle, and "Leave-by passed".
 // Round 3: the asker's photo in the head, and who the request asked to drive (AskedWho).
 // Round 3 Part A: the self-drive licence line (A5), the status pill with the Expired badge (A6), dates in words (A4).
+import { Fragment } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import type { FieldChanges, RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
+import type { FieldChanges, Holder, RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
 import { addDays, cap, joinDots, requestTone, today } from "../lib/format";
 import { datesInWords } from "../lib/when";
 import { Avatar, Pill } from "../ui/basics";
@@ -14,6 +15,8 @@ import { ContactButtons, linksOf } from "../ui/ContactButtons";
 import { DriverLine } from "../ui/DriverRow";
 import { firstName } from "../ui/driverRowLogic";
 import { Icon } from "../ui/icons";
+import { HolderStrip } from "../ui/Holder";
+import type { Wanted } from "../ui/holderLogic";
 import { askedOf, selfDriveLicenceLine } from "../ui/whoDrivesLogic";
 import { LATE_TEXT, proposalLine } from "./approvalLogic";
 import { againFields, diffLines, timelineSteps } from "./requestLogic";
@@ -74,8 +77,11 @@ export function ChangesList({ changes, testId = "changes" }: { changes?: FieldCh
   );
 }
 
-/** The groups of free vehicles as radio options, or the flat list when the tool gave no groups. */
-export function VehicleGroups({ sug, name, vehicle, onPick, greyGarage }: { sug: Suggestions; name: string; vehicle: string; onPick: (reg: string) => void; greyGarage?: boolean }) {
+/**
+ * The groups of free vehicles as radio options, or the flat list when the tool gave no groups. Round 4–7 (7): a busy
+ * vehicle's holder under its option ("Anoja's · 08:00–11:00" with Ask), never inside the radio's label.
+ */
+export function VehicleGroups({ sug, name, vehicle, onPick, greyGarage, wanted }: { sug: Suggestions; name: string; vehicle: string; onPick: (reg: string) => void; greyGarage?: boolean; wanted?: Wanted | null }) {
   if (!sug.groups) return <>{sug.vehicles.map((v) => <VehicleOption key={v.reg_no} v={v} name={name} checked={vehicle === v.reg_no} onPick={() => onPick(v.reg_no)} />)}</>;
   return (
     <>
@@ -85,7 +91,15 @@ export function VehicleGroups({ sug, name, vehicle, onPick, greyGarage }: { sug:
         return (
           <div key={key} className="form" data-testid={`group-${key}`}>
             <div className="lab">{label}</div>
-            {rows.map((v) => <VehicleOption key={v.reg_no} v={v} name={name} checked={vehicle === v.reg_no} disabled={greyGarage && key === "in_garage"} onPick={() => onPick(v.reg_no)} />)}
+            {rows.map((v) => {
+              const holder = key === "busy" ? (v as SuggestedVehicle & { holder?: Holder }).holder : undefined;
+              return (
+                <Fragment key={v.reg_no}>
+                  <VehicleOption v={v} name={name} checked={vehicle === v.reg_no} disabled={greyGarage && key === "in_garage"} onPick={() => onPick(v.reg_no)} />
+                  {holder && <HolderStrip holder={holder} resource="vehicle" what={v.reg_no} wanted={wanted} />}
+                </Fragment>
+              );
+            })}
           </div>
         );
       })}
