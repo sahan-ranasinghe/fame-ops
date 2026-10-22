@@ -13,6 +13,7 @@
 // Round 3: the driver card (components/office/DriverRows.tsx TaskDriverCard) shows the driver, the person who drives it
 // themselves ("Drives themselves") or someone not in Fame Fleet ("Someone else": their initials, name, Call / WhatsApp);
 // the server's sentences (Running late, the status line, the warnings saved past) in the person's language.
+// Round 4–7 (4): the vehicle check lines (with the photos) and Completed · not confirmed (grey).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -20,6 +21,7 @@ import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MapPin } from '@/components/icons';
 import { TaskDriverCard } from '@/components/office/DriverRows';
+import { TaskCheckLines } from '@/components/office/VehicleChecks';
 import { StopTimeline } from '@/components/office/StopTimeline';
 import { StopArrival, SwapSegments, TaskMoreDetails, TaskWarnings, TripPurposeCard } from '@/components/office/TaskDetailParts';
 import { showSnackbar } from '@/components/patterns/Snackbar';
@@ -171,7 +173,10 @@ export default function TaskDetailScreen() {
             {!task.late_report && task.status === 'in_progress' && task.eta?.late_min ? <Pill text={t('office.status.late', { min: task.eta.late_min })} tone="amber" size={15} /> : null}
             {task.label && <Pill text={task.label} tone="muted" size={15} />}
             {task.kind === 'self' && <Pill text={t('office.task.driverStarted')} tone="muted" size={15} />}
-            {task.finish_flag && <Pill text={task.finish_flag.text} tone="amber" size={15} />}
+            {/* Round 4–7 (4b): a trip nobody drives with the app closed without its odometer: Completed · not confirmed, grey. */}
+            {task.finish_flag && (task.finish_flag.kind === 'not_confirmed'
+              ? <Pill text={t('office.checks.notConfirmed')} tone="muted" size={15} />
+              : <Pill text={task.finish_flag.text} tone="amber" size={15} />)}
           </View>
         )}
         {task && task.needs_driver && (
@@ -224,6 +229,8 @@ export default function TaskDetailScreen() {
             {task.vehicle_changed && <Txt variant="small">{task.vehicle_changed}</Txt>}
           </View>
         )}
+        {/* Round 4–7 (4): the vehicle check of the task's day by its person, with the photos. */}
+        {task?.vehicle_checks?.length ? <Section title={t('office.checks.title')}><TaskCheckLines checks={task.vehicle_checks} /></Section> : null}
         {p && task && <TripPurposeCard p={p} />}
         {p && stops.length > 0 && (
           <Section title={t('office.task.stops')}>

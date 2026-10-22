@@ -129,6 +129,8 @@ export default function IssuesScreen() {
           )}
         </View>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          {/* Round 4–7 (4): a problem found by a vehicle check before work. */}
+          {i.pre_trip ? <StatusChip text={t('office.checks.preTrip')} tone="amber" testID="issue-pre-trip" /> : null}
           <StatusChip text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} />
           <StatusChip text={t(`office.issues.status.${i.status}`)} tone={statusTone(i.status)} />
         </View>

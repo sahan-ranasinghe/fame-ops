@@ -61,7 +61,7 @@ export function issuesArgs(status: IssueStatusFilter, search = '', cursor?: stri
 /** The issue kinds (the server's KIND_TEXT keys) and the task kinds someone with assign_tasks alone may read. */
 export const ISSUE_KINDS = ['vehicle_report', 'odometer_flag', 'km_gap', 'service_due', 'document', 'documents_missing', 'licence', 'allowance', 'rental', 'garage_booked',
   'signal', 'late_start', 'running_late', 'not_accepted', 'declined', 'request_waiting', 'vehicle_conflict', 'app_stopped', 'arrival_override', 'completed_early',
-  'vehicle_needed', 'missed_task', 'push_failed', 'routing_failed', 'map_fallback'] as const;
+  'vehicle_needed', 'missed_task', 'push_failed', 'routing_failed', 'map_fallback', 'trip_not_confirmed'] as const;
 export const TASK_ISSUE_KINDS = ['signal', 'late_start', 'running_late', 'not_accepted', 'declined', 'vehicle_conflict', 'arrival_override', 'completed_early', 'vehicle_needed', 'missed_task'] as const;
 
 /** The kinds this person can read: all with issues, the task kinds with assign_tasks alone. */

@@ -4,7 +4,8 @@
 // id (current_employee_id), their own row's photo_id, their own <employee id>/profile/ folder in driver-photos, a
 // photos row of kind profile and set_my_photo. Round 3: the server answers photo_url for office people (/me, the users
 // list, the requester on a request, an issue's assignee); those screens show it, and My profile shows /me's until this
-// phone's own link is there.
+// phone's own link is there. Round 4–7 (feature 4): one upload for every own photo (uploadOwnPhoto: the id of the new
+// photos row of a kind), also a no-app trip's photos (saveMyTripPhoto).
 
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useState } from 'react';
@@ -49,29 +50,48 @@ export async function pickMyPhoto(source: 'camera' | 'gallery'): Promise<MyPhoto
 
 export type SaveOutcome = 'ok' | 'failed' | 'network';
 
+/** The kinds of my own photos Office mode uploads (the photos table's kinds a person writes for themselves). */
+export type OwnPhotoKind = 'profile' | 'licence' | 'vehicle_report' | 'vehicle_check' | 'odometer';
+
 /**
- * Saves a picked photo as mine: a signed upload into my own folder (the own-folder insert policy allows it), its photos
- * row, then set_my_photo. No queue (and none of the driver app's offline store, which the web build cannot carry).
+ * One of my own photos into my own folder of driver-photos (the own-folder insert policy allows it) through a signed
+ * upload, then its photos row of `kind`: the new photo's id, or 'network' (it did not go up) / 'failed' (the server said
+ * no). No queue (and none of the driver app's offline store, which the web build cannot carry).
  */
-export async function saveMyOfficePhoto(photo: MyPhoto): Promise<SaveOutcome> {
+export async function uploadOwnPhoto(kind: OwnPhotoKind, pathOf: (employeeId: string, id: string) => string, uri: string): Promise<{ id: string } | Exclude<SaveOutcome, 'ok'>> {
   try {
     const id = await myEmployeeId();
     if (!id) return 'failed';
     const photoId = Crypto.randomUUID();
-    const path = profilePhotoPath(id, photoId);
+    const path = pathOf(id, photoId);
     const signed = await supabase.storage.from('driver-photos').createSignedUploadUrl(path);
     if (signed.error || !signed.data) return 'network';
-    await uploadToTicket({ bucket: 'driver-photos', path, token: signed.data.token }, photo.uri, 'image/jpeg');
+    await uploadToTicket({ bucket: 'driver-photos', path, token: signed.data.token }, uri, 'image/jpeg');
     const row = await supabase.from('photos').insert({
-      id: photoId, employee_id: id, kind: 'profile', storage_path: path, taken_at: new Date().toISOString(),
+      id: photoId, employee_id: id, kind, storage_path: path, taken_at: new Date().toISOString(),
     });
     if (row.error) return 'failed';
-    const set = await supabase.rpc('set_my_photo', { p_photo_id: photoId });
-    return set.error ? 'network' : set.data === 'ok' ? 'ok' : 'failed';
+    return { id: photoId };
   } catch {
     // uploadToTicket throws with its own sentence on a dropped connection.
     return 'network';
   }
+}
+
+/** An uploaded photo made mine by the database function `set` ('ok' when it says ok). */
+async function setOwnPhoto(up: { id: string } | Exclude<SaveOutcome, 'ok'>, set: (photoId: string) => PromiseLike<{ data: unknown; error: unknown }>): Promise<SaveOutcome> {
+  if (typeof up === 'string') return up;
+  try {
+    const done = await set(up.id);
+    return done.error ? 'network' : done.data === 'ok' ? 'ok' : 'failed';
+  } catch {
+    return 'network';
+  }
+}
+
+/** Saves a picked photo as mine: the upload and its photos row of kind profile, then set_my_photo. */
+export async function saveMyOfficePhoto(photo: MyPhoto): Promise<SaveOutcome> {
+  return setOwnPhoto(await uploadOwnPhoto('profile', profilePhotoPath, photo.uri), (photoId) => supabase.rpc('set_my_photo', { p_photo_id: photoId }));
 }
 
 /**
@@ -80,23 +100,23 @@ export async function saveMyOfficePhoto(photo: MyPhoto): Promise<SaveOutcome> {
  * (which checks the folder and the kind). The picture comes made at the licence's size (office/media.ts, driver_licence).
  */
 export async function saveMyLicencePhoto(side: LicenceSide, uri: string): Promise<SaveOutcome> {
-  try {
-    const id = await myEmployeeId();
-    if (!id) return 'failed';
-    const photoId = Crypto.randomUUID();
-    const path = licencePhotoPath(id, photoId);
-    const signed = await supabase.storage.from('driver-photos').createSignedUploadUrl(path);
-    if (signed.error || !signed.data) return 'network';
-    await uploadToTicket({ bucket: 'driver-photos', path, token: signed.data.token }, uri, 'image/jpeg');
-    const row = await supabase.from('photos').insert({
-      id: photoId, employee_id: id, kind: 'licence', storage_path: path, taken_at: new Date().toISOString(),
-    });
-    if (row.error) return 'failed';
-    const set = await supabase.rpc('set_my_licence_photo', { p_side: side, p_photo_id: photoId });
-    return set.error ? 'network' : set.data === 'ok' ? 'ok' : 'failed';
-  } catch {
-    return 'network';
-  }
+  return setOwnPhoto(await uploadOwnPhoto('licence', licencePhotoPath, uri), (photoId) => supabase.rpc('set_my_licence_photo', { p_side: side, p_photo_id: photoId }));
+}
+
+/** Where a trip's photo goes in driver-photos: the driver's rule, <employee id>/<yyyy-mm-dd Colombo>/<uuid>.jpg. */
+export const tripPhotoPath = (employeeId: string, id: string, now = new Date()): string =>
+  `${employeeId}/${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Colombo' }).format(now)}/${id}.jpg`;
+
+export type TripPhotoKind = 'vehicle_report' | 'vehicle_check' | 'odometer';
+
+/**
+ * Round 4–7 (feature 4): a photo for my own no-app trip (a problem found by the vehicle check: vehicle_report; a side of
+ * the vehicle: vehicle_check; the odometer at the end: odometer), into my own <employee id>/<day>/ folder: the new
+ * photo's id (my_trip_check / finish_my_trip check it is mine, of that kind and unused), or 'failed' / 'network'. The
+ * picture comes made at 1600 px (office/media.ts, use 'check').
+ */
+export function saveMyTripPhoto(kind: TripPhotoKind, uri: string): Promise<{ id: string } | Exclude<SaveOutcome, 'ok'>> {
+  return uploadOwnPhoto(kind, (employeeId, id) => tripPhotoPath(employeeId, id), uri);
 }
 
 /** My photo's link (null until there is one, or while it loads), and `shown` to put a just-saved photo up at once. */

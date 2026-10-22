@@ -44,6 +44,21 @@ const NUMBERS: NumberRow[] = [
 ];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+/**
+ * Round 4–7 (phase8-plan.md §33): the five feature switches, on by default (absent = on), each saved at once; one line of
+ * text each, shortened from the server's SETTING_TEXT (supabase/functions/_shared/fleet/settings.ts).
+ */
+export type FeatureKey = "vehicle_check" | "trip_close_prompt" | "fuel_card" | "passengers" | "holder_contact";
+export const FEATURES: readonly (readonly [FeatureKey, string, string])[] = [
+  ["vehicle_check", "Vehicle check before work", "Whenever a driver takes a vehicle, and before a self-drive or someone-else trip: \"Any damage or problem?\" A problem with photos becomes a pre-trip issue."],
+  ["trip_close_prompt", "\"Trip finished?\" for self-drive trips", "Asks for the odometer when the trip ends; an unanswered trip closes as Completed · not confirmed at 09:00 the next day."],
+  ["fuel_card", "Fuel card at Start task", "The trip's km, roughly how many litres it takes and \"Enough fuel?\". Advisory, never blocks."],
+  ["passengers", "Passengers on trips", "The Passengers field on trips; registered passengers are told about the trip and see it in My trips."],
+  ["holder_contact", "Who holds a busy driver or vehicle", "The warning names who holds them, with Call, WhatsApp and Ask for it."],
+];
+/** A feature switch as shown: off only when saved off (absent = on). */
+export const featureOn = (s: Partial<Values> | null | undefined, key: FeatureKey) => s?.[key] !== false;
+
 /** The sections of Fleet settings, in order: each a row on /settings/fleet and a page of its own. */
 export const FLEET_SECTIONS = [
   { key: "office", title: "The office" },
@@ -65,7 +80,7 @@ export function sectionSummary(key: FleetSection, d: SettingsResult): string {
     case "office":
       return `Base: ${d.base_place?.name ?? "none"} · office phone ${s.office_phone ? phoneDisplay(s.office_phone) : "not set"}`;
     case "dispatch":
-      return `Pickup ${s.dwell_min?.pickup ?? d.defaults.dwell_min?.pickup ?? "—"} min · accept within ${s.accept_within_min ?? FALLBACK.accept_within_min} min · buffer ${s.buffer_min} min · suggestions ${onOff(s.planner_suggestions !== false)}`;
+      return `Pickup ${s.dwell_min?.pickup ?? d.defaults.dwell_min?.pickup ?? "—"} min · accept within ${s.accept_within_min ?? FALLBACK.accept_within_min} min · buffer ${s.buffer_min} min · suggestions ${onOff(s.planner_suggestions !== false)} · features ${FEATURES.filter(([k]) => featureOn(s, k)).length} of ${FEATURES.length} on`;
     case "tasks":
       return `Approval ${onOff(s.tasks_need_approval !== false)} · vehicle on the day ${onOff(s.vehicle_on_the_day === true)} · self-drive ${onOff(s.self_drive_allowed !== false)}`;
     case "day":
@@ -436,6 +451,24 @@ export function FleetSettings({ section }: { section?: FleetSection } = {}) {
                 </span>
               </span>
             </label>
+          </div>
+        )}
+
+        {/* Round 4–7 (§33): the five feature switches, on by default; each saved at once and put back when the save fails. */}
+        {show("dispatch") && (
+          <div className="card card-b form" data-testid="feature-settings">
+            <h2>Features</h2>
+            {FEATURES.map(([key, title, text]) => (
+              <label key={key} className="row" style={{ padding: 0, cursor: "pointer" }} data-testid={`feature-${key}`}>
+                <input type="checkbox" checked={featureOn(draft, key)} disabled={busy !== null} aria-label={title}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setDraft({ ...draft, [key]: on });
+                    void save(key, on).then((ok) => { if (!ok) setDraft((d) => (d ? { ...d, [key]: !on } : d)); });
+                  }} />
+                <span className="grow"><span className="name">{title}</span><span className="sub" style={{ display: "block" }}>{text}</span></span>
+              </label>
+            ))}
           </div>
         )}
 

@@ -2,7 +2,9 @@
 // each row saved at once through update_settings {key, value} with Saved or the error under it (a dropped write says it
 // may not have been saved, Try again). The rows: new tasks need the fleet admin's OK and vehicle on the day (switches),
 // drivers' personal trips (four choices, one line each), the auto clock-out (HH:MM, empty = off), the accept window
-// (minutes) and the office phone (typed as 077…, stored +94…). The controls show only with update_settings (no dead UI);
+// (minutes) and the office phone (typed as 077…, stored +94…); Round 4–7: Features, the five switches (the vehicle check,
+// "Trip finished?", the fuel card, passengers, who holds a busy driver or vehicle; on when absent). The controls show only
+// with update_settings (no dead UI);
 // with get_settings alone the values are read. The laptop-only line at the bottom. The rules: office/peopleLogic.ts.
 
 import { useState } from 'react';
@@ -14,7 +16,7 @@ import { ChoiceRow } from '@/components/patterns/Select';
 import { Button, Txt } from '@/components/ui';
 import {
   cutoffValue, minutesValue, officePhoneValue, PERSONAL_TRIPS, type PersonalTrips, personalTripsValue, type QuickKey, QUICK_SETTINGS, type QuickRow, settingInput,
-  type SettingProblem, switchValue, withSetting,
+  type SettingProblem, type SwitchKey, switchValue, withSetting, FEATURE_KEYS,
 } from '@/office/peopleLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, SettingsResult } from '@/office/types';
@@ -79,7 +81,7 @@ export default function QuickSettings() {
     );
   };
 
-  const switchRow = (key: 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions', label: string, hint: string) => {
+  const switchRow = (key: SwitchKey, label: string, hint: string) => {
     const on = switchValue(key, settings, defaults);
     return (
       <View style={{ gap: 6, paddingVertical: 10 }}>
@@ -211,6 +213,15 @@ export default function QuickSettings() {
                 <Txt variant="small">{settings?.office_phone ? t('office.people.officePhoneHint') : t('office.people.officePhoneNone')}</Txt>
                 {status('office_phone')}
               </View>
+            </Section>
+            {/* Round 4–7 (§33): the five feature switches, on by default; each saved at once (Settings → Fleet on the site). */}
+            <Section title={t('office.features.title')}>
+              {FEATURE_KEYS.map((key, n) => (
+                <View key={key} testID={`feature-${key}`}>
+                  {n > 0 && <Divider />}
+                  {switchRow(key, t(`office.features.${key}`), t(`office.features.${key}Hint`))}
+                </View>
+              ))}
             </Section>
             <Txt variant="small" style={{ paddingHorizontal: 4 }}>{t('office.more.laptopOnly')}</Txt>
           </>

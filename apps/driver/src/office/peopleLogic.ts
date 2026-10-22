@@ -396,7 +396,12 @@ export function userFields(u: OfficeUser, email: string): UserFields {
 
 // ---- Quick settings (design 19's card as a page) ----
 
-export type QuickKey = 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions' | 'driver_personal_trips' | 'duty_cutoff' | 'accept_within_min' | 'accept_before_leave_min' | 'office_phone';
+/** Round 4–7 (phase8-plan.md §33): the five feature switches, on by default (absent = on). */
+export const FEATURE_KEYS = ['vehicle_check', 'trip_close_prompt', 'fuel_card', 'passengers', 'holder_contact'] as const;
+export type FeatureKey = (typeof FEATURE_KEYS)[number];
+export type SwitchKey = 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions' | FeatureKey;
+
+export type QuickKey = 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions' | 'driver_personal_trips' | 'duty_cutoff' | 'accept_within_min' | 'accept_before_leave_min' | 'office_phone' | FeatureKey;
 export type SettingKind = 'switch' | 'choice' | 'time' | 'minutes' | 'phone';
 
 export interface QuickRow {
@@ -414,6 +419,8 @@ export const QUICK_SETTINGS: readonly QuickRow[] = [
   { key: 'accept_within_min', kind: 'minutes' },
   { key: 'accept_before_leave_min', kind: 'minutes' },
   { key: 'office_phone', kind: 'phone' },
+  // Round 4–7: the feature switches, a group of their own on the page (Features).
+  ...FEATURE_KEYS.map((key) => ({ key, kind: 'switch' as const })),
 ];
 
 export const PERSONAL_TRIPS = ['allowed', 'default', 'off', 'ask_first'] as const;
@@ -429,8 +436,11 @@ export function personalTripsValue(saved?: string | null, fallback?: string | nu
   return known(saved) ? saved : known(fallback) ? fallback : 'allowed';
 }
 
-/** A switch as shown: the saved value, else the server's default, else the site's (approval on, vehicle on the day off). */
-export function switchValue(key: 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions', settings: Partial2, defaults?: Partial2): boolean {
+/**
+ * A switch as shown: the saved value, else the server's default, else the site's (approval on, vehicle on the day off;
+ * Round 4–7: the five features on).
+ */
+export function switchValue(key: SwitchKey, settings: Partial2, defaults?: Partial2): boolean {
   const v = settings?.[key] ?? defaults?.[key];
   return typeof v === 'boolean' ? v : key !== 'vehicle_on_the_day';
 }

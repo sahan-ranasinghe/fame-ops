@@ -153,6 +153,7 @@ export default function IssueScreen() {
         {q.data && !q.data.issue && <ListEmpty text={t('office.issues.notFound')} />}
         {i && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {i.pre_trip ? <Pill text={t('office.checks.preTrip')} tone="amber" size={15} /> : null}
             <Pill text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} size={15} />
             <Pill text={statusWord(i.status)} tone={statusTone(i.status)} size={15} />
             {snooze && <Pill text={t('office.issues.snoozed')} tone="muted" size={15} />}

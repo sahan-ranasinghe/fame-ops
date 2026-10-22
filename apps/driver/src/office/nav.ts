@@ -139,6 +139,10 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   if (path === '/tasks' || path.startsWith('/tasks?')) return has(permissions, 'assign_tasks') ? '/office/(tabs)/tasks' : null;
   if (path === '/requests') return has(permissions, 'approve') ? '/office/(tabs)/approve' : null;
   if (path === '/my-trips') return has(permissions, 'request') ? '/office/(tabs)/trips' : null;
+  // Round 4–7 (4): a trip of the person's own nobody drives with the app ("Trip finished? Enter the odometer"): its page
+  // (my_trip is anyone's for their own trips).
+  m = path.match(/^\/my-trips\/([0-9a-f-]{36})$/);
+  if (m) return `/office/my-trip/${m[1]}`;
   if (path === '/live' || path.startsWith('/live?')) return has(permissions, 'view') ? '/office/(tabs)/live' : null;
   // Stage 1 item 2: the site's home (a "needs a driver" push links to /) opens Home.
   if (path === '/' || path === '') return '/office';
@@ -159,7 +163,12 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   if (path === '/tasks/history') return has(permissions, 'assign_tasks') ? '/office/task-history' : null;
   if (path === '/vehicles') return has(permissions, 'view') ? '/office/vehicles' : null;
   m = path.match(/^\/vehicles\/([^/]+)(?:\/edit)?$/);
-  if (m && m[1] !== 'new') return has(permissions, 'view') ? `/office/vehicles/${m[1]}` : null;
+  if (m && m[1] !== 'new') {
+    if (!has(permissions, 'view')) return null;
+    // Round 4–7 (4): a pre-trip problem's link names its check (?check=<id>): the vehicle's page marks it.
+    const check = url.match(/[?&]check=([0-9a-f-]{36})/);
+    return `/office/vehicles/${m[1]}${check ? `?check=${check[1]}` : ''}`;
+  }
   if (path === '/places') return has(permissions, 'vehicles') ? '/office/places' : null;
   m = path.match(/^\/places\/([0-9a-f-]{36})$/);
   if (m) return has(permissions, 'vehicles') ? `/office/places/${m[1]}` : null;

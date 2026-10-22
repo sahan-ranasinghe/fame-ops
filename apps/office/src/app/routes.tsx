@@ -19,6 +19,7 @@ import { Mileage } from "../screens/Mileage";
 import { InboxPage } from "../screens/InboxPage";
 import { More } from "../screens/More";
 import { MyTrips } from "../screens/MyTrips";
+import { MyTripOrRequest } from "../screens/MyTripPage";
 import { NewRequest } from "../screens/NewRequest";
 import { NewTask } from "../screens/NewTask";
 import { NoAccess } from "../screens/NoAccess";
@@ -128,11 +129,12 @@ export const routes: RouteObject[] = [
         element: <Guard need={VR}><Requests /></Guard>,
         children: [{ path: ":id", element: <RequestDetail /> }],
       },
-      // Hotfix 2 (A): My trips; a trip opens the request page beside the list (full screen on a phone).
+      // Hotfix 2 (A): My trips; a trip opens the request page beside the list (full screen on a phone). Round 4–7 (4): a
+      // trip of the person's own nobody drives with the app (/my-trips/<task id>: the vehicle check, Trip finished?).
       {
         path: "my-trips",
         element: <Guard need={TRIPS_NEED}><MyTrips /></Guard>,
-        children: [{ path: ":id", element: <RequestDetail /> }],
+        children: [{ path: ":id", element: <MyTripOrRequest /> }],
       },
       // Hotfix 2 (A): the notification centre as a page (the bell opens it on a phone); everyone.
       { path: "inbox", element: <InboxPage /> },

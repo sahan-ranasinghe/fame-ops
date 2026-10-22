@@ -39,6 +39,8 @@ export interface Fleet {
   myPhoto?: { save: (jpeg: Blob) => Promise<"ok" | "failed" | "network"> };
   /** Web build only (Round 3, A5): my driving licence's front or back through my own folder and set_my_licence_photo. */
   myLicence?: { savePhoto: (side: "front" | "back", jpeg: Blob) => Promise<"ok" | "failed" | "network"> };
+  /** Web build only (Round 4–7, 4): a photo for my own no-app trip through my own folder (data/myPhoto.ts saveTripPhoto): its id. */
+  tripPhoto?: { save: (kind: "vehicle_report" | "vehicle_check" | "odometer", jpeg: Blob) => Promise<{ id: string } | "failed" | "network"> };
 }
 
 const Ctx = createContext<Fleet | null>(null);

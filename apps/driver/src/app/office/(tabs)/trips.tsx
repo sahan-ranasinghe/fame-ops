@@ -7,6 +7,9 @@
 // opens the request's page only for an approver (a requester's own request page comes later).
 // Round 3 (A6): an expired request (nobody decided it before its day was over) has its own section and filter choice,
 // its own badge (the calendar with a cross) and Request again (the trip editor with everything copied but the day).
+// Round 4–7 (4): a trip nobody drives with the app, on the person's own account, has its button (my_trips' trip_action):
+// Vehicle check before setting off, Trip finished?, or Enter the odometer for one closed without it; it opens the trip's
+// page (office/my-trip/[id]).
 
 import { tripChip } from '@/office/statusWords';
 import { useRouter } from 'expo-router';
@@ -23,6 +26,7 @@ import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
 import { dateWords, whenWords } from '@/lib/dateWords';
 import { isCreatedTask, tripLive, tripTitle } from '@/office/homeLogic';
+import { TRIP_ACTION_KEY, tripTaskId } from '@/office/myTripLogic';
 import { canRequestAgain, expiredText } from '@/office/requestsLogic';
 import { requestAgainDraft, setDraft } from '@/office/trip/draft';
 import { useOffice, useTool } from '@/office/state';
@@ -109,6 +113,12 @@ export default function TripsTab() {
             ) : null}
           </View>
         )}
+        {(() => {
+          const task = tripTaskId(trip);
+          return trip.trip_action && task ? (
+            <Button kind={trip.trip_action === 'check' ? 'primary' : 'dark'} label={t(TRIP_ACTION_KEY[trip.trip_action])} onPress={() => router.push({ pathname: '/office/my-trip/[id]', params: { id: task } })} style={{ minHeight: 52, marginTop: 8 }} testID="trip-action" />
+          ) : null;
+        })()}
         {canEdit(trip) && me.tools.includes('update_request') && (
           <Button kind="outline" label={t('office.trip.edit')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'edit', id: trip.id } })} style={{ minHeight: 48, marginTop: 8 }} />
         )}

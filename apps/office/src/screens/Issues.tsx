@@ -60,7 +60,7 @@ function IssueRow({ i, current, search, replace }: { i: Issue; current: boolean;
     <Link className="row issue-row" to={`/issues/${i.id}${search}`} state={{ fromList: true }} replace={replace} aria-current={current ? "true" : undefined} style={current ? { background: "var(--surface-2)" } : undefined}>
       <span className={`att-ic ${severityTone(i.severity)}`}><Icon name={attIcon(i.title)} /></span>
       <div className="grow">
-        <div className="name">{i.title}</div>
+        <div className="name">{i.title}{i.pre_trip && <> <span data-testid="issue-pre-trip"><Pill tone="warn">Pre-trip</Pill></span></>}</div>
         <div className="sub">{datesInWords([kindText(i), i.detail, i.due].filter(Boolean).join(" · "))}</div>
         <div className="sub">{datesInWords(whoLine(i))}</div>
         {snooze && <div className="sub" data-testid="snoozed-until">{datesInWords(snooze)}</div>}

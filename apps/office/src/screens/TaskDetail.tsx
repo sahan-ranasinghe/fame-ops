@@ -45,6 +45,8 @@ import { findDriverPath } from "./needsDriverLogic";
 import { dwellNote, needsDriverText, segmentRows, segmentsTotal, taskTone, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
 import { datesInWords, whenText } from "../lib/when";
+import { finishChip } from "./myTripLogic";
+import { TaskCheckLines } from "./VehicleChecks";
 
 /** The arrival flags shown in amber (an override, no GPS fix, Done without Arrived); "no pin" is plain. */
 const ARRIVAL_WARN = new Set(["override", "no_gps", "not_arrived"]);
@@ -164,7 +166,10 @@ export function TaskDetail() {
         </Notice>
       )}
       <WarningsNote warnings={flash} />
-      {t.finish_flag && <Notice>{t.finish_flag.text}</Notice>}
+      {/* Round 4–7 (4b): Completed · not confirmed (a trip nobody drives with the app, closed without its odometer) is grey. */}
+      {t.finish_flag && (t.finish_flag.kind === "not_confirmed"
+        ? <div className="card card-b" data-testid="finish-flag"><Pill>{finishChip(t.finish_flag)?.text}</Pill> <span className="muted small">{t.finish_flag.text}</span></div>
+        : <Notice>{t.finish_flag.text}</Notice>)}
       <div className="card card-b">
         <dl className="kv">
           <div>
@@ -223,6 +228,8 @@ export function TaskDetail() {
           <div><dt>Charged to</dt><dd>{t.purpose === "personal" ? "Personal · not charged to a job" : projects || "Fame internal"}</dd></div>
           <div><dt>Sent · seen</dt><dd className="mono">{joinDots([hhmm(t.sent), t.seen === "not opened yet" ? "not opened yet" : hhmm(t.seen)]) || "—"}</dd></div>
           <div><dt>Started · done</dt><dd className="mono">{joinDots([hhmm(t.started), hhmm(t.completed)]) || "—"}</dd></div>
+          {/* Round 4–7 (4): the vehicle check of the task's day by its person, with the photos. */}
+          <TaskCheckLines checks={t.vehicle_checks} />
           <div><dt>Odometer</dt><dd className="num">{t.start_odometer_km != null ? num(t.start_odometer_km) : "—"}{t.end_odometer_km != null ? " → " + num(t.end_odometer_km) : ""}</dd></div>
           <div><dt>Km this task</dt><dd className="num">{km != null ? num(km) + " km" : "—"}{segments.length > 1 ? <span className="muted"> · {segments.length} vehicles</span> : null}{t.gps_km != null ? <span className="muted"> · GPS {num(t.gps_km)} km</span> : null}</dd></div>
           {t.created_by && <div><dt>Assigned by</dt><dd>{t.created_by}</dd></div>}

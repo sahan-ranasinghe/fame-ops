@@ -46,11 +46,29 @@ import {
 } from "./myTripsLogic";
 import { TripCardsContext, TRIPS_KEY, TRIPS_PATH, useMyTripsArgs } from "./myTripsQuery";
 import { ExpiredBadge, RequestAgain } from "./requestParts";
+import { TRIP_ACTION_TEXT, tripTaskId } from "./myTripLogic";
 
 type Trip = RequestCard | CreatedTaskCard;
 
 /** A button or link inside a clickable row: it does its own thing, the row does not open. */
 const Inside = ({ children }: { children: ReactNode }) => <span onClick={(e: MouseEvent) => e.stopPropagation()}>{children}</span>;
+
+/**
+ * Round 4–7 (4): a trip nobody drives with the app, on the person's own account, says what it asks now (my_trips'
+ * trip_action): Vehicle check before setting off, Trip finished?, or Enter the odometer for one closed without it. The
+ * button opens the trip's page (/my-trips/<task>) beside the list.
+ */
+function TripActionButton({ t, search }: { t: Trip; search: string }) {
+  const task = tripTaskId(t);
+  if (!t.trip_action || !task) return null;
+  return (
+    <Inside>
+      <Link className={`btn small${t.trip_action === "check" ? " primary" : " dark"}`} to={`${TRIPS_PATH}/${task}${search}`} data-testid="trip-action">
+        {TRIP_ACTION_TEXT[t.trip_action]}
+      </Link>
+    </Inside>
+  );
+}
 
 function DriverCell({ a, waiting }: { a: RequestCard["assigned"]; waiting: boolean }) {
   if (!a) return <span className="muted">{waiting ? "Not assigned yet" : "—"}</span>;
@@ -66,7 +84,7 @@ function DriverCell({ a, waiting }: { a: RequestCard["assigned"]; waiting: boole
   );
 }
 
-function StatusCell({ q }: { q: RequestCard }) {
+function StatusCell({ q, search }: { q: RequestCard; search: string }) {
   const live = liveOf(q);
   const lines = decisionLines(q);
   // The person who approved, to call about the trip (Call office instead when they have no number).
@@ -79,6 +97,7 @@ function StatusCell({ q }: { q: RequestCard }) {
       {approver && <Inside><ContactButtons phone={approver} label="Call fleet admin" testId="call-approver" /></Inside>}
       {/* Round 3 (A6): an expired request is asked again from its row (everything copied but the day). */}
       <Inside><RequestAgain q={q} className="btn small" /></Inside>
+      <TripActionButton t={q} search={search} />
     </div>
   );
 }
@@ -103,14 +122,14 @@ function RequestRow({ t, search }: { t: RequestCard; search: string }) {
           {t.project && <div className="sub">{t.project}</div>}
         </div>
       </td>
-      <td data-label="Status"><StatusCell q={t} /></td>
+      <td data-label="Status"><StatusCell q={t} search={search} /></td>
       <td data-label="Driver"><DriverCell a={t.assigned} waiting={t.status === "waiting" || t.status === "changed"} /></td>
     </tr>
   );
 }
 
 /** A task the person created directly: its title, when, route, live state and driver; it opens the task. */
-function CreatedTaskRow({ t }: { t: CreatedTaskCard }) {
+function CreatedTaskRow({ t, search }: { t: CreatedTaskCard; search: string }) {
   const navigate = useNavigate();
   const to = createdTaskLink(t);
   const live = createdLive(t);
@@ -132,6 +151,7 @@ function CreatedTaskRow({ t }: { t: CreatedTaskCard }) {
           <Pill tone={liveTone(live.state)}>{liveWord(live.state)}</Pill>
           <span className="sub" data-testid="trip-live">{live.text}</span>
           {t.approved_by && <div className="sub" data-testid="trip-decision">{decisionLines({ approved_by: t.approved_by })[0]}</div>}
+          <TripActionButton t={t} search={search} />
         </div>
       </td>
       <td data-label="Driver"><DriverCell a={t.assigned} waiting={false} /></td>
@@ -209,7 +229,7 @@ export function MyTrips() {
                       <table data-testid="trips-table">
                         <thead><tr><th>When</th><th>Trip</th><th>Status</th><th>Driver and vehicle</th></tr></thead>
                         <tbody>
-                          {trips.map((t) => isCreatedTask(t) ? <CreatedTaskRow key={`task:${t.id}`} t={t} /> : <RequestRow key={t.id} t={t} search={query} />)}
+                          {trips.map((t) => isCreatedTask(t) ? <CreatedTaskRow key={`task:${t.id}`} t={t} search={query} /> : <RequestRow key={t.id} t={t} search={query} />)}
                         </tbody>
                       </table>
                     </div>
