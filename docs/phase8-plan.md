@@ -1288,6 +1288,34 @@ same style.
     - each behaviour change, with the reason;
     - the proposed removals.
 
+### 33.14 The checkpoint's decisions (Sahan, 22 October 2026, before the deploy)
+
+1. Office mode Maintenance opens on "Service and documents" (the drivers' problem reports one tap away): kept.
+2. The proposed removals are approved, with two conditions:
+   - the Warning / Info chip on Office mode's issue rows goes only where each group shows its severity with an ICON (never
+     colour alone);
+   - Office mode's five-steps card goes only if sent, seen and accepted, with their times, are on the new timeline (else it
+     stays).
+3. The Pre-trip tag on an issue stays when the vehicle_check switch is off.
+4. Before the deploy:
+   - a. A height-only resize never reloads or remounts a page (phones change height when the address bar shows or hides,
+     and phones still use the desktop site). An e2e resizes only the height on the task page and asserts no reload and no
+     refetch.
+   - b. Passengers are saved in the same transaction as their trip or request, on create and update:
+     - the write-only column `passenger_list` on tasks and vehicle_requests, applied by triggers in the same statement
+       (20261022130000_round6_passengers_tx.sql);
+     - office_create_task and office_book_vehicle carry it;
+     - every trip tool writes it with its own row (passengerColumn);
+     - a name that cannot be saved undoes the trip (pgTAP).
+   - c. "Location off" is critical only during a task in progress, which always has its driver on duty. The signal issue
+     is opened only for running tasks (issues.ts). Off duty the phone sends no heartbeats, so the status is "Not sharing",
+     never "Location off".
+
+**Follow-ups (after this round):**
+- The server's English on Sinhala screens (a vehicle type such as "van", issue titles, "Nuwan declined…"): with the Sinhala
+  import.
+- A search on Maintenance's "All vehicles" and on the Timeline.
+
 ### 33.5 Also in the round
 - `docs/voice-calls-plan.md` (doc only): WebRTC through a service (LiveKit, Agora, Twilio Voice) with their current prices
   and free tiers (cited), the native modules (react-native-webrtc, CallKeep / ConnectionService, FCM high priority to

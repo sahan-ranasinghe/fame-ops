@@ -56,5 +56,35 @@ update public.tasks set status = 'cancelled', cancelled_reason = 'test' where id
 select results_eq($$ select count(*)::int from public.office_inbox where event like 'passenger.%' $$, $$ values (2) $$,
   'with passengers off, the cancel tells nobody');
 
+-- Saved with the trip, in the same statement (Sahan, before the deploy): a task with its names keeps them, the column stays
+-- empty; a name that cannot be saved undoes the trip; a request's names reach its task too; one no longer named is removed.
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, passenger_list) values
+  ('40000000-0000-0000-0000-0000000c6a02', 'With names', '10000000-0000-0000-0000-0000000c6a01', '20000000-0000-0000-0000-0000000c6a01',
+   now() + interval '2 days',
+   '{"by": "Office", "rows": [{"employee_id": "10000000-0000-0000-0000-0000000c6a03", "name": "Asha Rider", "phone": null},
+                               {"employee_id": null, "name": "Guest Two", "phone": "+94771234568"}]}'::jsonb);
+select results_eq($$ select count(*)::int from public.task_passengers where task_id = '40000000-0000-0000-0000-0000000c6a02' and removed_at is null $$,
+  $$ values (2) $$, 'a task saved with its names keeps them');
+select results_eq($$ select passenger_list is null from public.tasks where id = '40000000-0000-0000-0000-0000000c6a02' $$,
+  $$ values (true) $$, 'the names are never stored on the task row');
+select throws_ok($$ insert into public.tasks (id, title, employee_id, vehicle_id, start_at, passenger_list) values
+  ('40000000-0000-0000-0000-0000000c6a03', 'Bad name', '10000000-0000-0000-0000-0000000c6a01', '20000000-0000-0000-0000-0000000c6a01',
+   now() + interval '2 days', '{"by": "Office", "rows": [{"employee_id": null, "name": "Bad Phone", "phone": "0771234567"}]}'::jsonb) $$,
+  '23514', NULL, 'a name that cannot be saved stops the trip''s insert');
+select results_eq($$ select count(*)::int from public.tasks where id = '40000000-0000-0000-0000-0000000c6a03' $$, $$ values (0) $$,
+  'so the trip is never saved without its names');
+update public.tasks set passenger_list = '{"by": "Office", "rows": [{"employee_id": null, "name": "Guest Two", "phone": "+94771234568"}]}'::jsonb
+  where id = '40000000-0000-0000-0000-0000000c6a02';
+select results_eq($$ select name from public.task_passengers where task_id = '40000000-0000-0000-0000-0000000c6a02' and removed_at is null $$,
+  $$ values ('Guest Two'::text) $$, 'an edit keeps the same ones and removes the one no longer named');
+select results_eq($$ select count(*)::int from public.task_passengers where task_id = '40000000-0000-0000-0000-0000000c6a02' and removed_at is not null $$,
+  $$ values (1) $$, 'removed, never deleted');
+update public.vehicle_requests set task_id = '40000000-0000-0000-0000-0000000c6a01' where id = '30000000-0000-0000-0000-0000000c6a01';
+update public.vehicle_requests set passenger_list = '{"by": "Priya", "rows": [{"employee_id": null, "name": "Guest Visitor", "phone": "+94771234567"}]}'::jsonb
+  where id = '30000000-0000-0000-0000-0000000c6a01';
+select results_eq($$ select (select count(*)::int from public.request_passengers where request_id = '30000000-0000-0000-0000-0000000c6a01' and removed_at is null),
+                            (select count(*)::int from public.task_passengers where task_id = '40000000-0000-0000-0000-0000000c6a01' and removed_at is null) $$,
+  $$ values (1, 1) $$, 'a request''s names reach its task in the same statement');
+
 select * from finish();
 rollback;

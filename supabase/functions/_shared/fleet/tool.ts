@@ -6,11 +6,22 @@ import { ToolError } from "./db.ts";
 import type { Actor } from "./roles.ts";
 import { dayRange, isRealDate } from "./time.ts";
 
+/**
+ * Round 4–7 (6): the checked passenger names a trip tool keeps with its OWN write (withPassengerList hands them over; the
+ * write adds them as passenger_list, applied by the database in the same statement). `written` says the tool did.
+ */
+export interface PassengersToKeep {
+  list: { by: string; rows: { employee_id: string | null; name: string; phone: string | null }[] };
+  written: boolean;
+}
+
 export interface Ctx {
   db: Db;
   now: Date;
   /** The person the tool runs for (role already checked), and the channel they came through. */
   actor: Actor;
+  /** Round 4–7 (6): the names to keep with the trip's own write (trip tools under withPassengerList only). */
+  passengers?: PassengersToKeep;
 }
 
 export interface Out {

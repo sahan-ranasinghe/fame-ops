@@ -9,7 +9,7 @@
 // (the timeline), and a request can be made on behalf of someone else.
 
 import { holdersOf } from "../holders.ts";
-import { passengerCards } from "./passengers.ts";
+import { passengerCards, passengerColumn } from "./passengers.ts";
 import { noAppAction } from "./checks.ts";
 import { z } from "zod";
 import type { Json } from "../database.types.ts";
@@ -780,7 +780,7 @@ export const createRequest = tool({
     ...requestFields,
     ...tripInput,
   }),
-  async run(args, { db, now, actor }) {
+  async run(args, { db, now, actor, passengers }) {
     realDate(args.date);
     // Phase 7 (§34): with stops, the trip is planned as a task's is (the leave time from the deadlines when none is typed).
     const settingsNow = await loadSettings(db);
@@ -831,6 +831,8 @@ export const createRequest = tool({
         from_dwell_min: args.from_dwell_min ?? null,
         to_dwell_min: args.to_dwell_min ?? null,
         requester_phone: args.requester_phone ?? null,
+        // Round 4–7 (6): who rides, in the same statement.
+        ...passengerColumn(passengers),
       }).select("*").single(),
       "vehicle request",
     );
@@ -1836,7 +1838,7 @@ export const bookVehicle = tool({
     return_to_base: z.boolean().optional(),
     avoid_expressway: z.boolean().optional(),
   }),
-  async run(args, { db, now, actor }) {
+  async run(args, { db, now, actor, passengers }) {
     realDate(args.date);
     const matched = args.project ? (await matchProjects(db, args.project)).projects : [];
     const project = matched.length === 1 ? matched[0] : null;
@@ -1920,6 +1922,7 @@ export const bookVehicle = tool({
       to_dwell_min: args.to_dwell_min ?? null,
     };
     const saved = await saveTask(db, {
+      keep: passengers,
       title: args.title ?? (args.route_to ? `Trip · ${args.route_to}` : `Trip for ${who.name}`),
       label,
       driver,
@@ -2295,7 +2298,7 @@ export const updateRequest = tool({
     from_dwell_min: z.number().int().min(0).max(1440).nullable().optional().describe("Minutes at From; null = the default"),
     to_dwell_min: z.number().int().min(0).max(1440).nullable().optional().describe("Minutes at To; null = the default"),
   }),
-  async run(args, { db, now, actor }) {
+  async run(args, { db, now, actor, passengers }) {
     if (args.date) realDate(args.date);
     const request = await getRequest(db, args.request_id);
     if (!actor.permissions.includes("approve") && request.requested_by_employee_id !== actor.employeeId) {
@@ -2384,6 +2387,8 @@ export const updateRequest = tool({
     const nowIso = now.toISOString();
     const rows = unwrap(
       await db.from("vehicle_requests").update({
+        // Round 4–7 (6): who rides, in the same statement (the request's task too, in the database).
+        ...passengerColumn(passengers),
         ...after,
         on_behalf_of: onBehalfOf,
         requester_phone: requesterPhone,

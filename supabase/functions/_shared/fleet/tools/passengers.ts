@@ -9,7 +9,8 @@ import { type Employee, loadRefs } from "../fleet.ts";
 import { contactLinks, phoneDisplay } from "../format.ts";
 import { driverPhotoLinks } from "../media.ts";
 import { countWith, MAX_PASSENGERS, type PassengerIn, type PassengerRow, passengerRows } from "../passengers.ts";
-import { type AnyTool, type Ctx, type Out, tool, zId, zText } from "../tool.ts";
+import type { Json } from "../database.types.ts";
+import { type AnyTool, type Ctx, type Out, type PassengersToKeep, tool, zId, zText } from "../tool.ts";
 
 export const zPassengerList = z.array(z.object({
   person: zId.optional().describe("A registered office person's id (find_people)"),
@@ -63,34 +64,23 @@ async function officePeople(db: Db): Promise<Map<string, { name: string; phone: 
   return new Map(refs.employees.filter(isOffice).map((e) => [e.id, { name: e.name, phone: e.phone }]));
 }
 
-type Target = { table: "task_passengers"; column: "task_id"; id: string } | {
-  table: "request_passengers";
-  column: "request_id";
-  id: string;
-};
+/** A trip whose passengers are kept: a task or a request (its task follows it in the database). */
+type Target = { table: "tasks" | "vehicle_requests"; id: string };
 
-/** Keeps exactly these passengers on a task or a request: the same ones stay, the others are removed (never deleted). */
-async function keepPassengers(db: Db, target: Target, rows: readonly PassengerRow[], by: string, now: Date): Promise<void> {
-  const current = unwrap(
-    // deno-lint-ignore no-explicit-any
-    await (db.from(target.table) as any).select("id, employee_id, name, phone").eq(target.column, target.id).is("removed_at", null),
-    "passengers",
-  ) as { id: string; employee_id: string | null; name: string; phone: string | null }[];
-  const same = (a: PassengerRow, b: { employee_id: string | null; name: string; phone: string | null }) =>
-    a.employee_id ? a.employee_id === b.employee_id : !b.employee_id && a.name === b.name && a.phone === b.phone;
-  const gone = current.filter((c) => !rows.some((r) => same(r, c)));
-  const added = rows.filter((r) => !current.some((c) => same(r, c)));
-  if (gone.length) {
-    // deno-lint-ignore no-explicit-any
-    unwrap(await (db.from(target.table) as any).update({ removed_at: now.toISOString() }).in("id", gone.map((g) => g.id)), "passengers");
-  }
-  if (added.length) {
-    unwrap(
-      // deno-lint-ignore no-explicit-any
-      await (db.from(target.table) as any).insert(added.map((r) => ({ [target.column]: target.id, ...r, added_by: by }))),
-      "passengers",
-    );
-  }
+/**
+ * The trip write's own passenger_list: the database applies it in the same statement (the triggers of
+ * 20261022130000_round6_passengers_tx.sql), so the trip is never saved without its passengers. Marks the list as written.
+ */
+export function passengerColumn(keep: PassengersToKeep | undefined): { passenger_list?: Json } {
+  if (!keep) return {};
+  keep.written = true;
+  return { passenger_list: keep.list as unknown as Json };
+}
+
+/** The names alone (or a tool that did not carry them): one statement on the trip, applied by the database. */
+async function writePassengerColumn(db: Db, target: Target, list: PassengersToKeep["list"]): Promise<void> {
+  // deno-lint-ignore no-explicit-any
+  unwrap(await (db.from(target.table) as any).update({ passenger_list: list }).eq("id", target.id), "passengers");
 }
 
 export interface PassengerCard {
@@ -157,8 +147,9 @@ export async function passengerCards(
 
 /**
  * A trip tool with passenger_list: checked first, then the tool runs as before (the count it saves is never under the
- * names), then the names are kept against what it saved. `count`: the tool's own count field; `targets`: where the names go
- * once it answered (created: the task_id and / or request_id of the answer; an edit: the trip it changed).
+ * names) and writes the names WITH its own row (ctx.passengers → passengerColumn: one transaction). `count`: the tool's own
+ * count field; `targets`: the trip (created: the task_id and / or request_id of the answer; an edit: the trip it changes),
+ * for names alone and, never expected, a tool that did not carry them.
  */
 export function withPassengerList<T extends AnyTool>(
   t: T,
@@ -180,17 +171,25 @@ export function withPassengerList<T extends AnyTool>(
       if (passenger_list === undefined) return await t.run(rest, ctx);
       const checked = passengerRows(passenger_list, await officePeople(ctx.db));
       if ("error" in checked) throw new ToolError(checked.error);
+      const keep: PassengersToKeep = { list: { by: ctx.actor.name, rows: checked.rows }, written: false };
       const onlyNames = !!opts.ids && Object.entries(rest).every(([k, v]) => opts.ids!.includes(k) || v === undefined);
       // Names alone never skip the tool's checks: an edit tool without its guard always runs.
       if (onlyNames && !opts.guard) throw new ToolError("Nothing to change.");
-      if (onlyNames) await opts.guard!(rest, ctx);
+      if (onlyNames) {
+        await opts.guard!(rest, ctx);
+        for (const target of await opts.targets(rest, {}, ctx.db)) await writePassengerColumn(ctx.db, target, keep.list);
+        return {
+          result: { ...Object.fromEntries(opts.ids!.map((k) => [k, rest[k]])), passengers_named: checked.rows.length },
+          summary: `passengers of ${opts.ids!.map((k) => rest[k]).join(" ")}`,
+        };
+      }
       const count = countWith(rest[opts.count] as number | null | undefined, checked.rows.length);
-      const out = onlyNames
-        ? { result: Object.fromEntries(opts.ids!.map((k) => [k, rest[k]])), summary: `passengers of ${opts.ids!.map((k) => rest[k]).join(" ")}` }
-        : await t.run({ ...rest, ...(count != null && { [opts.count]: count }) }, ctx);
+      const out = await t.run({ ...rest, ...(count != null && { [opts.count]: count }) }, { ...ctx, passengers: keep });
       const result = (out.result ?? {}) as Record<string, unknown>;
-      for (const target of await opts.targets(rest, result, ctx.db)) {
-        await keepPassengers(ctx.db, target, checked.rows, ctx.actor.name, ctx.now);
+      if (!keep.written) {
+        // Never expected (every trip write carries them): the names still go on the trip, in their own statement.
+        console.error(`withPassengerList: ${t.name} saved without passenger_list; written after`);
+        for (const target of await opts.targets(rest, result, ctx.db)) await writePassengerColumn(ctx.db, target, keep.list);
       }
       return { ...out, result: { ...result, passengers_named: checked.rows.length } };
     },
@@ -203,17 +202,15 @@ export const createdTargets = (_args: Record<string, unknown>, result: Record<st
   const taskId = result.task_id as string | undefined;
   const requestId = (result.request_id as string | undefined) ?? (result.request as { id?: string } | undefined)?.id;
   return [
-    ...(taskId ? [{ table: "task_passengers", column: "task_id", id: taskId } as const] : []),
-    ...(requestId ? [{ table: "request_passengers", column: "request_id", id: requestId } as const] : []),
+    ...(taskId ? [{ table: "tasks", id: taskId } as const] : []),
+    ...(requestId ? [{ table: "vehicle_requests", id: requestId } as const] : []),
   ];
 };
 
-export const taskTarget = (id: string): Target => ({ table: "task_passengers", column: "task_id", id });
-export const requestTarget = (id: string): Target => ({ table: "request_passengers", column: "request_id", id });
+export const taskTarget = (id: string): Target => ({ table: "tasks", id });
+export const requestTarget = (id: string): Target => ({ table: "vehicle_requests", id });
 
-/** update_request: the request's names, and its task's when it has one (who rides needs no new approval). */
-export async function requestTargets(args: Record<string, unknown>, _result: Record<string, unknown>, db: Db): Promise<Target[]> {
-  const id = args.request_id as string;
-  const r = unwrap(await db.from("vehicle_requests").select("task_id").eq("id", id).single(), "request");
-  return [requestTarget(id), ...(r.task_id ? [taskTarget(r.task_id)] : [])];
+/** update_request: the request's names (the database gives its task, when it has one, the same: no new approval). */
+export function requestTargets(args: Record<string, unknown>): Target[] {
+  return [requestTarget(args.request_id as string)];
 }

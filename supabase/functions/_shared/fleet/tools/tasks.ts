@@ -37,7 +37,7 @@ import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { checkCards } from "./checks.ts";
 import { estimateText, FUEL_ANSWER_TEXT, type FuelEstimate } from "../fuelCard.ts";
 import { shareText } from "../passengers.ts";
-import { passengerCards } from "./passengers.ts";
+import { passengerCards, passengerColumn } from "./passengers.ts";
 import { videoCard, videoLinks } from "../videos.ts";
 import {
   legSequence,
@@ -62,7 +62,7 @@ import { loadSettings, type Settings } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { lateReportOf } from "../presence.ts";
 import { duration, whenText } from "../durations.ts";
-import { realDate, tool, zDate, zId, zPaging, zText, zTime } from "../tool.ts";
+import { type PassengersToKeep, realDate, tool, zDate, zId, zPaging, zText, zTime } from "../tool.ts";
 import { pageOf, pageWindow } from "../paging.ts";
 import { stopProgress } from "../stopProgress.ts";
 import { endOfDay, type GooglePin, googlePin } from "../googlePlaces.ts";
@@ -762,6 +762,8 @@ export interface NewTask {
   assignedBy?: string | null;
   /** The vehicle used and why ("Kamal's vehicle today", "chosen"). */
   vehicleWhy?: string;
+  /** Round 4–7 (6): the passenger names, saved with the trip's own row (the task's, or a booking's request). */
+  keep?: PassengersToKeep;
   /** Round 3: who drives (driver by default); someone else's name and phone. */
   drivenBy?: DrivenBy;
   driverName?: string | null;
@@ -857,7 +859,8 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
   if (t.request && "create" in t.request) {
     const booked = unwrap(
       await db.rpc("office_book_vehicle", {
-        p_request: t.request.create as unknown as Json,
+        // A booking's names go with its request (its task copies them, in the same transaction).
+        p_request: { ...t.request.create, ...passengerColumn(t.keep) } as unknown as Json,
         p_task: taskJson,
         p_stops: t.stops.map(stopRow),
         p_projects: t.split.rows,
@@ -870,7 +873,7 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
   } else {
     taskId = unwrap(
       await db.rpc("office_create_task", {
-        p_task: taskJson,
+        p_task: { ...taskJson, ...passengerColumn(t.keep) } as unknown as Json,
         p_stops: t.stops.map(stopRow),
         p_projects: t.split.rows,
         p_request_id: t.request?.id,
@@ -1146,6 +1149,8 @@ const planFields = {
  * task row exists until an approver sends it (decide_request), so the driver sees nothing and no accept window runs.
  */
 async function proposeTask(db: Db, now: Date, actor: Actor, p: {
+  /** Round 4–7 (6): the names, kept with the request's own insert. */
+  keep?: PassengersToKeep;
   args: {
     title: string;
     label?: string;
@@ -1209,6 +1214,7 @@ async function proposeTask(db: Db, now: Date, actor: Actor, p: {
         vehicle_why: p.picked.why ?? null,
         vehicle_choice: p.picked.choice,
       } as unknown as Json,
+      ...passengerColumn(p.keep),
     }).select("*").single(),
     "vehicle request",
   );
@@ -1295,7 +1301,7 @@ export const createTask = tool({
     projects: zSplit.optional(),
     created_by: zText(80).optional().describe("Name of the office user assigning the task, if known"),
   }),
-  async run(args, { db, now, actor }) {
+  async run(args, { db, now, actor, passengers }) {
     realDate(args.date);
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     // Round 3: who drives. self = you, other = someone not in Fame Fleet (the task on your account); both need a plate.
@@ -1343,6 +1349,7 @@ export const createTask = tool({
     // Phase 7 (§33): someone without the approve permission proposes the task; it waits for the fleet admin's OK.
     if (settings.tasks_need_approval && !actor.permissions.includes("approve")) {
       return await proposeTask(db, now, actor, {
+        keep: passengers,
         args,
         driver,
         vehicle,
@@ -1358,6 +1365,7 @@ export const createTask = tool({
     }
 
     const saved = await saveTask(db, {
+      keep: passengers,
       title: args.title,
       label: args.label ?? split.label,
       driver,
@@ -2312,7 +2320,7 @@ export async function changeTask(
   actor: Actor,
   task: Task,
   c: TaskChanges,
-  opts: { version?: number; note?: string; tellRequester?: boolean; allowNoop?: boolean } = {},
+  opts: { version?: number; note?: string; tellRequester?: boolean; allowNoop?: boolean; keep?: PassengersToKeep } = {},
 ): Promise<ChangedTask> {
   if (task.status === "completed" || task.status === "cancelled") throw new ToolError(`This task is ${task.status}; it cannot be changed.`);
   if (opts.version !== undefined && task.plan_version !== opts.version) {
@@ -2405,6 +2413,8 @@ export async function changeTask(
   let version = task.plan_version + 1;
   const updated = unwrap(
     await db.from("tasks").update({
+      // Round 4–7 (6): who rides, in the same statement.
+      ...passengerColumn(opts.keep),
       employee_id: driver.id,
       driven_by: drivenBy,
       driver_name: driverName,
@@ -2551,7 +2561,7 @@ export const updateTask = tool({
     contact_phone: zClearable(30),
     notes: zClearable(1000),
   }),
-  async run(args, { db, now, actor }) {
+  async run(args, { db, now, actor, passengers }) {
     if (args.date) realDate(args.date);
     const task = await getTask(db, args.task_id);
     const refs = (args.driver || args.vehicle) ? await loadRefs(db) : null;
@@ -2572,7 +2582,7 @@ export const updateTask = tool({
       contactName: cleared(args.contact_name),
       contactPhone: cleared(args.contact_phone),
       notes: cleared(args.notes),
-    }, { version: args.plan_version });
+    }, { version: args.plan_version, keep: passengers });
     const driver = out.task.employee_id
       ? unwrapMaybe(await db.from("employees").select("name, phone").eq("id", out.task.employee_id).maybeSingle(), "employee")
       : null;
