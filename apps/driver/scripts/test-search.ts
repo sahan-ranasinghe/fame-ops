@@ -127,9 +127,12 @@ console.log('\nThe server\'s suggestions');
 {
   const places = read('../../supabase/functions/_shared/fleet/tools/places.ts');
   check(places.includes('text: z.string().trim().max(500).optional()') && places.includes('suggest: z.boolean().optional()') && places.includes('near: z.object({ lat:'), 'search_places takes an optional text, suggest and near (additive: the contract keeps its shape)');
-  check(places.includes('if (suggest && typed.length < SEARCH_MIN_CHARS) {') && places.includes('db.rpc("recent_places", { p_text: "", p_since: since, p_limit: SUGGEST_LIMITS.recent })') && places.includes('.eq("operator", "other").not("lat", "is", null)') && places.includes('db.from("towns")'), 'an empty box: the places used before, our own pinned places, the towns in a box around the point');
-  check(places.includes('nearPoint ?? (await basePoint(db, settings))?.point ?? COLOMBO'), 'nearest to the phone, else the base place, else Colombo');
-  check(places.includes('layer: "town", badge: "Town"') && places.includes('suggested: true'), 'towns as their own layer; the answer says it is suggestions');
+  const emptyBox = places.slice(places.indexOf('if (suggest && typed.length < SEARCH_MIN_CHARS) {'), places.indexOf('const pin = typed ? await pastedPin(typed) : null;'));
+  // Round 4–7 (item 10, Uber / Google Maps): Saved (the company's) and Recent (the person's OWN, my_recent_places), about 5
+  // rows; "<Name>'s recent" for someone else's trip; no towns and never the company's whole history (recent_places).
+  check(places.includes('if (suggest && typed.length < SEARCH_MIN_CHARS) {') && places.includes('myRecent(actor.employeeId, "", other ? 2 : 3)') && places.includes('.eq("operator", "other").not("lat", "is", null)') && !emptyBox.includes('db.from("towns")') && !places.includes('db.rpc("recent_places"'), 'an empty box: Saved (our own pinned places) and the person\'s own Recent; no towns, never the company\'s history');
+  check(places.includes('const point = nearPoint ?? base?.point ?? COLOMBO;'), 'nearest to the phone, else the base place, else Colombo');
+  check(places.includes('group: "saved"') && places.includes('group: "recent"') && places.includes('group: "for"') && places.includes('suggested: true'), 'each suggestion with its group (Saved, Recent, <Name>\'s recent); the answer says it is suggestions');
   check(places.includes('const pin = typed ? await pastedPin(typed) : null;') && places.includes('if (typed.length < SEARCH_MIN_CHARS) return { result: { text: typed, results: [] }, summary: "search: too short" };'), 'a typed search is unchanged (a pin, the short rule, the three layers)');
   const suggest = read('../../supabase/functions/_shared/fleet/suggest.ts');
   check(suggest.includes('export function nearestFirst') && suggest.includes('export function ourPlacesFirst') && read('../../supabase/functions/_shared/fleet/suggest_test.ts').includes('Deno.test('), 'the ranking is pure, with its Deno test');

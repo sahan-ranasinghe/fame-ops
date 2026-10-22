@@ -99,8 +99,8 @@ console.log('\nA4: the screens use it (no raw server date on screen)');
   // No screen prints a server date field as it came: {x.at}, {x.since}, {x.expiry} … straight into the text.
   const screens = [...filesUnder('app'), ...filesUnder('components')].filter((f) => f.endsWith('.tsx'));
   const raw = screens.filter((f) => /<(Txt|Mono)[^>]*>\{[a-z]+\.(at|since|sent|created|updated|opened|reported|expiry|added|until|day|uploaded|removed|started|completed|decided|seen|last_used|updated_at)\}<\//.test(read(f)));
-  // A plan's timeline row ({x.at} / {leave.at}) is HH:MM, not a date.
-  check(same(raw.sort(), ['app/office/task/[id]/plan.tsx', 'app/office/trip/review.tsx'].sort()), 'no raw date field printed on a screen (only the plans\' HH:MM rows)', raw);
+  // A plan's timeline row ({x.at} / {leave.at}) and a vehicle check's time of day ({c.at}, Round 4–7) are HH:MM, not dates.
+  check(same(raw.sort(), ['app/office/task/[id]/plan.tsx', 'app/office/trip/review.tsx', 'components/office/VehicleChecks.tsx'].sort()), 'no raw date field printed on a screen (only the plans\' and the checks\' HH:MM)', raw);
   check(monthWords(en, '2026-10', NOW) === 'Oct' && monthWords(en, '2025-12', NOW) === 'Dec 2025' && monthWords(si, '2026-10', NOW) === si('months.9') && monthWords(en, 'x', NOW) === 'x', 'a month: "Oct", "Dec 2025"');
   check(shortWhen(en, '2026-10-21 08:31', NOW) === '08:31' && shortWhen(en, '2026-10-20 08:31', NOW) === 'Yesterday 08:31' && shortWhen(en, '—', NOW) === '—' && shortWhen(en, '~10:38', NOW) === '~10:38', "a step's time: alone today, with its day otherwise");
   check(spanWords(en, '2026-10-21 08:31', '2026-10-21 11:40', NOW) === 'Today 08:31–11:40' && spanWords(en, '2026-10-19 22:10', '2026-10-20 01:05', NOW) === 'Mon 19 Oct 22:10 – Yesterday 01:05' && spanWords(en, '2026-10-21 08:31', undefined, NOW) === 'Today 08:31', 'a span on one day, across two, still running');
@@ -156,7 +156,8 @@ console.log('\nA5: the driving licence (office/licenceLogic.ts)');
   const profile = read('app/office/profile.tsx');
   check(/update_my_profile', input\)/.test(profile) && /saveMyLicencePhoto\(side, uri\)/.test(profile) && /use="driver_licence"/.test(profile), 'My profile: update_my_profile with only the change, the photos as the driver\'s own');
   const photo = read('office/myPhoto.ts');
-  check(/licencePhotoPath\(id, photoId\)/.test(photo) && /kind: 'licence'/.test(photo) && /set_my_licence_photo', \{ p_side: side, p_photo_id: photoId \}/.test(photo), "the photo: <employee_id>/licence/, a photos row of kind licence, set_my_licence_photo");
+  // Round 4–7: one upload for every own photo (uploadOwnPhoto(kind, path)), the licence's in <employee_id>/licence/.
+  check(/uploadOwnPhoto\('licence', licencePhotoPath, uri\)/.test(photo) && /kind, storage_path: path/.test(photo) && /set_my_licence_photo', \{ p_side: side, p_photo_id: photoId \}/.test(photo), "the photo: <employee_id>/licence/, a photos row of kind licence, set_my_licence_photo");
   check(/selfDriveLine\(card\)/.test(read('app/office/request/[id].tsx')) && /selfDriveLine\(r\)/.test(read('app/office/(tabs)/approve.tsx')), "the approver's line on the request's page and the Approve tab's row");
   const who = read('components/office/WhoDrivesChoice.tsx');
   check(/WHO_CHOICES\.map/.test(who) && !/permissions|can\(/.test(who), "I'll drive myself is offered to anyone who can request (no permission check on the choice)");
