@@ -3370,6 +3370,161 @@ if CHANNEL == "api":
           and psql(f"select count(*) from employee_changes where field = 'licence_no' and new_value = 'B1112223'") == "1",
           "My profile: an office person's own licence, on /me, every change logged", json.dumps(me_l.get("licence")))
 
+# ---------------------------------------------------------------------------
+# Round 4–7 (Sahan, 22 October 2026): the switches, the vehicle check, the fuel type and card, passengers, who holds a busy
+# vehicle, issues by severity and in bulk, data retention; per person (item 10) on BOTH channels in the api run.
+print("\n== Round 4–7 ==")
+R = "M" if CHANNEL == "mcp" else "A"
+gs = tool("get_settings", {})
+check(all(gs["settings"].get(k) is True for k in ("vehicle_check", "trip_close_prompt", "fuel_card", "passengers", "holder_contact"))
+      and gs["settings"].get("retention", {}).get("location_days") == 183,
+      "get_settings: the five switches on, the retention periods (location points 183 days)", json.dumps(gs["settings"].get("retention")))
+tool("update_settings", {"key": "fuel_card", "value": False})
+check(tool("get_settings", {})["settings"]["fuel_card"] is False, "a switch goes off live (update_settings)")
+tool("update_settings", {"key": "fuel_card", "value": True})
+r = tool("update_settings", {"key": "retention", "value": {"location_days": 10}}, expect_error=True)
+check("30" in r, "the location points' minimum (30 days) cannot be lowered", r)
+
+# Feature 5: the fuel type and grade.
+fv = tool("register_vehicle", {"reg_no": f"WP RF{R}-4701", "make_model": "Toyota HiAce", "vehicle_type": "van", "seats": 12,
+                               "fuel_type": "diesel", "fuel_grade": "auto_diesel", "current_odometer_km": 20000})
+check(fv["registered"].get("fuel_text") == "Auto Diesel" and fv["registered"].get("fuel_type") == "diesel",
+      "register_vehicle with its fuel: Auto Diesel", json.dumps(fv["registered"])[:200])
+r = tool("update_vehicle", {"reg_no": f"WP RF{R}-4701", "fuel_grade": "petrol_95"}, expect_error=True)
+check("does not fit" in r, "a grade that does not fit the fuel is refused in words", r)
+up = tool("update_vehicle", {"reg_no": f"WP RF{R}-4701", "fuel_type": "petrol"})
+check(up["updated"].get("fuel_text") == "Petrol" and "fuel_grade" in up["changed"], "a new fuel type drops a grade that no longer fits", json.dumps(up)[:200])
+nofuel = tool("register_vehicle", {"reg_no": f"WP RF{R}-4702", "vehicle_type": "car"})
+check(nofuel["registered"].get("fuel_text") == "Fuel type: not set", "a vehicle with no fuel type says so", nofuel["registered"].get("fuel_text"))
+
+# Feature 4: a driver's vehicle check (the app writes it; here the database) shows on the vehicle and in vehicle_checks.
+VF = psql(f"select id from vehicles where reg_no = 'WP RF{R}-4701'")
+KASUN = psql("select id from employees where username = 'kasun.s'")
+CHK = str(uuid.uuid4())
+psql(f"insert into vehicle_checks (id, vehicle_id, employee_id, checked_at, result, odometer_km, how) values ('{CHK}', '{VF}', '{KASUN}', now(), 'problem', 20010, 'clock_in')")
+psql(f"insert into vehicle_reports (vehicle_id, employee_id, category, note, check_id) values ('{VF}', '{KASUN}', 'damage', 'Rear bumper dent', '{CHK}')")
+vc = tool("vehicle_checks", {"vehicle": f"WP RF{R}-4701"})
+c0 = (vc.get("checks") or [{}])[0]
+check(vc["count"] == 1 and c0.get("result_text") == "Problem: Damage" and c0.get("how_text") == "Start work" and c0.get("report", {}).get("note") == "Rear bumper dent",
+      "vehicle_checks: who, when, Problem: Damage, Start work, the report", json.dumps(c0)[:300])
+lv = [v for v in tool("list_vehicles", {"search": f"RF{R}-4701"})["vehicles"] if v["reg_no"] == f"WP RF{R}-4701"]
+check(lv and lv[0].get("check_today", {}).get("result_text") == "Problem: Damage" and lv[0]["check_today"].get("by") == "Kasun Silva",
+      "list_vehicles: the vehicle's check today", json.dumps(lv[0].get("check_today") if lv else None))
+fleet_jobs({"report_id": psql(f"select id from vehicle_reports where check_id = '{CHK}'")})
+pre = [i for i in tool("list_issues", {"kind": "vehicle_report"})["issues"] if i.get("pre_trip")]
+check(pre and pre[0]["title"].startswith("Pre-trip check:") and pre[0].get("headline") and "Pre-trip" not in pre[0].get("meta", ""),
+      "the pre-trip problem in Issues: tagged, one specific line, a grey line", json.dumps(pre[:1])[:300])
+
+# Item 8: groups, the badge without information, the bulk action.
+grp = tool("list_issues", {"group": True})
+check(isinstance(grp.get("groups"), list) and all(g["count"] >= len(g["newest"]) and len(g["newest"]) <= 3 for g in grp["groups"])
+      and "needs_action" in grp, "list_issues grouped by kind: each with its count and its 3 newest; the badge's needs_action", json.dumps(grp.get("groups", [])[:2])[:300])
+ids = [i["id"] for i in tool("list_issues", {"kind": "vehicle_report"})["issues"]][:2]
+if ids:
+    bulk = tool("update_issues", {"ids": ids, "status": "dismissed", "note": "test data"})
+    check(bulk["done"] == len(ids), "update_issues: many dismissed with one reason, nothing deleted", json.dumps(bulk))
+    check(psql(f"select count(*) from issues where id in ({','.join(repr(i) for i in ids)}) and status = 'dismissed' and resolution_note = 'test data'") == str(len(ids)),
+          "each keeps its reason")
+
+# Feature 7: the day timeline per vehicle.
+dt7 = tool("day_timeline", {"date": today.isoformat(), "kind": "vehicles"})
+check(dt7["kind"] == "vehicles" and any(r_["name"] == f"WP RF{R}-4701" for r_ in dt7["rows"]), "day_timeline: one row per vehicle", str(dt7.get("count")))
+
+# Item 9: the preview counts, removes nothing.
+pv = tool("retention_preview", {})
+check(len(pv["rules"]) >= 10 and "tasks and their stops" in pv["never"] and pv["periods"]["inbox_read_days"] == 30,
+      "retention_preview: every rule with its period, the business records never removed", json.dumps(pv["rules"][:2])[:200])
+
+if CHANNEL == "api":
+    # Per person (item 10), on office-api (a session) and office-mcp (the person's own key): A's places never reach B.
+    print("\n== Round 4–7: per person, both channels ==")
+    def person(name):
+        email = f"{name.lower().split()[0]}.{uuid.uuid4().hex[:6]}@fame.test"
+        tool("create_office_user", {"name": name, "email": email, "permissions": ["view", "request"]})
+        uid = psql(f"select auth_user_id from employees where email = '{email}'")
+        pw = "P4ss-" + uuid.uuid4().hex[:10]
+        http("PUT", f"{API}/auth/v1/admin/users/{uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": pw})
+        key = tool("create_office_key", {"email": email, "label": "round 4–7 test"})
+        return {"email": email, "id": psql(f"select id from employees where email = '{email}'"), "token": office_sign_in(email, pw, enrol_totp=False),
+                "url": API + "/functions/v1" + key["connector_url"].split("/functions/v1", 1)[1]}
+    def call_as(p, channel, name, args):
+        if channel == "api":
+            code, body = api_call(p["token"], name, args)
+            return code == 200, (body.get("result") if code == 200 else body)
+        code, raw = http("POST", p["url"], {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-06-18"},
+                         {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}}, raw=True)
+        text = raw.decode()
+        if text.lstrip().startswith(("event:", "data:")):
+            text = [l[6:] for l in text.replace("\r", "").split("\n") if l.startswith("data: ")][-1]
+        msg = json.loads(text)
+        res = msg.get("result") or {}
+        body = (res.get("content") or [{}])[0].get("text", "") if res else msg.get("error", {}).get("message", "")
+        ok_ = bool(res) and not res.get("isError")
+        return ok_, (json.loads(body) if ok_ else body)
+    A = person("Anoja Asker")
+    B = person("Bandula Other")
+    secret = f"Anoja's clinic {uuid.uuid4().hex[:4]}"
+    ok_, ra = call_as(A, "api", "create_request", {"date": day(1), "time": "10:00", "route_to": secret, "pax": 1})
+    check(ok_, "A asks for a trip to her own place", str(ra)[:200])
+    for ch in ("api", "mcp"):
+        ok_, sa = call_as(A, ch, "search_places", {"suggest": True})
+        ok2, sb = call_as(B, ch, "search_places", {"suggest": True})
+        a_names = [x["name"] for x in (sa.get("results") or [])] if ok_ else []
+        b_names = [x["name"] for x in (sb.get("results") or [])] if ok2 else []
+        check(ok_ and secret in a_names and any(x.get("group") == "recent" for x in sa["results"] if x["name"] == secret),
+              f"{ch}: A's own place in A's Recent", str(a_names))
+        check(ok2 and secret not in b_names, f"{ch}: A's place never in B's suggestions", str(b_names))
+        ok3, sbt = call_as(B, ch, "search_places", {"text": secret[:12], "map": False})
+        check(ok3 and secret not in [x["name"] for x in sbt.get("results", [])], f"{ch}: nor in B's typed results", str(sbt)[:200])
+    ap = tool("search_places", {"suggest": True, "for_request": ra["request"]["id"]})
+    check(any(x["name"] == secret and x.get("group") == "for" and x.get("group_label", "").endswith("'s recent") for x in ap["results"]),
+          "an approver deciding A's request sees \"Anoja's recent\", labelled", json.dumps(ap["results"])[:300])
+
+    # Feature 4b: A drives herself; her check (in the window) starts the trip, her odometer closes it.
+    when = (now.astimezone(colombo) + dt.timedelta(minutes=40))
+    if when.date() == today:
+        ok_, rs = call_as(A, "api", "create_request", {"date": today.isoformat(), "time": when.strftime("%H:%M"), "route_to": "Galle", "driven_by": "self"})
+        check(ok_, "A asks to drive herself", str(rs)[:200])
+        apd = tool("decide_request", {"request_id": rs["request"]["id"], "decision": "approve", "vehicle": f"WP RF{R}-4701"})
+        TS = apd.get("task_id") or psql(f"select task_id from vehicle_requests where id = '{rs['request']['id']}'")
+        ok_, mt = call_as(A, "api", "my_trip", {"task_id": TS})
+        check(ok_ and mt["state"] == "to_check" and mt["window"]["open"] and mt["last_odometer_km"] == 20010,
+              "my_trip: her trip, to check, the window open, the vehicle's last reading", json.dumps(mt)[:300])
+        ok_, b_try = call_as(B, "api", "my_trip", {"task_id": TS})
+        check(not ok_, "B cannot open A's trip", str(b_try)[:120])
+        ok_, low = call_as(A, "api", "my_trip_check", {"task_id": TS, "result": "ok", "odometer_km": 19000})
+        check(not ok_ and "under the vehicle's last reading" in str(low), "an odometer under the last reading is refused in words", str(low)[:200])
+        ok_, ck = call_as(A, "api", "my_trip_check", {"task_id": TS, "result": "ok", "odometer_km": 20015})
+        check(ok_ and ck.get("started_now") and ck["state"] == "on_the_way", "her check starts the trip (On the way)", json.dumps(ck)[:300])
+        ok_, fin = call_as(A, "mcp", "finish_my_trip", {"task_id": TS, "odometer_km": 20055, "fuel": {"litres": 10, "amount_lkr": 3500}})
+        check(ok_ and fin["state"] == "done" and fin["km"] == 40, "finish_my_trip (her own key on office-mcp): done, 40 km", json.dumps(fin)[:300])
+        check(psql(f"select current_odometer_km from vehicles where id = '{VF}'") == "20055"
+              and psql(f"select count(*) from odometer_logs where task_id = '{TS}'") == "2"
+              and psql(f"select count(*) from fuel_logs where task_id = '{TS}' and amount_cents = 350000") == "1",
+              "the vehicle's odometer follows; both readings and the fuel logged with the trip")
+    else:
+        print("  SKIP  the self-drive trip (it would be tomorrow at this hour)")
+
+    # Feature 7: B asks A for the vehicle her trip holds; A says Yes in one tap.
+    TH = psql(f"select id from tasks where employee_id = '{KASUN}' and status in ('assigned', 'in_progress') order by start_at limit 1")
+    if TH:
+        psql(f"update tasks set assigned_by_employee_id = '{A['id']}', request_id = null where id = '{TH}'")
+        td = tool("task_detail", {"task_id": TH})
+        check(td["task"].get("holder", {}).get("name") == "Anoja Asker", "task_detail names the holder (who assigned it)", json.dumps(td["task"].get("holder")))
+        ok_, ask = call_as(B, "api", "ask_for_it", {"task_id": TH, "resource": "vehicle", "note": "site visit"})
+        check(ok_ and ask.get("asked") == "Anoja Asker", "B asks the holder for it", str(ask)[:200])
+        ok_, inbox = call_as(A, "api", "my_inbox", {})
+        item = [i for i in (inbox.get("items") or []) if i["event"] == "holder.asked"] if ok_ else []
+        check(item and [a_["label"] for a_ in item[0].get("actions", [])] == ["Yes", "No"], "A's notification has Yes / No", json.dumps(item[:1])[:300])
+        if item:
+            yes = item[0]["actions"][0]
+            ok_, ans = call_as(A, "mcp", yes["tool"], yes["args"])
+            check(ok_ and ans["answer"] == "yes", "A says Yes in one tap (her own key)", str(ans)[:200])
+            ok_, binbox = call_as(B, "api", "my_inbox", {})
+            check(ok_ and any(i["event"] == "holder.answered" for i in binbox.get("items", [])), "B hears the answer")
+        ok_, notmine = call_as(B, "api", "answer_holder_ask", {"ask_id": ask.get("ask_id", str(uuid.uuid4())), "answer": "no"})
+        check(not ok_, "only the holder (or a fleet admin) answers", str(notmine)[:160])
+
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:
     print("  - " + f)
