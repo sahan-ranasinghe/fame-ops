@@ -15,7 +15,7 @@ import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { Board, BoardCard } from "../data/types";
 import { useQuery } from "../data/useQuery";
-import { cap, longDate, statusTone, today } from "../lib/format";
+import { longDate, statusTone, today } from "../lib/format";
 import { Dot, ErrBox, StaleNote, Updated, VehicleThumb } from "../ui/basics";
 import { DriverLine } from "../ui/DriverRow";
 import { vehicleChipWords } from "../ui/driverRowLogic";
@@ -24,6 +24,7 @@ import { DayStrip } from "../ui/DayPicker";
 import { LoadMore, PAGE_SIZE, type PagedList, SkeletonRows } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import { decidedText } from "./approversLogic";
+import { finishChip } from "./myTripLogic";
 import { LateReportLine } from "./LateReport";
 import { NeedsDriverList } from "./NeedsDriverList";
 import { TripTags } from "./TripPurpose";
@@ -58,7 +59,11 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
       {/* Hotfix 2 (K): who sent it to the driver. */}
       {t.approved_by && <span className="muted small" data-testid="card-approved-by">{decidedText("approved", t.approved_by)}</span>}
       {/* Phase 7: finished far under the plan (the odometer or the time); the words on hover and on the task. */}
-      {t.finish_flag && <span><span className="pill warn" title={t.finish_flag.text}>{t.finish_flag.kind === "completed_early" ? "Completed early" : cap(t.finish_flag.kind)}</span></span>}
+      {/* Round 4–7 (4b): a trip nobody drives with the app, closed without its odometer: Completed · not confirmed (grey). */}
+      {(() => {
+        const chip = finishChip(t.finish_flag);
+        return chip && <span><span className={`pill ${chip.tone}`} title={t.finish_flag?.text} data-testid="card-finish-flag">{chip.text}</span></span>;
+      })()}
     </button>
   );
 }

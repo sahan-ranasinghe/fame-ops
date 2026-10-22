@@ -214,4 +214,25 @@ describe("FleetSettings", () => {
     await waitFor(() => expect(card.getByTestId("privacy-email-saved").textContent).toBe("None saved: the page shows the office phone."));
     expect(card.queryByRole("button", { name: "Remove" })).toBeNull();
   });
+  it("Round 4–7: the five feature switches under Planning and accepting, on when absent, each saved at once", async () => {
+    const transport = new Settings(false, { fuel_card: false });
+    await mount(transport, "dispatch");
+    const card = within(screen.getByTestId("feature-settings"));
+    expect(card.getByRole("heading", { name: "Features" })).toBeTruthy();
+    const boxes = card.getAllByRole<HTMLInputElement>("checkbox");
+    expect(boxes.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Vehicle check before work", "\"Trip finished?\" for self-drive trips", "Fuel card at Start task", "Passengers on trips", "Who holds a busy driver or vehicle",
+    ]);
+    expect(boxes.map((b) => b.checked)).toEqual([true, true, false, true, true]);
+    fireEvent.click(card.getByLabelText("Vehicle check before work"));
+    await waitFor(() => expect(transport.saves).toEqual([{ key: "vehicle_check", value: false }]));
+    await waitFor(() => expect(card.getByLabelText<HTMLInputElement>("Vehicle check before work").checked).toBe(false));
+    fireEvent.click(card.getByLabelText("Fuel card at Start task"));
+    await waitFor(() => expect(transport.saves).toContainEqual({ key: "fuel_card", value: true }));
+  });
+
+  it("Round 4–7: the dispatch row's summary counts the features on", async () => {
+    await mount(new Settings(false, { passengers: false, holder_contact: false }));
+    expect(screen.getByTestId("fleet-row-dispatch").textContent).toContain("features 3 of 5 on");
+  });
 });

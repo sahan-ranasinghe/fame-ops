@@ -7,6 +7,10 @@
 // Round 3 Part A (A5): the person's own driving licence photos (front and back) the same way: <employee id>/licence/<uuid>.jpg,
 // a photos row of kind licence, then set_my_licence_photo(side) (the driver app's calls: apps/driver/src/lib/api.ts
 // saveLicencePhoto; the database checks the folder and the kind, and logs the change in employee_changes).
+// Round 4–7 (feature 4): a trip nobody drives with the app (/my-trips/:task): the photos of a problem found by the vehicle
+// check (kind vehicle_report), the four sides of an all-good check (vehicle_check) and the odometer at the end (odometer),
+// each into my own <employee id>/<yyyy-mm-dd>/ folder (the driver's rule) with its photos row; the page passes the ids to
+// my_trip_check / finish_my_trip, which check they are mine, of that kind and unused.
 import { supabase } from "../auth/supabase";
 
 export type MyPhotoOutcome = "ok" | "failed" | "network";
@@ -19,16 +23,22 @@ export const licencePhotoPath = (employeeId: string, id: string) => `${employeeI
 
 export type LicenceSide = "front" | "back";
 
+/** The kinds of my own photos a page uploads. */
+export type OwnPhotoKind = "profile" | "licence" | "vehicle_report" | "vehicle_check" | "odometer";
+
+/** Where a trip's photo goes in driver-photos: the driver's rule, <employee id>/<yyyy-mm-dd Colombo>/<uuid>.jpg. */
+export const tripPhotoPath = (employeeId: string, id: string, now = new Date()) =>
+  `${employeeId}/${new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(now)}/${id}.jpg`;
+
 /**
- * One of my own photos into my own folder of driver-photos, its photos row, then the database function that makes it
- * mine. "network" = it did not go up (no connection); "failed" = the server said no.
+ * One of my own photos into my own folder of driver-photos and its photos row of `kind`: the new photo's id, or
+ * "network" (it did not go up) / "failed" (the server said no).
  */
-async function saveOwnPhoto(
+export async function uploadOwnPhoto(
   jpeg: Blob,
-  kind: "profile" | "licence",
+  kind: OwnPhotoKind,
   pathOf: (employeeId: string, id: string) => string,
-  set: (photoId: string) => PromiseLike<{ data: unknown; error: unknown }>,
-): Promise<MyPhotoOutcome> {
+): Promise<{ id: string } | Exclude<MyPhotoOutcome, "ok">> {
   if (!supabase) return "failed";
   try {
     const me = await supabase.rpc("current_employee_id");
@@ -45,11 +55,35 @@ async function saveOwnPhoto(
       id: photoId, employee_id: id, kind, storage_path: path, taken_at: new Date().toISOString(),
     });
     if (row.error) return "failed";
-    const done = await set(photoId);
+    return { id: photoId };
+  } catch {
+    return "network";
+  }
+}
+
+/**
+ * One of my own photos into my own folder of driver-photos, its photos row, then the database function that makes it
+ * mine. "network" = it did not go up (no connection); "failed" = the server said no.
+ */
+async function saveOwnPhoto(
+  jpeg: Blob,
+  kind: "profile" | "licence",
+  pathOf: (employeeId: string, id: string) => string,
+  set: (photoId: string) => PromiseLike<{ data: unknown; error: unknown }>,
+): Promise<MyPhotoOutcome> {
+  const up = await uploadOwnPhoto(jpeg, kind, pathOf);
+  if (typeof up === "string") return up;
+  try {
+    const done = await set(up.id);
     return done.error ? "network" : done.data === "ok" ? "ok" : "failed";
   } catch {
     return "network";
   }
+}
+
+/** Round 4–7 (4): a photo for my own no-app trip (a problem's, a side of the vehicle, the odometer): its id for the tool. */
+export function saveTripPhoto(kind: "vehicle_report" | "vehicle_check" | "odometer", jpeg: Blob): Promise<{ id: string } | Exclude<MyPhotoOutcome, "ok">> {
+  return uploadOwnPhoto(jpeg, kind, (employeeId, id) => tripPhotoPath(employeeId, id));
 }
 
 /** Saves a made photo as mine. "network" = it did not go up (no connection); "failed" = the server said no. */

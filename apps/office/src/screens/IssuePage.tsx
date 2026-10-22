@@ -136,7 +136,7 @@ export default function IssuePage() {
       <PanelTop
         title={i.title}
         sub={kindText(i)}
-        side={<Pill tone={statusTone(i.status)}>{i.status.replace("_", " ")}</Pill>}
+        side={<>{i.pre_trip && <span data-testid="issue-pre-trip"><Pill tone="warn">Pre-trip</Pill></span>} <Pill tone={statusTone(i.status)}>{i.status.replace("_", " ")}</Pill></>}
         onClose={close}
       />
       <div className="card card-b">

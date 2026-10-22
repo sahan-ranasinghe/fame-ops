@@ -73,6 +73,8 @@ export const KIND_TEXT: Record<string, string> = {
   completed_early: "Completed early",
   documents_missing: "Documents missing",
   vehicle_needed: "Needs another vehicle",
+  // Round 4–7 (4b): a trip nobody drives with the app, closed at 09:00 the next day without its odometer.
+  trip_not_confirmed: "Trip not confirmed",
 };
 
 export const kindText = (i: Pick<Issue, "kind" | "kind_text">) => i.kind_text ?? KIND_TEXT[i.kind] ?? i.kind;

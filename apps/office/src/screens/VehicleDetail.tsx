@@ -1,9 +1,9 @@
 // One vehicle, read only (/vehicles/:reg): what the board knows about it, with
 // Edit (/vehicles/:reg/edit) for someone who may change it. Phase 7 (§6, §28):
 // the photo large (Upload photo / Replace photo on the web) and the Documents
-// section.
+// section. Round 4–7 (4): the vehicle check (Today's check and the last 7 days); a notification's ?check=<id> scrolls to it.
 import { useContext, useEffect, useState } from "react";
-import { Link, useLocation, useParams } from "react-router";
+import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import type { DocKind, VehicleCard, VehiclesList } from "../data/types";
 import { joinDots, num, vehicleAvailabilityTone } from "../lib/format";
@@ -12,6 +12,7 @@ import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { PageTop } from "../ui/Page";
 import { VehiclePhotoCard } from "./PhotoUpload";
+import { VehicleChecksSection } from "./VehicleChecks";
 import { VehicleDocumentsSection } from "./VehicleDocs";
 import { DocChip, MissingDocs, vehiclePath, VehiclesShown } from "./Vehicles";
 import { dayWords } from "../lib/when";
@@ -66,8 +67,14 @@ export function VehicleDetail() {
   const { me } = useFleet();
   const { v, err } = useVehicle(plate);
   const canEdit = me.tools.includes("update_vehicle");
-  // Back to the board with its filter (Phase 7, §16: the filter is in the URL).
-  const back = `/vehicles${useLocation().search}`;
+  // Round 4–7 (4): a check to scroll to (a pre-trip problem's notification links /vehicles/<plate>?check=<id>).
+  const [params] = useSearchParams();
+  const focus = params.get("check");
+  // Back to the board with its filter (Phase 7, §16: the filter is in the URL), without the check.
+  const backParams = new URLSearchParams(useLocation().search);
+  backParams.delete("check");
+  const backQuery = backParams.toString();
+  const back = `/vehicles${backQuery ? `?${backQuery}` : ""}`;
   if (err) return <><PageTop title={plate} backTo={back} /><Notice tone="bad">{err}</Notice></>;
   if (!v) return <><PageTop title={plate} backTo={back} /><Loading>Loading the vehicle…</Loading></>;
   const docs = v.documents ?? {};
@@ -92,6 +99,7 @@ export function VehicleDetail() {
           <div style={{ gridColumn: "1/-1" }}><dt>Documents</dt><dd><DocChip name="Lic" d={docs.lic} /><DocChip name="Ins" d={docs.ins} /><DocChip name="Emi" d={docs.emi} />{[docs.lic, docs.ins, docs.emi].some((x) => x?.expiry) && <div className="sub">{joinDots([docs.lic?.expiry && `licence ${dayWords(docs.lic.expiry, { inline: true })}`, docs.ins?.expiry && `insurance ${dayWords(docs.ins.expiry, { inline: true })}`, docs.emi?.expiry && `emission ${dayWords(docs.emi.expiry, { inline: true })}`])}</div>}<MissingDocs v={v} /></dd></div>
         </dl>
       </div>
+      <VehicleChecksSection key={`checks-${v.reg_no}`} plate={v.reg_no} today={v.check_today} focus={focus} />
       <VehicleDocumentsSection key={`docs-${v.reg_no}`} reg={v.reg_no} rented={!!v.rented_from} dates={vehicleDates(v)} />
       {canEdit && <div className="acts"><Link className="btn dark" to={`${vehiclePath(v.reg_no)}/edit`}>Edit vehicle</Link></div>}
     </div>

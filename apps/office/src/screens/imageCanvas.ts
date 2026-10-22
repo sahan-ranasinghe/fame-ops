@@ -81,3 +81,8 @@ export function documentPhoto(file: Blob): Promise<Blob> {
 export function licencePhoto(file: Blob): Promise<Blob> {
   return withDecoded(file, (src) => draw(src, fitLongSide(src.w, src.h, LICENCE_PX)));
 }
+
+/** Round 4–7 (4): a photo for a trip nobody drives with the app (a problem, a side of the vehicle, the odometer): 1600 px on the long side, like the driver app's. */
+export function tripPhoto(file: Blob): Promise<Blob> {
+  return withDecoded(file, (src) => draw(src, fitLongSide(src.w, src.h, VEHICLE_PX)));
+}
