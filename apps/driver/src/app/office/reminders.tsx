@@ -9,6 +9,7 @@ import { View } from 'react-native';
 
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Plate, Txt } from '@/components/ui';
+import { dueWords } from '@/office/issuesLogic';
 import { levelTone, type ReminderRow, reminderGroups } from '@/office/overviewLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { Overview } from '@/office/types';
@@ -30,7 +31,7 @@ export default function RemindersScreen() {
         left={r.plate ? <Plate regNo={r.plate} /> : undefined}
         title={r.what}
         line={r.subject}
-        right={r.due ? <Pill text={r.due} tone={levelTone(r.level)} /> : undefined}
+        right={r.due ? <Pill text={dueWords(t, r.due)} tone={levelTone(r.level)} /> : undefined}
         onPress={r.to ? () => router.push(r.to as never) : undefined}
         testID="reminder-row"
       />

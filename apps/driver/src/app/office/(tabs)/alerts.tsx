@@ -12,6 +12,7 @@ import { Check, ChevronRight, ClipboardCheck, type LucideIcon, TriangleAlert, Va
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
+import { whenWords } from '@/lib/dateWords';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
 import { appendInbox, filterInbox, groupByDay, inboxArgs, inboxHistory, inboxChoice, inboxFilterDefs, inboxLine, kindTone, markRead, unreadAfter } from '@/office/inboxLogic';
@@ -144,7 +145,7 @@ export default function AlertsTab() {
                     <Txt variant={item.read ? 'body' : 'strong'} size={17}>{item.title}</Txt>
                     {item.body ? <Txt variant="muted" size={15}>{item.body}</Txt> : null}
                     <View style={styles.foot}>
-                      <Txt variant="small" style={{ flex: 1 }} numberOfLines={1}>{inboxLine(item, today, names)}</Txt>
+                      <Txt variant="small" style={{ flex: 1 }} numberOfLines={1}>{inboxLine({ ...item, ago: whenWords(t, item.ago) }, today, names)}</Txt>
                       {route && (
                         <View style={styles.open}>
                           <Txt variant="strong" size={14}>{t('office.alerts.open')}</Txt>

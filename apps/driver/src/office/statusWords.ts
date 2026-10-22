@@ -15,7 +15,7 @@
 // leave-by time is already in the past.", "Not available …" and "Running late …" and "Last seen …" (presence.ts), and the
 // best match's reason (availability.ts rankMatches: "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today").
 
-import { dateWords } from '../lib/dateWords';
+import { dateWords, relativeKey, type RelWords } from '../lib/dateWords';
 import { durationText } from '../lib/durations';
 import type { Tone } from './ui';
 
@@ -87,13 +87,22 @@ function dayWords(text: string): Words | null {
   return { key: 'office.when.day', vars: { day: { key: `days.${DAY_NAMES.indexOf(m[1])}` }, date: m[2], month: { key: `months.${MONTH_NAMES.indexOf(m[3])}` } } };
 }
 
-/** "17:42" as it is, or "Fri 16 Oct 17:42" in the person's words. */
+/** "17:42" as it is, "Fri 16 Oct 17:42" in the person's words, or the server's relative words ("3 h ago", M5). */
 function whenWords(text: string): WordsVar | null {
   if (new RegExp(`^${TIME}$`).test(text)) return text;
   const m = text.match(new RegExp(`^(.+) (${TIME})$`));
   const day = m ? dayWords(m[1]) : dayWords(text);
-  if (!day) return null;
-  return m ? { key: 'office.when.dayTime', vars: { day, time: m[2] } } : day;
+  if (day) return m ? { key: 'office.when.dayTime', vars: { day, time: m[2] } } : day;
+  const rel = relativeKey(text);
+  return rel ? relWords(rel) : null;
+}
+
+/** lib/dateWords' relative words as Words: a farther time's "Fri 16 Oct" said with the person's day and month names. */
+function relWords(r: RelWords): Words {
+  const vars: Record<string, WordsVar> = {};
+  for (const [k, v] of Object.entries(r.vars)) vars[k] = typeof v === 'string' ? v : relWords(v);
+  if (r.day) vars.date = dayWords(r.day) ?? r.day;
+  return { key: r.key, vars };
 }
 
 /** "06:00–13:00" as it is, or "from 06:00" (fleet.ts taskWindow) in the person's words. */

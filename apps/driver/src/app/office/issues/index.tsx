@@ -19,7 +19,7 @@ import { presetRange } from '@/lib/patterns/calendarLogic';
 import { defaultValues, type FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
 import {
-  activeCount, appendPage, defaultSort, ISSUE_SORTS, type IssueSort, issuesArgs, issuesChoice, issuesFilterDefs, kindText, listRows, rowLine, SEARCH_DEBOUNCE_MS,
+  activeCount, appendPage, defaultSort, dueWords, ISSUE_SORTS, type IssueSort, issuesArgs, issuesChoice, issuesFilterDefs, kindText, listRows, rowLine, SEARCH_DEBOUNCE_MS,
   severityCounts, severityTone, snoozeParts, statusTone, whoLine, type WhoWords, issuesExtra, issuesExtraDefs, kindsFor,
 } from '@/office/issuesLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -115,7 +115,7 @@ export default function IssuesScreen() {
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Txt variant="strong" size={17} numberOfLines={2}>{i.title}</Txt>
-          <Txt variant="muted" size={15} numberOfLines={2}>{rowLine(i, kindText(i, t))}</Txt>
+          <Txt variant="muted" size={15} numberOfLines={2}>{rowLine({ ...i, due: dueWords(t, i.due) }, kindText(i, t))}</Txt>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {i.vehicle ? <Plate regNo={i.vehicle} /> : null}
             {/* Round 3: the person who took it, their photo beside the words (initials until there is one). */}

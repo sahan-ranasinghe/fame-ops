@@ -13,6 +13,7 @@ import { AppState, Pressable, type ScrollView, StyleSheet, View } from 'react-na
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
+import { whenWords } from '@/lib/dateWords';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { requestLine, requestTitle } from '@/office/homeLogic';
 import { CalendarX } from '@/components/icons';
@@ -136,7 +137,7 @@ export default function ApproveTab() {
                     right={<View style={{ alignItems: 'flex-end', gap: 4 }}>
                       {marked.has(r.id) && <StatusChip text={t('office.approve.newPill')} tone="blue" />}
                       <StatusChip text={t(`office.requests.status_${r.status}`)} tone={statusTone(r.status)} icon={isExpired(r) ? CalendarX : undefined} testID={isExpired(r) ? 'request-expired' : undefined} />
-                      {r.asked ? <Txt variant="small" style={{ maxWidth: 100, textAlign: 'right' }} numberOfLines={1}>{r.asked}</Txt> : null}
+                      {r.asked ? <Txt variant="small" style={{ maxWidth: 100, textAlign: 'right' }} numberOfLines={1}>{whenWords(t, r.asked)}</Txt> : null}
                     </View>}
                     onPress={() => router.push({ pathname: '/office/request/[id]', params: { id: r.id } })}
                     testID="request-row"
