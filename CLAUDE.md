@@ -1149,7 +1149,11 @@ iOS; Play Store.
   one run against it is not a fair gate.
 - Time limits: if any single step runs more than 30 minutes, or the same error comes back 3 times, stop and tell Sahan what
   is wrong.
-- At most 2 subagents at a time, and none while the full e2e run is going. One fresh reviewer per checkpoint.
+- Subagents (Sahan, 22 October 2026): up to 5 for building, 1 local test run at a time, none during CI. Each in its own
+  git worktree (never a stash); every local check runs through one shared lock (`flock`), vitest at maxWorkers 4; subagents
+  never start the local Supabase stack or run the connector suite, pgTAP or Deno (the lead, once, at the end), never deploy,
+  push, migrate or run eas; installed packages are reused (installs one at a time). The lead keeps the shared files
+  (settings, migration numbering, translations). One fresh reviewer per checkpoint.
 - Before ending a turn, stop every background server started (functions serve, the local Supabase stack, dev servers),
   unless Sahan needs it running, and list any that stay.
 - Every checkpoint says how long it took and what took the longest.
