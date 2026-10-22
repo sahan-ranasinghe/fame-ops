@@ -39,7 +39,7 @@ import {
 } from "./overview/overviewLogic";
 import { NeedsDriverLine, RequestLine, TripLine } from "./overview/rows";
 import { Section } from "./overview/Section";
-import { canOpen, FULL_PATH, OPEN_TEXT, openFrom, type OverviewOpen, tileTarget, withParam } from "./overviewLinks";
+import { canOpen, FULL_PATH, OPEN_TEXT, openFrom, type OverviewOpen, reminderTile, tileTarget, withParam } from "./overviewLinks";
 import { OverviewPanel, RoadRows } from "./OverviewPanel";
 import { SkeletonRows } from "../ui/ListKit";
 
@@ -145,7 +145,7 @@ export function Overview() {
                 <Tile label="Requests to approve" value={d.requests.waiting ?? 0} unit="open" sub={requestsLine(d.requests)} tone={d.requests.waiting ? "warn" : ""} link={linkOf("requests")} />
               )}
               {issuesPage && (
-                <Tile label="Reminders due" value={d.reminders.count ?? 0} unit={`in ${d.reminders.window_days ?? 14} days`} sub={d.reminders.red ? `${d.reminders.red} need action now` : "Nothing urgent"} tone={d.reminders.red ? "bad" : ""} link={linkOf("reminders")} />
+                <Tile label="Reminders due" value={reminderTile(d.needs_attention).count} unit={`in ${d.reminders.window_days ?? 14} days`} sub={reminderTile(d.needs_attention).red ? `${reminderTile(d.needs_attention).red} need action now` : "Nothing urgent"} tone={reminderTile(d.needs_attention).red ? "bad" : ""} link={linkOf("reminders")} />
               )}
             </div>
           </Section>

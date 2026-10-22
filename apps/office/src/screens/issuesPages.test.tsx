@@ -36,11 +36,25 @@ class FakeTransport implements Transport {
   answer(tool: string, args: Record<string, unknown>): unknown {
     if (tool === "list_issues") {
       // As the server pages (Hotfix 3): Active = open or in progress; snoozed true = only those, false = without them.
+      // Round 4–7 (item 8): kind narrows; group = by kind, the most urgent first, each kind's 3 newest.
       const status = String(args.status);
       const fits = (i: Issue) => status === "all" || (status === "active" ? i.status === "open" || i.status === "in_progress" : i.status === status);
       const snooze = (i: Issue) => (args.snoozed === true ? !!i.snoozed_until : args.snoozed === false ? !i.snoozed_until : true);
       const words = (i: Issue) => !args.search || i.title.toLowerCase().includes(String(args.search).toLowerCase());
-      const all = this.rows.filter((i) => fits(i) && snooze(i) && words(i));
+      const all = this.rows.filter((i) => fits(i) && snooze(i) && words(i) && (!args.kind || i.kind === args.kind));
+      if (args.group) {
+        const rank: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+        const groups = [...new Set(all.map((i) => i.kind))].map((k) => {
+          const mine = all.filter((i) => i.kind === k);
+          const severity = mine.reduce<string>((b, i) => (rank[i.severity] < rank[b] ? i.severity : b), "info") as "critical" | "warning" | "info";
+          return { kind: k, kind_text: mine[0].kind_text ?? k, severity, count: mine.length, newest: mine.slice(0, 3) };
+        }).sort((a, b) => rank[a.severity] - rank[b.severity]);
+        const act = this.rows.filter((i) => !i.snoozed_until);
+        return {
+          status, from: args.from, to: args.to, count: 0, open: act.filter((i) => i.status === "open").length, in_progress: act.filter((i) => i.status === "in_progress").length,
+          snoozed: this.rows.filter((i) => i.snoozed_until).length, issues: [], groups,
+        };
+      }
       const from = offsetOf(args.cursor as string | undefined);
       const issues = typeof args.limit === "number" ? all.slice(from, from + args.limit) : all;
       const end = from + issues.length;
@@ -117,9 +131,11 @@ afterEach(() => {
 describe("the issues list (§9)", () => {
   it("asks for this month's active issues, the most urgent first, snoozed left out; the status and the dates are filters in the URL", async () => {
     const t = await mount("/issues");
-    expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", from: month.from, to: month.to, sort: "urgent", snoozed: false, limit: 25 });
+    // Round 4–7 (item 8): the Open tab asks for the groups (by kind); the row's grey line is the plate · when (who opened it is on the issue's page).
+    expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", from: month.from, to: month.to, snoozed: false, group: true });
     await screen.findByText("Vehicle problem: breakdown");
-    expect(rowOf("Vehicle problem: breakdown").textContent).toContain(datesInWords(`Opened ${month.from} 08:00 · System · Vehicle problem`));
+    expect(rowOf("Vehicle problem: breakdown").textContent).toContain(`WP CAB-4521${datesInWords(`${month.from} 08:00`)}`);
+    expect(rowOf("Vehicle problem: breakdown").textContent).not.toContain("System");
     // Active is the default: no chip, the Filter button counts nothing; the header says it.
     expect(screen.queryByTestId("filter-chips")).toBeNull();
     expect(within(screen.getByTestId("issues-list")).getByRole("heading").textContent).toContain("Active");
@@ -175,7 +191,8 @@ describe("the issues list (§9)", () => {
     expect(screen.getByTestId("where").textContent).toBe("/issues?status=all");
     const row = rowOf("Vehicle problem: breakdown");
     expect(row.textContent).toContain("in progress");
-    expect(row.textContent).toContain("System · Vehicle problem · taken by Sahan");
+    // Round 4–7 (item 8): who took it is the avatar on the row (the words are on the issue's page).
+    expect(within(row).getByTestId("issue-assignee").getAttribute("title")).toBe("Taken by Sahan");
     expect(rowOf("Service due")).toBe(other);
     expect(t.argsOf("list_issues").length).toBe(loads);
     expect(screen.queryByText("Loading issues…")).toBeNull();
@@ -240,8 +257,9 @@ describe("the issues list a page at a time (Hotfix 3, L3)", () => {
     window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener: () => undefined, removeEventListener: () => undefined })) as unknown as typeof window.matchMedia;
   };
 
+  // Round 4–7 (item 8): the Open tab shows groups; a kind's own list ("Show all 30") pages as before.
   it("a desktop: 25 rows, the count in the header, page numbers; page 2 is asked by its cursor", async () => {
-    const t = await mount("/issues", many(30));
+    const t = await mount("/issues?kind=odometer_flag", many(30));
     await screen.findByText("Odometer check 1");
     const list = screen.getByTestId("issues-list");
     expect(within(list).getAllByRole("link")).toHaveLength(25);
@@ -256,7 +274,7 @@ describe("the issues list a page at a time (Hotfix 3, L3)", () => {
 
   it("a phone: Load more brings the next 25 under the rows shown", async () => {
     phone();
-    const t = await mount("/issues", many(30));
+    const t = await mount("/issues?kind=odometer_flag", many(30));
     await screen.findByText("Odometer check 1");
     const firstRow = () => within(screen.getByTestId("issues-list")).getAllByRole("link")[0];
     const first = firstRow();
