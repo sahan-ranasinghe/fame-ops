@@ -12,18 +12,31 @@
 // Round 3: who drives shows in the chips ("You drive it yourself", "Kamal Silva · someone else · 077…"); with no app
 // the task's button is "Save trip" and Book now needs the plate (the reason under the button until there is one).
 // Round 4–7 (6): who rides in the chips ("Asha, Kamal +3"); the names go as passenger_list (none with the switch off).
+// Round 4–7, item 12 (the approved mockup 2): restyled, nothing removed. The map in a rounded card; "Leave by · Fri 23 Oct"
+// with the big time, its note and ⓘ (how it was planned: each leg's source and the rush hour, as before); the facts row
+// (distance, driving, back or ends, people); the plan as the route stepper (components/office/PlanStepper.tsx); the
+// conflict cards and warnings; the people card (the driver with the plate, "✓ Checked" when today's vehicle check is in,
+// Change; who drives with no app; who rides with their avatars and Edit; the projects; the contact; the note); Back and the
+// one primary button in the bottom bar.
 
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
+import { Briefcase, Clock, MessageCircle, Phone, Road, TriangleAlert, Undo2, Users } from '@/components/icons';
 import { HolderLine } from '@/components/office/HolderParts';
+import { AvatarStack } from '@/components/office/Passengers';
+import { PlanInfo, PlanStepper, planWords } from '@/components/office/PlanStepper';
+import { RowIcon, RowPlate } from '@/components/patterns/ListRow';
+import { look } from '@/components/patterns/look';
+import { StatsRow } from '@/components/patterns/StatsRow';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { TimeField } from '@/components/patterns/TimeField';
 import { TaskMap } from '@/components/TaskMap';
-import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { Button, Mono, Txt } from '@/components/ui';
 import { whatsappLink } from '@/lib/contacts';
-import { durationText } from '@/lib/durations';
+import { durationText, shortDate } from '@/lib/durations';
+import { colomboDate } from '@/lib/time';
 import { phoneLocal } from '@/lib/profile';
 import { conflictResource } from '@/office/holderLogic';
 import { has } from '@/office/nav';
@@ -42,10 +55,11 @@ import { ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
 import { emptyWho } from '@/office/trip/whoDrivesLogic';
 import { passengersOn, ridersLine } from '@/office/trip/passengersLogic';
 import { whoOfDraft } from '@/office/trip/whoWords';
-import { legTextT, reasonLines, reasonText, stopTimesT } from '@/office/trip/words';
+import { legTextT, reasonLines, reasonText } from '@/office/trip/words';
+import { planNotes, planRows } from '@/office/stepperRows';
 import { sentenceText } from '@/office/statusWords';
-import type { BookResult, Conflict, CreateTaskResult, FleetError, SettingsResult, UpdateRequestResult } from '@/office/types';
-import { ErrorNotice, Loading, Pill, Screen } from '@/office/ui';
+import type { BookResult, Conflict, CreateTaskResult, FleetError, SettingsResult, TimelineItem, UpdateRequestResult, VehiclesList } from '@/office/types';
+import { Avatar, Divider, ErrorNotice, Loading, Row, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -53,11 +67,14 @@ const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 type SendKind = 'send' | 'book';
 
 export default function TripReview() {
-  const { t } = useApp();
+  const { t, tList } = useApp();
   const { me, api } = useOffice();
   const router = useRouter();
   const d = useTripDraft();
   const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
+  // Round 4–7, item 12 (feature 4 on Review): the picked vehicle's check today, for "✓ Checked" beside it.
+  const pickedPlate = d?.fields.vehicle && d.fields.vehicle !== ON_THE_DAY && !/^any /.test(d.fields.vehicle) ? d.fields.vehicle : '';
+  const vehicleCheck = useTool<VehiclesList>('list_vehicles', { filter: 'all', search: pickedPlate, limit: 5 }, { enabled: !!pickedPlate && me.tools.includes('list_vehicles') });
   const fallback = useMemo(() => ({ mode: 'request' as const, fields: { date: '', leaveBy: '', stops: [], returnToBase: false, avoidExpressway: false, end: '', start: '', startPax: false, title: '', buffer: '', driver: '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false }, req: { behalf: '', project: '', need: '', tools: false, note: '', requesterPhone: '' }, rows: [], step: 'review' as const, at: 0 }), []);
   const trip = useTrip(d ?? fallback, settings.data ?? null);
   const [busy, setBusy] = useState<'' | SendKind>('');
@@ -83,7 +100,10 @@ export default function TripReview() {
     ) : null;
     return (
       <View key={`${c.kind}-${c.task?.id ?? i}`} style={styles.conflict} testID="conflict-card">
-        <Txt variant="strong" size={15} color={colors.red}>{sentenceText(t, c.text)}</Txt>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+          <TriangleAlert size={18} color={colors.red} strokeWidth={2.2} />
+          <Txt variant="strong" size={15} color={colors.red} style={{ flex: 1 }}>{sentenceText(t, c.text)}</Txt>
+        </View>
         {/* Round 4–7 (7): who holds it (Google Calendar's room booking), with Call, WhatsApp and Ask for it for this trip. */}
         {c.holder && conflictResource(c) ? <HolderLine holder={c.holder} resource={conflictResource(c)!} what={conflictWhat(c)} wanted={tripWanted()} testID={`conflict-holder-${i}`} /> : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -206,99 +226,132 @@ export default function TripReview() {
   const items = p?.timeline?.items ?? [];
   const reasons = reasonLines(t, trip.reasons);
   const note = leaveNote(p);
+  // Round 4–7, item 12 (the approved mockup 2): the plan as the route stepper (S, the stops with their planned times, one meta
+  // line each, the legs under them, B back at base), the facts as one row, the explanations behind ⓘ.
+  const names = { days: tList('days'), months: tList('months') };
+  const backRow = f.returnToBase && totals?.ends && p?.start
+    ? { time: totals.ends, place: p.start.name, meta: f.end ? (d.mode === 'task' || d.mode === 'stops' ? `${t('office.trip.freeBy')} ${f.end}` : t('office.request.backBy', { time: f.end })) : undefined }
+    : null;
+  const rows = p ? planRows(items, { startName: p.start?.name, offset: d.reached ?? 0, back: backRow }, planWords(t)) : [];
+  const legLine = (x: Extract<TimelineItem, { kind: 'leg' }>) => [legTextT(t, x, p?.start?.name), x.rush_factor && x.rush_factor !== 1 ? t('office.trip.rushHour', { f: x.rush_factor }) : '', x.via_expressway ? t('office.trip.viaExpressway') : ''].filter(Boolean).join(' · ');
+  const people = Math.max(parseInt(f.pax, 10) || 0, riding ? f.riders?.length ?? 0 : 0);
+  const plate = f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : '';
+  // Today's vehicle check (feature 4): "✓ Checked" beside the vehicle when the trip is today and the check is in.
+  const check = vehicleCheck.data?.vehicles?.find((v) => v.reg_no === plate)?.check_today;
+  const toWho = () => { updateDraft((x) => ({ ...x, step: 'who' })); router.back(); };
+  const showsDriver = (d.mode === 'task' || books) && !!f.driver && !noAppTrip;
+  const projects = d.mode === 'task' ? d.rows.filter((r) => r.project.trim()) : d.req.project ? [{ project: d.req.project, percent: '' }] : [];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <TripHeader step="review" mode={d.mode} above={aboveFor(d.mode)} onBack={() => router.back()} />
-      <Screen bottom={16} style={{ padding: 0, gap: 0 }}>
-        {mapTask && <View style={{ height: 300 }}><TaskMap report={false} mapPackage={me.map?.package} task={mapTask} me={null} googleNoteFor="any" /></View>}
-        <View style={{ padding: 16, gap: 14 }}>
-          {d.mode === 'edit' && d.wasApproved ? <Txt variant="strong" size={15} color={colors.amberText} testID="reapproval-notice">{t('office.trip.reapprovalNotice')}</Txt> : null}
-          {trip.plan.updating && !p && <Loading text={t('office.trip.planning')} />}
-          {trip.plan.updating && p && <Txt variant="small" color={colors.blue} testID="plan-updating">{t('office.trip.updatingPlan')}</Txt>}
-          {reasons.filter((r) => !r.note).map((r, i) => <Txt key={i} variant="strong" size={15} color={colors.amberText}>{r.text}</Txt>)}
-          {/* Round 1 review: Next on When needs only the stops, so a trip with no time at all gets its one time here (the leave
-              time; an arrive-by is set on When), never a dead end. */}
-          {!d.running && !f.leaveBy.trim() && !hasDeadline(f.stops) && (
-            <View style={{ gap: 6 }} testID="review-leave">
-              <TimeField label={t('office.request.leaveBy')} value={f.leaveBy} onCommit={trip.setLeave} placeholder={t('office.trip.leaveAuto')} testID="review-leave-by" />
-              <Txt variant="small">{t('office.trip.reasonLeave')}</Txt>
-            </View>
-          )}
-          {p && leave && leave.kind === 'leave' && (
-            <View style={{ gap: 2 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                <View>
-                  <Txt variant="label" color={colors.muted}>{t('office.request.leaveBy').toUpperCase()}</Txt>
-                  <Mono size={34} bold>{leave.at}</Mono>
-                </View>
-                {totals && (
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Txt variant="strong" size={17}>{`${t('office.trip.kmN', { km: Math.round(totals.km) })} · ${durationText(t, totals.drive_min)}`}</Txt>
-                    <Txt variant="small">{f.returnToBase ? t('office.trip.endsAt', { place: p.start?.name ?? '', time: totals.ends }) : t('office.trip.endsAtTime', { time: totals.ends })}</Txt>
-                  </View>
-                )}
+      <Screen bottom={16} style={{ paddingTop: 4, gap: 12 }}>
+        {mapTask && <View style={styles.map}><TaskMap report={false} mapPackage={me.map?.package} task={mapTask} me={null} googleNoteFor="any" /></View>}
+        {d.mode === 'edit' && d.wasApproved ? <Txt variant="strong" size={15} color={colors.amberText} testID="reapproval-notice">{t('office.trip.reapprovalNotice')}</Txt> : null}
+        {trip.plan.updating && !p && <Loading text={t('office.trip.planning')} />}
+        {trip.plan.updating && p && <Txt variant="small" color={colors.blue} testID="plan-updating">{t('office.trip.updatingPlan')}</Txt>}
+        {reasons.filter((r) => !r.note).map((r, i) => (
+          <View key={i} style={styles.warn} testID="review-warning">
+            <TriangleAlert size={18} color={colors.amberText} strokeWidth={2.2} />
+            <Txt variant="strong" size={15} color={colors.amberText} style={{ flex: 1 }}>{r.text}</Txt>
+          </View>
+        ))}
+        {/* Round 1 review: Next on When needs only the stops, so a trip with no time at all gets its one time here (the leave
+            time; an arrive-by is set on When), never a dead end. */}
+        {!d.running && !f.leaveBy.trim() && !hasDeadline(f.stops) && (
+          <View style={[styles.card, { gap: 6 }]} testID="review-leave">
+            <TimeField label={t('office.request.leaveBy')} value={f.leaveBy} onCommit={trip.setLeave} placeholder={t('office.trip.leaveAuto')} testID="review-leave-by" />
+            <Txt variant="small">{t('office.trip.reasonLeave')}</Txt>
+          </View>
+        )}
+        {p && leave && leave.kind === 'leave' && (
+          <View style={styles.card} testID="review-leave-card">
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt variant="small" size={13}>{[t('office.request.leaveBy'), f.date ? shortDate(names, `${f.date}T06:00:00Z`) : ''].filter(Boolean).join(' · ')}</Txt>
+                <Mono size={40} bold style={{ lineHeight: 46 }}>{leave.at}</Mono>
+                {note ? <Txt variant="small" testID="leave-note">{[t(note.source === 'plan' ? 'office.trip.leavePlanned' : 'office.trip.leaveTyped'), note.estimate ? t('office.trip.leaveEstimated') : ''].filter(Boolean).join(' · ')}</Txt> : null}
               </View>
-              {note ? <Txt variant="small" testID="leave-note">{[t(note.source === 'plan' ? 'office.trip.leavePlanned' : 'office.trip.leaveTyped'), note.estimate ? t('office.trip.leaveEstimated') : ''].filter(Boolean).join(' · ')}</Txt> : null}
+              <PlanInfo lines={planNotes(items, null, legLine)} />
             </View>
-          )}
-          {p && items.length > 0 && (
-            <View style={{ gap: 10, opacity: trip.plan.updating ? 0.75 : 1 }}>
-              {items.map((x, i) => {
-                if (x.kind === 'stop') {
-                  const late = x.late_min != null && x.late_min > 0;
-                  return (
-                    <View key={`s${x.n}`} style={{ flexDirection: 'row', gap: 12 }}>
-                      <Mono size={16} bold style={{ width: 54 }}>{x.planned_arrive}</Mono>
-                      <View style={[styles.mark, x.is_start && { backgroundColor: colors.amber }]}><Mono size={13} bold color={x.is_start ? colors.ink : '#ffffff'}>{x.is_start ? 'S' : String(x.n + (d.reached ?? 0))}</Mono></View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <Txt variant="strong">{x.place}</Txt>
-                          {x.arrive_by && <Pill text={late ? t('office.task.minLate', { min: x.late_min ?? 0 }) : t('office.trip.onTime')} tone={late ? 'amber' : 'blue'} size={13} />}
-                        </View>
-                        <Txt variant="muted" size={15}>{stopTimesT(t, x)}{x.arrive_by ? ` · ${t('office.request.arriveBy', { time: x.arrive_by })}` : ''}</Txt>
-                      </View>
-                    </View>
-                  );
-                }
-                if (x.kind === 'leg') return <Txt key={`l${i}`} variant="small" style={{ marginLeft: 66 }}>{[legTextT(t, x, p.start?.name), x.rush_factor && x.rush_factor !== 1 ? t('office.trip.rushHour', { f: x.rush_factor }) : '', x.via_expressway ? t('office.trip.viaExpressway') : ''].filter(Boolean).join(' · ')}</Txt>;
-                return null;
-              })}
-              {f.returnToBase && totals?.ends && p.start && (
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <Mono size={16} bold style={{ width: 54 }}>{totals.ends}</Mono>
-                  <View style={[styles.mark, { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.ink }]}><Mono size={13} bold>B</Mono></View>
-                  <View style={{ flex: 1 }}>
-                    <Txt variant="strong">{t('office.request.backAt', { place: p.start.name })}</Txt>
-                    {f.end ? <Txt variant="muted" size={15}>{d.mode === 'task' || d.mode === 'stops' ? `${t('office.trip.freeBy')} ${f.end}` : t('office.request.backBy', { time: f.end })}</Txt> : null}
-                  </View>
-                </View>
-              )}
-            </View>
-          )}
-          {p?.conflicts?.map((c, i) => conflictCard(c, i, true))}
-          {reasons.filter((r) => r.note).map((r, i) => <Txt key={`n${i}`} variant="small">{r.text}</Txt>)}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {(d.mode === 'task' || books) && f.driver && !noAppTrip && (
-              <View style={styles.chipRow}>
-                <Txt variant="strong" size={15}>{driverName}</Txt>
-                {f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? <Plate regNo={f.vehicle} /> : f.vehicle ? <Txt variant="small">{f.vehicle === ON_THE_DAY ? t('office.trip.onTheDay') : f.vehicle}</Txt> : null}
-              </View>
+            {totals && (
+              <StatsRow variant="facts" framed={false} testID="review-facts" items={[
+                { key: 'km', icon: Road, value: t('office.trip.kmN', { km: Math.round(totals.km) }), label: t('office.ui3.factDistance') },
+                { key: 'drive', icon: Clock, value: durationText(t, totals.drive_min), label: t('office.ui3.factDriving') },
+                { key: 'ends', icon: Undo2, value: totals.ends, label: t(f.returnToBase ? 'office.ui3.factBack' : 'office.ui3.factEnds') },
+                ...(people > 0 ? [{ key: 'people', icon: Users, value: String(people), label: t('office.ui3.factPeople') }] : []),
+              ]} />
+            )}
+          </View>
+        )}
+        {p && rows.length > 0 && (
+          <View style={{ opacity: trip.plan.updating ? 0.75 : 1 }}>
+            <PlanStepper rows={rows} testID="review-stepper" />
+          </View>
+        )}
+        {p?.conflicts?.map((c, i) => conflictCard(c, i, true))}
+        {reasons.filter((r) => r.note).map((r, i) => <Txt key={`n${i}`} variant="small">{r.text}</Txt>)}
+        {(showsDriver || (noAppTrip && (d.mode === 'request' || d.mode === 'task' || d.mode === 'edit')) || people > 0 || projects.length > 0 || f.cname || f.cphone || f.notes || d.req.note) ? (
+          <View style={styles.list} testID="review-people">
+            {showsDriver && (
+              <Row
+                inset
+                left={<Avatar name={driverName} />}
+                title={driverName}
+                titleAfter={plate ? <RowPlate regNo={plate} /> : undefined}
+                line={[t('office.ui3.driverRole'), !plate && f.vehicle ? (f.vehicle === ON_THE_DAY ? t('office.trip.onTheDay') : f.vehicle) : ''].filter(Boolean).join(' · ')}
+                chip={check && f.date === colomboDate() ? { text: check.result === 'problem' ? t('office.ui3.checkProblem') : t('office.ui3.checked'), tone: check.result === 'problem' ? 'red' : 'green' } : null}
+                right={d.mode === 'task' ? <LinkText label={t('office.trip.change')} onPress={toWho} testID="review-change-driver" /> : undefined}
+                testID="review-driver"
+              />
             )}
             {noAppTrip && (d.mode === 'request' || d.mode === 'task' || d.mode === 'edit') ? (
-              <View style={styles.chipRow} testID="who-chip">
-                <Txt variant="strong" size={15}>{who.by === 'self' ? t('office.who.reviewSelf') : t('office.who.reviewOther', { name: who.name.trim(), phone: phoneLocal(who.phone) })}</Txt>
-                {(d.mode === 'task' || books) && f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? <Plate regNo={f.vehicle} /> : null}
-              </View>
+              <Row
+                inset
+                left={<Avatar name={who.by === 'other' ? who.name.trim() || '?' : me.name} />}
+                title={who.by === 'self' ? t('office.who.reviewSelf') : t('office.who.reviewOther', { name: who.name.trim(), phone: phoneLocal(who.phone) })}
+                titleAfter={(d.mode === 'task' || books) && plate ? <RowPlate regNo={plate} /> : undefined}
+                testID="who-chip"
+              />
             ) : null}
-            {(f.cname || f.cphone) && <Pill text={t('office.trip.contactChip', { who: [f.cname, f.cphone].filter(Boolean).join(' · ') })} tone="muted" size={15} />}
-            {(f.notes || d.req.note) && <Pill text={t('office.request.notes', { note: f.notes || d.req.note })} tone="muted" size={15} />}
-            {f.pax && <Pill text={t('office.trip.paxN', { n: f.pax })} tone="muted" size={15} />}
-            {riding && f.riders?.length ? <Pill text={ridersLine(f.riders.map((r) => r.name), parseInt(f.pax, 10) || null)} tone="muted" size={15} /> : null}
+            {p?.vehicle_used && (d.mode === 'task' || books) ? <Txt variant="small" style={styles.insetText} testID="vehicle-used">{t('office.trip.vehicleUsedLine', { text: `${p.vehicle_used.reg_no}${p.vehicle_used.why && p.vehicle_used.why !== 'chosen' ? ` · ${p.vehicle_used.why}` : ''}` })}</Txt> : null}
+            {people > 0 && (
+              <>
+                {(showsDriver || noAppTrip) && <Divider soft />}
+                <Row
+                  inset
+                  left={riding && f.riders?.length ? <AvatarStack people={f.riders} /> : <RowIcon icon={Users} tone="quiet" />}
+                  title={t('office.task.passengers', { n: people })}
+                  line={riding && f.riders?.length ? ridersLine(f.riders.map((r) => r.name), parseInt(f.pax, 10) || null) : t('office.trip.paxN', { n: f.pax })}
+                  right={<LinkText label={t('office.trip.edit')} onPress={toWho} testID="review-edit-riders" />}
+                  testID="review-riders"
+                />
+              </>
+            )}
+            {projects.map((r, i) => (
+              <View key={`p${i}`}>
+                <Divider soft />
+                <Row inset left={<RowIcon icon={Briefcase} tone="quiet" />} title={r.project} line={[t('office.trip.projectLabel'), r.percent !== '' ? `${r.percent}%` : ''].filter(Boolean).join(' · ')} />
+              </View>
+            ))}
+            {(f.cname || f.cphone) && (
+              <>
+                <Divider soft />
+                <Row inset left={<RowIcon icon={Phone} tone="quiet" />} title={t('office.trip.contactChip', { who: [f.cname, f.cphone].filter(Boolean).join(' · ') })} />
+              </>
+            )}
+            {(f.notes || d.req.note) && (
+              <>
+                <Divider soft />
+                <View style={styles.noteRow}>
+                  <MessageCircle size={20} color={colors.muted} strokeWidth={2} />
+                  <Txt variant="body" size={15} style={{ flex: 1 }}>{f.notes || d.req.note}</Txt>
+                </View>
+              </>
+            )}
           </View>
-          {p?.vehicle_used && (d.mode === 'task' || books) ? <Txt variant="small" testID="vehicle-used">{t('office.trip.vehicleUsedLine', { text: `${p.vehicle_used.reg_no}${p.vehicle_used.why && p.vehicle_used.why !== 'chosen' ? ` · ${p.vehicle_used.why}` : ''}` })}</Txt> : null}
-          {typeof problem === 'string' ? <Txt variant="strong" size={15} color={colors.red}>{problem}</Txt> : problem ? <ErrorNotice error={problem} onRetry={() => void send(lastKind.current)} /> : null}
-        </View>
+        ) : null}
+        {typeof problem === 'string' ? <Txt variant="strong" size={15} color={colors.red}>{problem}</Txt> : problem ? <ErrorNotice error={problem} onRetry={() => void send(lastKind.current)} /> : null}
       </Screen>
       <TripFooter
         label={label}
@@ -307,6 +360,7 @@ export default function TripReview() {
         busy={busy !== ''}
         problem={books ? (booking && 'error' in booking ? reasonText(t, booking.error) : null) : ('error' in planned ? reasonText(t, planned.error) : null)}
         secondary={books ? { label: t('office.trip.saveWaiting'), onPress: () => void send('send'), disabled: 'error' in planned } : undefined}
+        onBack={() => router.back()}
       >
         {needsApproval && <Txt variant="small" style={{ textAlign: 'center' }}>{t('office.trip.approvalNote')}</Txt>}
       </TripFooter>
@@ -314,9 +368,22 @@ export default function TripReview() {
   );
 }
 
+/** A small blue link at a row's right ("Change", "Edit"), 44 px tall. */
+function LinkText({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} hitSlop={8} style={{ minHeight: 44, justifyContent: 'center' }} testID={testID}>
+      <Txt variant="strong" size={15} color={colors.blue}>{label}</Txt>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  mark: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  chipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ebe9e3', borderRadius: 999, paddingHorizontal: 12, minHeight: 40 },
-  conflict: { borderWidth: 1.5, borderColor: colors.red, borderRadius: 14, padding: 12, gap: 10, backgroundColor: colors.card },
+  map: { height: 200, borderRadius: look.radius, overflow: 'hidden', borderWidth: 1, borderColor: look.border, backgroundColor: colors.mapLand },
+  card: { backgroundColor: colors.card, borderRadius: look.radius, borderWidth: 1, borderColor: look.border, padding: 16, gap: 14 },
+  list: { backgroundColor: colors.card, borderRadius: look.radius, borderWidth: 1, borderColor: look.border, overflow: 'hidden' },
+  insetText: { paddingHorizontal: 14, paddingBottom: 10, marginTop: -6 },
+  noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  warn: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#fffaf0', borderRadius: 12, borderWidth: 1, borderColor: colors.amberEdge, paddingHorizontal: 14, paddingVertical: 10 },
+  conflict: { borderWidth: 1, borderColor: '#f0c4bf', borderRadius: look.radius, padding: 14, gap: 10, backgroundColor: colors.card },
   smallBtn: { minHeight: 44, paddingHorizontal: 12 },
 });

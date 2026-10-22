@@ -178,6 +178,21 @@ export function PassengerRows({ list }: { list: Passenger[] }) {
   );
 }
 
+/** Round 4–7, item 12 (the approved mockups 2 and 4): who rides as overlapping avatars (the photo, else the initials), at
+ *  most three, each ringed white. */
+export function AvatarStack({ people, size = 32, testID = 'avatar-stack' }: { people: readonly { name: string; photo_url?: string }[]; size?: number; testID?: string }) {
+  if (people.length === 0) return null;
+  return (
+    <View style={{ flexDirection: 'row' }} testID={testID}>
+      {people.slice(0, 3).map((p, i) => (
+        <View key={`${p.name}-${i}`} style={[styles.stacked, { borderRadius: (size + 4) / 2, marginLeft: i === 0 ? 0 : -10 }]}>
+          <Avatar name={p.name} size={size} photo={p.photo_url} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const STOP_KEY: Record<string, string> = { pickup: 'office.trip.type_pickup', drop: 'office.trip.type_drop', visit: 'office.trip.type_visit' };
 
 /**
@@ -226,4 +241,5 @@ const styles = StyleSheet.create({
   rowLine: { borderTopWidth: 1, borderTopColor: colors.line },
   iconBtn: { minWidth: 44, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   share: { flexDirection: 'row', gap: 6, paddingHorizontal: 10 },
+  stacked: { borderWidth: 2, borderColor: colors.card },
 });

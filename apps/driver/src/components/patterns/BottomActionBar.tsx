@@ -91,6 +91,21 @@ export function BottomActionBar({ primary, secondary, more, reason, reasonTestID
   );
 }
 
+/** The bar's row for a screen that lays its own buttons out (each keeps its own testID and spinner): the buttons side by
+ *  side, `barButton` / `barSecondary` / `barDanger` their sizes, BarMore the ⋯ at the end. */
+export function BarRow({ children }: { children: ReactNode }) {
+  return <View style={styles.row}>{children}</View>;
+}
+
+export function BarMore({ label, onPress, testID = 'bar-more' }: { label: string; onPress: () => void; testID?: string }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} testID={testID}
+      style={(state) => [styles.more, hoverStyle(state), state.pressed && { opacity: 0.7 }]}>
+      <Ellipsis size={22} color={colors.ink} strokeWidth={2.4} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   bar: { backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: look.border, paddingHorizontal: 16, paddingTop: 12, gap: 10 },
   row: { flexDirection: 'row', alignItems: 'stretch', gap: 10 },
@@ -99,3 +114,8 @@ const styles = StyleSheet.create({
   danger: { backgroundColor: colors.card, borderWidth: 1.5, borderColor: '#e3b8b4' },
   more: { width: 56, minHeight: 56, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
 });
+
+/** The bar's button sizes, for a screen that lays its buttons out with BarRow. */
+export const barButton = styles.btn;
+export const barSecondary = [styles.btn, styles.secondary];
+export const barDanger = [styles.btn, styles.secondary, styles.danger];
