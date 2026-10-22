@@ -69,7 +69,8 @@ export default function PlacesScreen() {
                   title={p.name}
                   line={placeLine(p) || undefined}
                   line2={p.removed ? t('office.places.removedAt', { at: datesInWords(t, p.removed) }) : undefined}
-                  right={p.pinned === false ? <Pill text={t('office.places.noPin')} tone="amber" /> : p.operator ? <Pill text={p.operator === 'dialog' ? 'Dialog' : 'Mobitel'} tone="muted" /> : undefined}
+                  // Round 4–7 (item 8): the operator only where the section does not say it already (Dialog sites, Mobitel sites).
+                  right={p.pinned === false ? <Pill text={t('office.places.noPin')} tone="amber" /> : p.operator && p.operator !== who ? <Pill text={p.operator === 'dialog' ? 'Dialog' : 'Mobitel'} tone="muted" /> : undefined}
                   onPress={p.id ? () => router.push({ pathname: '/office/places/[id]', params: { id: p.id! } }) : undefined}
                   testID="place-row"
                 />

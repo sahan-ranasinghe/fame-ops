@@ -12,7 +12,7 @@ import { type ReactNode, type Ref, useCallback } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Bell, type LucideIcon } from '@/components/icons';
+import { Bell, ChevronDown, ChevronRight, type LucideIcon } from '@/components/icons';
 import { BottomActionBar } from '@/components/patterns/BottomActionBar';
 import { ListRow, RowChip } from '@/components/patterns/ListRow';
 import { look } from '@/components/patterns/look';
@@ -196,11 +196,14 @@ export function Screen({ children, refreshing, onRefresh, bottom = 24, style, sc
 }
 
 /**
- * A section card (design 03): "NEEDS A DRIVER · 1" with a link on the right, then the rows. Round 4–7, item 12: `look="list"`
- * is the approved mockups' section: the title outside the card (16 px, the count beside it, a red count chip for a red
- * section), the link at the right, then one card whose rows run edge to edge with a divider (rows take `inset`).
+ * A section card (design 03): "NEEDS A DRIVER · 1" with a link on the right, then the rows. Round 4–7 (item 8): a group
+ * of a list may collapse (`onToggle`: the heading is the button, a chevron says open or closed) and carry its severity
+ * as a dot (`dot`, its words in `dotLabel` for the screen reader); `head` adds a control before the link (Select all).
+ * Round 4–7, item 12: `look="list"` is the approved mockups' section: the title outside the card (the count beside it, a
+ * red count chip for a red section), the link at the right, then one card whose rows run edge to edge with a divider
+ * (rows take `inset`); `look="group"` one kind of a group of cards under one heading (Home's "Needs you now").
  */
-export function Section({ title, count, link, onLink, tone, children, look: kind = 'card', testID }: {
+export function Section({ title, count, link, onLink, tone, children, open, onToggle, dot, dotLabel, head, look: kind = 'card', testID }: {
   title: string;
   count?: number;
   link?: string;
@@ -208,6 +211,11 @@ export function Section({ title, count, link, onLink, tone, children, look: kind
   tone?: 'red';
   children: ReactNode;
   look?: 'card' | 'list' | 'group';
+  open?: boolean;
+  onToggle?: () => void;
+  dot?: Tone;
+  dotLabel?: string;
+  head?: ReactNode;
   testID?: string;
 }) {
   // One kind of a group of cards under one heading (Home's "Needs you now"): the title small inside the card's top, the
@@ -252,20 +260,33 @@ export function Section({ title, count, link, onLink, tone, children, look: kind
       </View>
     );
   }
+  const label = (
+    <>
+      {onToggle ? (open === false ? <ChevronRight size={18} color={colors.muted} /> : <ChevronDown size={18} color={colors.muted} />) : null}
+      {dot ? <View style={[styles.dot, { backgroundColor: TONES[dot].ink }]} accessibilityLabel={dotLabel} /> : null}
+      <Txt variant="label" color={tone === 'red' ? colors.red : colors.muted} numberOfLines={1} style={{ flexShrink: 1 }}>{title.toUpperCase()}</Txt>
+      {count !== undefined && <Mono size={13} bold color={tone === 'red' ? colors.red : colors.muted}>{`· ${count}`}</Mono>}
+    </>
+  );
   return (
     <View style={[styles.section, tone === 'red' && { borderColor: colors.red }]} testID={testID}>
-      <View style={styles.sectionHead}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-          <Txt variant="label" color={tone === 'red' ? colors.red : colors.muted} numberOfLines={1}>{title.toUpperCase()}</Txt>
-          {count !== undefined && <Mono size={13} bold color={tone === 'red' ? colors.red : colors.muted}>{`· ${count}`}</Mono>}
-        </View>
+      <View style={[styles.sectionHead, onToggle && open === false && { borderBottomWidth: 0, paddingBottom: 0, marginBottom: 0 }]}>
+        {onToggle ? (
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: open !== false }} onPress={onToggle} testID={testID ? `${testID}-toggle` : undefined}
+            style={(state) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minHeight: 44 }, hoverStyle(state)]}>
+            {label}
+          </Pressable>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>{label}</View>
+        )}
+        {head}
         {link && onLink && (
-          <Pressable accessibilityRole="button" onPress={onLink} hitSlop={10} style={(state) => [webHitSlop(10), hoverStyle(state)]}>
+          <Pressable accessibilityRole="button" onPress={onLink} hitSlop={10} style={(state) => [webHitSlop(10), hoverStyle(state)]} testID={testID ? `${testID}-link` : undefined}>
             <Txt variant="strong" size={16} color={colors.blue}>{link}</Txt>
           </Pressable>
         )}
       </View>
-      {children}
+      {onToggle && open === false ? null : children}
     </View>
   );
 }
@@ -378,7 +399,8 @@ const styles = StyleSheet.create({
   bell: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.darkSurface, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: -4, right: -4, minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   section: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 4 },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.line, marginBottom: 6 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.line, marginBottom: 6 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
   avatar: { backgroundColor: colors.blueChip, alignItems: 'center', justifyContent: 'center' },
   divider: { height: 1, backgroundColor: colors.line },
   errorBox: { backgroundColor: colors.redChip, borderRadius: 12, padding: 14, gap: 10 },

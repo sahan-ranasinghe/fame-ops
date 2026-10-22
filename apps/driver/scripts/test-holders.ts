@@ -273,5 +273,16 @@ console.log('\n== The strings in both languages ==');
   check(digits.length === 0, 'Latin digits only (times and numbers)', digits);
 }
 
+console.log('\nA push tap');
+{
+  const layout = read('app/_layout.tsx');
+  const notif = read('lib/notifications.ts');
+  check(/event: typeof data\?\.event === 'string'/.test(notif), 'a push carries its event to the tap (tapData)');
+  check(layout.includes("routeForUrl(data.url, officeMe.permissions) ?? holderAsksRoute({ event: data.event ?? '' })"),
+    'a holder.* push the person cannot open as a task opens the Asks page, as the same item in Alerts does');
+  check(holderAsksRoute({ event: 'holder.asked' }) === '/office/holder-asks?which=to_me' && holderAsksRoute({ event: 'task.declined' }) === null,
+    'an ask opens To me; any other event is left to its link');
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nAll holder checks passed.');
 process.exit(failed ? 1 : 0);

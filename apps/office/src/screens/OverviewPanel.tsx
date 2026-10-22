@@ -9,7 +9,8 @@ import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
 import { statusLine, statusTone } from "../data/live";
 import type { Entry } from "../data/store";
-import type { Board, BoardCard, Overview, RequestsList, RoadDriver, VehiclesList } from "../data/types";
+import { useLists } from "../data/hooks";
+import type { Board, BoardCard, Overview, RequestsList, RoadDriver, VehicleCard, VehiclesList } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { joinDots, plateOf, today, vehicleAvailabilityTone } from "../lib/format";
 import { can } from "../transport/types";
@@ -19,7 +20,7 @@ import { PAGE_SIZE, SkeletonRows } from "../ui/ListKit";
 import { LATE_BADGE } from "./approvalLogic";
 import { requestsLine } from "./overview/overviewLogic";
 import { FULL_PATH, OPEN_TEXT, type OverviewOpen, VEHICLE_FILTER_WORDS } from "./overviewLinks";
-import { ReminderList } from "./Reminders";
+import { ReminderCards } from "./Reminders";
 import { TripTags } from "./TripPurpose";
 import { vehiclePath } from "./Vehicles";
 import { dayWords } from "../lib/when";
@@ -157,7 +158,9 @@ function RequestRows() {
 }
 
 export function OverviewPanel({ open, overview, onClose }: { open: OverviewOpen; overview: Overview | undefined; onClose: () => void }) {
-  const { me } = useFleet();
+  const { me, noConnector } = useFleet();
+  // Round 4–7 (item 8): the reminders' cards add each vehicle's service from list_vehicles.
+  const lists = useLists(open === "reminders" && !noConnector);
   // Esc closes the panel (not while typing in a field), like a detail panel beside a list.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -196,7 +199,7 @@ export function OverviewPanel({ open, overview, onClose }: { open: OverviewOpen;
       break;
     case "reminders":
       eyebrow = `Due in the next ${o?.reminders.window_days ?? 14} days`;
-      body = o ? <ReminderList items={o.needs_attention} issues={can(me, "issues")} /> : <SkeletonRows label="Loading the reminders…" />;
+      body = o ? <ReminderCards items={o.needs_attention} vehicles={lists.vehicles as VehicleCard[] | undefined} issues={can(me, "issues")} windowDays={o.reminders.window_days} /> : <SkeletonRows label="Loading the reminders…" />;
       break;
   }
   return (

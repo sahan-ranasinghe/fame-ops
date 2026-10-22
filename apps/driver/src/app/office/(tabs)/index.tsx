@@ -22,14 +22,14 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Mono, Txt } from '@/components/ui';
 import { addDays, colomboDate } from '@/lib/time';
 import { whenWords } from '@/lib/dateWords';
-import { dueWords } from '@/office/issuesLogic';
+import { dueWords, needsAction } from '@/office/issuesLogic';
 import { shortDate } from '@/lib/durations';
 import { greeting, isCreatedTask, requestLine, requestTitle, tripLive, tripTitle } from '@/office/homeLogic';
 import { chipText, sentenceText, taskChip, taskRowLine, tripChip } from '@/office/statusWords';
 import { has, homeActions, homeChips, homeSections } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { firstName } from '@/office/text';
-import type { Board, MyTrips, Overview, RequestsList } from '@/office/types';
+import type { Board, IssuesList, MyTrips, Overview, RequestsList } from '@/office/types';
 import { Avatar, Divider, ListFailed, NewTripButton, Pill, Row, Screen, Section, StatTiles, TopBar } from '@/office/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { useApp } from '@/state/app';
@@ -41,7 +41,7 @@ import { look } from '@/components/patterns/look';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { Sheet } from '@/components/patterns/Sheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
-import { attentionCount, attentionGroups, chipTarget, snoozeCalls, withoutGroups } from '@/office/overviewLogic';
+import { attentionCount, attentionGroups, chipTarget, reminderTile, snoozeCalls, withoutGroups } from '@/office/overviewLogic';
 import type { AttentionGroup, FleetError } from '@/office/types';
 import { ErrorNotice } from '@/office/ui';
 
@@ -60,10 +60,13 @@ export default function OfficeHome() {
   const requests = useTool<RequestsList>('list_requests', { status: 'waiting', limit: ROWS }, { enabled: sections.includes('requests'), every: 60_000 });
   const board = useTool<Board>('task_board', { date: today, limit: ROWS }, { enabled: sections.includes('tasks'), every: 60_000 });
   const trips = useTool<MyTrips>('my_trips', { from: addDays(today, -7), to: addDays(today, 30), limit: ROWS }, { enabled: sections.includes('trips') });
+  // Round 4–7 (item 8, §33.7): Needs attention counts what needs action (critical and warning, not snoozed), the same number
+  // as the Issues screen's header and the site's badge (list_issues needs_action; one row asked, only the counts read).
+  const issueCounts = useTool<IssuesList>('list_issues', { status: 'active', snoozed: false, limit: 1 }, { enabled: sections.includes('critical') && me.tools.includes('list_issues'), every: 60_000 });
 
   const refresh = useCallback(() => {
-    void Promise.all([overview.reload(), requests.reload(), board.reload(), trips.reload()]);
-  }, [overview, requests, board, trips]);
+    void Promise.all([overview.reload(), requests.reload(), board.reload(), trips.reload(), issueCounts.reload()]);
+  }, [overview, requests, board, trips, issueCounts]);
 
   const names = { days: tList('days'), months: tList('months') };
   const go = (chip: Parameters<typeof chipTarget>[0]) => {
@@ -103,13 +106,17 @@ export default function OfficeHome() {
     }
   }
   const ov = overview.data;
+  // The attention count: needs_action when the issues answer is in, else the server's groups' count (as before).
+  const attention = issueCounts.data ? needsAction(issueCounts.data) : attentionCount(ov);
+  // The reminders row: only service and document reminders (the rest are counted in Issues).
+  const reminders = reminderTile(ov?.needs_attention);
   const refreshing = overview.refreshing || requests.refreshing || board.refreshing || trips.refreshing;
 
   // "Needs you now" (the approved mockup 1): what waits for this person, by kind, in one group of cards under one heading
   // with the total. Each kind keeps its own list, its View all and its actions.
   const needsTotal = (sections.includes('requests') ? ov?.requests.waiting ?? 0 : 0)
     + (sections.includes('needs_driver') ? ov?.needs_driver?.count ?? 0 : 0)
-    + (sections.includes('critical') ? attentionCount(ov) : 0);
+    + (sections.includes('critical') ? attention : 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -127,7 +134,7 @@ export default function OfficeHome() {
           ]} />
         )}
         {overview.error && <ListFailed stale={!!ov} error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-        {(sections.includes('requests') || sections.includes('needs_driver') || sections.includes('critical') || (ov && chipTarget('reminders', me) && ov.reminders.count > 0)) && (
+        {(sections.includes('requests') || sections.includes('needs_driver') || sections.includes('critical') || (ov && chipTarget('reminders', me) && reminders.count > 0)) && (
           <View style={styles.needsHead}>
             <Txt variant="strong" size={17} testID="needs-you-now" accessibilityRole="header">{t('office.home.needsYouNow')}</Txt>
             {needsTotal > 0 ? <View style={styles.needsChip}><Mono size={12} bold color={colors.red}>{String(needsTotal)}</Mono></View> : null}
@@ -177,7 +184,7 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('critical') && (
-          <Section look="group" title={t('office.home.attention')} count={attentionCount(ov)} tone={attentionCount(ov) ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
+          <Section look="group" title={t('office.home.attention')} count={attention} tone={attention ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
             {!ov && !overview.error && <View style={styles.inset}><SkeletonRows rows={2} lines={2} /></View>}
             {snoozeError && !snoozing && <View style={styles.inset}><ErrorNotice error={snoozeError.error} onSignIn={() => void signOut()} /></View>}
             {ov && attentionGroups(ov).length === 0 && <View style={styles.inset}><ListEmpty text={t('office.home.noAttention')} /></View>}
@@ -212,13 +219,13 @@ export default function OfficeHome() {
           </Section>
         )}
 
-        {ov && chipTarget('reminders', me) && ov.reminders.count > 0 && (
+        {ov && chipTarget('reminders', me) && reminders.count > 0 && (
           <View style={styles.card}>
             <Row
               inset
               chevron
-              left={<RowIcon icon={Bell} tone={ov.reminders.red ? 'red' : 'amber'} />}
-              title={ov.reminders.count === 1 ? t('office.home.remindersRowOne') : t('office.home.remindersRow', { n: ov.reminders.count })}
+              left={<RowIcon icon={Bell} tone={reminders.red ? 'red' : 'amber'} />}
+              title={reminders.count === 1 ? t('office.home.remindersRowOne') : t('office.home.remindersRow', { n: reminders.count })}
               onPress={go('reminders')}
               testID="home-reminders"
             />

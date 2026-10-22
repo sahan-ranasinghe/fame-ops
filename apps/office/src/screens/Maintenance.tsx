@@ -1,25 +1,31 @@
 // Maintenance (the vehicles permission): problems drivers reported (shown with
 // the issues permission, which the reports tool needs) and the service and
-// document reminders of the next 14 days (from the overview's needs-attention
-// list when the person holds issues; otherwise read off the vehicles list).
+// documents of every vehicle.
 // Hotfix 3 (L3): the reports' status is in the URL (?status=, default Not closed), newest first, 25 at a time with the
-// count in the header; the reminders are shown 25 at a time the same way.
+// count in the header.
+// Round 4–7 (item 8, §33.7; Fleetio): "Service and documents" is ONE card per vehicle (list_vehicles): the service due by
+// km and by date with its bar, the documents' expiries as chips (ok / expiring / expired / missing; the rental's end),
+// the summary first, the ones that need attention first (?show=all: every vehicle), 25 at a time; a card opens the
+// vehicle. What the old reminder rows also carried (the km allowance, missed tasks, odometer checks, licences and the
+// rest of the overview's list) is in Issues: one line counts it and opens Issues.
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry, useLists } from "../data/hooks";
-import type { Overview, VehicleReport, VehicleReports } from "../data/types";
-import { attIcon, cap, levelTone, today } from "../lib/format";
+import type { Overview, VehicleCard, VehicleReport, VehicleReports } from "../data/types";
+import { cap, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, canOpenTask, type FleetError } from "../transport/types";
-import { Notice, Pill, Plate } from "../ui/basics";
+import { Notice, Pill, Plate, Segmented } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { FilterBar } from "../ui/FilterBar";
 import { pairsDef } from "../ui/filterLogic";
 import { EmptyLine, ListHeader, SearchBox, SkeletonRows, usePagedList, useUrlFilter, useUrlSearch } from "../ui/ListKit";
 import { useToast } from "../ui/Toast";
-import { ListFooter, ListStale, ListWaiting, useLocalPages } from "./listLocal";
-import { dueFromVehicles } from "./maintenanceLogic";
+import { ListFooter, ListStale, ListWaiting } from "./listLocal";
+import { isReminderKind } from "./overviewLinks";
+import { CareList, CareSummary } from "./VehicleCare";
+import { careCards, careCounts } from "./vehicleCareLogic";
 import { whenText } from "../lib/when";
 
 type Filter = "not_closed" | "open" | "in_garage" | "closed" | "all";
@@ -88,6 +94,10 @@ function ReportCard({ r }: { r: VehicleReport }) {
 /** The list's query key. */
 export const REPORTS_QUERY = "reports";
 
+/** Service and documents: the vehicles that need attention (the default) or every vehicle. */
+type CareShow = "attention" | "all";
+const CARE_SHOW: [CareShow, string][] = [["attention", "Need attention"], ["all", "All vehicles"]];
+
 const FILTER_WORDS: Record<Filter, string> = {
   not_closed: "No problem reports waiting: every report is closed.",
   open: "No open problem reports.",
@@ -106,18 +116,19 @@ export function Maintenance() {
   const canReports = me.tools.includes("list_vehicle_reports");
   const fromOverview = can(me, "issues");
   const overview = useEntry<Overview>("overview");
-  const lists = useLists(!noConnector && !fromOverview);
+  const lists = useLists(!noConnector);
   // Hotfix 3 (L3): the newest reports first, 25 at a time (Load more on a phone, page numbers on a desktop).
   const list = usePagedList<VehicleReport, VehicleReports>(REPORTS_QUERY, "list_vehicle_reports", { status: filter, ...(search ? { search } : {}) }, (d) => d.reports,
     { every: 60000, enabled: !noConnector && canReports });
   const q = list.query;
   const d = q.data;
 
-  const att = fromOverview
-    ? (overview.data?.needs_attention ?? []).filter((a) => !/problem/i.test(a.what || ""))
-    : dueFromVehicles(lists.vehicles ?? [], today());
-  // The reminders are in memory already: shown 25 at a time the same way.
-  const reminders = useLocalPages(att, fromOverview ? "overview" : "vehicles");
+  // Round 4–7 (item 8): the service and documents of every vehicle, one card each, the ones that need attention first.
+  const [show, setShow] = useUrlFilter<CareShow>("show", "attention", CARE_SHOW.map(([k]) => k));
+  const cards = careCards((lists.vehicles ?? []) as VehicleCard[], today());
+  const shown = show === "all" ? cards : cards.filter((c) => c.level > 0);
+  // What the overview lists besides service, documents and the drivers' problems: in Issues (counted here).
+  const elsewhere = fromOverview ? (overview.data?.needs_attention ?? []).filter((a) => !isReminderKind(a.kind) && a.kind !== "vehicle_report" && !/problem/i.test(a.what || "")).length : 0;
   const label = FILTERS.find(([k]) => k === filter)?.[1] ?? "";
   return (
     <section className="view">
@@ -148,19 +159,30 @@ export function Maintenance() {
           </div>
         )}
         <div className="section-t">Service and documents</div>
-        <div className="card">
-          <ListHeader title="Reminders" count={reminders.total} />
-          <div className="rows">
-            {reminders.items.length ? reminders.items.map((a, i) => (
-              <div className="row" key={`${a.what}-${a.subject ?? ""}-${i}`}>
-                <span className={`att-ic ${levelTone(a.level)}`}><Icon name={attIcon(a.what)} /></span>
-                <div className="grow"><div className="name">{a.what}</div><div className="sub">{a.subject || ""}</div></div>
-                <span className={`due ${levelTone(a.level)}`}>{a.due || ""}</span>
-              </div>
-            )) : <EmptyLine>No service or document reminders in the next 14 days. Add dates on each vehicle to get reminders.</EmptyLine>}
-          </div>
-          <ListFooter list={reminders} />
-        </div>
+        {!lists.vehicles && !noConnector ? <div className="card"><SkeletonRows rows={3} label="Loading the vehicles…" /></div> : (
+          <>
+            <div className="card card-b" style={{ display: "grid", gap: 12 }}>
+              <CareSummary counts={careCounts(cards)} />
+              <Segmented label="Vehicles shown" options={CARE_SHOW} value={show} onChange={setShow} />
+            </div>
+            <CareList
+              title={show === "all" ? "All vehicles" : "Need attention"}
+              cards={shown}
+              resetKey={show}
+              testId="care-list"
+              empty={show === "all" ? "No vehicles yet." : "Every service and document is in order. Add the dates on each vehicle to get reminders."}
+            />
+          </>
+        )}
+        {elsewhere > 0 && (
+          <Link className="card row link-row" to="/issues" data-testid="maintenance-issues">
+            <span className="grow">
+              <span className="name" style={{ display: "block" }}>{elsewhere === 1 ? "1 more thing needs attention" : `${elsewhere} more things need attention`}</span>
+              <span className="sub" style={{ display: "block" }}>Km allowances, missed tasks, odometer checks and the rest are in Issues</span>
+            </span>
+            <span className="btn small">Open Issues</span>
+          </Link>
+        )}
       </div>
     </section>
   );

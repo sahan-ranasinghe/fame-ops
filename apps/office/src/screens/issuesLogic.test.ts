@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import type { Issue, IssuesList } from "../data/types";
 import {
   bellCount,
+  bulkCalls,
+  bulkDoneText,
+  groupArgs,
+  groupText,
+  groupTick,
+  kindIcon,
+  rowMeta,
+  rowTitle,
+  showsGroups,
+  tabOf,
+  toggled,
   defaultSort,
   emptyText,
   eventText,
@@ -179,6 +190,12 @@ describe("the in-place patch after Take, Resolve or Dismiss (§9)", () => {
     const took = patchIssues(bell, issue({ id: "x", status: "in_progress", assigned_to: { name: "Sahan" } }), "open", { activeOnly: true, takenAt: "2026-10-18 10:05" });
     expect([took.open, took.in_progress]).toEqual([4, 2]);
     expect(took.issues[0].taken_by).toEqual({ name: "Sahan", at: "2026-10-18 10:05" });
+    // Round 4–7 (item 8): the badge's needs_action drops when a warning or critical one closes; an info one never counted.
+    const counted = list([before, other], { status: "active", open: 5, in_progress: 1, needs_action: 4, critical: 1 });
+    const closedCrit = patchIssues(counted, { ...fresh, severity: "critical" }, "open", { activeOnly: true });
+    expect([closedCrit.needs_action, closedCrit.critical, bellCount(closedCrit)]).toEqual([3, 0, 3]);
+    expect(patchIssues(counted, { ...fresh, severity: "info" }, "open", { activeOnly: true }).needs_action).toBe(4);
+    expect(patchIssues(counted, issue({ id: "x", status: "open", severity: "warning" }), "resolved").needs_action).toBe(5);
     // An issue not in the list still moves the counts (the bell lists only ten).
     expect(patchIssues(list([], { open: 3 }), fresh, "open").open).toBe(2);
   });
@@ -188,6 +205,9 @@ describe("words", () => {
   it("counts the bell and names kinds", () => {
     expect(bellCount({ open: 3, in_progress: 2 })).toBe(5);
     expect(bellCount(undefined)).toBe(0);
+    // Round 4–7 (item 8): the badge counts what needs action (critical and warning), not everything open.
+    expect(bellCount({ open: 24, in_progress: 0, needs_action: 4 })).toBe(4);
+    expect(bellCount({ open: 24, in_progress: 0, needs_action: 0 })).toBe(0);
     expect(kindText({ kind: "km_gap" })).toBe("Km outside tasks");
     expect(kindText({ kind: "something_new" })).toBe("something_new");
     expect(kindText({ kind: "vehicle_conflict" })).toBe("Vehicle taken");
@@ -205,5 +225,73 @@ describe("words", () => {
     expect(eventText({ action: "status", actor: "Charuka W.", from: "open", to: "in_progress" })).toBe("Charuka W. set it from open to in progress");
     expect(eventText({ action: "status", actor: "Charuka W.", from: "in_progress", to: "resolved", note: "Fixed" })).toBe("Charuka W. set it from in progress to resolved · Fixed");
     expect(eventText({ action: "auto_resolved", actor: "system" })).toBe("Resolved by itself: the condition cleared");
+  });
+});
+
+describe("the tabs and the groups (Round 4–7, item 8)", () => {
+  it("three tabs over the statuses: Open (active, open, in progress), Snoozed, Resolved (resolved, dismissed, all)", () => {
+    expect(["active", "open", "in_progress", "snoozed", "resolved", "dismissed", "all"].map((s) => tabOf(s as never)))
+      .toEqual(["open", "open", "open", "snoozed", "resolved", "resolved", "resolved"]);
+  });
+
+  it("the Open tab shows groups until a kind is chosen or words are searched for; the groups ask with group: true and no order", () => {
+    const days = { from: "2026-10-01", to: "2026-10-31" };
+    expect(showsGroups({ status: "active" })).toBe(true);
+    expect(showsGroups({ status: "in_progress" })).toBe(true);
+    expect(showsGroups({ status: "active", kind: "missed_task" })).toBe(false);
+    expect(showsGroups({ status: "active", search: "CAB" })).toBe(false);
+    expect(showsGroups({ status: "snoozed" })).toBe(false);
+    expect(showsGroups({ status: "resolved" })).toBe(false);
+    expect(groupArgs({ status: "active", ...days, sort: "urgent", severity: "critical" })).toEqual({ status: "active", ...days, snoozed: false, severity: "critical", group: true });
+    expect(groupText({ kind: "missed_task", kind_text: "Missed task" })).toBe("Missed tasks");
+    expect(groupText({ kind: "brand_new", kind_text: "Brand new" })).toBe("Brand new");
+  });
+});
+
+describe("Gmail's rows (Round 4–7, item 8)", () => {
+  it("one title (the server's headline, never the kind again) and one grey line (plate · driver · when)", () => {
+    const i = issue({ kind: "missed_task", title: "Missed task: Trip · Head office", headline: "Test Driver missed 'Trip · Head office'", meta: "CAP-2207 · Test Driver · 2 h ago", vehicle: "CAP-2207", driver: "Test Driver" });
+    expect(rowTitle(i)).toBe("Test Driver missed 'Trip · Head office'");
+    expect(rowMeta(i)).toBe("CAP-2207 · Test Driver · 2 h ago");
+    expect(rowTitle(i)).not.toMatch(/^Missed task/);
+    expect(rowMeta(i)).not.toMatch(/System|Missed task/);
+    // An older server: the title, and the grey line made from the card.
+    const old = issue({ title: "Revenue licence expires", vehicle: "WP CAB-4521", driver: "Kamal", due: "in 5 days" });
+    expect(rowTitle(old)).toBe("Revenue licence expires");
+    expect(rowMeta(old)).toBe("WP CAB-4521 · Kamal · in 5 days");
+    expect(rowMeta(issue({}))).toBe("2026-10-14 08:00");
+  });
+
+  it("an icon per kind (a kind the page does not know: the alert)", () => {
+    expect(kindIcon("missed_task")).toBe("calendar");
+    expect(kindIcon("odometer_flag")).toBe("gauge");
+    expect(kindIcon("service_due")).toBe("wrench");
+    expect(kindIcon("brand_new")).toBe("alert");
+    for (const k of Object.keys(KIND_TEXT)) expect(kindIcon(k)).not.toBe("");
+  });
+});
+
+describe("bulk Resolve / Dismiss (update_issues, Gmail's bulk)", () => {
+  it("one reason, required; the ids once each, 100 a call", () => {
+    expect(bulkCalls(["a", "b", "a"], "resolved", "  Test data ")).toEqual([{ ids: ["a", "b"], status: "resolved", note: "Test data" }]);
+    expect(bulkCalls(["a"], "dismissed", "   ")).toEqual([]);
+    expect(bulkCalls([], "dismissed", "Test data")).toEqual([]);
+    const many = Array.from({ length: 230 }, (_, n) => `i${n}`);
+    const calls = bulkCalls(many, "dismissed", "Test data");
+    expect(calls.map((c) => c.ids.length)).toEqual([100, 100, 30]);
+    expect(calls.every((c) => c.status === "dismissed" && c.note === "Test data")).toBe(true);
+    expect(bulkDoneText(3, "resolved")).toBe("3 issues resolved");
+    expect(bulkDoneText(1, "dismissed")).toBe("1 issue dismissed");
+  });
+
+  it("the ticks: a row, a group's rows, and the group's state", () => {
+    const one = toggled(new Set(), ["a"], true);
+    expect([...one]).toEqual(["a"]);
+    const group = toggled(one, ["a", "b", "c"], true);
+    expect([...group].sort()).toEqual(["a", "b", "c"]);
+    expect([...toggled(group, ["b"], false)].sort()).toEqual(["a", "c"]);
+    expect(groupTick(group, ["a", "b", "c"])).toBe("on");
+    expect(groupTick(one, ["a", "b", "c"])).toBe("mixed");
+    expect(groupTick(new Set(), ["a", "b"])).toBe("off");
   });
 });

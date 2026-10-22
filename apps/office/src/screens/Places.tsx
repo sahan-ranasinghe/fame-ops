@@ -14,6 +14,7 @@ import { can, type FleetError } from "../transport/types";
 import type { Paged } from "../data/types";
 import { errText } from "../transport/errors";
 import { Notice, Pill } from "../ui/basics";
+import { Icon } from "../ui/icons";
 import { FilterBar } from "../ui/FilterBar";
 import { pairsDef } from "../ui/filterLogic";
 import { EmptyLine, ListHeader, SkeletonRows, usePagedList } from "../ui/ListKit";
@@ -144,7 +145,7 @@ export function Places() {
                         ) : (
                           <>
                             <td data-label="District">{p.district ?? "—"}</td>
-                            <td data-label="Pin">{p.pinned ? <Pill tone="ok">Pinned</Pill> : <Pill tone="bad">no pin</Pill>}</td>
+                            <td data-label="Pin">{/* Round 4–7 (item 8): nearly every place is pinned; the words mark the exception. */}{p.pinned ? <span className="muted" role="img" aria-label="Pinned" title="Pinned"><Icon name="check" /></span> : <Pill tone="bad">no pin</Pill>}</td>
                           </>
                         )}
                       </tr>

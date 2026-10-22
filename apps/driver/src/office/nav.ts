@@ -107,8 +107,10 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     // with users or vehicles (decision 1); office users and the quick settings with users.
     { key: 'vehicles', need: ['view'] },
     { key: 'reports', need: ['vehicles', 'assign_tasks'] },
-    // O3 rows 6 and 8: Maintenance by its tool's permission (issues), Places as the website (vehicles).
-    { key: 'maintenance', need: ['issues'] },
+    // O3 rows 6 and 8: Maintenance by its tool's permission (issues), Places as the website (vehicles). Round 4–7 (item 8):
+    // Maintenance opens on the vehicles' service and documents (the website's vehicles permission); the problem reports
+    // are its second view with the issues permission.
+    { key: 'maintenance', need: ['vehicles', 'issues'] },
     { key: 'places', need: ['vehicles'] },
     { key: 'people_drivers', need: ['users', 'vehicles'] },
     { key: 'people_users', need: ['users', 'office_users'] },
@@ -182,7 +184,7 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   if (path === '/places') return has(permissions, 'vehicles') ? '/office/places' : null;
   m = path.match(/^\/places\/([0-9a-f-]{36})$/);
   if (m) return has(permissions, 'vehicles') ? `/office/places/${m[1]}` : null;
-  if (path === '/maintenance') return has(permissions, 'issues') ? '/office/maintenance' : null;
+  if (path === '/maintenance') return has(permissions, 'vehicles', 'issues') ? '/office/maintenance' : null;
   if (path === '/reminders') return has(permissions, 'issues') ? '/office/reminders' : null;
   // Hotfix O2-H2 (Part 2): the notification settings and one group of them (everyone).
   if (path === '/settings/notifications') return '/office/notifications';

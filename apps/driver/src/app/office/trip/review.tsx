@@ -238,7 +238,8 @@ export default function TripReview() {
   const plate = f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : '';
   // Today's vehicle check (feature 4): "✓ Checked" beside the vehicle when the trip is today and the check is in.
   const check = vehicleCheck.data?.vehicles?.find((v) => v.reg_no === plate)?.check_today;
-  const toWho = () => { updateDraft((x) => ({ ...x, step: 'who' })); router.back(); };
+  // A fact's row opens the Who step to change it (Change stops has no Who step: there the rows are facts).
+  const toWho = d.mode === 'stops' ? undefined : () => { updateDraft((x) => ({ ...x, step: 'who' })); router.back(); };
   const showsDriver = (d.mode === 'task' || books) && !!f.driver && !noAppTrip;
   const projects = d.mode === 'task' ? d.rows.filter((r) => r.project.trim()) : d.req.project ? [{ project: d.req.project, percent: '' }] : [];
 
@@ -301,7 +302,7 @@ export default function TripReview() {
                 titleAfter={plate ? <RowPlate regNo={plate} /> : undefined}
                 line={[t('office.ui3.driverRole'), !plate && f.vehicle ? (f.vehicle === ON_THE_DAY ? t('office.trip.onTheDay') : f.vehicle) : ''].filter(Boolean).join(' · ')}
                 chip={check && f.date === colomboDate() ? { text: check.result === 'problem' ? t('office.ui3.checkProblem') : t('office.ui3.checked'), tone: check.result === 'problem' ? 'red' : 'green' } : null}
-                right={d.mode === 'task' ? <LinkText label={t('office.trip.change')} onPress={toWho} testID="review-change-driver" /> : undefined}
+                right={d.mode === 'task' && toWho ? <LinkText label={t('office.trip.change')} onPress={toWho} testID="review-change-driver" /> : undefined}
                 testID="review-driver"
               />
             )}
@@ -311,6 +312,8 @@ export default function TripReview() {
                 left={<Avatar name={who.by === 'other' ? who.name.trim() || '?' : me.name} />}
                 title={who.by === 'self' ? t('office.who.reviewSelf') : t('office.who.reviewOther', { name: who.name.trim(), phone: phoneLocal(who.phone) })}
                 titleAfter={(d.mode === 'task' || books) && plate ? <RowPlate regNo={plate} /> : undefined}
+                onPress={toWho}
+                chevron
                 testID="who-chip"
               />
             ) : null}
@@ -323,7 +326,7 @@ export default function TripReview() {
                   left={riding && f.riders?.length ? <AvatarStack people={f.riders} /> : <RowIcon icon={Users} tone="quiet" />}
                   title={t('office.task.passengers', { n: people })}
                   line={riding && f.riders?.length ? ridersLine(f.riders.map((r) => r.name), parseInt(f.pax, 10) || null) : t('office.trip.paxN', { n: f.pax })}
-                  right={<LinkText label={t('office.trip.edit')} onPress={toWho} testID="review-edit-riders" />}
+                  right={toWho ? <LinkText label={t('office.trip.edit')} onPress={toWho} testID="review-edit-riders" /> : undefined}
                   testID="review-riders"
                 />
               </>
@@ -331,13 +334,13 @@ export default function TripReview() {
             {projects.map((r, i) => (
               <View key={`p${i}`}>
                 <Divider soft />
-                <Row inset left={<RowIcon icon={Briefcase} tone="quiet" />} title={r.project} line={[t('office.trip.projectLabel'), r.percent !== '' ? `${r.percent}%` : ''].filter(Boolean).join(' · ')} />
+                <Row inset chevron left={<RowIcon icon={Briefcase} tone="quiet" />} title={r.project} line={[t('office.trip.projectLabel'), r.percent !== '' ? `${r.percent}%` : ''].filter(Boolean).join(' · ')} onPress={toWho} />
               </View>
             ))}
             {(f.cname || f.cphone) && (
               <>
                 <Divider soft />
-                <Row inset left={<RowIcon icon={Phone} tone="quiet" />} title={t('office.trip.contactChip', { who: [f.cname, f.cphone].filter(Boolean).join(' · ') })} />
+                <Row inset chevron left={<RowIcon icon={Phone} tone="quiet" />} title={t('office.trip.contactChip', { who: [f.cname, f.cphone].filter(Boolean).join(' · ') })} onPress={toWho} />
               </>
             )}
             {(f.notes || d.req.note) && (

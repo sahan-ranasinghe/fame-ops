@@ -82,6 +82,31 @@ export function reminderGroups(items: readonly Attention[] | undefined): Reminde
   return out;
 }
 
+/**
+ * Round 4–7 (item 8, §33.7): Reminders and Maintenance hold only service and documents (Fleetio). These kinds are the
+ * reminders shown per vehicle and counted on Home's reminders row; the driver's licence is a document too (its own
+ * rows); everything else (the km allowance, missed tasks, odometer checks…) is in Issues, counted on a line there.
+ */
+export const CARE_KINDS = new Set(['document', 'documents_missing', 'service_due', 'rental', 'garage_booked']);
+export const isReminderKind = (kind?: string): boolean => !!kind && (CARE_KINDS.has(kind) || kind === 'licence');
+
+/** Home's reminders row: the service and document reminders (and the red ones), not every issue the overview lists. */
+export function reminderTile(items: readonly Pick<Attention, 'kind' | 'level'>[] | undefined): { count: number; red: number } {
+  const mine = (items ?? []).filter((a) => isReminderKind(a.kind));
+  return { count: mine.length, red: mine.filter((a) => a.level === 'red').length };
+}
+
+/** The reminders by vehicle (one card each, in the server's order) and the rows with no vehicle (the licences). */
+export function remindersByVehicle(rows: readonly ReminderRow[]): { plates: string[]; byPlate: Map<string, ReminderRow[]>; loose: ReminderRow[] } {
+  const byPlate = new Map<string, ReminderRow[]>();
+  const loose: ReminderRow[] = [];
+  for (const r of rows) {
+    if (r.plate) byPlate.set(r.plate, [...(byPlate.get(r.plate) ?? []), r]);
+    else loose.push(r);
+  }
+  return { plates: [...byPlate.keys()], byPlate, loose };
+}
+
 /** The tone of a reminder's due date (red overdue / within 7 days, amber soon). */
 export function levelTone(level: string | undefined): 'red' | 'amber' | 'muted' {
   return level === 'red' || level === 'critical' ? 'red' : level === 'orange' || level === 'amber' || level === 'warning' ? 'amber' : 'muted';

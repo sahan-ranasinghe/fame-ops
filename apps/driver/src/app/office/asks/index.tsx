@@ -16,6 +16,7 @@ import { appendAsks, askCountsLine, asksArgs, type Whose } from '@/office/askLog
 import { useOffice, useTool } from '@/office/state';
 import type { AskAnswers, FleetError } from '@/office/types';
 import { BackHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { datesInWords } from '@/lib/dateWords';
 import { useApp } from '@/state/app';
 
 export default function AsksScreen() {
@@ -65,8 +66,9 @@ export default function AsksScreen() {
                   {i > 0 && <Divider />}
                   <Row
                     title={a.question}
-                    line={[t('office.asks.askedBy', { name: a.asked_by, when: a.asked }), a.note].filter(Boolean).join(' · ')}
-                    line2={askCountsLine(a.counts, t)}
+                    // Round 4–7 (item 8): the day with the time ("Yesterday 10:02", in words), and "N yes" said once (on the pill).
+                    line={[t('office.asks.askedBy', { name: a.asked_by, when: datesInWords(t, `${a.asked_day ?? ''} ${a.asked}`.trim()) }), a.note].filter(Boolean).join(' · ')}
+                    line2={askCountsLine(!a.expired && a.counts.yes > 0 ? { ...a.counts, yes: 0 } : a.counts, t)}
                     right={a.expired ? <Pill text={t('office.asks.closed')} tone="muted" /> : a.counts.yes > 0 ? <Pill text={t('office.asks.yesN', { n: a.counts.yes })} tone="green" /> : undefined}
                     onPress={() => router.push({ pathname: '/office/asks/[id]', params: { id: a.id } })}
                     testID="ask-row"
