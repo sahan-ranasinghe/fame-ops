@@ -20,6 +20,8 @@
 // Round 3 Part A: a self-drive request says the asker's licence on the trip's day (A5: "Self-drive · licence on file ✓" /
 // "no licence on file" / "licence expired", amber for the last two, never a block); an expired request (A6) has its badge
 // with the icon, the line "Expired · nobody decided it in time" and, for the person who asked, Request again.
+// Part B pilot (docs/design-pass.md §5 b): the state chips in the header; expired and a changed time as StatusBanners; the
+// trip's numbers as the StatsRow and its stops as the RouteStepper (S, the stops, B).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -55,6 +57,9 @@ import { groupRows } from '@/office/trip/formsLogic';
 import { askedKey, asksNoDriver } from '@/office/trip/whoWords';
 import type { Availability, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList, SettingsResult } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { RouteStepper } from '@/components/patterns/RouteStepper';
+import { StatsRow } from '@/components/patterns/StatsRow';
+import { StatusBanner } from '@/components/patterns/StatusBanner';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -240,27 +245,27 @@ export default function ApproveRequest() {
       <BackHeader
         title={card ? requestTitle(card) : t('office.request.title')}
         subtitle={card ? [card.kind === 'task' ? t('office.request.proposedTask') : t('office.request.request'), card.requested_by, whenWords(t, card.asked)].filter(Boolean).join(' · ') : undefined}
+        chips={card ? (
+          <>
+            <Pill text={card.status === 'waiting' ? t('office.request.waitingYourOk') : card.status === 'changed' ? t('office.request.changedByRequester') : t(`office.requests.status_${card.status}`)} tone={open ? 'amber' : card.status === 'approved' ? 'green' : isExpired(card) ? 'muted' : 'red'} size={14} icon={isExpired(card) ? CalendarX : undefined} />
+            {others.length > 0 && <Pill text={t('office.request.alsoLooking', { name: others.join(', ') })} tone="muted" size={14} />}
+            {card.late && <Pill text={t('office.approve.late')} tone="red" size={14} />}
+          </>
+        ) : undefined}
       />
       <Screen refreshing={q.refreshing} onRefresh={refresh} bottom={16}>
         {!q.data && !q.error && <SkeletonRows rows={3} lines={2} />}
         {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         <SavedNotice noticeKey={`request:${id}`} />
         {q.data && !card && <ListEmpty text={t('office.request.notFound')} />}
-        {card && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Pill text={card.status === 'waiting' ? t('office.request.waitingYourOk') : card.status === 'changed' ? t('office.request.changedByRequester') : t(`office.requests.status_${card.status}`)} tone={open ? 'amber' : card.status === 'approved' ? 'green' : isExpired(card) ? 'muted' : 'red'} size={15} icon={isExpired(card) ? CalendarX : undefined} />
-            {others.length > 0 && <Pill text={t('office.request.alsoLooking', { name: others.join(', ') })} tone="muted" size={15} />}
-            {card.late && <Pill text={t('office.approve.late')} tone="red" size={15} />}
-          </View>
-        )}
         {/* Round 3 (A6): nobody decided it before its day was over; the person who asked may request it again. */}
         {card && isExpired(card) && (
-          <Section title={t('office.requests.status_expired')}>
-            <Txt variant="strong" testID="request-expired-line">{expiredText(card, t, (at) => dateWords(t, at))}</Txt>
+          <StatusBanner tone="blue" title={t('office.requests.status_expired')} testID="request-expired">
+            <Txt variant="body" size={15} testID="request-expired-line">{expiredText(card, t, (at) => dateWords(t, at))}</Txt>
             {canRequestAgain(card, me.tools, !decider || card.requested_by === me.name) && (
-              <Button kind="outline" icon={RotateCcw} label={t('office.requests.requestAgain')} onPress={requestAgain} style={{ minHeight: 52, marginTop: 10 }} testID="request-again" />
+              <Button kind="outline" icon={RotateCcw} label={t('office.requests.requestAgain')} onPress={requestAgain} style={{ minHeight: 52, marginTop: 6 }} testID="request-again" />
             )}
-          </Section>
+          </StatusBanner>
         )}
         {card && !open && (card.approved_by || card.declined_by || card.cancelled_by) && (
           <Section title={t('office.request.decided')}>
@@ -278,29 +283,25 @@ export default function ApproveRequest() {
               <Txt variant="body" size={15} style={{ flex: 1 }}>{[t('office.task.askedBy', { name: card.requested_by }), whenWords(t, card.asked)].filter(Boolean).join(' · ')}</Txt>
             </View>
             {trip.date && <Txt variant="label" color={colors.muted}>{shortDate(names, `${trip.date}T06:00:00Z`).toUpperCase()}</Txt>}
-            {trip.leaveBy && (
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                <Txt variant="heading" size={28}>{t('office.request.leaveBy')}</Txt>
-                <Mono size={28} bold>{trip.leaveBy}</Mono>
-              </View>
-            )}
-            {!trip.leaveBy && card.when && <Txt variant="heading" size={22}>{whenWords(t, card.when)}</Txt>}
-            <View style={{ gap: 12, marginTop: 4 }}>
-              {trip.rows.map((r, i) => (
-                <View key={`${r.mark}-${i}`} style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-                  <View style={[styles.mark, r.kind === 'start' && { backgroundColor: colors.amber }, r.kind === 'back' && { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.ink }]}>
-                    <Mono size={14} bold color={r.kind === 'stop' ? '#ffffff' : colors.ink}>{r.mark}</Mono>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Txt variant="strong">{r.place}</Txt>
-                    {r.parts.length > 0 && <Txt variant="muted" size={15}>{r.parts.join(' · ')}</Txt>}
-                  </View>
-                </View>
-              ))}
-            </View>
+            {/* Part B pilot (docs/design-pass.md §5 b): the numbers as the StatsRow, the trip as the RouteStepper. */}
+            {trip.leaveBy ? (
+              <StatsRow
+                testID="request-stats"
+                cells={[
+                  { key: 'leave', label: t('office.request.leaveBy'), value: trip.leaveBy },
+                  ...(trip.totals ? [
+                    { key: 'km', label: t('office.trip.distance'), value: t('office.trip.kmN', { km: trip.totals.km }) },
+                    { key: 'drive', label: t('office.trip.driving'), value: durationText(t, trip.totals.driveMin), words: true },
+                  ] : []),
+                ]}
+              />
+            ) : card.when ? <Txt variant="heading" size={22}>{whenWords(t, card.when)}</Txt> : null}
+            <RouteStepper
+              testID="request-steps"
+              steps={trip.rows.map((r, i) => ({ key: `${r.mark}-${i}`, mark: r.mark, state: 'todo' as const, place: r.place, time: r.time, times: r.parts.join(' · ') || undefined }))}
+            />
             <Txt variant="muted" size={15}>
               {[
-                trip.totals ? `${trip.totals.km} km · ${durationText(t, trip.totals.driveMin)}` : '',
                 card.need ? t('office.request.needs', { need: card.need }) : '',
                 card.note ? t('office.request.notes', { note: card.note }) : '',
                 card.proposed?.notes ? t('office.request.notes', { note: card.proposed.notes }) : '',
@@ -315,14 +316,12 @@ export default function ApproveRequest() {
         {card && open && !outcome && shown && (
           <View style={{ gap: 8 }}>
             {changed && (
-              <View style={styles.changed} testID="decide-changed">
-                <Txt variant="strong" size={15} style={{ flex: 1 }} color={colors.blue}>
-                  {t('office.decide.newTime', { day: shortDate(names, `${shown.date}T06:00:00Z`), leave: shown.leaveBy || '—', back: shown.back || '—' })}
-                </Txt>
-                <Pressable accessibilityRole="button" onPress={() => decideStore.set(id, null)} style={{ minHeight: 44, justifyContent: 'center' }} testID="decide-undo">
-                  <Txt variant="strong" size={15} color={colors.blue}>{t('office.decide.undo')}</Txt>
-                </Pressable>
-              </View>
+              <StatusBanner
+                tone="blue"
+                testID="decide-changed"
+                title={t('office.decide.newTime', { day: shortDate(names, `${shown.date}T06:00:00Z`), leave: shown.leaveBy || '—', back: shown.back || '—' })}
+                action={{ label: t('office.decide.undo'), onPress: () => decideStore.set(id, null), testID: 'decide-undo' }}
+              />
             )}
             {me.tools.includes(card.status === 'changed' ? 'redecide_request' : 'decide_request') && (
               <Button kind="outline" label={t('office.decide.changeTime')} onPress={() => router.push({ pathname: '/office/request/[id]/time', params: { id } })} style={{ minHeight: 52 }} testID="decide-change-time" />
@@ -510,7 +509,5 @@ export default function ApproveRequest() {
 
 const styles = StyleSheet.create({
   tripCard: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 18, gap: 10 },
-  mark: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  changed: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.blueChip, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6 },
   event: { flexDirection: 'row', gap: 10, paddingVertical: 8, minHeight: 44 },
 });

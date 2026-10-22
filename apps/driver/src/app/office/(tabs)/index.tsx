@@ -25,7 +25,9 @@ import { has, homeActions, homeChips, homeSections } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { firstName } from '@/office/text';
 import type { Board, MyTrips, Overview, RequestsList } from '@/office/types';
-import { Avatar, Divider, ListFailed, NewTripButton, Pill, Row, Screen, Section, StatTiles, TopBar } from '@/office/ui';
+import { StatsRow } from '@/components/patterns/StatsRow';
+import { tripRoute } from '@/office/tripsLogic';
+import { Avatar, Divider, ListFailed, NewTripButton, Pill, Row, Screen, Section, TopBar } from '@/office/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -105,11 +107,14 @@ export default function OfficeHome() {
       <TopBar greeting={t(`office.home.${greeting()}`, { name: firstName(me.name) })} date={shortDate(names, Date.now())} />
       <Screen refreshing={refreshing} onRefresh={refresh} bottom={actions.length > 0 ? 96 : 24}>
         <SavedNotice noticeKey="/office" />
+        {/* Part B pilot (docs/design-pass.md §5 c): the StatsRow on the site's rules (Free now leaves out the garage, as the
+            site's Overview does), the requests waiting beside them for someone who approves; each cell opens its list. */}
         {ov && (
-          <StatTiles light tiles={[
-            ...(chips.includes('road') ? [{ key: 'road', n: ov.vehicles.on_the_road, label: t('office.home.tileRoad'), tone: 'blue' as const, onPress: go('road') }] : []),
-            ...(chips.includes('free') ? [{ key: 'free', n: ov.vehicles.parked, label: t('office.home.tileFree'), onPress: go('free') }] : []),
-            ...(chips.includes('garage') && ov.vehicles.in_garage !== undefined ? [{ key: 'garage', n: ov.vehicles.in_garage, label: t('office.home.tileGarage'), onPress: go('garage') }] : []),
+          <StatsRow testID="stat-tiles" cells={[
+            ...(chips.includes('road') ? [{ key: 'road', value: String(ov.vehicles.on_the_road), label: t('office.home.tileRoad'), tone: 'blue' as const, onPress: go('road') }] : []),
+            ...(chips.includes('free') ? [{ key: 'free', value: String(Math.max(0, ov.vehicles.parked - (ov.vehicles.in_garage ?? 0))), label: t('office.home.tileFree'), onPress: go('free') }] : []),
+            ...(chips.includes('garage') && ov.vehicles.in_garage !== undefined ? [{ key: 'garage', value: String(ov.vehicles.in_garage), label: t('office.home.tileGarage'), onPress: go('garage') }] : []),
+            ...(sections.includes('requests') ? [{ key: 'requests', value: String(ov.requests.waiting), label: t('office.home.tileRequests'), tone: ov.requests.waiting ? 'amber' as const : 'ink' as const, onPress: () => router.push('/office/(tabs)/approve') }] : []),
           ]} />
         )}
         {overview.error && <ListFailed stale={!!ov} error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
@@ -118,7 +123,7 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('requests') && (
-          <Section title={t('office.home.requests')} count={ov?.requests.waiting} link={t('office.common.viewAll')} onLink={() => router.push('/office/(tabs)/approve')}>
+          <Section title={t('office.home.requests')} count={ov?.requests.waiting} link={t('office.common.viewAllN', { n: ov?.requests.waiting ?? 0 })} onLink={() => router.push('/office/(tabs)/approve')}>
             {!requests.data && !requests.error && <SkeletonRows rows={2} lines={2} />}
             {requests.error && <ListFailed stale={!!requests.data} error={requests.error} onRetry={refresh} />}
             {requests.data && requests.data.requests.length === 0 && <ListEmpty text={t('office.home.noRequests')} />}
@@ -138,7 +143,7 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('needs_driver') && (
-          <Section title={t('office.home.needsDriver')} count={ov?.needs_driver?.count ?? 0} tone="red" link={has(me.permissions, 'assign_tasks') ? t('office.common.viewAll') : undefined} onLink={() => router.push('/office/(tabs)/tasks')}>
+          <Section title={t('office.home.needsDriver')} count={ov?.needs_driver?.count ?? 0} tone="red" link={has(me.permissions, 'assign_tasks') ? t('office.common.viewAllN', { n: ov?.needs_driver?.count ?? 0 }) : undefined} onLink={() => router.push('/office/(tabs)/tasks')}>
             {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
             {ov && (ov.needs_driver?.tasks.length ?? 0) === 0 && <ListEmpty text={t('office.home.noNeedsDriver')} />}
             {ov?.needs_driver?.tasks.slice(0, ROWS).map((x, i) => (
@@ -157,7 +162,7 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('critical') && (
-          <Section title={t('office.home.attention')} count={attentionCount(ov)} tone={attentionCount(ov) ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
+          <Section title={t('office.home.attention')} count={attentionCount(ov)} tone={attentionCount(ov) ? 'red' : undefined} link={t('office.common.viewAllN', { n: attentionCount(ov) })} onLink={() => router.push('/office/issues')}>
             {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
             {snoozeError && !snoozing && <ErrorNotice error={snoozeError.error} onSignIn={() => void signOut()} />}
             {ov && attentionGroups(ov).length === 0 && <ListEmpty text={t('office.home.noAttention')} />}
@@ -199,7 +204,7 @@ export default function OfficeHome() {
           />
         )}
         {sections.includes('tasks') && (
-          <Section title={t('office.home.tasks')} count={board.data ? board.data.counts.assigned + board.data.counts.in_progress + board.data.counts.completed : undefined} link={t('office.home.board')} onLink={() => router.push('/office/(tabs)/tasks')}>
+          <Section title={t('office.home.tasks')} count={board.data ? board.data.counts.assigned + board.data.counts.in_progress + board.data.counts.completed : undefined} link={t('office.common.viewAllN', { n: board.data ? board.data.counts.assigned + board.data.counts.in_progress + board.data.counts.completed : 0 })} onLink={() => router.push('/office/(tabs)/tasks')}>
             {!board.data && !board.error && <SkeletonRows rows={3} lines={2} />}
             {board.error && <ListFailed stale={!!board.data} error={board.error} onRetry={refresh} />}
             {board.data && [...board.data.in_progress, ...board.data.assigned].length === 0 && (
@@ -233,7 +238,7 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('road') && (
-          <Section title={t('office.home.road')} count={ov?.on_the_road.length} link={t('office.home.liveMap')} onLink={() => router.push('/office/(tabs)/live')}>
+          <Section title={t('office.home.road')} count={ov?.on_the_road.length} link={t('office.common.viewAllN', { n: ov?.on_the_road.length ?? 0 })} onLink={() => router.push('/office/(tabs)/live')}>
             {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
             {ov && ov.on_the_road.length === 0 && <ListEmpty text={t('office.home.noRoad')} />}
             {ov?.on_the_road.slice(0, ROWS).map((d, i) => (
@@ -252,7 +257,7 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('trips') && (
-          <Section title={t('office.home.trips')} count={trips.data?.count} link={t('office.common.viewAll')} onLink={() => router.push('/office/(tabs)/trips')}>
+          <Section title={t('office.home.trips')} count={trips.data?.count} link={t('office.common.viewAllN', { n: trips.data?.count ?? 0 })} onLink={() => router.push('/office/(tabs)/trips')}>
             {!trips.data && !trips.error && <SkeletonRows rows={2} lines={2} />}
             {trips.error && <ListFailed stale={!!trips.data} error={trips.error} onRetry={refresh} />}
             {trips.data && trips.data.trips.length === 0 && (
@@ -271,7 +276,8 @@ export default function OfficeHome() {
                     title={tripTitle(x)}
                     line={[whenWords(t, x.when), x.back_by ? `${t('office.trips.backBy')} ${x.back_by}` : ''].filter(Boolean).join(' · ')}
                     chip={(() => { const k = tripChip(live.state); return { text: t(`office.chip.${k.key}`), tone: k.tone }; })()}
-                    onPress={() => router.push('/office/(tabs)/trips')}
+                    // Part B (R9): a trip opens itself, as on the Trips tab; the tab when the person may not open it.
+                    onPress={() => { const route = tripRoute(x, me.permissions); router.push((route ?? '/office/(tabs)/trips') as never); }}
                   />
                 </View>
               );

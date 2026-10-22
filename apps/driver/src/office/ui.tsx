@@ -158,8 +158,11 @@ export function NewTripButton({ choices }: { choices: { key: string; label: stri
   );
 }
 
-/** A stack screen's top: the back arrow (back means back) and the title. */
-export function BackHeader({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
+/**
+ * A stack screen's top: the back arrow (back means back) and the title. `chips`: the item's state under the title (Part B,
+ * docs/design-pass.md R6 and §4.4: one place for the status on every detail page, as design 14 has it).
+ */
+export function BackHeader({ title, subtitle, right, chips }: { title: string; subtitle?: string; right?: ReactNode; chips?: ReactNode }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t } = useApp();
@@ -169,9 +172,10 @@ export function BackHeader({ title, subtitle, right }: { title: string; subtitle
       <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/office'))} style={(state) => [styles.backBtn, hoverStyle(state)]}>
         <ChevronLeft size={28} color={colors.ink} strokeWidth={2.4} />
       </Pressable>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, gap: 2 }}>
         <Txt variant="heading" numberOfLines={1}>{title}</Txt>
         {subtitle ? <Txt variant="small" numberOfLines={1}>{subtitle}</Txt> : null}
+        {chips ? <View style={styles.headerChips} testID="header-chips">{chips}</View> : null}
       </View>
       {right}
     </View>
@@ -406,6 +410,7 @@ const styles = StyleSheet.create({
   badge: { position: 'absolute', top: -4, right: -4, minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   backHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingBottom: 12, backgroundColor: colors.page },
   backBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  headerChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 6 },
   section: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 4 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.line, marginBottom: 6 },
   avatar: { backgroundColor: colors.blueChip, alignItems: 'center', justifyContent: 'center' },

@@ -38,6 +38,8 @@ export { default as Images } from 'lucide-react-native/icons/images';
 export { default as CalendarX } from 'lucide-react-native/icons/calendar-x';
 export { default as Clock } from 'lucide-react-native/icons/clock';
 export { default as IdCard } from 'lucide-react-native/icons/id-card';
+export { default as Info } from 'lucide-react-native/icons/info';
+export { default as CircleCheck } from 'lucide-react-native/icons/circle-check';
 export { default as LocateFixed } from 'lucide-react-native/icons/locate-fixed';
 export { default as Pencil } from 'lucide-react-native/icons/pencil';
 // Office mode (Phase 8, O1).

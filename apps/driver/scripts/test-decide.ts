@@ -43,7 +43,7 @@ console.log('\nThe screens');
   const approve = src('app/office/request/[id].tsx');
   check(approve.includes("pathname: '/office/request/[id]/time'") && approve.includes("me.tools.includes(card.status === 'changed' ? 'redecide_request' : 'decide_request')"), 'Change time from Approve, only with the deciding tool');
   check(approve.includes('availabilityAt(availabilityArgs(card), shown)') && approve.includes('...decideTimes(change, asked)') && approve.includes("decision: 'change', ...redecideTimes(change, asked)"), "Who's available at the new time; the new time sent with the decision");
-  check(approve.includes('testID="decide-changed"') && approve.includes('decideStore.set(id, null)') && approve.includes('testID="decide-undo"'), 'the new time shown with Undo; cleared once decided');
+  check(approve.includes('testID="decide-changed"') && approve.includes('decideStore.set(id, null)') && approve.includes("testID: 'decide-undo'"), 'the new time shown with Undo (the StatusBanner\'s action since Part B); cleared once decided');
   check(approve.includes('setOutcome({ title, warnings })') && !approve.includes('Alert.alert(title') && approve.includes('<TellRequester'), 'after a decision the page stays: the outcome, the warnings, Tell requester');
   const time = src('app/office/request/[id]/time.tsx');
   check(time.includes('<TripDayPicker') && (time.match(/<TimeField/g) ?? []).length === 2 && time.includes('<PlaceSearch') && time.includes('<StickyActions>') && time.includes('disabled={!!block}'),

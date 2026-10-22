@@ -57,7 +57,6 @@ export function TripFooter({ label, onPress, disabled, busy, problem, children, 
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-      {problem ? <Txt variant="strong" size={15} color={colors.red}>{problem}</Txt> : null}
       {secondary ? (
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Button kind="outline" label={secondary.label} onPress={secondary.onPress} disabled={secondary.disabled || busy} style={{ flex: 1 }} />
@@ -66,6 +65,8 @@ export function TripFooter({ label, onPress, disabled, busy, problem, children, 
       ) : (
         <Button label={label} icon={busy ? undefined : ChevronRight} onPress={onPress} disabled={disabled} busy={busy} />
       )}
+      {/* Part B (docs/design-pass.md R7): why the button waits, under it, as on every other action bar. */}
+      {problem ? <Txt variant="strong" size={15} color={colors.red} testID="footer-problem">{problem}</Txt> : null}
       {children}
     </View>
   );

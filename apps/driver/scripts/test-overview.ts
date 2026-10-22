@@ -63,7 +63,7 @@ console.log('\nNeeds attention');
 console.log('\nThe screens');
 {
   const home = src('app/office/(tabs)/index.tsx');
-  check((home.match(/onPress: go\('/g) ?? []).length === 3 && /onPress=\{go\('reminders'\)\}/.test(home) && home.includes('<StatTiles'), 'the three header tiles and the reminders row open through chipTarget');
+  check((home.match(/onPress: go\('/g) ?? []).length === 3 && /onPress=\{go\('reminders'\)\}/.test(home) && home.includes('<StatsRow testID="stat-tiles"'), 'the three header tiles (the StatsRow since Part B) and the reminders row open through chipTarget');
   check(home.includes("for (const call of snoozeCalls(group, when)) await api.call('update_issue', call);") && home.includes('withoutGroups(prev, [group.key])') && home.includes('testID="attention-snooze"') && home.includes("me.tools.includes('update_issue')"),
     'Snooze on a group, with update_issue only');
   check(home.includes('attentionGroups(ov).slice(0, ROWS)') && home.includes("pathname: '/office/issues/[id]'"), 'the groups expand; each item opens its issue');

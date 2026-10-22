@@ -13,6 +13,9 @@
 // Round 3: the driver card (components/office/DriverRows.tsx TaskDriverCard) shows the driver, the person who drives it
 // themselves ("Drives themselves") or someone not in Fame Fleet ("Someone else": their initials, name, Call / WhatsApp);
 // the server's sentences (Running late, the status line, the warnings saved past) in the person's language.
+// Part B pilot (docs/design-pass.md §5 b): the state chips in the header; needs a driver and missed as StatusBanners;
+// Leave by · back · km as the StatsRow; the stops as the RouteStepper (S and B included); one action bar at the bottom
+// (the thing to do now, More for the rest: reassign, swap, the driven route, reopen, cancel; each with its tool as before).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -20,9 +23,12 @@ import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MapPin } from '@/components/icons';
 import { TaskDriverCard } from '@/components/office/DriverRows';
-import { StopTimeline } from '@/components/office/StopTimeline';
 import { StopArrival, SwapSegments, TaskMoreDetails, TaskWarnings, TripPurposeCard } from '@/components/office/TaskDetailParts';
+import { RouteStepper } from '@/components/patterns/RouteStepper';
+import { Sheet } from '@/components/patterns/Sheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
+import { StatsRow } from '@/components/patterns/StatsRow';
+import { StatusBanner } from '@/components/patterns/StatusBanner';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { Button, Mono, Txt } from '@/components/ui';
@@ -33,7 +39,8 @@ import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/off
 import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStatusKey } from '@/office/taskLogic';
 import type { FleetError, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
-import { BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
+import { taskSteps } from '@/office/stepsLogic';
+import { BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { sentenceText } from '@/office/statusWords';
 import { statusTone } from '@/office/homeLogic';
 import { useApp } from '@/state/app';
@@ -68,6 +75,9 @@ export default function TaskDetailScreen() {
   const task = p?.task;
   const [cancelling, setCancelling] = useState(false);
   const [reopening, setReopening] = useState(false);
+  // Part B: Change time or stops asks which; More holds the rest of the task's actions.
+  const [changing, setChanging] = useState(false);
+  const [acting, setActing] = useState(false);
   // The action under way (its button shows the spinner; the others wait).
   const [busy, setBusy] = useState<'cancel' | 'reopen' | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
@@ -153,36 +163,74 @@ export default function TaskDetailScreen() {
   const extras = task ? extrasFor(task, me.tools) : { time: false, stops: false, swap: false, reopen: false };
   const statusKey = task ? taskStatusKey(task) : '';
 
+  const started = !!task && (task.status === 'in_progress' || task.status === 'completed');
+  // Part B pilot (docs/design-pass.md §5 b): the stops as the RouteStepper, the start (S) and the way back (B) included,
+  // each reached stop with its arrival point.
+  const routeSteps = task ? taskSteps(t, stops, {
+    started,
+    start: task.start_place && !stops.some((s) => s.is_start) ? { place: task.start_place, planned: task.leave_by, left: task.started ? shortWhen(t, task.started) : undefined } : undefined,
+    back: task.return_to_base && task.start_place ? { place: task.start_place, time: p?.timeline?.totals.ends, line: [p?.timeline?.totals.ends ? t('office.request.about', { time: p.timeline.totals.ends }) : '', task.end_by ? t('office.request.backBy', { time: task.end_by }) : ''].filter(Boolean).join(' · ') } : undefined,
+  }).map((st) => {
+    const s = stops.find((x) => (x.id ?? `stop-${x.seq}`) === st.key);
+    return s ? { ...st, extra: <StopArrival stop={s} onSaved={q.reload} /> } : st;
+  }) : [];
+  // The action bar (R7): the one thing to do now, then More for the rest; every action only with its tool, as before.
+  const primary = !task ? null
+    : task.needs_driver && actions.reassign ? { label: t('office.home.giveDriver'), onPress: () => router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } }) }
+    : extras.time && extras.stops ? { label: t('office.task.changeTimeOrStops'), onPress: () => setChanging(true) }
+    : extras.time ? { label: t('office.task.changeTime'), onPress: () => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } }) }
+    : extras.stops ? { label: t('office.task.changeStops'), onPress: () => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } }) }
+    : null;
+  const hasMore = !!task && ((actions.reassign && !task.needs_driver) || extras.swap || extras.reopen || actions.cancel || ((task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route')));
+  const km = task?.km ?? task?.gps_km;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader
         title={task?.title ?? t('office.task.title')}
         subtitle={task ? [t('office.task.task'), task.start, p?.from_request ? t('office.task.askedBy', { name: p.from_request.requested_by }) : task.created_by ? t('office.task.madeBy', { name: task.created_by }) : ''].filter(Boolean).join(' · ') : undefined}
+        chips={task ? (
+          <>
+            <Pill text={t(`office.status.${statusKey}`)} tone={statusTone(statusKey)} size={14} />
+            {task.late_report && <Pill text={sentenceText(t, task.late_report.text)} tone="amber" size={14} />}
+            {!task.late_report && task.status === 'in_progress' && task.eta?.late_min ? <Pill text={t('office.status.late', { min: task.eta.late_min })} tone="amber" size={14} /> : null}
+            {task.label && <Pill text={task.label} tone="muted" size={14} />}
+            {task.kind === 'self' && <Pill text={t('office.task.driverStarted')} tone="muted" size={14} />}
+            {task.finish_flag && <Pill text={task.finish_flag.text} tone="amber" size={14} />}
+          </>
+        ) : undefined}
       />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} bottom={16}>
         {!p && !q.error && <SkeletonRows rows={4} lines={2} />}
         {q.error && <ListFailed stale={!!p} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {q.data && !task && <ListEmpty text={t('office.task.notFound')} />}
         <SavedNotice noticeKey={`task:${id}`} />
-        {task && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Pill text={t(`office.status.${statusKey}`)} tone={statusTone(statusKey)} size={15} />
-            {task.late_report && <Pill text={sentenceText(t, task.late_report.text)} tone="amber" size={15} />}
-            {!task.late_report && task.status === 'in_progress' && task.eta?.late_min ? <Pill text={t('office.status.late', { min: task.eta.late_min })} tone="amber" size={15} /> : null}
-            {task.label && <Pill text={task.label} tone="muted" size={15} />}
-            {task.kind === 'self' && <Pill text={t('office.task.driverStarted')} tone="muted" size={15} />}
-            {task.finish_flag && <Pill text={task.finish_flag.text} tone="amber" size={15} />}
-          </View>
-        )}
         {task && task.needs_driver && (
-          <View style={styles.needs}>
-            <Txt variant="strong" color={colors.red}>{[t('office.task.needsDriverSince', { since: dateWords(t, task.needs_driver.since) }), task.needs_driver.reason === 'declined' ? t('office.task.declinedWhy', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '' }) : t('office.task.notAccepted', { name: task.driver ?? '' })].join(' · ')}</Txt>
-          </View>
+          <StatusBanner
+            tone="red"
+            testID="needs-driver-banner"
+            title={t('office.task.needsDriverSince', { since: dateWords(t, task.needs_driver.since) })}
+            line={task.needs_driver.reason === 'declined' ? t('office.task.declinedWhy', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '' }) : t('office.task.notAccepted', { name: task.driver ?? '' })}
+          />
         )}
         {task && task.status === 'cancelled' && task.cancelled_reason && <Txt variant="muted">{t('office.task.cancelledWhy', { why: task.cancelled_reason })}</Txt>}
         {/* Round 3: a missed task says so ("Missed · not started (leave by 08:30)"), never "Cancelled:". */}
-        {task && task.status === 'missed' && task.status_line ? <Txt variant="muted" testID="missed-line">{sentenceText(t, task.status_line)}</Txt> : null}
+        {task && task.status === 'missed' && task.status_line ? <StatusBanner tone="red" testID="missed-line" title={sentenceText(t, task.status_line)} /> : null}
         {p && task && <TaskWarnings p={p} />}
+        {task && (
+          <StatsRow
+            testID="task-stats"
+            cells={[
+              { key: 'leave', label: t('office.request.leaveBy'), value: task.leave_by ?? task.start ?? '—' },
+              task.status === 'in_progress' && task.eta?.final
+                ? { key: 'back', label: t('office.trip.backAtShort'), value: task.eta.final, sub: t('office.task.statLive'), tone: 'blue' as const }
+                : { key: 'back', label: task.return_to_base ? t('office.trip.backAtShort') : t('office.trip.endsShort'), value: p?.timeline?.totals.ends ?? task.end_by ?? '—', sub: p?.timeline?.totals.ends ? t('office.task.statPlanned') : undefined },
+              km != null
+                ? { key: 'km', label: t('office.trip.distance'), value: t('office.trip.kmN', { km }), sub: task.km != null ? t('office.task.statLogged') : t('office.task.statGps') }
+                : { key: 'km', label: t('office.trip.distance'), value: p?.timeline?.totals.km != null ? t('office.trip.kmN', { km: Math.round(p.timeline.totals.km) }) : '—', sub: p?.timeline?.totals.km != null ? t('office.task.statPlanned') : undefined },
+            ]}
+          />
+        )}
         {task && (
           <View style={styles.card}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -225,63 +273,16 @@ export default function TaskDetailScreen() {
           </View>
         )}
         {p && task && <TripPurposeCard p={p} />}
-        {p && stops.length > 0 && (
+        {p && routeSteps.length > 0 && (
           <Section title={t('office.task.stops')}>
-            <View style={{ gap: 12, paddingTop: 4 }}>
-              {task?.start_place && !stops.some((s) => s.is_start) && (
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={[styles.mark, { backgroundColor: colors.amber }]}><Mono size={14} bold>S</Mono></View>
-                  <View style={{ flex: 1 }}>
-                    <Txt variant="strong">{task.start_place}</Txt>
-                    {task.leave_by && <Txt variant="muted" size={15}>{t('office.task.planned', { time: task.leave_by })}{task.started ? ` · ${t('office.task.left', { time: shortWhen(t, task.started) })}` : ''}</Txt>}
-                  </View>
-                </View>
-              )}
+            <View style={{ paddingTop: 8 }}>
               {/* Round 2: the live timeline (planned, arrived, left, late or early, the stops to come re-estimated). */}
-              <StopTimeline stops={stops} extra={(s) => <StopArrival stop={s} onSaved={q.reload} />} />
-              {task?.return_to_base && task.start_place && (
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={[styles.mark, { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.ink }]}><Mono size={14} bold>B</Mono></View>
-                  <View style={{ flex: 1 }}>
-                    <Txt variant="strong">{t('office.request.backAt', { place: task.start_place })}</Txt>
-                    <Txt variant="muted" size={15}>{[p.timeline?.totals.ends ? t('office.request.about', { time: p.timeline.totals.ends }) : '', task.end_by ? t('office.request.backBy', { time: task.end_by }) : ''].filter(Boolean).join(' · ')}</Txt>
-                  </View>
-                </View>
-              )}
+              <RouteStepper steps={routeSteps} testID="task-steps" />
             </View>
             {task?.notes ? <Txt variant="muted" size={15} style={{ marginTop: 8 }}>{t('office.request.notes', { note: task.notes })}</Txt> : null}
           </Section>
         )}
-        {task && (task.km != null || task.gps_km != null) && (
-          <Txt variant="muted" size={15}>{[task.km != null ? t('office.task.taskKm', { km: task.km }) : '', task.gps_km != null ? t('office.task.gpsKm', { km: task.gps_km }) : ''].filter(Boolean).join(' · ')}</Txt>
-        )}
         {p && task && <SwapSegments p={p} onSaved={q.reload} />}
-        {task && (task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route') && (
-          <Button kind="outline" label={t('office.history.showDrivenRoute')} onPress={() => router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } })}
-            style={{ minHeight: 56 }} />
-        )}
-        {task && (actions.reassign || actions.cancel) && (
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {actions.reassign && <Button kind="outline" label={task.needs_driver ? t('office.home.giveDriver') : t('office.task.reassign')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } })} style={{ flex: 1, minHeight: 56 }} />}
-            {actions.cancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => setCancelling(true)} busy={busy === 'cancel'} disabled={busy !== null} style={{ flex: 1, minHeight: 56, borderColor: colors.red }} />}
-          </View>
-        )}
-        {task && (extras.time || extras.stops) && (
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {extras.time && <Button kind="outline" label={t('office.task.changeTime')} onPress={() => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } })} disabled={busy !== null} style={{ flex: 1, minHeight: 56 }} />}
-            {extras.stops && <Button kind="outline" label={t('office.task.changeStops')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } })} disabled={busy !== null} style={{ flex: 1, minHeight: 56 }} />}
-          </View>
-        )}
-        {task && extras.swap && (
-          <Button kind="outline" label={t('office.task.swapVehicle')} onPress={() => router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } })} disabled={busy !== null} style={{ minHeight: 56 }} />
-        )}
-        {task && extras.reopen && (
-          <View style={styles.card}>
-            <Txt variant="strong">{t('office.task.reopenTitle')}</Txt>
-            <Txt variant="muted" size={15}>{t('office.task.reopenIntro')}</Txt>
-            <Button kind="outline" label={t('office.task.reopen')} onPress={() => setReopening(true)} busy={busy === 'reopen'} disabled={busy !== null} style={{ minHeight: 56 }} />
-          </View>
-        )}
         {task && (task.contact?.name || p?.from_request) && (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Txt variant="small">{t('office.task.requesterPush', { name: p?.from_request?.requested_by ?? task.contact?.name ?? '' })}</Txt>
@@ -298,6 +299,40 @@ export default function TaskDetailScreen() {
         )}
         {problem && <ErrorNotice error={problem} onRetry={() => void q.reload()} />}
       </Screen>
+      {task && (primary || hasMore) && (
+        <StickyActions>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {hasMore && <Button kind="outline" label={t('office.common.more')} onPress={() => setActing(true)} disabled={busy !== null} style={{ flex: primary ? 0.7 : 1 }} testID="task-more" />}
+            {primary && <Button label={primary.label} onPress={primary.onPress} disabled={busy !== null} style={{ flex: 1.3 }} testID="task-primary" />}
+          </View>
+        </StickyActions>
+      )}
+      {task && (
+        <Sheet visible={changing} title={t('office.task.changeTimeOrStops')} onClose={() => setChanging(false)} testID="task-change-sheet">
+          <View style={{ gap: 10 }}>
+            {extras.time && <Button kind="outline" label={t('office.task.changeTime')} onPress={() => { setChanging(false); router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } }); }} />}
+            {extras.stops && <Button kind="outline" label={t('office.task.changeStops')} onPress={() => { setChanging(false); router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } }); }} />}
+          </View>
+        </Sheet>
+      )}
+      {task && (
+        <Sheet visible={acting} title={t('office.task.moreTitle')} onClose={() => setActing(false)} testID="task-more-sheet">
+          <View style={{ gap: 10 }}>
+            {actions.reassign && !task.needs_driver && <Button kind="outline" label={t('office.task.reassign')} onPress={() => { setActing(false); router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } }); }} />}
+            {extras.swap && <Button kind="outline" label={t('office.task.swapVehicle')} onPress={() => { setActing(false); router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } }); }} />}
+            {(task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route') && (
+              <Button kind="outline" label={t('office.history.showDrivenRoute')} onPress={() => { setActing(false); router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } }); }} />
+            )}
+            {extras.reopen && (
+              <View style={{ gap: 4 }}>
+                <Button kind="outline" label={t('office.task.reopen')} onPress={() => { setActing(false); setReopening(true); }} busy={busy === 'reopen'} />
+                <Txt variant="small">{t('office.task.reopenIntro')}</Txt>
+              </View>
+            )}
+            {actions.cancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => { setActing(false); setCancelling(true); }} busy={busy === 'cancel'} style={{ borderColor: colors.red }} />}
+          </View>
+        </Sheet>
+      )}
       <ReasonSheet<CancelReasonKey>
         visible={cancelling}
         title="office.task.cancelTitle"
@@ -335,6 +370,4 @@ const styles = StyleSheet.create({
   dot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#ebe9e3', borderWidth: 2, borderColor: '#ebe9e3' },
   iconBtn: { width: 52, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   now: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#ebe9e3', borderRadius: 12, padding: 12, minHeight: 56 },
-  mark: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  needs: { backgroundColor: colors.redChip, borderRadius: 12, padding: 12 },
 });

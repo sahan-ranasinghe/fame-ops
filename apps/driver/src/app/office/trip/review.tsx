@@ -11,15 +11,22 @@
 // itself: the person sees the sentence and presses again, and Try again sends the same call (a booking stays a booking).
 // Round 3: who drives shows in the chips ("You drive it yourself", "Kamal Silva · someone else · 077…"); with no app
 // the task's button is "Save trip" and Book now needs the plate (the reason under the button until there is one).
+// Part B pilot (docs/design-pass.md §5 a): Leave by · distance · driving · back as the StatsRow, the plan as the
+// RouteStepper (S, the stops, B, the legs between), the reapproval, the plan's reasons and the conflicts as StatusBanners,
+// a skeleton while the first plan comes.
 
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
+import { SkeletonRows } from '@/components/patterns/ListState';
+import { RouteStepper } from '@/components/patterns/RouteStepper';
+import { StatsRow } from '@/components/patterns/StatsRow';
+import { StatusBanner } from '@/components/patterns/StatusBanner';
 import { TimeField } from '@/components/patterns/TimeField';
 import { TaskMap } from '@/components/TaskMap';
-import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { Button, Plate, Txt } from '@/components/ui';
 import { whatsappLink } from '@/lib/contacts';
 import { durationText } from '@/lib/durations';
 import { phoneLocal } from '@/lib/profile';
@@ -38,10 +45,11 @@ import { useTrip } from '@/office/trip/useTrip';
 import { ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
 import { emptyWho } from '@/office/trip/whoDrivesLogic';
 import { whoOfDraft } from '@/office/trip/whoWords';
-import { legTextT, reasonLines, reasonText, stopTimesT } from '@/office/trip/words';
+import { planSteps } from '@/office/stepsLogic';
+import { reasonLines, reasonText } from '@/office/trip/words';
 import { sentenceText } from '@/office/statusWords';
 import type { BookResult, Conflict, CreateTaskResult, FleetError, SettingsResult, UpdateRequestResult } from '@/office/types';
-import { ErrorNotice, Loading, Pill, Screen } from '@/office/ui';
+import { ErrorNotice, Pill, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -72,19 +80,18 @@ export default function TripReview() {
       </>
     ) : null;
     return (
-      <View key={`${c.kind}-${c.task?.id ?? i}`} style={styles.conflict} testID="conflict-card">
-        <Txt variant="strong" size={15} color={colors.red}>{sentenceText(t, c.text)}</Txt>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <StatusBanner key={`${c.kind}-${c.task?.id ?? i}`} tone="red" title={sentenceText(t, c.text)} testID="conflict-card">
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 4 }}>
           {a.openTask ? <Button kind="outline" label={t('office.trip.openThatTask')} onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: a.openTask! } })} style={styles.smallBtn} /> : null}
           {reach(c.requester)}
           {reach(c.driver)}
           {picks && mode === 'task' ? <Button kind="dark" label={t(a.pick === 'driver' ? 'office.trip.pickAnotherDriver' : 'office.trip.pickAnotherVehicle')} onPress={() => { updateDraft((x) => ({ ...x, step: 'who' })); router.back(); }} style={styles.smallBtn} /> : null}
         </View>
-      </View>
+      </StatusBanner>
     );
   };
 
-  if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }}><Screen><Loading text={t('office.common.loading')} /></Screen></View>;
+  if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }} accessibilityLabel={t('office.common.loading')}><Screen><SkeletonRows rows={4} lines={2} /></Screen></View>;
   const f = d.fields;
   const p = trip.preview;
   const mapTask = p ? previewTask(p) : null;
@@ -196,10 +203,17 @@ export default function TripReview() {
       <Screen bottom={16} style={{ padding: 0, gap: 0 }}>
         {mapTask && <View style={{ height: 300 }}><TaskMap report={false} mapPackage={me.map?.package} task={mapTask} me={null} googleNoteFor="any" /></View>}
         <View style={{ padding: 16, gap: 14 }}>
-          {d.mode === 'edit' && d.wasApproved ? <Txt variant="strong" size={15} color={colors.amberText} testID="reapproval-notice">{t('office.trip.reapprovalNotice')}</Txt> : null}
-          {trip.plan.updating && !p && <Loading text={t('office.trip.planning')} />}
+          {d.mode === 'edit' && d.wasApproved ? <StatusBanner tone="amber" title={t('office.trip.reapprovalNotice')} testID="reapproval-notice" /> : null}
+          {trip.plan.updating && !p && <View accessibilityLabel={t('office.trip.planning')}><SkeletonRows rows={3} lines={2} /></View>}
           {trip.plan.updating && p && <Txt variant="small" color={colors.blue} testID="plan-updating">{t('office.trip.updatingPlan')}</Txt>}
-          {reasons.filter((r) => !r.note).map((r, i) => <Txt key={i} variant="strong" size={15} color={colors.amberText}>{r.text}</Txt>)}
+          {(() => {
+            const blocking = reasons.filter((r) => !r.note);
+            return blocking.length ? (
+              <StatusBanner tone="amber" title={blocking[0].text} testID="plan-reasons">
+                {blocking.slice(1).map((r, i) => <Txt key={i} variant="body" size={15}>{r.text}</Txt>)}
+              </StatusBanner>
+            ) : null;
+          })()}
           {/* Round 1 review: Next on When needs only the stops, so a trip with no time at all gets its one time here (the leave
               time; an arrive-by is set on When), never a dead end. */}
           {!d.running && !f.leaveBy.trim() && !hasDeadline(f.stops) && (
@@ -209,54 +223,33 @@ export default function TripReview() {
             </View>
           )}
           {p && leave && leave.kind === 'leave' && (
-            <View style={{ gap: 2 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                <View>
-                  <Txt variant="label" color={colors.muted}>{t('office.request.leaveBy').toUpperCase()}</Txt>
-                  <Mono size={34} bold>{leave.at}</Mono>
-                </View>
-                {totals && (
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Txt variant="strong" size={17}>{`${t('office.trip.kmN', { km: Math.round(totals.km) })} · ${durationText(t, totals.drive_min)}`}</Txt>
-                    <Txt variant="small">{f.returnToBase ? t('office.trip.endsAt', { place: p.start?.name ?? '', time: totals.ends }) : t('office.trip.endsAtTime', { time: totals.ends })}</Txt>
-                  </View>
-                )}
-              </View>
+            <View style={{ gap: 6 }}>
+              <StatsRow
+                testID="review-stats"
+                cells={[
+                  { key: 'leave', label: t('office.request.leaveBy'), value: leave.at },
+                  ...(totals ? [
+                    { key: 'km', label: t('office.trip.distance'), value: t('office.trip.kmN', { km: Math.round(totals.km) }) },
+                    { key: 'drive', label: t('office.trip.driving'), value: durationText(t, totals.drive_min), words: true },
+                    { key: 'ends', label: f.returnToBase ? t('office.trip.backAtShort') : t('office.trip.endsShort'), value: totals.ends },
+                  ] : []),
+                ]}
+              />
               {note ? <Txt variant="small" testID="leave-note">{[t(note.source === 'plan' ? 'office.trip.leavePlanned' : 'office.trip.leaveTyped'), note.estimate ? t('office.trip.leaveEstimated') : ''].filter(Boolean).join(' · ')}</Txt> : null}
             </View>
           )}
           {p && items.length > 0 && (
-            <View style={{ gap: 10, opacity: trip.plan.updating ? 0.75 : 1 }}>
-              {items.map((x, i) => {
-                if (x.kind === 'stop') {
-                  const late = x.late_min != null && x.late_min > 0;
-                  return (
-                    <View key={`s${x.n}`} style={{ flexDirection: 'row', gap: 12 }}>
-                      <Mono size={16} bold style={{ width: 54 }}>{x.planned_arrive}</Mono>
-                      <View style={[styles.mark, x.is_start && { backgroundColor: colors.amber }]}><Mono size={13} bold color={x.is_start ? colors.ink : '#ffffff'}>{x.is_start ? 'S' : String(x.n + (d.reached ?? 0))}</Mono></View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <Txt variant="strong">{x.place}</Txt>
-                          {x.arrive_by && <Pill text={late ? t('office.task.minLate', { min: x.late_min ?? 0 }) : t('office.trip.onTime')} tone={late ? 'amber' : 'blue'} size={13} />}
-                        </View>
-                        <Txt variant="muted" size={15}>{stopTimesT(t, x)}{x.arrive_by ? ` · ${t('office.request.arriveBy', { time: x.arrive_by })}` : ''}</Txt>
-                      </View>
-                    </View>
-                  );
-                }
-                if (x.kind === 'leg') return <Txt key={`l${i}`} variant="small" style={{ marginLeft: 66 }}>{[legTextT(t, x, p.start?.name), x.rush_factor && x.rush_factor !== 1 ? t('office.trip.rushHour', { f: x.rush_factor }) : '', x.via_expressway ? t('office.trip.viaExpressway') : ''].filter(Boolean).join(' · ')}</Txt>;
-                return null;
-              })}
-              {f.returnToBase && totals?.ends && p.start && (
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <Mono size={16} bold style={{ width: 54 }}>{totals.ends}</Mono>
-                  <View style={[styles.mark, { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.ink }]}><Mono size={13} bold>B</Mono></View>
-                  <View style={{ flex: 1 }}>
-                    <Txt variant="strong">{t('office.request.backAt', { place: p.start.name })}</Txt>
-                    {f.end ? <Txt variant="muted" size={15}>{d.mode === 'task' || d.mode === 'stops' ? `${t('office.trip.freeBy')} ${f.end}` : t('office.request.backBy', { time: f.end })}</Txt> : null}
-                  </View>
-                </View>
-              )}
+            <View style={{ opacity: trip.plan.updating ? 0.75 : 1 }}>
+              <RouteStepper
+                testID="review-steps"
+                steps={planSteps(t, items, {
+                  reached: d.reached,
+                  startName: p.start?.name,
+                  back: f.returnToBase && totals?.ends && p.start
+                    ? { place: p.start.name, time: totals.ends, line: f.end ? (d.mode === 'task' || d.mode === 'stops' ? `${t('office.trip.freeBy')} ${f.end}` : t('office.request.backBy', { time: f.end })) : undefined }
+                    : undefined,
+                })}
+              />
             </View>
           )}
           {p?.conflicts?.map((c, i) => conflictCard(c, i, true))}
@@ -297,8 +290,6 @@ export default function TripReview() {
 }
 
 const styles = StyleSheet.create({
-  mark: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ebe9e3', borderRadius: 999, paddingHorizontal: 12, minHeight: 40 },
-  conflict: { borderWidth: 1.5, borderColor: colors.red, borderRadius: 14, padding: 12, gap: 10, backgroundColor: colors.card },
   smallBtn: { minHeight: 44, paddingHorizontal: 12 },
 });

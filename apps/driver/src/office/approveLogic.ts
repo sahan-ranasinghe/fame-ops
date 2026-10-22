@@ -14,6 +14,8 @@ export interface TripRow {
   place: string;
   /** The parts of the line ("arrive by 10:30", "1 h 30 there", "leave 11:45"): joined with " · " by the screen. */
   parts: string[];
+  /** The step's time for the RouteStepper's time column (Part B): leave at the start, arrive at a stop, back at base. */
+  time?: string;
 }
 
 export interface TripView {
@@ -38,11 +40,11 @@ export function tripView(q: Pick<RequestCard, 'trip' | 'fields' | 'route' | 'whe
   const trip = q.trip;
   const rows: TripRow[] = [];
   if (trip && trip.stops.length > 0) {
-    if (trip.start && !trip.stops.some((s) => s.is_start)) rows.push({ mark: 'S', kind: 'start', place: trip.start.name, parts: trip.leave_by ? [words.leave(trip.leave_by)] : [] });
+    if (trip.start && !trip.stops.some((s) => s.is_start)) rows.push({ mark: 'S', kind: 'start', place: trip.start.name, parts: trip.leave_by ? [words.leave(trip.leave_by)] : [], time: trip.leave_by });
     let n = 0;
     for (const s of trip.stops) {
       if (s.is_start) {
-        rows.push({ mark: 'S', kind: 'start', place: s.place ?? '', parts: [s.what === 'people' ? words.passengersHere : '', s.planned_leave ?? s.planned_depart ?? trip.leave_by ?? ''].filter(Boolean) });
+        rows.push({ mark: 'S', kind: 'start', place: s.place ?? '', parts: [s.what === 'people' ? words.passengersHere : '', s.planned_leave ?? s.planned_depart ?? trip.leave_by ?? ''].filter(Boolean), time: s.planned_leave ?? s.planned_depart ?? trip.leave_by });
         continue;
       }
       n += 1;
@@ -52,14 +54,14 @@ export function tripView(q: Pick<RequestCard, 'trip' | 'fields' | 'route' | 'whe
       if (s.dwell_min) parts.push(words.there(s.dwell_min));
       const leave = s.planned_leave ?? s.planned_depart;
       if (leave) parts.push(words.leave(leave));
-      rows.push({ mark: String(s.n ?? n), kind: 'stop', place: s.place ?? '', parts });
+      rows.push({ mark: String(s.n ?? n), kind: 'stop', place: s.place ?? '', parts, time: s.planned_arrive ?? s.arrive_by });
     }
     const ends = trip.timeline?.totals.ends;
     if (trip.return_to_base && trip.start) {
       const parts: string[] = [];
       if (ends) parts.push(words.about(ends));
       if (f?.back_by ?? q.back_by) parts.push(words.backBy((f?.back_by ?? q.back_by) as string));
-      rows.push({ mark: 'B', kind: 'back', place: words.backAt(trip.start.name), parts });
+      rows.push({ mark: 'B', kind: 'back', place: words.backAt(trip.start.name), parts, time: ends });
     }
     return {
       date: f?.date,
@@ -69,7 +71,7 @@ export function tripView(q: Pick<RequestCard, 'trip' | 'fields' | 'route' | 'whe
     };
   }
   // The old shape: From → To with the asked time and back-by.
-  if (f?.route_from) rows.push({ mark: 'S', kind: 'start', place: f.route_from, parts: f.time ? [words.leave(f.time)] : [] });
+  if (f?.route_from) rows.push({ mark: 'S', kind: 'start', place: f.route_from, parts: f.time ? [words.leave(f.time)] : [], time: f.time });
   if (f?.route_to) rows.push({ mark: '1', kind: 'stop', place: f.route_to, parts: [] });
   if (f?.back_by) rows.push({ mark: 'B', kind: 'back', place: f.route_from ? words.backAt(f.route_from) : '', parts: [words.backBy(f.back_by)] });
   return { date: f?.date, leaveBy: f?.time, rows };

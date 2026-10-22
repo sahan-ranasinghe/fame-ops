@@ -899,7 +899,8 @@
       "refresh": "Refresh",
       "moreDetails": "More details",
       "fewerDetails": "Fewer details",
-      "clear": "Clear"
+      "clear": "Clear",
+      "viewAllN": "View all ({n})"
     },
     "error": {
       "dropped": "Fame Fleet did not answer.",
@@ -961,7 +962,8 @@
       "remindersRow": "{n} reminders",
       "remindersRowOne": "1 reminder",
       "newTrip": "New trip",
-      "needsYouNow": "Needs you now"
+      "needsYouNow": "Needs you now",
+      "tileRequests": "Requests"
     },
     "status": {
       "assigned": "sent",
@@ -1272,7 +1274,13 @@
       "purposeSaved": "Trip saved",
       "purposeNowPersonal": "Now personal: its km are counted apart from the jobs.",
       "purposeNowCompany": "Now company work",
-      "purposeNotSelf": "Only a trip a driver started in the app is switched: the office's tasks are company work."
+      "purposeNotSelf": "Only a trip a driver started in the app is switched: the office's tasks are company work.",
+      "changeTimeOrStops": "Change time or stops",
+      "moreTitle": "More for this task",
+      "statLive": "live ETA",
+      "statPlanned": "planned",
+      "statLogged": "logged",
+      "statGps": "by GPS"
     },
     "give": {
       "title": "Needs a driver",
@@ -1628,7 +1636,11 @@
       "saveReapproval": "Save · ask for re-approval",
       "reapprovalOutcome": "The office will decide again.",
       "askedBy": "Asked by {name} · {phone}",
-      "leaveRunning": "The task is under way: its leave time stays. The stops and their times can change."
+      "leaveRunning": "The task is under way: its leave time stays. The stops and their times can change.",
+      "distance": "Distance",
+      "driving": "Driving",
+      "backAtShort": "Back",
+      "endsShort": "Ends"
     },
     "issues": {
       "above": "Everything that needs attention",

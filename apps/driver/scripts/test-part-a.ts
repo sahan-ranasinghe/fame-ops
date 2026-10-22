@@ -85,7 +85,8 @@ console.log('\nA4: the screens use it (no raw server date on screen)');
     ['app/office/places/[id].tsx', /datesInWords\(t, p\.removed\)[\s\S]*dateWords\(t, p\.updated_at\)/],
     ['app/office/places/index.tsx', /datesInWords\(t, p\.removed\)/],
     ['app/office/reports/index.tsx', /datesInWords\(t, c\.value\)[\s\S]*monthWords\(t, v\.month\.month\)[\s\S]*monthWords\(t, d\.month\)[\s\S]*dateWords\(t, e\.at\)[\s\S]*dateWords\(t, p\.day\)/],
-    ['app/office/task/[id].tsx', /dateWords\(t, task\.needs_driver\.since\)[\s\S]*shortWhen\(t, s\.time\)[\s\S]*shortWhen\(t, task\.started\)/],
+    // Part B: the start's time is built before the page (the RouteStepper's steps), so the three are checked in any order.
+    ['app/office/task/[id].tsx', /^(?=[\s\S]*dateWords\(t, task\.needs_driver\.since\))(?=[\s\S]*shortWhen\(t, s\.time\))(?=[\s\S]*shortWhen\(t, task\.started\))/],
     ['app/office/task/[id]/driver.tsx', /dateWords\(t, task\.needs_driver\.since\)/],
     ['app/office/task/[id]/plan.tsx', /dateWords\(t, plan\.computed_at\)/],
     ['app/office/task/[id]/route.tsx', /spanWords\(t, route\.data\?\.task\?\.started, route\.data\?\.task\?\.completed\)/],
@@ -100,7 +101,7 @@ console.log('\nA4: the screens use it (no raw server date on screen)');
   const screens = [...filesUnder('app'), ...filesUnder('components')].filter((f) => f.endsWith('.tsx'));
   const raw = screens.filter((f) => /<(Txt|Mono)[^>]*>\{[a-z]+\.(at|since|sent|created|updated|opened|reported|expiry|added|until|day|uploaded|removed|started|completed|decided|seen|last_used|updated_at)\}<\//.test(read(f)));
   // A plan's timeline row ({x.at} / {leave.at}) is HH:MM, not a date.
-  check(same(raw.sort(), ['app/office/task/[id]/plan.tsx', 'app/office/trip/review.tsx'].sort()), 'no raw date field printed on a screen (only the plans\' HH:MM rows)', raw);
+  check(same(raw.sort(), ['app/office/task/[id]/plan.tsx']), 'no raw date field printed on a screen (only the plan\'s HH:MM rows; Review\'s are the StatsRow and the RouteStepper since Part B)', raw);
   check(monthWords(en, '2026-10', NOW) === 'Oct' && monthWords(en, '2025-12', NOW) === 'Dec 2025' && monthWords(si, '2026-10', NOW) === si('months.9') && monthWords(en, 'x', NOW) === 'x', 'a month: "Oct", "Dec 2025"');
   check(shortWhen(en, '2026-10-21 08:31', NOW) === '08:31' && shortWhen(en, '2026-10-20 08:31', NOW) === 'Yesterday 08:31' && shortWhen(en, '—', NOW) === '—' && shortWhen(en, '~10:38', NOW) === '~10:38', "a step's time: alone today, with its day otherwise");
   check(spanWords(en, '2026-10-21 08:31', '2026-10-21 11:40', NOW) === 'Today 08:31–11:40' && spanWords(en, '2026-10-19 22:10', '2026-10-20 01:05', NOW) === 'Mon 19 Oct 22:10 – Yesterday 01:05' && spanWords(en, '2026-10-21 08:31', undefined, NOW) === 'Today 08:31', 'a span on one day, across two, still running');
