@@ -118,7 +118,9 @@ export default function TripReview() {
     const rf = { ...requestFieldsOf(d), ...(selfDrive ? {} : { who: emptyWho() }) };
     if (d.mode === 'edit') {
       // Only what changed since the request was loaded goes (the site's rule, with the version it was shown with).
-      const v = updateRequestInput(d.requestId ?? '', d.version ?? 0, rf, d.was ?? rf, trip.base);
+      // An edit draft saved before the shared rules holds { choice } in was: read it as the draft's own answer is read.
+      const was = d.was ? { ...d.was, who: whoOfDraft(d.was) } : rf;
+      const v = updateRequestInput(d.requestId ?? '', d.version ?? 0, rf, was, trip.base);
       return 'error' in v ? v : { tool: 'update_request', input: v.input };
     }
     const v = validateNewRequest(rf, trip.base);
