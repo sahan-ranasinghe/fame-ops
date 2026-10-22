@@ -172,6 +172,20 @@ test.beforeAll(() => {
   test.skip(!KEY, "OFFICE_MCP_KEY (the local shared key) is not set");
 });
 
+
+/**
+ * Round 4–7: moves inside the site the way a link does (history.pushState and the router's popstate), not a full page load:
+ * a page load asks /me, the Overview, the bell and the inbox again, and a test that loads eleven pages in 20 s met
+ * office-api's 120 calls a minute (CI run 39716033919).
+ */
+async function spaGo(page: import("@playwright/test").Page, path: string): Promise<void> {
+  await page.evaluate((p) => {
+    window.history.pushState({}, "", p);
+    window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+  }, path);
+  await page.waitForURL((u) => `${u.pathname}${u.search}` === path);
+}
+
 test("an office user sets a password, runs the fleet pages, watches a driver live, turns on 2-step, and signs in again with the code", async ({ page }) => {
   // Set up through the connector, as the admin would in Claude.
   const email = `e2e.${stamp}@fame.test`;
@@ -1344,7 +1358,7 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
   // Assign a task: a site by its id, with its badge; a site without a pin warns under the row.
-  await page.goto("/tasks/new");
+  await spaGo(page, "/tasks/new");
   const pickup = page.getByLabel("Stop 1", { exact: true });
   await pickup.fill(pinned.toLowerCase());
   const option = page.getByRole("option", { name: new RegExp(`Pinned Site ${stamp}`) });
@@ -1392,13 +1406,13 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   await page.unroute("**/functions/v1/office-api/tools/search_places");
 
   // The request form's stops use the same box (Phase 7, §34: the request is the trip editor).
-  await page.goto("/requests/new");
+  await spaGo(page, "/requests/new");
   await page.getByLabel("Stop 1", { exact: true }).fill(pinned);
   await page.getByRole("option", { name: new RegExp(`Pinned Site ${stamp}`) }).click();
   await expect(page.getByLabel("Stop 1", { exact: true })).toHaveValue(`Pinned Site ${stamp}`);
 
   // Places: find the bare site, give it a pin by hand; a later import never moves it.
-  await page.goto("/places?who=dialog");
+  await spaGo(page, "/places?who=dialog");
   await page.getByLabel("Find a place").fill(bare);
   await page.getByTestId("places-table").getByText(`Bare Site ${stamp}`).click();
   const placePage = page.getByTestId("place-page");
@@ -1417,7 +1431,7 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   await expect(placePage).toContainText("Removed. It is listed under Removed places.");
   const removedNow = await tool<{ results: { site_id?: string }[] }>("search_places", { text: bare, map: false });
   expect(removedNow.results.some((r) => r.site_id === bare)).toBe(false);
-  await page.goto("/places?who=removed");
+  await spaGo(page, "/places?who=removed");
   const removedRow = page.getByTestId("places-table").locator("tr", { hasText: `Bare Site ${stamp}` });
   await removedRow.getByRole("button", { name: "Restore" }).click();
   await expect(page.getByTestId("places-table").locator("tr", { hasText: `Bare Site ${stamp}` })).toHaveCount(0);
@@ -1434,7 +1448,7 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, "All Operational Sites_DNS Data");
   const buffer = Buffer.from(XLSX.write(book, { type: "buffer", bookType: "xlsx" }));
-  await page.goto("/settings/import-sites");
+  await spaGo(page, "/settings/import-sites");
   const xlsxType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   await page.getByLabel("The spreadsheet").setInputFiles({ name: "dialog.xlsx", mimeType: xlsxType, buffer });
   // The file's sheet names its preset: Dialog's, with its mapping filled in.

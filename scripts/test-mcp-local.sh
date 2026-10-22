@@ -26,6 +26,17 @@ if [ -z "$env_file" ] || [ ! -r "$env_file" ]; then
   exit 2
 fi
 
+# The clock (Round 4–7): the suite checks live things against the real clocks of Postgres and the functions (a route of the
+# last ~95 minutes, a point under 3 minutes old, "today"), which cannot be shifted without faketime in the containers. So
+# it starts only in the window where a ~95-minute run cannot cross midnight in Colombo (01:40–21:15), and says when it can
+# instead of failing half-way. FLEET_SUITE_ANY_TIME=1 runs it anyway.
+hhmm=$(TZ=Asia/Colombo date +%H%M)
+if [ "${FLEET_SUITE_ANY_TIME:-}" != "1" ] && { [ "$((10#$hhmm))" -ge 2115 ] || [ "$((10#$hhmm))" -lt 140 ]; }; then
+  echo "It is $(TZ=Asia/Colombo date +%H:%M) in Colombo: the connector suite would cross midnight and its 'today' and route checks" >&2
+  echo "would fail. Run it between 01:40 and 21:15 Colombo (or FLEET_SUITE_ANY_TIME=1 to run it anyway)." >&2
+  exit 3
+fi
+
 # This repo's Node version (the Supabase CLI runs through npx).
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
   . "$HOME/.nvm/nvm.sh"
