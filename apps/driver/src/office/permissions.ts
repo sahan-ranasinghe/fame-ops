@@ -1,5 +1,5 @@
 // Office mode (Phase 8, O1): the server's permission table, copied from supabase/functions/_shared/fleet/permissions.ts at
-// phase9-r47 (Round 4–7: the vehicle checks, a no-app trip's own tools, find_people, My trips for everyone, the holder tools, update_issues; the site imports that very file). Copy again when it changes, never edit this one alone.
+// phase9-r47 (Round 4–7: the vehicle checks, a no-app trip's own tools, find_people, My trips for everyone, the holder tools, update_issues, retention; the site imports that very file). Copy again when it changes, never edit this one alone.
 
 // Who may call which tool: the permissions a person holds (employees.permissions)
 // against the permission each tool needs. One table, applied by office-mcp (Claude)
@@ -181,6 +181,9 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   answer_holder_ask: ANY,
   holder_asks: ANY,
   day_timeline: ["view"],
+  // Round 4–7 (item 9): Settings → Data retention (the account keepers).
+  retention_preview: USERS,
+  run_retention: USERS,
   // Round 2b: office_users runs these for accounts holding none of office_users, users, approve (the guards: accountGuards.ts).
   list_office_users: ACCOUNTS,
   create_office_user: ACCOUNTS,

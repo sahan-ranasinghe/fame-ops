@@ -1297,6 +1297,8 @@ export interface FleetSettings {
   office_phone?: string | null;
   /** Hotfix 2 (J): a task may be made with its vehicle chosen on the day or of a type (switched on after every phone has the update). */
   vehicle_on_the_day?: boolean;
+  /** Round 4–7 (item 9): the days each kind of data is kept. */
+  retention?: RetentionDays;
   /** Round 4–7: the feature switches (Settings → Fleet → Dispatch; absent = on). */
   vehicle_check?: boolean;
   trip_close_prompt?: boolean;
@@ -2531,4 +2533,39 @@ export interface InboxAction {
   label: string;
   tool: string;
   args: Record<string, string>;
+}
+
+// ---- Round 4–7, item 9 (22 October 2026): data retention ----
+
+/** The days each kind of data is kept (the setting `retention`; minimums: location_days 30, audit_changes_days 183). */
+export interface RetentionDays {
+  inbox_read_days: number;
+  inbox_unread_days: number;
+  delivery_days: number;
+  audit_routine_days: number;
+  audit_changes_days: number;
+  issues_resolved_days: number;
+  location_days: number;
+  heartbeats_days: number;
+  counters_days: number;
+  drafts_days: number;
+  app_errors_days: number;
+}
+
+/** retention_preview: what the next run would remove (nothing is removed), the periods, the minimums, never removed. */
+export interface RetentionPreview {
+  periods: RetentionDays;
+  minimums: Partial<RetentionDays>;
+  rules: { key: string; what: string; days: number; before: string; count: number }[];
+  would_remove: number;
+  never: string[];
+  nightly: string;
+  kinds: number;
+}
+
+/** run_retention's answer. */
+export interface RetentionRun {
+  line: string;
+  counts: { key: string; what: string; days: number; before: string; count: number }[];
+  summarised: number;
 }

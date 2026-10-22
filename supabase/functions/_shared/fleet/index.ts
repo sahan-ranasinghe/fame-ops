@@ -74,6 +74,7 @@ import { activityLog, setActivityTools } from "./tools/activity.ts";
 import { finishMyTrip, myTrip, myTripCheck, vehicleChecks } from "./tools/checks.ts";
 import { createdTargets, findPeople, requestTargets, taskTarget, withPassengerList } from "./tools/passengers.ts";
 import { answerHolderAsk, askForIt, dayTimeline, holderAsks, withConflicts } from "./tools/holders.ts";
+import { retentionPreview, runRetentionNow } from "./tools/retention.ts";
 import {
   cancelTask,
   createTask,
@@ -226,6 +227,9 @@ export const TOOLS: AnyTool[] = [
   answerHolderAsk,
   holderAsks,
   dayTimeline,
+  // Round 4–7 (item 9): data retention (users).
+  retentionPreview,
+  runRetentionNow,
 ];
 // Round 2b: the Activity log reads every tool's title and whether it writes (this list, read when it runs).
 setActivityTools(() => TOOLS);
@@ -315,6 +319,10 @@ export const INSTRUCTIONS = [
   "Share trip link for the others. Busy drivers and vehicles (get_settings holder_contact): conflicts, availability, " +
   "suggest_vehicles and task_detail name the holder (who asked for the trip, else who assigned it) with Call and WhatsApp; " +
   "ask_for_it asks them (Yes / No in one tap; never changes a trip); day_timeline shows a day per driver or vehicle.",
+  "Data retention (Round 4–7; get_settings retention, users): a nightly job removes notifications, delivery records, the " +
+  "activity log's routine entries and old changes, old resolved issues, location points older than 6 months (each " +
+  "driver's day stays as a summary: driver_route answers it), heartbeats and usage counters; business records are never " +
+  "removed. retention_preview counts what would go; run_retention runs it now.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
   "Office accounts (users permission): create_office_user returns a one-time set-password link to send by WhatsApp; never ask for or type a password. " +
   "Each office person has permissions (view, request, approve, assign_tasks, vehicles, issues, users); update_office_user changes them.",

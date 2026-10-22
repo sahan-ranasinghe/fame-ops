@@ -76,6 +76,11 @@ export function setActivityTools(list: () => readonly AnyTool[]): void {
   allTools = list;
 }
 
+/** Round 4–7 (item 9): the activity log's routine entries: every read and the routine writes (kept 30 days, not 2 years). */
+export function routineToolNames(): string[] {
+  return [...new Set([...ROUTINE, ...allTools().filter((t) => t.readOnly).map((t) => t.name)])];
+}
+
 export const activityLog = tool({
   name: "activity_log",
   title: "Activity log",

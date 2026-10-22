@@ -20,6 +20,36 @@ export interface RushHour {
   bands: RushHourBand[];
 }
 
+/** Round 4–7 (item 9): the days each kind of data is kept (Slack / Google Workspace / Samsara retention policies). */
+export interface Retention {
+  inbox_read_days: number;
+  inbox_unread_days: number;
+  delivery_days: number;
+  audit_routine_days: number;
+  audit_changes_days: number;
+  issues_resolved_days: number;
+  location_days: number;
+  heartbeats_days: number;
+  counters_days: number;
+  drafts_days: number;
+  app_errors_days: number;
+}
+export const RETENTION_DEFAULTS: Retention = {
+  inbox_read_days: 30,
+  inbox_unread_days: 90,
+  delivery_days: 14,
+  audit_routine_days: 30,
+  audit_changes_days: 730,
+  issues_resolved_days: 365,
+  location_days: 183,
+  heartbeats_days: 90,
+  counters_days: 90,
+  drafts_days: 30,
+  app_errors_days: 90,
+};
+/** The floors no one can go under: GPS 30 days, the activity log's changes 6 months. */
+export const RETENTION_MINIMUMS: Partial<Record<keyof Retention, number>> = { location_days: 30, audit_changes_days: 183 };
+
 export interface Settings {
   dwell_min: Record<string, number>;
   buffer_min: number;
@@ -49,6 +79,8 @@ export interface Settings {
    *  no-app trip, the fuel card at Start task, passengers on trips, who holds a busy driver or vehicle (and Ask for it). */
   vehicle_check: boolean;
   trip_close_prompt: boolean;
+  /** Round 4–7 (item 9): how long each kind of data is kept (days); the nightly retention job removes the rest. */
+  retention: Retention;
   fuel_card: boolean;
   passengers: boolean;
   holder_contact: boolean;
@@ -150,6 +182,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   planner_suggestions: true,
   vehicle_check: true,
   trip_close_prompt: true,
+  retention: { ...RETENTION_DEFAULTS },
   fuel_card: true,
   passengers: true,
   holder_contact: true,
@@ -211,6 +244,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "A task may be made without a vehicle: the driver's vehicle on the day, or any vehicle of a type (the driver confirms it at Start task). Switch it on after every phone has the app update that knows it",
   planner_suggestions:
     "The trip forms suggest the leave time and each stop's stay (in grey, editable) and give a hint when a chosen time misses an arrive-by; off = just the fields, no suggestions. Never blocks a save",
+  retention:
+    "How long data is kept, in days (Settings → Data retention): notifications read / unread, delivery records, the activity log's routine entries and changes, resolved issues, location points (each driver's day stays as a summary), heartbeats, usage counters, unsent trip drafts, app errors. Business records are never removed. Minimums: location points 30, activity-log changes 183",
   vehicle_check:
     "The vehicle check before work: whenever a driver takes a vehicle, and before a self-drive or someone-else trip sets off, \"Any damage or problem with <plate>?\" (all good in one tap; a problem with photos becomes a pre-trip issue). Off = not asked",
   trip_close_prompt:
@@ -348,6 +383,16 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
     case "planner_suggestions":
       if (typeof value !== "boolean") throw new ToolError("planner_suggestions: true or false.");
       return value;
+    case "retention": {
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new ToolError("retention: an object of days by kind.");
+      const out: Retention = { ...RETENTION_DEFAULTS };
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (!(k in RETENTION_DEFAULTS)) throw new ToolError(`retention: "${k}" is not one of ${Object.keys(RETENTION_DEFAULTS).join(", ")}.`);
+        const min = RETENTION_MINIMUMS[k as keyof Retention] ?? 1;
+        out[k as keyof Retention] = number(v, `retention.${k}`, min, 3650, true);
+      }
+      return out;
+    }
     case "vehicle_check":
     case "trip_close_prompt":
     case "fuel_card":

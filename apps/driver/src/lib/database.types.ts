@@ -221,6 +221,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"driver_day_summaries": {
+                  Row: {
+                    "computed_at": string,"day": string,"driving_min": number,"employee_id": string,"first_at": string | null,"km": number,"last_at": string | null,"points": number,"stopped_min": number,"stops": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "computed_at"?: string,"day": string,"driving_min"?: number,"employee_id": string,"first_at"?: string | null,"km"?: number,"last_at"?: string | null,"points"?: number,"stopped_min"?: number,"stops"?: number
+                  }
+                  Update: {
+                    "computed_at"?: string,"day"?: string,"driving_min"?: number,"employee_id"?: string,"first_at"?: string | null,"km"?: number,"last_at"?: string | null,"points"?: number,"stopped_min"?: number,"stops"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "driver_day_summaries_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"driver_heartbeats": {
                   Row: {
                     "app_state": string | null,"app_version": string | null,"at": string,"battery_pct": number | null,"data_available": boolean | null,"dropped_accuracy": number | null,"dropped_duplicate": number | null,"dropped_jitter": number | null,"dropped_jump": number | null,"employee_id": string,"fixes_seen": number | null,"fixes_stored": number | null,"id": number,"last_gps_fix_age_s": number | null,"location_on": boolean | null,"location_restarts": number | null,"permission": string | null,"queued_points": number | null,"received_at": string,"rejected_points": number | null,"session_id": string | null,"sharing": boolean | null,"video_bytes_waiting": number | null,"video_uploads_waiting": number | null
@@ -1748,6 +1768,11 @@ isOneToOne: false
 "current_office_role":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"days_without_summary":
+{ Args: { "p_before": string,"p_limit": number }; Returns: {
+              "day": string,"employee_id": string
+            }[]
+                           },
 "decline_task":
 { Args: { "p_at"?: string,"p_note"?: string,"p_reason": string,"p_task_id": string }; Returns: string
                            },
@@ -1936,6 +1961,9 @@ isOneToOne: false
                            },
 "request_event_visible":
 { Args: { "p_request_id": string }; Returns: boolean
+                           },
+"retention_batch":
+{ Args: { "p_before": string,"p_dry": boolean,"p_limit": number,"p_rule": string,"p_tools"?: (string)[] }; Returns: number
                            },
 "save_fleet_setting":
 { Args: { "p_by": string,"p_key": string,"p_value": Json }; Returns: undefined

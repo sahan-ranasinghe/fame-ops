@@ -124,4 +124,6 @@ export const ALL_TOOLS = [
   "ask_for_it", "answer_holder_ask", "holder_asks", "day_timeline",
   // Round 4–7 (item 8): resolve or dismiss many issues at once.
   "update_issues",
+  // Round 4–7 (item 9): Settings → Data retention.
+  "retention_preview", "run_retention",
 ];

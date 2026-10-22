@@ -362,6 +362,30 @@ export const driverRoute = tool({
     // The phone's watchdog restarted the location service this often in the window (no position for 90 s while moving).
     const restarts = beats.reduce((s, b) => s + (b.location_restarts ?? 0), 0) || undefined;
     if (rows.length === 0) {
+      // Round 4–7 (item 9): a day older than the points' period answers its summary (km, driving, stops, first and last).
+      const kept = task ? null : unwrapMaybe(
+        await db.from("driver_day_summaries").select("*").eq("employee_id", who.id).eq("day", day).maybeSingle(),
+        "day summary",
+      );
+      if (kept) {
+        return {
+          result: {
+            driver: who.name,
+            date: day,
+            window,
+            summary_only: true,
+            km: Number(kept.km),
+            driving_minutes: kept.driving_min,
+            stopped_minutes: kept.stopped_min,
+            stops: kept.stops,
+            first_point: kept.first_at ? colomboTime(kept.first_at) : undefined,
+            last_point: kept.last_at ? colomboTime(kept.last_at) : undefined,
+            points_stored: kept.points,
+            note: "Older than the location points are kept: the day's summary only (no line, no stops on a map).",
+          },
+          summary: `route ${who.name} ${day}: the day's summary (${kept.km} km)`,
+        };
+      }
       return {
         result: {
           driver: who.name,

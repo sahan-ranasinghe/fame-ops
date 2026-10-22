@@ -15,7 +15,7 @@ export const READ_TOOLS: ReadonlySet<string> = new Set([
   "fleet_overview", "get_settings", "holder_asks", "issue_history", "list_app_errors", "list_drivers", "list_fuel", "list_import_presets",
   "list_issues", "list_office_users", "list_place_imports", "list_places", "list_requests", "list_tasks",
   "list_vehicle_reports", "list_vehicles", "live_drivers", "mileage_summary", "my_inbox", "my_notification_settings",
-  "my_prefs", "my_trip", "my_trips", "place_detail", "plan_task", "routing_usage", "search_places", "suggest_vehicles",
+  "my_prefs", "my_trip", "my_trips", "place_detail", "retention_preview", "plan_task", "routing_usage", "search_places", "suggest_vehicles",
   "task_board", "task_detail", "unavailability", "vehicle_checks", "vehicle_documents",
 ]);
 

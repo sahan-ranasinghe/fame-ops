@@ -3,6 +3,9 @@
 //   POST { "job": "sync", "task_id"?, "report_id"?, "request_id"?, "vehicle_id"? }
 //   POST { "job": "prune_fuel_videos" }   (pg_cron fuel-videos-prune, monthly: the files older
 //                                          than 12 months go, the rows are marked pruned)
+//   POST { "job": "retention" }           (pg_cron retention, nightly 02:45 Colombo, Round 4–7 item 9: each driver's
+//                                          day kept as a summary, then what is past its period removed in batches,
+//                                          one activity-log row)
 //   POST { "job": "google_content" }      (pg_cron google-content, nightly: the Google pins of stops
 //                                          still to be driven fetched again at 23 days, then every
 //                                          Google detail over 30 days old removed)
@@ -17,6 +20,10 @@ import { adminClient } from "../_shared/fleet/db.ts";
 import { syncIssues, type SyncScope } from "../_shared/fleet/issues.ts";
 import { pruneFuelVideos } from "../_shared/fleet/videos.ts";
 import { googleContentJob } from "../_shared/fleet/googlePlaces.ts";
+import { runRetention } from "../_shared/fleet/retention.ts";
+import { routineToolNames } from "../_shared/fleet/tools/activity.ts";
+// The tool list registers itself with the activity log (its reads are the log's routine entries).
+import "../_shared/fleet/index.ts";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -62,6 +69,16 @@ Deno.serve(async (request) => {
     } catch (error) {
       console.error("fleet-jobs google_content failed", error);
       return json(500, { error: "google_content_failed", message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  if (body.job === "retention") {
+    const started = Date.now();
+    try {
+      const result = await runRetention(adminClient(), new Date(), { dry: false, routine: routineToolNames(), by: "System" });
+      return json(200, { job: "retention", ...result, ms: Date.now() - started });
+    } catch (error) {
+      console.error("fleet-jobs retention failed", error);
+      return json(500, { error: "retention_failed", message: error instanceof Error ? error.message : String(error) });
     }
   }
   if (body.job !== "sync") return json(400, { error: "unknown_job" });
