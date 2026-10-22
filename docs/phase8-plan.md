@@ -1259,6 +1259,34 @@ same style.
   artifact (Playwright's mockups project, the design pages of `apps/driver/src/design` for the driver's two screens, the
   e2e build only), and the differences with why.
 - The connector suite's clock (Sahan, 22 October 2026): no new Docker images; the 21:15–01:40 start guard stays.
+- **Restyle, never rebuild (Sahan, 22 October 2026; item 12 and every UI change of the round).**
+  - The mockups set the look and the layout only. The existing screens and components are restyled and restructured, never
+    rebuilt from the picture. The mockups' names, places and numbers are samples: all text comes from real data and the
+    translation files.
+  - Everything works as it does today:
+    - the crash screen and error boundaries, the success snackbars, the primary button's own spinner, no double-saves,
+      timeouts with "Try again", writes never retried by themselves, sign-out only on 401 / 403;
+    - the planner (one calculation, advisory, suggestions in grey), the clock time picker, the duration sheet, Where's
+      suggestions (Saved and my Recent);
+    - the selection marks, dates in words, the i18n guard, Sinhala, Latin digits;
+    - visibility by permission, locked accounts with their reasons, the last-admin rule;
+    - live stop progress (the slide's arrive / leave / finish, Undo, "corrected", times confirmed later, the background
+      prompt), the live timeline and the re-estimates;
+    - the notification settings, the offline queue, the map fallbacks (Google → the free map → "Map not available"), the
+      contrast rules.
+    - Every feature or action that exists today but is not drawn in a mockup stays, placed in the mockup's style (⋯ More,
+      a section, a sheet, the bottom bar).
+  - A feature inventory comes first for every screen restyled: everything on it today on every surface (buttons, actions,
+    menu items, fields, links, filters, tabs, badges, statuses, warnings, empty and error states, each role and permission
+    variant), each mapped to its new place.
+  - Nothing is removed without Sahan's OK: a candidate stays and is listed under "Proposed removals" with the reason.
+  - Each screen gets a test that its key actions still exist.
+  - Every existing test keeps passing. Only the selectors or text that legitimately changed are updated, and each is listed.
+  - The checkpoint gives per screen:
+    - the inventory table (screen · item · old place · new place);
+    - "kept behaviour checked" (the tests that cover it);
+    - each behaviour change, with the reason;
+    - the proposed removals.
 
 ### 33.5 Also in the round
 - `docs/voice-calls-plan.md` (doc only): WebRTC through a service (LiveKit, Agora, Twilio Voice) with their current prices
