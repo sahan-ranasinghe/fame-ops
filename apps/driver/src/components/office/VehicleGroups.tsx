@@ -11,6 +11,7 @@ import { HolderStrip } from '@/components/office/HolderParts';
 import { ListEmpty } from '@/components/patterns/ListState';
 import { ChoiceRow } from '@/components/patterns/Select';
 import { Plate, Txt } from '@/components/ui';
+import { availabilityText } from '@/office/availabilityWords';
 import { holderOf, type Wanted } from '@/office/holderLogic';
 import { groupRows, vehicleLine } from '@/office/trip/formsLogic';
 import type { SuggestedVehicle } from '@/office/types';
@@ -26,7 +27,7 @@ export function VehicleRow({ v, selected, onPick, disabled, reason, wanted, igno
   return (
     <View key={v.reg_no} style={{ gap: 4 }}>
       <ChoiceRow selected={selected} onPress={onPick} disabled={disabled} disabledReason={reason} leading={<Plate regNo={v.reg_no} />} mark="end" accessibilityLabel={v.reg_no} testID={`vehicle-row-${v.reg_no}`}>
-        <Txt variant={v.pick === 'no' ? 'strong' : 'muted'} size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
+        <Txt variant={v.pick === 'no' ? 'strong' : 'muted'} size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }), (line) => availabilityText(t, line))}</Txt>
         {v.assigned_to ? <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt> : null}
       </ChoiceRow>
       {v.assigned_to && (v.call || v.whatsapp) ? (

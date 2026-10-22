@@ -12,6 +12,7 @@ import { useLeaveGuard } from '@/components/navigation';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ChoiceRow } from '@/components/patterns/Select';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { availabilityText } from '@/office/availabilityWords';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { canSwap, type SwapFields, type SwapResult, swapInput, swapPlates, swapRows, typedKm } from '@/office/taskExtrasLogic';
@@ -49,7 +50,7 @@ export default function SwapVehicleScreen() {
       : r.state === 'garage' ? [t('office.task.swapGarage'), r.held_by ? t('office.task.swapWith', { name: r.held_by }) : ''].filter(Boolean).join(' · ')
       : r.state === 'held' ? `${t('office.task.swapWith', { name: r.held_by ?? '' })}${since}`
       : t('office.task.swapFree');
-    return [base, r.booked].filter(Boolean).join(' · ');
+    return [base, r.booked ? availabilityText(t, r.booked) : ''].filter(Boolean).join(' · ');
   };
 
   async function swap() {

@@ -15,6 +15,7 @@ import { useLeaveGuard } from '@/components/navigation';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Plate, Txt } from '@/components/ui';
+import { availabilityText } from '@/office/availabilityWords';
 import { dutyOf } from '@/office/liveLogic';
 import { canMove, currentChoice, type MoveResult, moveHint, moveInput, moveSentences, NO_VEHICLE, searchRows } from '@/office/moveLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -54,7 +55,7 @@ export default function MoveVehicleScreen() {
       : r.state === 'garage' ? [t('office.task.swapGarage'), r.held_by ? t('office.task.swapWith', { name: r.held_by }) : ''].filter(Boolean).join(' · ')
       : r.state === 'held' ? `${t('office.task.swapWith', { name: r.held_by ?? '' })}${since}`
       : t('office.task.swapFree');
-    return [base, r.booked].filter(Boolean).join(' · ');
+    return [base, r.booked ? availabilityText(t, r.booked) : ''].filter(Boolean).join(' · ');
   };
 
   async function move() {

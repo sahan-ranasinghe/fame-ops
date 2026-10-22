@@ -33,6 +33,7 @@ import { SkeletonRows } from '@/components/patterns/ListState';
 import { colomboDate } from '@/lib/time';
 import { rankedDrivers } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
+import { availabilityText } from '@/office/availabilityWords';
 import { wantedOfWindow } from '@/office/holderLogic';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
@@ -205,7 +206,7 @@ function WhoStep({ d }: { d: TripDraft }) {
   // The chosen vehicle's facts (design 08: "Toyota HiAce · 12 seats · Free"), from the groups when they know it.
   const chosenReg = f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : picked?.vehicle?.reg_no ?? '';
   const chosenV = chosenReg ? [...taskGroups.flatMap((g) => g.rows), ...allSuggested].find((v) => v.reg_no === chosenReg) : undefined;
-  const chosenFacts = chosenV ? vehicleLine(chosenV, (n) => t('office.trip.seats', { n })) : '';
+  const chosenFacts = chosenV ? vehicleLine(chosenV, (n) => t('office.trip.seats', { n }), (line) => availabilityText(t, line)) : '';
   const defaultLine = f.driver
     ? dayDefault
       ? (f.vehicle && f.vehicle !== ON_THE_DAY ? t('office.trip.defaultDayInstead') : t('office.trip.defaultDay'))
