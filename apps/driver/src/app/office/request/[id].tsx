@@ -68,6 +68,7 @@ import { requestTitle } from '@/office/homeLogic';
 import { holderOf, wantedOfWindow } from '@/office/holderLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
+import { useSwitch } from '@/office/switches';
 import { sentenceText } from '@/office/statusWords';
 import { groupRows } from '@/office/trip/formsLogic';
 import { askedKey, asksNoDriver } from '@/office/trip/whoWords';
@@ -264,7 +265,9 @@ export default function ApproveRequest() {
     ? { time: planned?.totals.ends, place: card.trip.start.name, meta: (card.fields?.back_by ?? card.back_by) ? t('office.request.backBy', { time: (card.fields?.back_by ?? card.back_by) as string }) : undefined }
     : null;
   const stepRows = card && planned ? planRows(planned.items, { startName: card.trip?.start?.name, back: backAt }, planWords(t)) : trip ? requestRows(trip.rows) : [];
-  const pax = card ? Math.max(card.fields?.pax ?? 0, card.passengers_list?.length ?? 0) : 0;
+  // The switch passengers off: who rides is not shown, nor counted in the facts (office/switches.ts).
+  const ridersOn = useSwitch('passengers');
+  const pax = card && ridersOn ? Math.max(card.fields?.pax ?? 0, card.passengers_list?.length ?? 0) : 0;
   const waLink = card?.requester_phone ? whatsappLink(card.requester_phone) : null;
   const [moreOpen, setMoreOpen] = useState(false);
   const [allDrivers, setAllDrivers] = useState(false);
@@ -327,7 +330,7 @@ export default function ApproveRequest() {
         )}
         {card && trip?.totals && (
           <StatsRow variant="facts" testID="request-facts" items={[
-            { key: 'km', icon: Road, value: `${trip.totals.km} km`, label: t('office.ui3.factDistance') },
+            { key: 'km', icon: Road, value: t('office.trip.kmN', { km: trip.totals.km }), label: t('office.ui3.factDistance') },
             { key: 'drive', icon: Clock, value: durationText(t, trip.totals.driveMin), label: t('office.ui3.factDriving') },
             ...(trip.totals.ends ? [{ key: 'ends', icon: Undo2, value: trip.totals.ends, label: t(card.trip?.return_to_base ? 'office.ui3.factBack' : 'office.ui3.factEnds') }] : []),
             ...(pax > 0 ? [{ key: 'people', icon: Users, value: String(pax), label: t('office.ui3.factPeople') }] : []),
@@ -404,7 +407,7 @@ export default function ApproveRequest() {
           </Section>
         )}
         {/* Round 4–7 (6): who rides by name (a registered person with their photo; someone without an account with Call / WhatsApp). */}
-        {card?.passengers_list?.length ? (
+        {ridersOn && card?.passengers_list?.length ? (
           <Section look="list" title={t('office.passengers.title')} count={card.passengers_list.length}>
             <View style={styles.inner}>
               <PassengerRows list={card.passengers_list} />

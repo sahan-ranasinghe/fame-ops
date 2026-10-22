@@ -13,7 +13,7 @@ import {
   STATUS_FILTERS, statusTone, updateInput, whoLine, type WhoWords,
 } from '../src/office/issuesLogic';
 import {
-  bulkCalls, groupText, groupTick, ISSUE_TABS, metaParts, needsAction, rowTitle, showsGroups, statusShown, TAB_STATUS, tabExtra, tabFor, toggled, withoutIssues,
+  bulkCalls, groupText, groupTick, ISSUE_TABS, metaParts, needsAction, rowTitle, rowWho, showsGroups, statusShown, TAB_STATUS, tabExtra, tabFor, toggled, withoutIssues,
 } from '../src/office/issuesLogic';
 import type { Issue, IssueHistory, IssuesList } from '../src/office/types';
 
@@ -144,6 +144,18 @@ console.log('\n== The rows\' lines (rowLine, whoLine, snoozeParts) ==');
   check(snoozeParts(issue()) === undefined, 'not snoozed: nothing');
   check(same(snoozeParts(issue({ snoozed_until: '2026-10-19 07:00' })), { until: '2026-10-19 07:00' }), 'snoozed until');
   check(same(snoozeParts(issue({ snoozed_until: '2026-10-19 07:00', snoozed_by: 'Sahan' })), { until: '2026-10-19 07:00', by: 'Sahan' }), 'snoozed until, by whom');
+  // Review of Round 4–7: the row's photo alone said neither who took it nor when it was closed; the words are back.
+  check(same(rowWho(issue({ taken_by: { name: 'Charuka', at: '2026-10-18 10:05' }, assigned_to: { name: 'Charuka' } })), { taken: { name: 'Charuka', at: '10:05' } }), 'an active row: taken by, with the time of day');
+  check(same(rowWho(issue({ assigned_to: { name: 'Charuka' } })), { taken: { name: 'Charuka' } }) && same(rowWho(issue()), {}), 'taken by from the person it is given to; nobody: nothing');
+  check(same(rowWho(issue({ status: 'resolved', resolved_by: 'Sahan', resolved_at: '2026-10-18 14:20', taken_by: { name: 'Charuka' } })), { closed: { how: 'resolved', by: 'Sahan', at: '2026-10-18 14:20' } }), 'a resolved row: who and when (not who took it)');
+  check(same(rowWho(issue({ status: 'dismissed', resolved: '2026-10-18 11:30' })), { closed: { how: 'dismissed', by: null, at: '2026-10-18 11:30' } }) && same(rowWho(issue({ status: 'resolved', resolved_by: 'system' })), { closed: { how: 'resolved', by: 'system', at: null } }),
+    'dismissed with the older field; resolved by itself without a time');
+  const list = readFileSync(join(__dirname, '..', 'src', 'app', 'office', 'issues', 'index.tsx'), 'utf8');
+  check(list.includes("t('office.issues.takenByAt', { name: who.taken.name, at: who.taken.at })") && list.includes("t(c.how === 'dismissed' ? 'office.issues.dismissedBy' : 'office.issues.resolvedBy', { name: c.by, at })")
+    && list.includes("[t('office.issues.closedAuto'), at].filter(Boolean).join(' · ')") && list.includes('line={[dueWords(t, meta.rest), taken].filter(Boolean).join(\' · \')}'),
+    'the row says "taken by Sahan 10:05" in the grey line and "Resolved by Sahan · Today 14:20" under it');
+  check(/<ListRow\b/.test(list) && list.includes('onLongPress={canPick ? () => pick([i.id], !on) : undefined}') && list.includes('selected={on}') && list.includes('testID="issue-tick"') && list.includes('<Avatar name={i.assigned_to.name}'),
+    'the row is the one list row: the tick, the long press, the ticked look, the chips and the photo kept');
 }
 
 console.log('\n== The facts on the page (issueFacts) ==');

@@ -52,3 +52,13 @@ export function nextIndex(
 
 /** The old phone-wide draft goes to this person only when they were the last to sign in and have none of their own. */
 export const legacyGoesTo = (person: string, lastEmail: string | null | undefined, hasOwn: boolean): boolean => !hasOwn && personOf(lastEmail) === person;
+
+/**
+ * A sign-in, before the e-mail typed replaces the one kept (`previousEmail`): the old phone-wide draft is dropped unless the
+ * person signing in is the one who signed in last (it was theirs: their getDraft moves it to them). Without this, the
+ * e-mail would already be the new person's when the draft is first read, and another person's draft would move to them.
+ */
+export const legacyDropAtSignIn = (signingIn: string, previousEmail: string | null | undefined): boolean => {
+  const person = personOf(signingIn);
+  return !person || personOf(previousEmail) !== person;
+};

@@ -12,7 +12,7 @@ import {
   appendDuty, appendFuel, appendVehicles, clockOf, clockOut, companyInput, docTone, dutyArgs, emptyVehicle, filterCounts, heldLine, hoursText, isDate, kmLine, megabytes, mileageView, mondayOf,
   monthOf, outsideKm, rangeArgs, rangeDayCount, rangeFits, REPORT_MAX_DAYS, reportSections, rowCells, vehicleChoice, vehicleFilterDefs, vehicleFormDirty, vehicleInput, vehiclesArgs, vehiclesEmpty, vehicleTone,
   linksStale, reportFilterArgs, reportFilterDefs, videoChip, videoLine, videoPieces, VIDEO_LINK_FRESH_MS, wholeMonth,
-  amountsOf, amountWords, FUEL_GRADES, FUEL_TYPES, fuelKeys, fuelMissing, fuelShown, fuelTextParts, gradesFor, withFuelGrade, withFuelType,
+  amountsOf, amountWords, FUEL_GRADES, FUEL_TYPES, fuelKeys, fuelMissing, fuelShown, fuelUnset, fuelTextParts, gradesFor, withFuelGrade, withFuelType,
 } from '../src/office/manageLogic';
 import { fuelTitle } from '../src/office/taskDetailLogic';
 import { MORE_SECTION, moreFor } from '../src/office/nav';
@@ -158,7 +158,14 @@ console.log('\nVehicles: the fuel type and grade (Round 4–7, feature 5)');
   check('input' in r1b && r1b.input.fuel_type === 'electric' && !('fuel_grade' in r1b.input), 'a grade that does not fit the type is never sent', r1b);
   const now = { fuel_type: 'petrol' as const, fuel_grade: 'petrol_92' as const };
   check(same(fuelShown(f, now), { type: 'petrol', grade: 'petrol_92' }) && !fuelMissing(f, false, now), 'an edit starts from the vehicle\'s own fuel');
-  check(fuelMissing(f, false, { fuel_type: undefined }) && fuelMissing(f, false, null) && !fuelMissing(f, false, undefined), 'an edit of a vehicle with no fuel type waits for one; while the vehicle loads it does not refuse');
+  // Review of Round 4–7: only Register needs the fuel type; an edit of a vehicle without one saves the other changes and
+  // says "Fuel type: not set" in amber (fuelUnset), never while the vehicle loads.
+  check(!fuelMissing(f, false, { fuel_type: undefined }) && !fuelMissing(f, false, null) && !fuelMissing(f, false, undefined) && fuelMissing(f, true, null),
+    'an edit of a vehicle with no fuel type does not wait for one (Register still does)');
+  check(fuelUnset(f, false, { fuel_type: undefined }) && fuelUnset(f, false, null) && !fuelUnset(f, false, undefined) && !fuelUnset(f, false, now) && !fuelUnset({ ...f, fuelType: 'diesel' }, false, null) && !fuelUnset(f, true, null),
+    'the amber "not set" on an edit of a vehicle known to have none, until one is picked');
+  const unsetEdit = vehicleInput({ ...f, seats: '9' }, 'WP CAB-9', { fuel_type: undefined });
+  check('input' in unsetEdit && same(unsetEdit.input, { reg_no: 'WP CAB-9', seats: 9 }), 'Edit saves a vehicle with no fuel type: the other changes go, no fuel field', unsetEdit);
   const r2 = vehicleInput({ ...f, seats: '9' }, 'WP CAB-1', now);
   check('input' in r2 && same(r2.input, { reg_no: 'WP CAB-1', seats: 9 }), 'an edit that keeps the fuel sends none of it', r2);
   const toDiesel = { ...f, ...withFuelType(f, 'diesel', now) };
@@ -188,6 +195,7 @@ console.log('\nFuel: a missing amount (Round 4–7, §33.6)');
   check(reports.includes('sub={amountsLine(d.totals)}') && reports.includes('amountWords(e.lkr)') && reports.includes('office.fuel.withoutAmountOne') && reports.includes('fuelTextParts(e.fuel)'), 'Reports → Fuel: the totals with "N fills without an amount", each fill\'s amount and fuel');
   const form = read('app/office/vehicles/form.tsx');
   check(form.includes('disabled={!!waits}') && form.includes("t('office.fuel.pickType')") && form.includes('withFuelType(x, k, now)') && form.includes('gradesFor(fuel.type)'), 'the form: the fuel type chips, the grades that fit, the button waits with the reason');
+  check(form.includes("fuelUnset(f, isNew, now) ? <Txt variant=\"strong\" size={14} color={colors.amberText} testID=\"vehicle-fuel-unset\">{t('office.fuel.notSet')}</Txt>"), 'the form: an edit of a vehicle with no fuel type says "Fuel type: not set" in amber');
   const page = read('app/office/vehicles/[reg].tsx');
   check(page.includes('fuelKeys(v.fuel_type, v.fuel_grade)') && page.includes("t('office.fuel.setIt')") && page.includes('!v.fuel_type && canEdit'), 'the vehicle page: the fuel, amber "not set" with Set it for someone who may edit');
 }

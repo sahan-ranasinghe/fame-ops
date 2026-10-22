@@ -92,3 +92,14 @@ export function odometerFromText(text: string, lastKnownKm?: number | null): num
   }
   return candidates.reduce((best, n) => (String(n).length > String(best).length ? n : best));
 }
+
+/** "16 MB" (one decimal under 10 MB). */
+export function megabytes(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+}
+
+/** Upload progress as a whole percentage. */
+export function percentOf(offset: number, bytes: number): number {
+  return bytes > 0 ? Math.min(100, Math.floor((offset / bytes) * 100)) : 0;
+}

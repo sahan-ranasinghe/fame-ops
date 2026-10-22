@@ -71,6 +71,7 @@ import {
   streamsFor,
   totalAmountText,
   videoMark,
+  videoWords,
 } from '../src/lib/history';
 import { namesLine, passengerRows, ridingPassengers } from '../src/lib/passengers';
 import { RECENT_REPORTS, REPORT_ICON, reportIcon, reportMeta, reportsSeeAll, reportTitle } from '../src/lib/reportList';
@@ -290,6 +291,9 @@ function reminderAndLine() {
   check(/\.\.\.fillColumns\(fuel\.fill\)/.test(app) && /if \(taskId\) \{\s*saveFuelMemos\(rememberFilled\(fuelMemosRef\.current, taskId, at\)\);\s*void disarmFuelReminder\(\);/.test(app), 'a fill logged on the task cancels it (and sends its fuel type and grade)');
   check(/void playSound\('done'\);\s*\/\/ The task is over: no "Fill up on the way" reminder after it\.\s*void disarmFuelReminder\(\);/.test(app), 'Save & finish cancels it');
   check(/remove\(KEYS\.fuelMemos\);[\s\S]{0,120}void disarmFuelReminder\(\);/.test(app), 'sign-out forgets the answers and cancels it');
+  // Review of Round 4–7: a reminder armed before the office turned the switch off never fires (tests/fuelCard.test.tsx runs it).
+  const sw = code('lib/fuelReminderSwitch.ts');
+  check(/useFuelReminderSwitch\(shift\.fuel_card\);/.test(app) && /if \(!on\) void disarmFuelReminder\(\);/.test(sw), 'the switch fuel_card off cancels a reminder already armed (and takes it out of the tray)');
   const layout = code('app/_layout.tsx');
   check(/if \(data\.kind === 'fuel'\) \{[\s\S]*?router\.push\(\{ pathname: '\/log-mileage', params: \{ mode: 'fuel', taskId \} \}\);/.test(layout), 'its tap opens Log fuel for the task (Today underneath)');
   const task = code('app/task/[id].tsx');
@@ -364,6 +368,13 @@ async function recentAndHistory() {
   // The video's mark.
   check(videoMark(entries[0], undefined, false).kind === 'uploaded' && videoMark({ videoStatus: 'none', videoBytes: null }, undefined, false).kind === 'none', 'uploaded: the mark; none: nothing');
   check(videoMark(entries[0], { failed: true, bytes: 10, offset: 0 }, false).kind === 'failed' && videoMark(entries[0], { failed: false, bytes: 10, offset: 0 }, true).kind === 'waitingWifi', 'failed (tap to retry); waiting for Wi-Fi');
+  // Review of Round 4–7: a retry only while the phone's queue holds the piece; the server's "failed" alone is only said.
+  check(same(videoMark(entries[0], { failed: true, bytes: 10, offset: 0 }, false), { kind: 'failed', retry: true }) && same(videoMark({ videoStatus: 'failed', videoBytes: 10 }, undefined, false), { kind: 'failed', retry: false }),
+    'failed with the piece on the phone: retry; failed on the server with nothing queued: no retry');
+  check(same(videoWords({ kind: 'failed', retry: true }, true), { key: 'fuel.failed', tone: 'red' }) && same(videoWords({ kind: 'failed', retry: true }, false), { key: 'fuel.uploadFailed', tone: 'red' }) && same(videoWords({ kind: 'failed', retry: false }, true), { key: 'fuel.uploadFailed', tone: 'red' }),
+    '"Failed · tap to retry" only where a tap retries; else "Video upload failed"');
+  check(same(videoWords({ kind: 'uploading', bytes: 8_808_038, offset: 3_523_216 }, false), { key: 'fuel.pctOfSize', vars: { pct: 40, size: '8.4 MB' }, tone: 'blue' }) && same(videoWords({ kind: 'none' }, false), { key: 'fuel.noVideo', tone: 'muted' }) && videoWords({ kind: 'waitingWifi' }, false).key === 'fuel.waitingWifi' && videoWords({ kind: 'uploaded' }, false).key === 'fuel.uploaded',
+    'the words back: "40 % of 8.4 MB", "No video", "Waiting for Wi-Fi", "Uploaded"');
   check(same(videoMark({ videoStatus: 'recorded', videoBytes: 3000 }, { failed: false, bytes: 1000, offset: 500 }, false), { kind: 'uploading', bytes: 3000, offset: 2500 }), 'uploading: the pieces already gone count as done');
 
   // The server's pages and the two lists merged.
@@ -396,8 +407,12 @@ async function recentAndHistory() {
   const mileage = code('app/(tabs)/mileage.tsx');
   check(/seeAll="all"/.test(mileage) && /recentEntries\(mergeEntries\(/.test(mileage) && /pendingOdometerLogs\(\)/.test(mileage) && /windowOf\(todayTasks, shown\)/.test(mileage), 'Mileage: today\'s tasks stay; Recent (5, the phone\'s own too) and See all');
   const rowsSrc = code('components/LogRows.tsx');
-  check(/<Icon size=\{20\}/.test(rowsSrc) && /const Icon = fill \? Fuel : Gauge;/.test(rowsSrc) && /dateWords\(t, entry\.at\)/.test(rowsSrc) && /testID="video-mark"/.test(rowsSrc) && /pathname: '\/history', params: \{ kind: seeAll \}/.test(rowsSrc),
+  // The row is the app's one list row since the review of Round 4–7: the kind's icon in its tile (RowIcon draws it at 20).
+  check(/<RowIcon icon=\{Icon\}/.test(rowsSrc) && /<ListRow\b/.test(rowsSrc) && /const Icon = fill \? Fuel : Gauge;/.test(rowsSrc) && /dateWords\(t, entry\.at\)/.test(rowsSrc) && /testID="video-mark"/.test(rowsSrc) && /pathname: '\/history', params: \{ kind: seeAll \}/.test(rowsSrc),
     'a row: a fuel pump or an odometer gauge, the date in words, the video\'s mark; See all opens the history');
+  check(rowsSrc.includes("const retry = mark?.kind === 'failed' && mark.retry && onRetry ? () => onRetry(entry) : undefined;") && rowsSrc.includes('onPress={retry}')
+    && rowsSrc.includes('const words = mark ? videoWords(mark, !!retry) : null;') && rowsSrc.includes('line2={markWords ?? undefined}'),
+    'a row is a retry only while the phone holds the piece; the video\'s state in words on its second line');
 }
 
 // ------------------------------------------------------------------------------------------------------------------------
@@ -495,6 +510,8 @@ function strings() {
     'logHistory.recent', 'logHistory.seeAll', 'logHistory.title', 'logHistory.fuelTitle', 'logHistory.all', 'logHistory.empty', 'logHistory.emptyFuel',
     'logHistory.emptyOdometer', 'logHistory.failed', 'logHistory.noAmount', 'logHistory.noAmountOne',
     'pax.title', 'pax.more', 'pax.call',
+    // The review of Round 4–7: a fill's video in words again.
+    'fuel.uploadFailed', 'fuel.pctOfSize',
   ];
   const missing = NEW_KEYS.flatMap((k) => (['en', 'si'] as const).filter((l) => !text(l, k)).map((l) => `${l}:${k}`));
   check(missing.length === 0, `every new key in both languages (${NEW_KEYS.length})`, missing);

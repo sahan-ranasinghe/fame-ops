@@ -171,6 +171,14 @@ console.log('\nThe banners and the task page\'s bar (office/detailBanner.ts)');
   const done = taskActions({ reopen: true, route: true }, false);
   check(same(done, { bar: ['reopen'], more: ['route'] }), 'done today: Reopen on the bar, the driven route under ⋯', done);
   check(same(taskActions({}, false), { bar: [], more: [] }), 'a viewer: no bar');
+  // Review of Round 4–7: a bar never holds ⋯ More alone.
+  check(same(taskActions({ route: true }, false), { bar: ['route'], more: [] }) && same(taskActions({ route: true, cancel: true }, false), { bar: ['route', 'cancel'], more: [] }),
+    'none of the first jobs: one or two others go on the bar themselves (no ⋯ More holding them)');
+  check(same(taskActions({ route: true, plan: true, cancel: true }, false), { bar: ['route'], more: ['plan', 'cancel'] }), 'three: the most used (the driven route) on the bar, the rest under ⋯');
+  // Review of Round 4–7: "km" through the key Review uses (office.trip.kmN), never typed after a number.
+  const kmTyped = ['components/office/VehicleChecks.tsx', 'app/office/request/[id].tsx'].filter((f) => /\} km`/.test(code(f)));
+  check(kmTyped.length === 0 && code('app/office/request/[id].tsx').includes("t('office.trip.kmN', { km: trip.totals.km })") && (code('components/office/VehicleChecks.tsx').match(/t\('office\.trip\.kmN', \{ km: kmText\(c\.odometer_km\) \}\)/g) ?? []).length === 2,
+    'the request\'s distance and a check\'s odometer say km in the person\'s language', kmTyped);
 }
 
 console.log('\nThe key actions on each screen (read as text)');

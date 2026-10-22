@@ -5,24 +5,23 @@
 // Round 4–7, item 12 (mockup 5's "Later today"): the list row of the mockups: the leave time in mono, ONE title line, ONE
 // grey line ("2 people · 58 km"; without either, where it starts or, a trip of the driver's own, where it goes) with the
 // row's chip (In progress, Accepted, Not accepted yet), "Changed" under it, a chevron. The date stays under the time on
-// "Coming up"; the Google credit stays.
+// "Coming up"; the Google credit stays. Drawn by the app's one list row (components/patterns/ListRow.tsx).
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { GoogleCredit } from '@/components/GoogleCredit';
-import { ChevronRight } from '@/components/icons';
+import { ListRow } from '@/components/patterns/ListRow';
 import { ChangedTag, leaveTime, useDateLabel } from '@/components/task';
 import { taskTitle } from '@/components/taskLines';
-import { ToneChip } from '@/components/ToneChip';
 import { Mono, Txt } from '@/components/ui';
 import { hasChanges } from '@/lib/taskPreview';
 import { colomboTime } from '@/lib/time';
-import { rowChip, rowMeta } from '@/lib/todayCard';
+import { rowChip, rowChipTone, rowMeta } from '@/lib/todayCard';
 import type { TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
-import { colors, hoverStyle } from '@/theme';
+import { colors } from '@/theme';
 
 /** A heading and its rows; nothing when there are none. */
 export function TaskList({ title, tasks, showDate = false }: { title: string; tasks: readonly TaskWithStops[]; showDate?: boolean }) {
@@ -44,31 +43,32 @@ export function TaskRows({ tasks, showDate = false }: { tasks: readonly TaskWith
       {tasks.map((task, index) => {
         const chip = rowChip(t, task);
         const meta = rowMeta(t, task);
+        const changed = task.status === 'assigned' && hasChanges(changesFor(task));
+        const google = task.task_stops.some((s) => !!s.google_place_id);
         return (
-          <Pressable
-            key={task.id}
-            accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/task/[id]', params: { id: task.id } })}
-            style={(state) => [styles.row, index > 0 && styles.divided, hoverStyle(state), state.pressed && { opacity: 0.8 }]}
-            testID={`task-row-${task.id}`}
-          >
-            <View style={styles.time}>
-              <Mono size={15} bold>{colomboTime(leaveTime(task))}</Mono>
-              {showDate && <Txt variant="small" size={11} numberOfLines={1}>{dateLabel(task.start_at)}</Txt>}
-            </View>
-            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-              <Txt variant="strong" size={15} numberOfLines={1}>{taskTitle(t, task)}</Txt>
-              {(meta !== '' || chip) && (
-                <View style={styles.metaRow}>
-                  {meta !== '' && <Txt variant="small" size={13} numberOfLines={1} style={{ flexShrink: 1 }}>{meta}</Txt>}
-                  {chip && <ToneChip text={chip.text} tone={chip.tone} />}
+          <View key={task.id} style={index > 0 ? styles.divided : undefined}>
+            <ListRow
+              inset
+              left={(
+                <View style={styles.time}>
+                  <Mono size={15} bold>{colomboTime(leaveTime(task))}</Mono>
+                  {showDate && <Txt variant="small" size={11} numberOfLines={1}>{dateLabel(task.start_at)}</Txt>}
                 </View>
               )}
-              <GoogleCredit show={task.task_stops.some((s) => !!s.google_place_id)} />
-              {task.status === 'assigned' && hasChanges(changesFor(task)) && <ChangedTag />}
-            </View>
-            <ChevronRight size={18} color={colors.muted} strokeWidth={2} />
-          </Pressable>
+              title={taskTitle(t, task)}
+              line={meta !== '' ? meta : undefined}
+              lineChip={chip ? { text: chip.text, tone: rowChipTone(chip.tone) } : null}
+              below={google || changed ? (
+                <>
+                  <GoogleCredit show={google} />
+                  {changed && <ChangedTag />}
+                </>
+              ) : undefined}
+              onPress={() => router.push({ pathname: '/task/[id]', params: { id: task.id } })}
+              chevron
+              testID={`task-row-${task.id}`}
+            />
+          </View>
         );
       })}
     </View>
@@ -102,8 +102,6 @@ export function useMarkShown(onScreen: readonly TaskWithStops[]): void {
 
 const styles = StyleSheet.create({
   list: { backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.cardLine, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, minHeight: 64 },
   divided: { borderTopWidth: 1, borderTopColor: colors.divider },
   time: { width: 52 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });

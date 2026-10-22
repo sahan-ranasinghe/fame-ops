@@ -15,6 +15,7 @@ import { dateWords } from '@/lib/dateWords';
 import { colomboDate } from '@/lib/time';
 import { byDay, howKey, kmText, lastWeekArgs, resultText } from '@/office/myTripLogic';
 import { useOffice, useTool } from '@/office/state';
+import { useSwitch } from '@/office/switches';
 import type { CheckToday, VehicleCheck, VehicleChecks } from '@/office/types';
 import { ListFailed, Section, StatusChip } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -65,7 +66,7 @@ function CheckItem({ c, focused }: { c: VehicleCheck; focused: boolean }) {
         <StatusChip text={resultText(t, c)} tone={c.result === 'problem' ? 'red' : 'green'} />
         <Txt variant="strong" size={15} style={{ flex: 1 }} numberOfLines={1}>{c.person ?? ''}</Txt>
       </View>
-      <Txt variant="small">{[c.odometer_km != null ? `${kmText(c.odometer_km)} km` : '', t(howKey(c.how)), c.task?.title ?? ''].filter(Boolean).join(' · ')}</Txt>
+      <Txt variant="small">{[c.odometer_km != null ? t('office.trip.kmN', { km: kmText(c.odometer_km) }) : '', t(howKey(c.how)), c.task?.title ?? ''].filter(Boolean).join(' · ')}</Txt>
       {c.report?.note ? <Txt variant="muted" size={15}>{t('office.checks.note', { note: c.report.note })}</Txt> : null}
       <CheckPhotos photos={c.photos} />
       {report ? <Txt variant="strong" size={15} color={colors.blue}>{t('office.checks.openReport')}</Txt> : null}
@@ -90,9 +91,12 @@ function CheckItem({ c, focused }: { c: VehicleCheck; focused: boolean }) {
 export function VehicleChecksSection({ plate, today: checkToday, focus }: { plate: string; today?: CheckToday; focus?: string }) {
   const { t } = useApp();
   const { me, signOut } = useOffice();
-  const allowed = me.tools.includes('vehicle_checks');
+  // The switch vehicle_check off: no section (§33.13: a feature switched off hides its part).
+  const on = useSwitch('vehicle_check');
+  const allowed = on && me.tools.includes('vehicle_checks');
   const q = useTool<VehicleChecks>('vehicle_checks', lastWeekArgs(plate, colomboDate()), { enabled: allowed });
   const days = q.data ? byDay(q.data.checks) : [];
+  if (!on) return null;
   return (
     <Section title={t('office.checks.title')}>
       <View style={{ gap: 6, paddingVertical: 6 }}>
@@ -120,13 +124,14 @@ export function VehicleChecksSection({ plate, today: checkToday, focus }: { plat
 /** A task's checks: "Vehicle check 07:42 · All good" / "· Problem: Damage", the odometer, the note and the photos. */
 export function TaskCheckLines({ checks }: { checks?: VehicleCheck[] }) {
   const { t } = useApp();
-  if (!checks?.length) return null;
+  const on = useSwitch('vehicle_check');
+  if (!on || !checks?.length) return null;
   return (
     <View style={{ gap: 8 }} testID="task-checks">
       {checks.map((c) => (
         <View key={c.id} style={{ gap: 4 }} testID="task-check">
           <Txt variant="strong" size={15} color={c.result === 'problem' ? colors.red : colors.ink}>
-            {[t('office.checks.taskLine', { time: c.at, result: resultText(t, c) }), c.odometer_km != null ? `${kmText(c.odometer_km)} km` : ''].filter(Boolean).join(' · ')}
+            {[t('office.checks.taskLine', { time: c.at, result: resultText(t, c) }), c.odometer_km != null ? t('office.trip.kmN', { km: kmText(c.odometer_km) }) : ''].filter(Boolean).join(' · ')}
           </Txt>
           {c.report?.note ? <Txt variant="muted" size={15}>{t('office.checks.note', { note: c.report.note })}</Txt> : null}
           <CheckPhotos photos={c.photos} />

@@ -10,6 +10,7 @@
 // right with `timeSide="right"`, the stops behind the driver `passed`, a "Show all N stops" link as a row's `after`).
 // The driver's Today (mockup 5) is that compact card: one line a row centred on its mark, the place in regular weight (the
 // one being driven to in bold), the deadline as the row's chip; app/(tabs)/index.tsx feeds it lib/todayCard.ts todaySteps.
+// The driver's task preview and a finished task draw their stops on it too (components/task.tsx StopTimeline).
 
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -44,6 +45,8 @@ export interface StepperRow {
   subStruck?: boolean;
   title: string;
   titleLines?: 1 | 2;
+  /** Gone from the trip (a stop the office took out, on the driver's preview of a changed task): grey, struck through. */
+  struck?: boolean;
   chip?: { text: string; tone: ToneName } | null;
   /** ONE meta line. */
   meta?: StepperMeta[];
@@ -91,7 +94,7 @@ export function RouteStepper({ rows, live = false, framed = true, compact = fals
             </View>
             <View style={[styles.body, !last && { paddingBottom: right ? 8 : compact ? 14 : 18 }]}>
               <View style={[styles.titleRow, right && styles.titleRowRight]}>
-                <Txt variant={!right || r.state === 'current' ? 'strong' : 'body'} size={compact ? 14 : 16} numberOfLines={r.titleLines ?? 1} color={r.state === 'passed' ? colors.muted : colors.ink} style={{ flexShrink: 1, flexGrow: right ? 1 : 0 }}>{r.title}</Txt>
+                <Txt variant={!right || r.state === 'current' ? 'strong' : 'body'} size={compact ? 14 : 16} numberOfLines={r.titleLines ?? 1} color={r.state === 'passed' || r.struck ? colors.muted : colors.ink} style={[{ flexShrink: 1, flexGrow: right ? 1 : 0 }, r.struck && styles.struck]}>{r.title}</Txt>
                 {r.chip ? <View style={[styles.chip, { backgroundColor: TINT[r.chip.tone].bg }]}><Txt variant="strong" size={13} color={TINT[r.chip.tone].ink} numberOfLines={1}>{r.chip.text}</Txt></View> : null}
                 {right && r.time ? <Mono size={13} color={colors.muted}>{r.time}</Mono> : null}
               </View>

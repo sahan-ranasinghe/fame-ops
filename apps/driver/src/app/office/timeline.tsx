@@ -17,6 +17,7 @@ import { Mono, Plate, Segmented, Txt } from '@/components/ui';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { barOf, bookingTime, bookingTone, byLine, holderTitle, hourTicks, nowAt, rowLine, type TimelineRow, timelineOrder } from '@/office/holderLogic';
 import { useOffice, useTool } from '@/office/state';
+import { useSwitch } from '@/office/switches';
 import type { DayTimeline } from '@/office/types';
 import { Avatar, BackHeader, ListFailed, Screen, StatusChip, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -45,7 +46,9 @@ export default function TimelineScreen() {
   const opensTasks = me.permissions.includes('assign_tasks');
   const now = date === today ? nowAt(colomboTime(new Date())) : null;
   const ticks = hourTicks();
-  const mayAsks = me.tools.includes('holder_asks') && ['request', 'approve', 'assign_tasks'].some((p) => me.permissions.includes(p as never));
+  // holder_contact off: no holder under a booking and no Asks link (the server sends none; an older answer shows none).
+  const holders = useSwitch('holder_contact');
+  const mayAsks = holders && me.tools.includes('holder_asks') && ['request', 'approve', 'assign_tasks'].some((p) => me.permissions.includes(p as never));
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -69,19 +72,21 @@ export default function TimelineScreen() {
         {q.error && <ListFailed stale={!!data} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {data && rows.length === 0 && <ListEmpty text={t(kind === 'drivers' ? 'office.holders.noDrivers' : 'office.holders.noVehicles')} />}
         {rows.map((r) => (
-          <RowCard key={r.id} r={r} kind={kind} now={now} ticks={ticks} meName={me.name} onOpen={opensTasks ? (id) => router.push({ pathname: '/office/task/[id]', params: { id } }) : undefined} />
+          <RowCard key={r.id} r={r} kind={kind} now={now} ticks={ticks} meName={me.name} holders={holders} onOpen={opensTasks ? (id) => router.push({ pathname: '/office/task/[id]', params: { id } }) : undefined} />
         ))}
       </Screen>
     </View>
   );
 }
 
-function RowCard({ r, kind, now, ticks, meName, onOpen }: {
+function RowCard({ r, kind, now, ticks, meName, holders, onOpen }: {
   r: TimelineRow;
   kind: Kind;
   now: number | null;
   ticks: ReturnType<typeof hourTicks>;
   meName: string;
+  /** The switch holder_contact: off = no holder's photo and name under a booking. */
+  holders: boolean;
   onOpen?: (taskId: string) => void;
 }) {
   const { t } = useApp();
@@ -120,7 +125,7 @@ function RowCard({ r, kind, now, ticks, meName, onOpen }: {
               <Txt variant="strong" size={15} numberOfLines={1}>{x.title}</Txt>
               {kind === 'drivers' && x.vehicle ? <Txt variant="small" numberOfLines={1}>{x.vehicle}</Txt> : null}
               {kind === 'vehicles' && x.driver ? <Txt variant="small" numberOfLines={1}>{x.driver}</Txt> : null}
-              {x.holder ? (
+              {x.holder && holders ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} testID="timeline-holder">
                   <Avatar name={x.holder.name} size={22} photo={x.holder.photo_url} />
                   <Txt variant="small" numberOfLines={1} style={{ flex: 1 }}>{[holderTitle(x.holder, meName, t), byLine({ name: x.holder.name, by: x.holder.by }, t)].filter(Boolean).join(' · ')}</Txt>

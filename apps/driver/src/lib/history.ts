@@ -12,7 +12,7 @@
 //     below the oldest held. Two lists merged ("All") show only what is certain: nothing older than the oldest row held
 //     of a list that has more (mergeSafe), so no entry ever appears out of order after a Load more.
 
-import { thousands } from './format';
+import { megabytes, percentOf, thousands } from './format';
 import { colomboDate } from './time';
 
 export type LogKind = 'fuel' | 'odometer';
@@ -185,7 +185,8 @@ export function missingAmountKey(totals: FuelTotals): { key: 'logHistory.noAmoun
 
 export type VideoMark =
   | { kind: 'uploaded' }
-  | { kind: 'failed' }
+  /** retry: the phone still holds the piece (its queue's upload failed: a tap tries again); false = only the server says so. */
+  | { kind: 'failed'; retry: boolean }
   | { kind: 'waitingWifi' }
   | { kind: 'uploading'; bytes: number; offset: number }
   | { kind: 'queued' }
@@ -200,10 +201,10 @@ export interface Upload {
 
 /**
  * The fill's video in a word: uploaded (the mark), uploading (how far: the pieces already gone count as done), waiting for
- * Wi-Fi, failed (tap to retry), or none.
+ * Wi-Fi, failed (tap to retry while the phone holds the piece; the server's word alone is only said), or none.
  */
 export function videoMark(e: Pick<LogEntry, 'videoStatus' | 'videoBytes'>, upload: Upload | undefined, wifiOnly: boolean): VideoMark {
-  if (upload?.failed) return { kind: 'failed' };
+  if (upload?.failed) return { kind: 'failed', retry: true };
   if (upload) {
     if (wifiOnly) return { kind: 'waitingWifi' };
     const total = e.videoBytes ?? upload.bytes;
@@ -212,7 +213,7 @@ export function videoMark(e: Pick<LogEntry, 'videoStatus' | 'videoBytes'>, uploa
       : { kind: 'uploading', bytes: upload.bytes, offset: upload.offset };
   }
   if (e.videoStatus === 'uploaded') return { kind: 'uploaded' };
-  if (e.videoStatus === 'failed') return { kind: 'failed' };
+  if (e.videoStatus === 'failed') return { kind: 'failed', retry: false };
   if (e.videoStatus === 'recorded' || e.videoStatus === 'uploading') return { kind: 'queued' };
   return { kind: 'none' };
 }
@@ -271,4 +272,16 @@ export function mergeSafe(
 /** The lists a filter shows. */
 export function streamsFor(filter: HistoryFilter): LogKind[] {
   return filter === 'all' ? ['odometer', 'fuel'] : [filter];
+}
+
+/** The video's words on a fill's row, as keys: the mark in words (the row's icon says it too) and its tone. */
+export function videoWords(mark: VideoMark, canRetry: boolean): { key: string; vars?: Record<string, string | number>; tone: 'blue' | 'amber' | 'red' | 'muted' } {
+  switch (mark.kind) {
+    case 'uploaded': return { key: 'fuel.uploaded', tone: 'blue' };
+    case 'failed': return mark.retry && canRetry ? { key: 'fuel.failed', tone: 'red' } : { key: 'fuel.uploadFailed', tone: 'red' };
+    case 'waitingWifi': return { key: 'fuel.waitingWifi', tone: 'amber' };
+    case 'uploading': return { key: 'fuel.pctOfSize', vars: { pct: percentOf(mark.offset, mark.bytes), size: megabytes(mark.bytes) }, tone: 'blue' };
+    case 'queued': return { key: 'fuel.uploading', vars: { pct: 0 }, tone: 'amber' };
+    default: return { key: 'fuel.noVideo', tone: 'muted' };
+  }
 }

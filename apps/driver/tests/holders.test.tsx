@@ -48,6 +48,7 @@ function mockWords() {
 
 /* eslint-disable import/first */
 import AlertsTab from '@/app/office/(tabs)/alerts';
+import MoreTab from '@/app/office/(tabs)/more';
 import ReviewScreen from '@/app/office/trip/review';
 import { DriverRows } from '@/components/office/DriverRows';
 import { ConflictCard } from '@/components/office/HolderParts';
@@ -57,6 +58,7 @@ import { hideSnackbar, shownSnackbar } from '@/components/patterns/Snackbar';
 import { forgetAnswers } from '@/office/holderLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { OfficeProvider } from '@/office/state';
+import { forgetSwitches } from '@/office/switches';
 import { groupRows } from '@/office/trip/formsLogic';
 import { newDraft, setDraft } from '@/office/trip/draft';
 import { newStop } from '@/office/trip/stopsLogic';
@@ -92,6 +94,7 @@ let errors: ReturnType<typeof failOnConsoleError>;
 beforeEach(() => {
   resetFake();
   forgetAnswers();
+  forgetSwitches();
   act(() => hideSnackbar());
   answers.ask_for_it = () => ({ ask_id: 'k1', asked: 'Anoja Perera', what: 'FX 1', wanted: 'Fri 24 Oct 08:00–11:00', next: 'Asked Anoja Perera.' });
   errors = failOnConsoleError();
@@ -270,5 +273,30 @@ describe('Alerts: the buttons of an item', () => {
     renderRouter(routes({ 'office/alerts': AlertsTab }), { initialUrl: '/office/alerts' });
     await screen.findByText(item.title);
     expect(screen.queryByTestId('inbox-actions')).toBeNull();
+  });
+
+  // Review of Round 4–7: the switch is read by the screen too, so an item answered before the switch went off has no buttons.
+  it('holder_contact off (get_settings): an item that still carries Yes / No shows none; the item still opens', async () => {
+    answers.my_inbox = inbox;
+    answers.get_settings = () => ({ settings: { holder_contact: false } });
+    renderRouter(routes({ 'office/alerts': AlertsTab }), { initialUrl: '/office/alerts' });
+    await screen.findByText(item.title);
+    await waitFor(() => expect(screen.queryByTestId('inbox-actions')).toBeNull());
+    fireEvent.press(screen.getByText(plain.title));
+    await screen.findByText(`task page ${TASK}`);
+  });
+});
+
+describe('More: the asks for a busy driver or vehicle follow the switch', () => {
+  it('holder_contact off: no Asks row; on: the row', async () => {
+    answers.get_settings = () => ({ settings: { holder_contact: false } });
+    const first = renderRouter(routes({ 'office/(tabs)/more': MoreTab }), { initialUrl: '/office/more' });
+    await screen.findByText(t('office.holders.timelineTitle'));
+    await waitFor(() => expect(screen.queryByText(t('office.holders.asksTitle'))).toBeNull());
+    first.unmount();
+    forgetSwitches();
+    answers.get_settings = () => ({ settings: { holder_contact: true } });
+    renderRouter(routes({ 'office/(tabs)/more': MoreTab }), { initialUrl: '/office/more' });
+    expect(await screen.findByText(t('office.holders.asksTitle'))).toBeTruthy();
   });
 });

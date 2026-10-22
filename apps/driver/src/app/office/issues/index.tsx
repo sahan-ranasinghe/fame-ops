@@ -15,6 +15,9 @@
 // only when the tab does not say it. With update_issues: tap a row's icon (or hold the row) to tick it, a group's
 // Select, "Select all 12 in this group"; the bar at the bottom resolves or dismisses them with one reason
 // (update_issues). The header counts what needs action (critical and warning), as Home and the site's badge.
+// The row is the app's one list row (components/patterns/ListRow.tsx: the tick or icon on the left, the long press, the
+// ticked look, the plate chip at the start of the grey line, the chips and the photo at the right); who took it is said in
+// the grey line ("taken by Sahan 10:05") and who closed it under it ("Resolved by Sahan · Today 14:20").
 
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -25,16 +28,17 @@ import {
 } from '@/components/icons';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
-import { ChoiceChips, pickedStyle, SelectMark } from '@/components/patterns/Select';
+import { ChoiceChips, SelectMark } from '@/components/patterns/Select';
 import { Sheet } from '@/components/patterns/Sheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
-import { Button, Field, Plate, Segmented, Txt } from '@/components/ui';
+import { ListRow, RowPlate } from '@/components/patterns/ListRow';
+import { Button, Field, Segmented, Txt } from '@/components/ui';
 import { presetRange } from '@/lib/patterns/calendarLogic';
 import { defaultValues, type FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
 import {
   appendPage, BULK_REASONS, type BulkAction, bulkCalls, defaultSort, dueWords, groupText, groupTick, type IssueGroup, ISSUE_SORTS, ISSUE_TABS, type IssueSort, type IssueTab, issuesArgs,
-  issuesChoice, issuesFilterDefs, isActive, kindText, listRows, metaParts, needsAction, rowTitle, SEARCH_DEBOUNCE_MS, severityCounts, severityTone, showsGroups, snoozeParts, statusShown,
+  issuesChoice, issuesFilterDefs, isActive, kindText, listRows, metaParts, needsAction, rowTitle, rowWho, SEARCH_DEBOUNCE_MS, severityCounts, severityTone, showsGroups, snoozeParts, statusShown,
   statusTone, TAB_STATUS, tabExtra, tabFor, toggled, withoutIssues, issuesExtra, issuesExtraDefs, kindsFor,
 } from '@/office/issuesLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -198,18 +202,18 @@ export default function IssuesScreen() {
     const canPick = mayBulk && isActive(i.status);
     const on = picked.has(i.id);
     const open = () => router.push({ pathname: '/office/issues/[id]', params: { id: i.id } });
-    const closedBy = !isActive(i.status) && i.resolved_by ? (i.resolved_by === 'system' ? t('office.issues.closedAuto') : t('office.issues.closedBy', { name: i.resolved_by })) : '';
+    // Who has it ("taken by Sahan 10:05", in the grey line) and who closed it, when ("Resolved by Sahan · Today 14:20").
+    const who = rowWho(i);
+    const taken = who.taken ? (who.taken.at ? t('office.issues.takenByAt', { name: who.taken.name, at: who.taken.at }) : t('office.issues.takenBy', { name: who.taken.name })) : '';
+    const closed = who.closed ? closedWords(who.closed) : '';
     return (
-      <Pressable
-        accessibilityRole="button"
+      <ListRow
         // While rows are ticked, a tap ticks (Gmail); a long press starts it.
         onPress={picked.size > 0 && canPick ? () => pick([i.id], !on) : open}
         onLongPress={canPick ? () => pick([i.id], !on) : undefined}
-        style={({ pressed }) => [styles.row, on && styles.picked, pressed && { opacity: 0.7 }]}
-        testID="issue-row"
-      >
-        {/* The kind's icon, tinted by severity; with bulk actions it is the tick (Gmail's avatar), else a picture. */}
-        {canPick ? (
+        selected={on}
+        left={canPick ? (
+          // The kind's icon, tinted by severity; with bulk actions it is the tick (Gmail's avatar), else a picture.
           <Pressable
             accessibilityRole="checkbox"
             accessibilityState={{ checked: on }}
@@ -225,29 +229,36 @@ export default function IssuesScreen() {
             <Icon size={22} color={tile.ink} strokeWidth={2.2} />
           </View>
         )}
-        <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
-          <Txt variant="strong" size={17} numberOfLines={2}>{rowTitle(i)}</Txt>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }} testID="issue-meta">
-            {meta.plate ? <Plate regNo={meta.plate} /> : null}
-            <Txt variant="muted" size={15} numberOfLines={1} style={{ flexShrink: 1 }}>{dueWords(t, meta.rest)}</Txt>
+        title={rowTitle(i)}
+        titleLines={2}
+        lineLead={meta.plate ? <RowPlate regNo={meta.plate} /> : undefined}
+        line={[dueWords(t, meta.rest), taken].filter(Boolean).join(' · ')}
+        line2={snooze
+          ? (snooze.by ? t('office.issues.snoozedUntilBy', { at: dateWords(t, snooze.until), name: snooze.by }) : t('office.issues.snoozedUntil', { at: dateWords(t, snooze.until) }))
+          : closed || undefined}
+        line2Warn={!!snooze}
+        right={(
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            {/* Round 4–7 (4): a problem found by a vehicle check before work. */}
+            {i.pre_trip ? <StatusChip text={t('office.checks.preTrip')} tone="amber" testID="issue-pre-trip" /> : null}
+            <StatusChip text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} />
+            {statusShown(status, i.status) ? <StatusChip text={t(`office.issues.status.${i.status}`)} tone={statusTone(i.status)} /> : null}
+            {/* Round 3: the person who took it, their photo (initials until there is one); their name is in the grey line. */}
+            {i.assigned_to ? <Avatar name={i.assigned_to.name} size={28} photo={i.assigned_to.photo_url} /> : null}
           </View>
-          {snooze && (
-            <Txt variant="small" color={colors.amberText}>
-              {snooze.by ? t('office.issues.snoozedUntilBy', { at: dateWords(t, snooze.until), name: snooze.by }) : t('office.issues.snoozedUntil', { at: dateWords(t, snooze.until) })}
-            </Txt>
-          )}
-          {closedBy ? <Txt variant="small">{closedBy}</Txt> : null}
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 6 }}>
-          {/* Round 4–7 (4): a problem found by a vehicle check before work. */}
-          {i.pre_trip ? <StatusChip text={t('office.checks.preTrip')} tone="amber" testID="issue-pre-trip" /> : null}
-          <StatusChip text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} />
-          {statusShown(status, i.status) ? <StatusChip text={t(`office.issues.status.${i.status}`)} tone={statusTone(i.status)} /> : null}
-          {/* Round 3: the person who took it, their photo (initials until there is one). */}
-          {i.assigned_to ? <Avatar name={i.assigned_to.name} size={28} photo={i.assigned_to.photo_url} /> : null}
-        </View>
-      </Pressable>
+        )}
+        testID="issue-row"
+      />
     );
+  };
+
+  /** "Resolved by Sahan · Today 14:20", "closed automatically · Today 14:20", "by Sahan" (no time known), "closed 14:20". */
+  const closedWords = (c: NonNullable<ReturnType<typeof rowWho>['closed']>): string => {
+    const at = c.at ? dateWords(t, c.at) : '';
+    if (c.by === 'system') return [t('office.issues.closedAuto'), at].filter(Boolean).join(' · ');
+    if (c.by && at) return t(c.how === 'dismissed' ? 'office.issues.dismissedBy' : 'office.issues.resolvedBy', { name: c.by, at });
+    if (c.by) return t('office.issues.closedBy', { name: c.by });
+    return at ? t(c.how === 'dismissed' ? 'office.issues.dismissedAt' : 'office.issues.closedAt', { at }) : '';
   };
 
   /** A group's rows in the order asked (Sort): the most urgent first, else as the server sent them (the newest first). */
@@ -381,7 +392,5 @@ export default function IssuesScreen() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, minHeight: 56 },
-  picked: { ...pickedStyle, borderRadius: 12, paddingHorizontal: 6 },
   tile: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
 });

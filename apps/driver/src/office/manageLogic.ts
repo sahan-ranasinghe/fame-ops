@@ -53,9 +53,18 @@ export function withFuelGrade(f: Pick<VehicleFields, 'fuelType' | 'fuelGrade'>, 
   return { fuelGrade: grade };
 }
 
-/** The save waits for a fuel type (register always; an edit once the vehicle is known and it has none): true = it waits. */
+/**
+ * The save waits for a fuel type on Register only (true = it waits). An edit of a vehicle with none saves the other changes
+ * (the form says "Fuel type: not set" in amber: fuelUnset).
+ */
 export function fuelMissing(f: Pick<VehicleFields, 'fuelType' | 'fuelGrade'>, isNew: boolean, now?: FuelNow | null): boolean {
-  if (!isNew && now === undefined) return false;
+  if (!isNew) return false;
+  return !fuelShown(f, now).type;
+}
+
+/** An edit of a vehicle known to have no fuel type, none picked: the amber hint (never a block). */
+export function fuelUnset(f: Pick<VehicleFields, 'fuelType' | 'fuelGrade'>, isNew: boolean, now?: FuelNow | null): boolean {
+  if (isNew || now === undefined) return false;
   return !fuelShown(f, now).type;
 }
 

@@ -16,7 +16,7 @@ import { supabase } from '../lib/supabase';
 import { signedOut } from './api';
 import { officeApi } from './client';
 import { getOfficeMe, OFFICE_KEYS, setOfficeMe } from './store';
-import { forgetDraftCache } from './trip/draft';
+import { forgetDraftCache, settleLegacyDraft } from './trip/draft';
 import type { FleetError, Me } from './types';
 import { setJson } from '../lib/kv';
 
@@ -54,6 +54,9 @@ export async function signInOffice(email: string, password: string): Promise<Off
   if (outcome.kind === 'ok') {
     // Round 4–7 (item 10): the trip draft is per person (office/trip/draft.ts): another person's stays on the phone, never
     // shown here; this person's own comes back (within its 30 days).
+    // The phone's old draft (from before Round 4–7) goes to nobody else: read the e-mail of the last sign-in before it is
+    // replaced by this one.
+    settleLegacyDraft(email);
     forgetDraftCache();
     setOfficeMe(outcome.me);
     setJson(OFFICE_KEYS.email, email.trim().toLowerCase());

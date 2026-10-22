@@ -152,13 +152,5 @@ export function clockOf(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** "16 MB" (one decimal under 10 MB). */
-export function megabytes(bytes: number): string {
-  const mb = bytes / (1024 * 1024);
-  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
-}
-
-/** Upload progress as a whole percentage. */
-export function percentOf(offset: number, bytes: number): number {
-  return bytes > 0 ? Math.min(100, Math.floor((offset / bytes) * 100)) : 0;
-}
+/** "16 MB" and the upload's share: lib/format.ts (pure, for the history's rows too). */
+export { megabytes, percentOf } from './format';
