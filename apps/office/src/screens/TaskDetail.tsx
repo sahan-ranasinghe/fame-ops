@@ -51,6 +51,8 @@ import { datesInWords, whenText } from "../lib/when";
 import { finishChip } from "./myTripLogic";
 import { TaskCheckLines } from "./VehicleChecks";
 import { PassengerList } from "./PassengerList";
+import { HolderLine } from "../ui/Holder";
+import { StatusBanner } from "../ui/patterns";
 import { countWithNames, ridersLine } from "./passengersLogic";
 
 /** Round 4–7 (5): "Fuel: Enough fuel · 07:42" with the estimate under it; before the start the estimate alone. */
@@ -183,11 +185,13 @@ export function TaskDetail() {
             : <Link className="btn small" to={`/tasks/${id}/edit${q}`} state={FROM_TASK}>Change</Link>
           : undefined}
       />
-      {t.needs_driver && (
-        <Notice tone="bad" action={findDriver ? <Link className="btn small" to={findDriverPath(id)} state={FROM_TASK}>Find a driver</Link> : undefined}>
-          <b data-testid="needs-driver-line">{needsDriverText(t)}</b>
-        </Notice>
-      )}
+      {/* Round 4–7, item 12 (the approved mockup 4): ONE status banner: needs a driver (with Find a driver), on the way
+          (arrives about, back about, the late chip; a click opens Live), else the task's state in words. */}
+      {t.needs_driver ? (
+        <StatusBanner tone="bad" icon="user_x" title={<span data-testid="needs-driver-line">{needsDriverText(t)}</span>} testId="task-banner">
+          {findDriver ? <span><Link className="btn small" to={findDriverPath(id)} state={FROM_TASK}>Find a driver</Link></span> : null}
+        </StatusBanner>
+      ) : <TaskBanner t={t} />}
       <WarningsNote warnings={flash} />
       <ConflictCards conflicts={flashedConflicts} />
       <TaskAsksLine taskId={id} />
@@ -195,6 +199,9 @@ export function TaskDetail() {
       {t.finish_flag && (t.finish_flag.kind === "not_confirmed"
         ? <div className="card card-b" data-testid="finish-flag"><Pill>{finishChip(t.finish_flag)?.text}</Pill> <span className="muted small">{t.finish_flag.text}</span></div>
         : <Notice>{t.finish_flag.text}</Notice>)}
+      <div className="td-layout">
+      <div className="td-cols">
+      <div className="td-top">
       <div className="card card-b">
         <dl className="kv">
           <div>
@@ -296,6 +303,15 @@ export function TaskDetail() {
           </p>
         </div>
       ) : null}
+      {/* Round 4–7, item 12 (feature 7): who this trip is for (its requester, else who assigned it), with Call and WhatsApp. */}
+      {t.holder && (
+        <div className="card card-b" data-testid="task-holder">
+          <div className="section-t" style={{ marginBottom: 6 }}>{t.holder.by === "asked" ? "Asked for by" : "Assigned by"}</div>
+          <HolderLine holder={t.holder} resource="driver" ask={false} testId="task-holder-line" />
+        </div>
+      )}
+      </div>
+      <div className="td-left">
       {can(me, ...ROUTES_NEED) && <TaskRoute id={id} started={t.started} />}
 
       <div className="section-t">Stops{t.start_place ? ` · from ${t.start_place}` : ""}{t.return_to_base ? " · back to the office" : ""}{t.avoid_expressway ? " · no expressway" : ""}</div>
@@ -374,6 +390,8 @@ export function TaskDetail() {
         </>
       )}
 
+      </div>
+      <div className="td-rest">
       <div className="section-t">Odometer and fuel</div>
       <div className="card">
         <div className="rows">
@@ -446,7 +464,26 @@ export function TaskDetail() {
           </div>
         </>
       ) : null}
+      </div>
+      </div>
+      </div>
     </div>
+  );
+}
+
+/**
+ * The task's status banner while it is on the way (the approved mockup 4): "On the way to <stop>", arrives about, back
+ * about, the late chip; a click opens Live. In the other states the page's top already says the state (the pill and the
+ * Status line), so no second banner says it again.
+ */
+function TaskBanner({ t }: { t: TaskDetailData["task"] }) {
+  const eta = t.eta;
+  if (t.status !== "in_progress") return null;
+  return (
+    <StatusBanner tone="live" icon="navigation" to="/live" testId="task-banner"
+      title={`On the way${eta?.next_stop ? ` to ${eta.next_stop}` : ""}`}
+      line={joinDots([eta?.next ? `Arrives about ${eta.next}` : "", eta?.final ? `back about ${eta.final}` : ""]) || "On the way now"}
+      chip={eta?.late_min ? { text: `${duration(eta.late_min)} late`, tone: "warn" } : null} />
   );
 }
 

@@ -50,7 +50,7 @@ import { PlanWithMap } from "./PlanMap";
 import { RequestDetailCard } from "./RequestDetailCard";
 import { useRequest } from "./RequestDetail";
 import { decisionInput, dwellChanges, redecideInput } from "./requestLogic";
-import { RequestStatusPill, VehicleGroups, VehicleOption } from "./requestParts";
+import { DecideBanner, RequestStatusPill, VehicleGroups, VehicleOption } from "./requestParts";
 import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
 import { TripDecide } from "./TripDecide";
 import { isChoice, knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
@@ -307,6 +307,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
     return (
       <section className="view" data-testid="request-redecide">
         <PageTop title={q.status === "changed" ? "Decide the change" : "Change the booking"} sub={<>{q.requested_by} · {joinDots([q.when, q.route])}</>} backTo={`/requests/${id}`} />
+        {q.status === "changed" && <DecideBanner q={q} />}
         <ReviewingLine list={reviewers} block />
         <DraftBanner draft={draft} />
         <div className="page-form">
@@ -356,6 +357,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
   return (
     <section className="view" data-testid="request-decide">
       <PageTop title="Decide the request" sub={<>{q.requested_by} · {joinDots([q.when, q.route])}</>} backTo={`/requests/${id}`} />
+      <DecideBanner q={q} />
       <ReviewingLine list={reviewers} block />
       <DraftBanner draft={draft} />
       <div className="page-form">
@@ -440,7 +442,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
           {msg && <div><Notice tone={msg.tone}>{msg.text}</Notice>{msg.warnings && <WarningsNote warnings={msg.warnings} />}</div>}
           <StickyActions>
             <button type="button" className="btn" disabled={busy} onClick={() => void decide("decline")}>Decline</button>
-            <button type="button" className="btn dark" disabled={busy || !ready || !!plateWhy} onClick={() => void decide("approve")}>{custodianDrives || noAppDrives ? "Approve" : "Approve & send to driver"}</button>
+            <button type="button" className="btn primary" disabled={busy || !ready || !!plateWhy} onClick={() => void decide("approve")}>{custodianDrives || noAppDrives ? "Approve" : "Approve & send to driver"}</button>
             {plateWhy && <p className="hint btn-why" data-testid="approve-why">{plateWhy}</p>}
           </StickyActions>
         </div>

@@ -7,6 +7,8 @@
 // Phase 7 (§16): each tile opens its list: on a desktop a panel beside the Overview (/?open=road …, with an X and Esc; a
 // reload or a shared link opens it again); on a phone, and in a shared link opened on one, the full page
 // (/live?filter=road, /vehicles?filter=free …), Back returning here. A tile the person has no list for stays a number.
+// Round 4–7, item 12 (the approved mockup 1 at desktop width): the tiles as ONE stats row with icons (each keeps
+// its link and its panel; where Hotfix 3 puts them: action first); a requester's note as the status banner.
 import type { ReactNode } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -17,7 +19,7 @@ import type { MyTrips, Overview as OverviewData, RequestsList } from "../data/ty
 import { useQuery } from "../data/useQuery";
 import { longDate, today } from "../lib/format";
 import { can } from "../transport/types";
-import { Empty, ErrBox, Notice, StaleNote, Tile, type TileLink } from "../ui/basics";
+import { Empty, ErrBox, StaleNote, Tile, type TileLink } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { useIsPhone } from "../ui/phone";
 import { NEEDS_DRIVER_LIST, sortNeedsDriver } from "./needsDriverLogic";
@@ -42,6 +44,7 @@ import { Section } from "./overview/Section";
 import { canOpen, FULL_PATH, OPEN_TEXT, openFrom, type OverviewOpen, reminderTile, tileTarget, withParam } from "./overviewLinks";
 import { OverviewPanel, RoadRows } from "./OverviewPanel";
 import { SkeletonRows } from "../ui/ListKit";
+import { StatusBanner } from "../ui/patterns";
 
 /** The waiting queue on the Overview: the first page (the section shows 5, the count is the answer's total). */
 export const REQ_WAITING_ARGS = { status: "waiting", limit: SECTION_ROWS.desktop };
@@ -137,15 +140,15 @@ export function Overview() {
           <Section key={id} id={id} title={SECTION_TITLE.tiles} {...fold(id)}
             summary={`${d.vehicles.on_the_road ?? 0} of ${d.vehicles.total ?? 0} on the road · ${free} free · ${d.tasks.total ?? 0} tasks today`}>
             <div className="tiles">
-              <Tile label="Vehicles on the road" value={d.vehicles.on_the_road ?? 0} unit={`of ${d.vehicles.total ?? 0}`} sub={`${d.tasks.in_progress ?? 0} task${d.tasks.in_progress === 1 ? "" : "s"} in progress`} link={linkOf("road")} />
-              <Tile label="Free now" value={free} unit="vehicles" sub="not on a task, not in the garage" link={linkOf("free")} />
-              <Tile label="In garage" value={d.vehicles.in_garage ?? 0} unit="vehicles" sub={d.vehicles.in_garage ? "off the road" : "none"} tone={d.vehicles.in_garage ? "warn" : ""} link={linkOf("garage")} />
-              <Tile label="Tasks today" value={d.tasks.total ?? 0} unit="jobs" sub={`${d.tasks.in_progress ?? 0} in progress · ${d.tasks.done ?? 0} done`} link={linkOf("tasks")} />
+              <Tile label="Vehicles on the road" icon="pin" kind="live" value={d.vehicles.on_the_road ?? 0} unit={`of ${d.vehicles.total ?? 0}`} sub={`${d.tasks.in_progress ?? 0} task${d.tasks.in_progress === 1 ? "" : "s"} in progress`} link={linkOf("road")} />
+              <Tile label="Free now" icon="check" kind="ok" value={free} unit="vehicles" sub="not on a task, not in the garage" link={linkOf("free")} />
+              <Tile label="In garage" icon="wrench" value={d.vehicles.in_garage ?? 0} unit="vehicles" sub={d.vehicles.in_garage ? "off the road" : "none"} tone={d.vehicles.in_garage ? "warn" : ""} link={linkOf("garage")} />
+              <Tile label="Tasks today" icon="tasks" value={d.tasks.total ?? 0} unit="jobs" sub={`${d.tasks.in_progress ?? 0} in progress · ${d.tasks.done ?? 0} done`} link={linkOf("tasks")} />
               {approves && (
-                <Tile label="Requests to approve" value={d.requests.waiting ?? 0} unit="open" sub={requestsLine(d.requests)} tone={d.requests.waiting ? "warn" : ""} link={linkOf("requests")} />
+                <Tile label="Requests to approve" icon="requests" kind={d.requests.waiting ? "warn" : undefined} value={d.requests.waiting ?? 0} unit="open" sub={requestsLine(d.requests)} tone={d.requests.waiting ? "warn" : ""} link={linkOf("requests")} />
               )}
               {issuesPage && (
-                <Tile label="Reminders due" value={reminderTile(d.needs_attention).count} unit={`in ${d.reminders.window_days ?? 14} days`} sub={reminderTile(d.needs_attention).red ? `${reminderTile(d.needs_attention).red} need action now` : "Nothing urgent"} tone={reminderTile(d.needs_attention).red ? "bad" : ""} link={linkOf("reminders")} />
+                <Tile label="Reminders due" icon="issues" kind={reminderTile(d.needs_attention).red ? "bad" : undefined} value={reminderTile(d.needs_attention).count} unit={`in ${d.reminders.window_days ?? 14} days`} sub={reminderTile(d.needs_attention).red ? `${reminderTile(d.needs_attention).red} need action now` : "Nothing urgent"} tone={reminderTile(d.needs_attention).red ? "bad" : ""} link={linkOf("reminders")} />
               )}
             </div>
           </Section>
@@ -223,7 +226,8 @@ export function Overview() {
                 ? <div className="two ov-two" key={line.join("+")}>{nodeOf.get(line[0])}{nodeOf.get(line[1])}</div>
                 : nodeOf.get(line[0])))}
               {!approves && can(me, "request") && !sections.includes("my_trips") && (
-                <Notice tone="info">Need a vehicle? <Link to="/requests/new">New request</Link> sends it to the fleet office; you are told when it is decided.</Notice>
+                <StatusBanner tone="live" icon="requests" title="Need a vehicle?" testId="overview-request-banner"
+                  line={<><Link to="/requests/new">New request</Link> sends it to the fleet office; you are told when it is decided.</>} />
               )}
             </div>
           )}

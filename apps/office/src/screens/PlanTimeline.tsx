@@ -8,6 +8,8 @@
 // server's warnings as today. With the plan map (§20) a stop row and its pin
 // highlight each other: hovering or tapping a row selects its pin (`onHover`,
 // `onSelect`), a pin tapped on the map highlights its row (`selected`).
+// Round 4–7, item 12 (the approved mockup 2): drawn on the route stepper's rail (styles.css .plan-stops): each stop's mark
+// (S, its number) on one thin line, the legs as small lines on the rail; the words and their order unchanged.
 import type { KeyboardEvent } from "react";
 import type { PlanSummary, PlanTimeline as Timeline } from "../data/types";
 import { num } from "../lib/format";
@@ -94,7 +96,7 @@ export function PlanTimeline({ timeline, plan, startName, reasons = [], warnings
               const late = x.late_min != null && x.late_min > 0;
               const id = stopPin(x.n);
               return (
-                <li key={`s${x.n}`} className="plan-stop" data-testid="plan-stop" {...rowProps(id)}
+                <li key={`s${x.n}`} className="plan-stop" data-testid="plan-stop" data-mark={x.is_start ? "S" : String(x.n + offset)} data-start={x.is_start ? "" : undefined} {...rowProps(id)}
                   style={{ display: "grid", gap: 2, padding: "6px 0", ...(linked ? { cursor: "pointer" } : {}), ...(selected === id ? SELECTED : {}) }}>
                   <b>{shiftLabel(x.label, x.n, offset)}</b>
                   <span className="num small">
