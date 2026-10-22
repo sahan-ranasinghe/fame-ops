@@ -364,12 +364,12 @@ export default function TaskDetailScreen() {
             </View>
           ) : null}
           {/* Round 4–7, item 12: the trip's holder (feature 7: the requester, else who assigned it), with Call and WhatsApp. */}
-          {task && (holder || task.label || p?.from_request) ? (
+          {task && (showMap || holder || p?.from_request) ? (
             <View style={styles.list} testID="task-holder">
               <Row
                 inset
                 left={<RowIcon icon={Briefcase} tone="quiet" />}
-                title={task.label || p?.from_request?.project || task.title}
+                title={task.title}
                 line={holder ? [t(holder.by === 'asked' ? 'office.ui3.askedBy' : 'office.ui3.assignedBy', { name: holderTitle(holder, me.name, t) }), windowWords(holder, t)].filter(Boolean).join(' · ') : p?.from_request ? t('office.ui3.askedBy', { name: p.from_request.requested_by }) : undefined}
                 onPress={p?.from_request && me.permissions.includes('approve') ? () => router.push({ pathname: '/office/request/[id]', params: { id: p.from_request!.id } }) : undefined}
                 right={(
