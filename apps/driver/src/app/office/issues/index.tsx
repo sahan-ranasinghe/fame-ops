@@ -241,7 +241,7 @@ export default function IssuesScreen() {
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
           {/* Round 4–7 (4): a problem found by a vehicle check before work. */}
           {i.pre_trip ? <StatusChip text={t('office.checks.preTrip')} tone="amber" testID="issue-pre-trip" /> : null}
-          {i.severity === 'critical' ? <StatusChip text={t('office.issues.severity.critical')} tone="red" /> : null}
+          <StatusChip text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} />
           {statusShown(status, i.status) ? <StatusChip text={t(`office.issues.status.${i.status}`)} tone={statusTone(i.status)} /> : null}
           {/* Round 3: the person who took it, their photo (initials until there is one). */}
           {i.assigned_to ? <Avatar name={i.assigned_to.name} size={28} photo={i.assigned_to.photo_url} /> : null}

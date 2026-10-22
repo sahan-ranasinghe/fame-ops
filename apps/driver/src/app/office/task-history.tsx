@@ -114,7 +114,8 @@ export default function TaskHistoryScreen() {
                       routeText(x, t),
                     ].filter(Boolean).join(' · ')}
                     line2={rowSub(x, t) || undefined}
-                    chip={{ text: key ? t(key) : t(`office.chip.${taskStatusChip(x.status)}`), tone: historyTone(x.status) }}
+                    // Round 4–7 (item 8): the status chip only when the filter does not say it already (Status: Completed).
+                    chip={choice.status && choice.status === x.status ? null : { text: key ? t(key) : t(`office.chip.${taskStatusChip(x.status)}`), tone: historyTone(x.status) }}
                     onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: x.id } })}
                   />
                 </View>

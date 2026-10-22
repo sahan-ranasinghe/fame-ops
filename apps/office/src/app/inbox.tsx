@@ -208,7 +208,7 @@ function InboxRow({ item, onOpen }: { item: InboxItem; onOpen: (i: InboxItem) =>
       <span className="grow">
         <b>{headline(item)}</b>
         {item.body && <small>{datesInWords(item.body)}</small>}
-        <small className="when" title={item.at}>{item.ago}{item.read ? "" : " · unread"}</small>
+        <small className="when" title={item.at}>{item.ago}{/* Round 4–7 (item 8): the dot shows it; the words for the screen reader. */}{item.read ? "" : <span className="sr-only"> · unread</span>}</small>
       </span>
     </>
   );

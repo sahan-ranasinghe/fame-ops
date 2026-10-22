@@ -57,7 +57,8 @@ export default function OfficeUsersPeople() {
         title={u.name}
         line={userLine(u)}
         line2={permissionWords(u.permissions, permWord)}
-        chip={{ text: t(`office.people.${pill.key}`), tone: pill.tone }}
+        // Round 4–7 (item 8): "active" is every row's: only a switched-off person says so.
+        chip={pill.key !== 'active' ? { text: t(`office.people.${pill.key}`), tone: pill.tone } : null}
         onPress={() => u.email && router.push({ pathname: '/office/people/user/[email]', params: { email: u.email } })}
       />
     );
