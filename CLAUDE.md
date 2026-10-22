@@ -4,39 +4,31 @@
 - **Fame Driver** (called **Fame Fleet** from 1.3.0, Phase 7 Part 6; package `com.fameglobal.driver`): an Android app for drivers. Drivers sign in with a username and 6-digit
   PIN (no Claude account). It shows their tasks, shares their location in the background,
   logs odometer readings with photos, logs fuel, and reports vehicle problems.
-- **Fame Fleet (office)**: designed by the boss (see `design/`). Office users (the boss and
+- **Fame Fleet (office)**: first sketched by the boss (see `design/`, a reference only). Office users (the boss and
   the fleet admin) keep working in Claude Teams. They use our MCP connector `office-mcp`
-  directly in Claude chat, and later a Claude artifact built from the office screens in
-  `design/` that calls the same connector. There is NO separately hosted office web app.
+  directly in Claude chat, and the Fame Fleet artifact that calls the same connector.
 - **Backend**: Supabase (Postgres, Auth, Storage, Edge Functions).
 - Gallery HR / HR features are a separate, later project: do not build them.
 
-## UI source of truth: the boss's design
-- `design/png/` (one PNG per screen) and `design/fame-fleet.pdf` (same screens, with text).
-  `design/fame-fleet.html` is a bundled viewer; its text is not readable, so use the PNGs/PDF.
-- Driver app screens: `Driver · Today.png`, `Driver · Task in progress.png`,
-  `Driver · Log mileage.png`. Bottom tabs: Today, Mileage, Report, Me.
-- Office screens (Phase B, not now): `Desktop · Overview / Live locations / Tasks /
-  Vehicles / Project costs.png`, `Office · Home.png`, `Office · Approve request.png`.
-- Match layout, wording, hierarchy and style. Screens not designed yet (login, permissions,
-  Mileage tab, Report tab, Me tab) must be built in the same style.
-- **Office mode (Phase 8): `design/office/`.** `png/` has the 20 screens ("01 Sign in.png" to "20 Manage a driver (users
-  permission).png"): what each screen looks like. `html/` has one source file per screen plus `canvas.json` (the order and
-  titles). These are design source, not runnable: a link like "Approve.dc.html" means `html/Approve.html`, and
-  `support.js` is not included. Read them for the exact text, spacing, colours and the flow between screens.
-  `office-mode.pdf` has the same screens with selectable text. A role word in a design (e.g. "Admin" on More, a Home per
-  role) is an example: the app decides by permission. The sample names in the designs are not real people: never seed
-  them. The plan and what each design leaves open: `docs/phase8-plan.md`.
+## UI
+- UI: follow today's best commercial apps (name the app per pattern); the files in design/ are a reference only, never a
+  constraint. Keep the brand colours (amber accent, ink, blue/amber/red status colours) and the fonts unless I say otherwise.
+  (Sahan, 22 October 2026: the boss's design was itself made by an AI. The apps to follow: Uber, PickMe, Grab, Google Maps,
+  Samsara, Fleetio, Gmail, WhatsApp, Stripe, Shopify, Linear, Airbnb, Google Calendar. The design pass stays parked:
+  Sahan brings approved mockups first, then they are built to match.)
+- The design files, for reference: `design/png/` and `design/fame-fleet.pdf` (the driver app and the first office
+  screens), `design/office/` (Office mode: `png/` the 20 screens, `html/` their sources, `office-mode.pdf`). The sample
+  names in them are not real people: never seed them. A role word in them is an example: the app decides by permission.
+- Driver app tabs: Today, Mileage, Fuel, Report, Me.
 
-### Design tokens (sampled from the PNGs)
+### Brand tokens
 - Ink / dark header `#15181c`, dark surface `#22272c`, page background `#f3f2ee`,
   card `#ffffff`, map land `#e9e7e0`.
 - Accent amber `#f2a900`: primary buttons (Start task, Save & finish task), active tab pill.
 - Blue `#1e4fa0`: live / sharing / in progress; blue chip background `#e6edf8`.
 - Amber text `#8a5a00`: stale / warnings. Red `#b3261e`: danger, not sharing, expired.
-- Fonts: closest Google Fonts to the PNGs: IBM Plex Sans (body), IBM Plex Mono (plates,
-  times, odometer numbers), a heavy grotesque for big headings (e.g. Archivo ExtraBold);
-  compare with the PNGs. Sinhala: Yaldevi (body), Gemunu Libre ExtraBold (headings, big buttons);
+- Fonts: IBM Plex Sans (body), IBM Plex Mono (plates, times, odometer numbers), Archivo ExtraBold
+  (big headings). Sinhala: Yaldevi (body), Gemunu Libre ExtraBold (headings, big buttons);
   since 1.3.0 no fallback font is bundled (Gemunu Libre Bold and Noto Sans Sinhala were unused). Plates are shown in
   mono inside a thin bordered chip.
 - Numbers, plates, times and LKR amounts always in Latin digits, in both languages.
@@ -580,7 +572,7 @@
   'removed'), arrived_at, done_at, what ('people'|'goods'|'documents'|'other'), note,
   dwell_min, arrive_by (deadline), planned_arrive_at, planned_depart_at, skip_reason
   ('closed'|'nobody_there'|'not_needed'|'not_visited'|'other'), skip_note, removed_at.
-  The design shows one pickup and one drop-off; up to 12 stops allowed. A stop the office
+  Up to 12 stops. A stop the office
   edits out is marked 'removed' (never deleted) and shown nowhere; the driver's unfinished
   stops at Save & finish become skipped · not_visited. auto_detected_at (the arrival nudge,
   Part 4b). Part 5: google_place_id, google_fetched_at (set by trigger when the coordinates are a
@@ -789,29 +781,29 @@ The office sees photos only through 1-hour signed URLs returned by connector too
 
 ## Driver app (Fame Driver), Phase A
 Tabs: Today, Mileage, Report, Me.
-1. Login (not designed): language, username, PIN.
-2. Permissions (not designed): location "Allow all the time", notifications, battery
+1. Login: language, username, PIN.
+2. Permissions: location "Allow all the time", notifications, battery
    optimisation help.
-3. Today (designed): date, "Morning, <name>", සිංහල/English switch, current vehicle +
+3. Today: date, "Morning, <name>", සිංහල/English switch, current vehicle +
    Change, "On duty" toggle, NEXT TASK card (leave-by time, title, the first two stops,
    passengers · contact, Accept + Start task, or "Accepted ✓ HH:MM" + Start task, and the
    link "Can't do this task" → a reasons sheet: Vehicle problem / Not available / Unwell /
    Other, an optional note; a declined task leaves the list), "Later today" list (each
    row: Accepted / Not accepted yet). Records seen_at the first time a task is shown. Pull to refresh +
    Supabase Realtime.
-4. Task in progress (designed): map with my position and the destination (straight line
+4. Task in progress: map with my position and the destination (straight line
    when the destination has coordinates), IN PROGRESS, Started HH:MM, destination,
    title · passengers, Distance left (straight-line, marked approximate), Arrive about
    (hide until routing exists), Start odo, Navigate, Call contact, Complete task,
    "Report a problem with the vehicle".
-5. Log mileage (designed): odometer photo → OCR suggestion → driver checks; Odometer now;
+5. Log mileage: odometer photo → OCR suggestion → driver checks; Odometer now;
    "Start: X · N km this task"; Did you add fuel? Yes/No → Litres, Amount (LKR), fuel
    receipt photo; Save & finish task. Reused from the Mileage tab for a manual log.
-6. Mileage tab (not designed): this month's km for my vehicle vs its allowance, today's
+6. Mileage tab: this month's km for my vehicle vs its allowance, today's
    tasks with km, Log odometer, Log fuel.
-7. Report tab (not designed): category, note, 1–3 photos, vehicle filled in, Send; list of
+7. Report tab: category, note, 1–3 photos, vehicle filled in, Send; list of
    my reports with status.
-8. Me tab (not designed): name, code, phone, language, current vehicle, app version,
+8. Me tab: name, code, phone, language, current vehicle, app version,
    sign out (disabled while a task is in progress).
 9. Start a trip (Phase 7 §13, `app/start-trip.tsx`; on Today while on duty with no task running): purpose per
    `driver_personal_trips` (Company work / Personal), the place search through `driver-api` (`components/PlaceSearch.tsx`;
