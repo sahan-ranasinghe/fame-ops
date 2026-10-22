@@ -129,7 +129,9 @@
     "test:shared-logic": "node ../../scripts/shared-logic.mjs --check",
     "test:relative-words": "tsx scripts/test-relative-words.ts",
     "test:vehicle-check": "tsx scripts/test-vehicle-check.ts",
-    "test:trip-close": "tsx scripts/test-trip-close.ts"
+    "test:trip-close": "tsx scripts/test-trip-close.ts",
+    "test:fuel-card": "tsx scripts/test-fuel-card.ts",
+    "test:passengers": "tsx scripts/test-passengers.ts"
   },
   "private": true,
   "expo": {
