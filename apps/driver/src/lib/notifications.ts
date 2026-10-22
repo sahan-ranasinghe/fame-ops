@@ -450,6 +450,8 @@ export interface TapData {
   at?: number;
   /** Phase 8 (O1 item 9): an office notification's link (the site's path), opened in Office mode. */
   url?: string;
+  /** Round 4–7 (7): an office notification's event (a holder.* push opens the Asks page for who cannot open the task). */
+  event?: string;
 }
 
 function dataOf(notification: Notifications.Notification | null | undefined): TapData {
@@ -461,6 +463,7 @@ function dataOf(notification: Notifications.Notification | null | undefined): Ta
     changes: data?.changes,
     at: typeof notification?.date === 'number' ? notification.date : undefined,
     url: typeof data?.url === 'string' ? data.url : undefined,
+    event: typeof data?.event === 'string' ? data.event : undefined,
   };
 }
 

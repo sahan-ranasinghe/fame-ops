@@ -23,6 +23,7 @@ import { screenOf } from '@/lib/crashLogic';
 import { anyFormDirty } from '@/components/navigation';
 import { tapData } from '@/lib/notifications';
 import { bootOffice } from '@/office/auth';
+import { holderAsksRoute } from '@/office/holderLogic';
 import { routeForUrl } from '@/office/nav';
 import { useOfficeMe } from '@/office/store';
 import { AppProvider, useApp } from '@/state/app';
@@ -77,7 +78,8 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
     const data = tapData(response);
     if (data.kind !== 'office') return;
     router.navigate('/office');
-    const target = routeForUrl(data.url, officeMe.permissions);
+    // The link's screen; a holder.* push the person cannot open as a task opens the Asks page (as in Alerts).
+    const target = routeForUrl(data.url, officeMe.permissions) ?? holderAsksRoute({ event: data.event ?? '' });
     if (target) router.push(target as never);
     else router.navigate('/office/(tabs)/alerts');
   }, [ready, me, officeMe, response, router]);
