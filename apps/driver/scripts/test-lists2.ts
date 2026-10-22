@@ -132,13 +132,13 @@ console.log('\nThe strings (office.lists2 in both languages)');
     if (typeof o === 'string') keys.push(path);
     else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) walk(v, path ? `${path}.${k}` : k);
   };
-  walk(parts.en, '');
+  walk(get(dicts.en, 'office.lists2'), 'office.lists2'); // merged into en.json (the sidecar's keys are the same)
   const siKeys: string[] = [];
   const walkSi = (o: unknown, path: string) => {
     if (typeof o === 'string') siKeys.push(path);
     else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) walkSi(v, path ? `${path}.${k}` : k);
   };
-  walkSi(parts.si, '');
+  walkSi(get(dicts.si, 'office.lists2'), 'office.lists2'); // merged into si.json (the sidecar's keys are the same)
   check(keys.length >= 12 && same([...keys].sort(), [...siKeys].sort()), 'every key in both languages', { en: keys.length, si: siKeys.length });
   const ph = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort().join();
   const bad = keys.filter((k) => {

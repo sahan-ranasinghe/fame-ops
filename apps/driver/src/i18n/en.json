@@ -3535,6 +3535,29 @@
       "issuesLineSub": "Km allowances, missed tasks, odometer checks and the rest are in Issues",
       "openIssues": "Open Issues",
       "openVehicle": "Open {plate}"
+    },
+    "lists2": {
+      "showAll": "Show all {n}",
+      "vehicles": {
+        "noMake": "Make not set",
+        "docValid": "{doc} valid"
+      },
+      "rest": {
+        "until": "Until ~{time}",
+        "untilLive": "Until ~{time} (live)",
+        "untilPlanned": "Until ~{time} (planned)",
+        "noEnd": "End time not set",
+        "since": "Since {time}",
+        "back": "Back {time}",
+        "today": "Today",
+        "untilWhen": "Until {when}"
+      },
+      "history": {
+        "section": "Tasks"
+      },
+      "activity": {
+        "section": "Changes"
+      }
     }
   },
   "patterns": {

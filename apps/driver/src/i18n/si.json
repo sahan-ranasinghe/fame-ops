@@ -3535,6 +3535,29 @@
       "issuesLineSub": "km සීමා, මඟ හැරුණු කාර්යය, ඔඩෝමීටර පරීක්ෂා සහ අනෙක් ඒවා ගැටලු තුළ ඇත",
       "openIssues": "ගැටලු විවෘත කරන්න",
       "openVehicle": "{plate} විවෘත කරන්න"
+    },
+    "lists2": {
+      "showAll": "සියල්ල ({n})",
+      "vehicles": {
+        "noMake": "වර්ගය සහ මාදිලිය නැත",
+        "docValid": "{doc} වලංගුයි"
+      },
+      "rest": {
+        "until": "~{time} දක්වා",
+        "untilLive": "~{time} දක්වා (සජීවී)",
+        "untilPlanned": "~{time} දක්වා (සැලසුම්)",
+        "noEnd": "අවසන් වේලාව නැත",
+        "since": "{time} සිට",
+        "back": "{time} ට පැමිණේ",
+        "today": "අද",
+        "untilWhen": "{when} දක්වා"
+      },
+      "history": {
+        "section": "කාර්යයන්"
+      },
+      "activity": {
+        "section": "වෙනස්කම්"
+      }
     }
   },
   "patterns": {
