@@ -3611,5 +3611,49 @@
     "title": "Passengers",
     "more": "+{n} more",
     "call": "Call {name}"
+  },
+  "todayCard": {
+    "goodMorning": "Good morning, {name}",
+    "goodAfternoon": "Good afternoon, {name}",
+    "goodEvening": "Good evening, {name}",
+    "since": "since {time}",
+    "checked": "Checked",
+    "checkNeeded": "Check needed",
+    "checkProblem": "Problem reported",
+    "nextTask": "Next task",
+    "inProgress": "In progress",
+    "leaveIn": "Leave in {time}",
+    "leaveNow": "Leave now",
+    "leaveFrom": "leave from {place}",
+    "leave": "leave",
+    "started": "started",
+    "backAtBase": "Back at base",
+    "pickup": "pickup",
+    "drop": "drop",
+    "people": "{n} people",
+    "onePerson": "1 person",
+    "laterToday": "Later today · {n}",
+    "callsTitle": "Call or WhatsApp",
+    "moreCalls": "More ways to call"
+  },
+  "taskSheet": {
+    "nextStop": "Next stop · {n} of {total}",
+    "allDone": "All stops done",
+    "leftApprox": "left, approx.",
+    "leftStraight": "left, straight line",
+    "arriveAbout": "arrive about",
+    "beThereBy": "be there by",
+    "stopsMore": "All stops and more",
+    "slideArrive": "Slide when you arrive",
+    "slideLeave": "Slide when you leave",
+    "problem": "Problem with the vehicle?"
+  },
+  "dayRoute": {
+    "firstLast": "First–last point",
+    "noGps": "No GPS for {duration}",
+    "gaps": "{n} gaps",
+    "stopNear": "Stopped near {place} · {span} · {duration}",
+    "stopped": "Stopped · {span} · {duration}",
+    "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The day's numbers are above."
   }
 }
