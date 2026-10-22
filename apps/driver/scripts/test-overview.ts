@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { attentionCount, attentionGroups, chipTarget, levelTone, reminderGroups, snoozeCalls, vehicleFilterParam, withoutGroups } from '../src/office/overviewLogic';
+import { attentionCount, attentionGroups, chipTarget, levelTone, reminderGroups, snoozeCalls, vehicleFilterParam, withoutGroups, isReminderKind, reminderTile, remindersByVehicle } from '../src/office/overviewLogic';
 import { PRESETS } from '../src/office/permissions';
 import type { Attention, AttentionGroup, Overview } from '../src/office/types';
 
@@ -75,6 +75,27 @@ console.log('\nThe screens');
   check(Object.keys(en.office.reminders).every((k) => typeof si.office.reminders[k] === 'string'), 'office.reminders in both languages');
   const homeKeys = ['reminders', 'attention', 'noAttention', 'attentionN', 'sev_critical', 'sev_warning', 'snooze', 'snoozeTitle', 'snooze_tomorrow', 'snooze_week'];
   check(homeKeys.every((k) => typeof en.office.home[k] === 'string' && typeof si.office.home[k] === 'string'), 'the new Home words in both languages');
+}
+
+
+console.log('\nRound 4–7, item 8: Reminders and Home count service and documents; Needs attention counts what needs action');
+{
+  check(isReminderKind('document') && isReminderKind('service_due') && isReminderKind('documents_missing') && isReminderKind('rental') && isReminderKind('garage_booked') && isReminderKind('licence')
+    && !isReminderKind('allowance') && !isReminderKind('missed_task') && !isReminderKind('odometer_flag') && !isReminderKind(undefined), 'the reminder kinds: service and documents (and the licence); the rest is in Issues');
+  check(same(reminderTile([{ kind: 'service_due', level: 'red' }, { kind: 'document', level: 'amber' }, { kind: 'missed_task', level: 'red' }, { kind: 'allowance', level: 'amber' }]), { count: 2, red: 1 }) && same(reminderTile(undefined), { count: 0, red: 0 }),
+    "Home's reminders row counts only those");
+  const g = reminderGroups([
+    { what: 'Service overdue', vehicle: 'WP CAB-4521', kind: 'service_due', level: 'red', issue_id: 'a' },
+    { what: 'Insurance expires', vehicle: 'WP KL-1234', kind: 'document', issue_id: 'b' },
+    { what: 'Revenue licence expires', vehicle: 'WP CAB-4521', kind: 'document', issue_id: 'c' },
+    { what: 'Licence expires', subject: 'Nimal', kind: 'licence', issue_id: 'd' },
+  ]);
+  const by = remindersByVehicle(g.due);
+  check(same(by.plates, ['WP CAB-4521', 'WP KL-1234']) && same(by.byPlate.get('WP CAB-4521')?.map((r) => r.key), ['a', 'c']) && same(by.loose.map((r) => r.key), ['d']), "one card per vehicle in the server's order; the licences apart");
+  const home = src('app/office/(tabs)/index.tsx');
+  check(home.includes("useTool<IssuesList>('list_issues', { status: 'active', snoozed: false, limit: 1 }") && home.includes('needsAction(issueCounts.data)') && home.includes('count={attention}'),
+    "Needs attention counts needs_action (the Issues header's and the site badge's number)");
+  check(home.includes('reminderTile(ov?.needs_attention)') && home.includes('reminders.count > 0') && /onPress=\{go\('reminders'\)\}/.test(home), 'the reminders row: service and documents only, to Reminders');
 }
 
 console.log('\nStage 1 review');

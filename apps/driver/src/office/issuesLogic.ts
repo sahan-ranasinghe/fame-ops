@@ -52,6 +52,9 @@ export function issuesArgs(status: IssueStatusFilter, search = '', cursor?: stri
     ...(extra.kind ? { kind: extra.kind } : {}),
     ...(extra.vehicle ? { vehicle: extra.vehicle } : {}),
     ...(extra.from && extra.to ? { from: extra.from, to: extra.to } : {}),
+    ...(extra.snoozed !== undefined ? { snoozed: extra.snoozed } : {}),
+    ...(extra.severity ? { severity: extra.severity } : {}),
+    ...(extra.group ? { group: true } : {}),
     ...(cursor ? { cursor } : {}),
   };
 }
@@ -77,6 +80,12 @@ export interface IssuesExtra {
   vehicle?: string;
   from?: string;
   to?: string;
+  /** Round 4–7 (item 8): the tab's own input: Open leaves the snoozed out (false), Snoozed lists only them (true). */
+  snoozed?: boolean;
+  /** The Open tab's groups by kind (list_issues group: true). */
+  group?: boolean;
+  /** The groups are narrowed by the server (their counts stay right); a flat list narrows on the phone as before. */
+  severity?: string;
 }
 
 export function issuesExtraDefs(kinds: readonly string[], plates: readonly string[], tr: (key: string) => string): FilterDef[] {
@@ -371,3 +380,102 @@ export const REPORT_STATUS_KEYS: Record<string, string> = { open: 'report.open',
 /** The report's category words: the driver app's report.<category> keys. */
 export const REPORT_CATEGORIES = new Set(['breakdown', 'accident', 'tyre', 'warning_light', 'other']);
 export const reportCategoryKey = (category: string): string | undefined => (REPORT_CATEGORIES.has(category) ? `report.${category}` : undefined);
+
+// ---- Round 4–7 (item 8, §33.7): the tabs, the groups by kind, Gmail's rows and the bulk actions ----
+
+/**
+ * The tabs (Gmail's Inbox · Snoozed · Done) over the Filter sheet's status: Open = Active, Open or In progress (the snoozed
+ * left out), Snoozed = the active ones snoozed, Resolved = Resolved or Dismissed. The sheet keeps its five statuses.
+ */
+export type IssueTab = 'open' | 'snoozed' | 'resolved';
+export const ISSUE_TABS: readonly IssueTab[] = ['open', 'snoozed', 'resolved'];
+export const tabFor = (status: IssueStatusFilter, snoozedTab: boolean): IssueTab =>
+  snoozedTab ? 'snoozed' : status === 'resolved' || status === 'dismissed' ? 'resolved' : 'open';
+/** The status a tab opens on. */
+export const TAB_STATUS: Record<IssueTab, IssueStatusFilter> = { open: 'active', snoozed: 'active', resolved: 'resolved' };
+
+/** The Open tab groups by kind until a kind is chosen ("Show all N") or words are searched for (one list of results). */
+export const showsGroups = (tab: IssueTab, kind: string | undefined, search: string): boolean => tab === 'open' && !kind && !search.trim();
+
+/** What a tab adds to list_issues' input: the snoozed left out or alone, the groups (with the severity asked of the server). */
+export function tabExtra(tab: IssueTab, grouped: boolean, severity: SeverityFilter): IssuesExtra {
+  if (tab === 'snoozed') return { snoozed: true };
+  if (tab === 'resolved') return {};
+  return grouped ? { snoozed: false, group: true, ...(severity !== 'all' ? { severity } : {}) } : { snoozed: false };
+}
+
+export type IssueGroup = NonNullable<IssuesList['groups']>[number];
+
+/** A group's heading: office.issues.group.<kind> ("Missed tasks"), else the kind's words. */
+export function groupText(g: { kind: string; kind_text?: string }, tr: (key: string) => string): string {
+  const key = `office.issues.group.${g.kind}`;
+  const found = tr(key);
+  return found && found !== key ? found : kindText(g, tr);
+}
+
+/** The row's ONE title: the server's specific line (never the kind again), else the title. */
+export const rowTitle = (i: Pick<Issue, 'headline' | 'title'>): string => i.headline || i.title;
+
+/**
+ * The row's ONE grey line with the plate apart (drawn as its chip): the server's "plate · driver · when", else made from
+ * the card (the driver and the due words, or when it was opened).
+ */
+export function metaParts(i: Pick<Issue, 'meta' | 'vehicle' | 'driver' | 'due' | 'opened'>): { plate?: string; rest: string } {
+  const line = i.meta || [i.vehicle, i.driver, i.due || i.opened].filter(Boolean).join(' · ');
+  if (i.vehicle && line.startsWith(i.vehicle)) return { plate: i.vehicle, rest: line.slice(i.vehicle.length).replace(/^\s*·\s*/, '') };
+  return { rest: line };
+}
+
+/** The status chip on a row only when the tab or filter does not say it already. */
+export function statusShown(status: IssueStatusFilter, rowStatus: string): boolean {
+  if (status === 'active') return rowStatus !== 'open';
+  return rowStatus !== status;
+}
+
+/** The badge's number: what needs action (critical and warning, not snoozed), else (an older server) the active ones. */
+export const needsAction = (list: Pick<IssuesList, 'open' | 'in_progress' | 'needs_action'> | null | undefined): number =>
+  list?.needs_action ?? activeCount(list);
+
+/** update_issues takes at most this many ids at a time. */
+export const BULK_MAX = 100;
+export type BulkAction = 'resolved' | 'dismissed';
+/** The reasons offered as chips (office.issues.reason.<key>); the person may write another. */
+export const BULK_REASONS = ['test', 'handled', 'notIssue'] as const;
+
+/** update_issues' inputs: the ids once each in calls of 100, one reason; nothing without a reason or an id. */
+export function bulkCalls(ids: readonly string[], status: BulkAction, note: string): { ids: string[]; status: BulkAction; note: string }[] {
+  const reason = note.trim().slice(0, 500);
+  const unique = [...new Set(ids)];
+  if (!reason || !unique.length) return [];
+  const out: { ids: string[]; status: BulkAction; note: string }[] = [];
+  for (let i = 0; i < unique.length; i += BULK_MAX) out.push({ ids: unique.slice(i, i + BULK_MAX), status, note: reason });
+  return out;
+}
+
+/** The selection after a tick: on adds the ids, off takes them away. */
+export function toggled(selected: ReadonlySet<string>, ids: readonly string[], on: boolean): Set<string> {
+  const next = new Set(selected);
+  for (const id of ids) {
+    if (on) next.add(id);
+    else next.delete(id);
+  }
+  return next;
+}
+
+/** A group's tick: all its rows on screen picked = on, some = mixed, none = off. */
+export function groupTick(selected: ReadonlySet<string>, ids: readonly string[]): 'on' | 'mixed' | 'off' {
+  const n = ids.filter((id) => selected.has(id)).length;
+  return n === 0 ? 'off' : n === ids.length ? 'on' : 'mixed';
+}
+
+/** A group after the bulk action: the issues done leave it, its count drops, an empty group goes. */
+export function withoutIssues(list: IssuesList, ids: readonly string[]): IssuesList {
+  const gone = new Set(ids);
+  const groups = list.groups
+    ?.map((g) => {
+      const left = g.newest.filter((i) => !gone.has(i.id));
+      return { ...g, newest: left, count: Math.max(0, g.count - (g.newest.length - left.length)) };
+    })
+    .filter((g) => g.count > 0);
+  return { ...list, issues: list.issues.filter((i) => !gone.has(i.id)), ...(groups ? { groups } : {}) };
+}

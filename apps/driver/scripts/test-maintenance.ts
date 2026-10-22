@@ -3,12 +3,16 @@
 //
 //   npm run test:maintenance          (from apps/driver)
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { issuesArgs, issuesExtra, issuesExtraDefs, ISSUE_KINDS, kindsFor, TASK_ISSUE_KINDS } from '../src/office/issuesLogic';
 import { appendReports, canTakeOffRoad, categoryKey, reportSaveCalls, reportsArgs, reportsChoice, reportsFilterDefs, reportTone } from '../src/office/maintenanceLogic';
-import type { VehicleReports } from '../src/office/types';
+import type { VehicleCard, VehicleReports } from '../src/office/types';
+import { careCards, careCounts, docsOf, docWords, isDue, readService, serviceOf, serviceWords, summaryChips } from '../src/office/vehicleCareLogic';
+// The website's twin, read at run time (its types import the site's own aliases, which this project does not resolve).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const site = require('../../office/src/screens/vehicleCareLogic') as { careCards: typeof careCards };
 
 let failures = 0;
 function check(ok: unknown, label: string, detail?: unknown): void {
@@ -77,6 +81,59 @@ console.log('\nStage 1 review');
   const list = src('app/office/maintenance/index.tsx');
   const page = src('app/office/maintenance/[id].tsx');
   check(list.includes('handReport(r);') && page.includes('handedReport(id)') && page.includes('reportPageArgs(handed?.vehicle)'), "the list hands its row to the page; the page reads that vehicle's reports (never lost past the newest 200)");
+}
+
+
+console.log('\nRound 4–7, item 8: Maintenance as service and documents per vehicle (Fleetio)');
+{
+  const TODAY = '2026-10-22';
+  const van = (over: Partial<VehicleCard> = {}): VehicleCard => ({
+    reg_no: 'WP CAB-4521', make_model: 'Toyota HiAce', next_service: 'In 1,120 km or 2 Nov', service_state: 'due soon',
+    documents: { lic: { chip: 'ok', expiry: '2027-03-01', days_left: 130 }, ins: { chip: 'orange', expiry: '2026-11-10', days_left: 19 }, emi: { chip: 'not set' } },
+    documents_missing: ['emission'], ...over,
+  });
+  check(same(readService('In 1,120 km or 2 Nov', TODAY), { km: 1120, date: '2026-11-02' }) && same(readService('320 km over', TODAY), { km: -320 }) && same(readService('Not set', TODAY), {}), "the server's service words read back");
+  const svc = serviceOf({ next_service: 'In 1,120 km or 2 Nov', service_state: 'due soon' }, TODAY);
+  check(svc.state === 'due_soon' && svc.days === 11 && svc.fill > 0.8 && svc.fill < 1 && serviceOf({ next_service: '320 km over', service_state: 'overdue' }, TODAY).fill === 1, 'the bar fills towards the service, full when overdue');
+  check(same(docsOf(van(), TODAY).map((d) => [d.kind, d.state]), [['revenue_licence', 'ok'], ['insurance', 'expiring'], ['emission', 'missing']]), 'the documents: ok / expiring / missing (and expired)');
+  const fleet = [van({ reg_no: 'A-OK', next_service: 'In 9,000 km', service_state: 'ok', documents: { lic: { expiry: '2027-05-01', days_left: 190 } }, documents_missing: [] }), van({ reg_no: 'B-SOON' }), van({ reg_no: 'C-OVER', next_service: '320 km over', service_state: 'overdue' }), van({ reg_no: 'D', active: false })];
+  const cards = careCards(fleet, TODAY);
+  check(same(cards.map((c) => c.reg_no), ['C-OVER', 'B-SOON', 'A-OK']), 'one card per active vehicle, the most urgent first');
+  check(same(JSON.stringify(site.careCards(fleet as never, TODAY)), JSON.stringify(cards)), "the app's rules give the website's answer (screens/vehicleCareLogic.ts)");
+  check(isDue(cards[1]) && !isDue(cards[2]), 'due for the reminders: the service soon, a document missing');
+  const tr = (k: string, v?: Record<string, string | number>) => `${k}${v ? JSON.stringify(v) : ''}`;
+  check(summaryChips(careCounts(cards), tr).map((c) => c.key).join() === 'overdue,soon,expiring,missing', 'the summary as chips (only what is there)');
+  check(docWords({ kind: 'insurance', state: 'expiring', days: 19 }, tr, (d) => d) === 'office.care.expiresIn{"name":"office.care.doc.insurance","n":19}' && serviceWords(svc, tr, (d) => `<${d}>`) === 'office.care.serviceOr{"a":"office.care.serviceIn{\\"km\\":\\"1,120\\"}","b":"<2026-11-02>"}',
+    "the words as keys (km in Latin digits, the day in words)");
+
+  const list = src('app/office/maintenance/index.tsx');
+  check(list.includes('<CareSummary') && list.includes('<CareCard') && list.includes("pathname: '/office/vehicles/[reg]'") && list.includes("t('office.care.show.all')") && list.includes('testID="maintenance-issues"'),
+    'Maintenance: the summary, a card per vehicle to the vehicle, All vehicles, the line to Issues');
+  check(list.includes("params.view === 'reports'") && list.includes("me.tools.includes('list_vehicle_reports')") && (list.match(/<Segmented/g) ?? []).length >= 2 && list.includes('<LoadMore shown={cardsShown}'),
+    'the problem reports are the second view (with their tool; the Issues header opens them); the cards 25 at a time');
+  const card = src('components/office/VehicleCare.tsx');
+  check(card.includes("accessibilityRole=\"progressbar\"") && card.includes('accessibilityValue={{ min: 0, max: 100, now }}') && card.includes("t('office.care.openVehicle'"), 'the bar says how near the service is to the screen reader; a card names its vehicle');
+  const rem = src('app/office/reminders.tsx');
+  check(rem.includes('remindersByVehicle(') && rem.includes('<CareCard') && rem.includes('testID="reminders-issues"') && rem.includes('row(r, i, true)'), 'Reminders: one card per vehicle (its rows without the plate again), the line to Issues');
+
+  const dir = join(__dirname, '..', 'src', 'i18n');
+  const words = { en: JSON.parse(readFileSync(join(dir, 'en.json'), 'utf8')), si: JSON.parse(readFileSync(join(dir, 'si.json'), 'utf8')) };
+  const merge = (a: Record<string, unknown>, b: Record<string, unknown>) => {
+    for (const [k, v] of Object.entries(b)) {
+      if (v && typeof v === 'object' && !Array.isArray(v)) merge((a[k] ??= {}) as Record<string, unknown>, v as Record<string, unknown>);
+      else a[k] = v;
+    }
+  };
+  if (existsSync(join(dir, 'parts'))) for (const f of readdirSync(join(dir, 'parts')).filter((n) => n.endsWith('.json'))) {
+    const part = JSON.parse(readFileSync(join(dir, 'parts', f), 'utf8'));
+    merge(words.en, part.en ?? {});
+    merge(words.si, part.si ?? {});
+  }
+  const lookup = (o: unknown, k: string) => k.split('.').reduce<unknown>((n, p) => (n && typeof n === 'object' ? (n as Record<string, unknown>)[p] : undefined), o);
+  const asked = [...(list + card + rem + src('office/vehicleCareLogic.ts')).matchAll(/t\(\s*'(office\.(?:care|reminders)\.[A-Za-z_.]+)'/g)].map((m) => m[1]);
+  const dyn = ['revenue_licence', 'insurance', 'emission', 'registration', 'lease', 'other', 'rental'].map((k) => `office.care.doc.${k}`).concat(['attention', 'all'].flatMap((k) => [`office.care.title.${k}`, `office.care.empty.${k}`]));
+  const all = [...new Set([...asked, ...dyn])];
+  check(asked.length > 15 && all.every((k) => typeof lookup(words.en, k) === 'string' && typeof lookup(words.si, k) === 'string'), 'every office.care / reminders word in English and Sinhala', all.filter((k) => typeof lookup(words.si, k) !== 'string'));
 }
 
 console.log(failures === 0 ? '\nAll maintenance checks passed.' : `\n${failures} maintenance check(s) FAILED.`);
