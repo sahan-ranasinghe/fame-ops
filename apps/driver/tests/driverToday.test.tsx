@@ -84,6 +84,14 @@ const routes = {
 let errors: ReturnType<typeof failOnConsoleError>;
 let openURL: jest.SpyInstance;
 let alert: jest.SpyInstance;
+// The sample's later tasks are 6 and 8½ hours from now: the test's clock starts at 08:30 Colombo, so both are "later
+// today" whenever it runs (CI at 15:59 put the second on tomorrow: "Later today · 1"). The clock runs on from there.
+beforeAll(() => {
+  jest.useFakeTimers({ advanceTimers: true, now: new Date('2026-10-22T03:00:00Z') });
+});
+afterAll(() => {
+  jest.useRealTimers();
+});
 beforeEach(() => {
   mockValue = null;
   mockState = 'accepted';
