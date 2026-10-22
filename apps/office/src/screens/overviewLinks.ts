@@ -68,6 +68,17 @@ export function openFrom(params: URLSearchParams, me: Pick<Me, "permissions" | "
 /** A chip key ↔ its word in the URL. */
 export type FilterWords<K extends string> = Record<K, string | null>;
 
+/** Live with the driver on a task selected (the task page's on-the-way banner): /live?task=<id>. */
+export const liveForTask = (taskId: string): string => `/live?task=${encodeURIComponent(taskId)}`;
+
+/**
+ * The driver Live selects first: the one on the task the URL names (?task=, from a task page), else the first of the chip
+ * in the URL (the Overview's "on the road"), else anyone.
+ */
+export function firstSelected<T extends { task_id?: string }>(all: readonly T[], shown: readonly T[], task: string | null | undefined): T | undefined {
+  return (task ? all.find((x) => x.task_id === task) : undefined) ?? shown[0] ?? all[0];
+}
+
 /** Live locations: the Overview's "on the road" is the chip On a task. */
 export const LIVE_FILTER_WORDS: FilterWords<LiveFilter> = { all: null, on_task: "road", on_duty: "on_duty", off_duty: "off_duty", problems: "problems" };
 
@@ -127,6 +138,24 @@ export const isReminderKind = (kind?: string): boolean => !!kind && (CARE_KINDS.
 export function reminderTile(items: readonly Pick<Attention, "kind" | "level">[] | undefined): { count: number; red: number } {
   const mine = (items ?? []).filter((a) => isReminderKind(a.kind));
   return { count: mine.length, red: mine.filter((a) => a.level === "red").length };
+}
+
+/**
+ * The reminders in numbers (the fresh reviewer, 22 October 2026: the tile said 3, the panel 1): how many reminders (the
+ * tile's number, reminderTile), on how many vehicles, and how many drivers' licences.
+ */
+export function reminderCounts(items: readonly Attention[] | undefined): { reminders: number; vehicles: number; licences: number } {
+  const mine = (items ?? []).filter((a) => isReminderKind(a.kind));
+  const plates = new Set(reminderGroups(mine).due.flatMap((r) => (r.plate ? [r.plate] : [])));
+  return { reminders: mine.length, vehicles: plates.size, licences: mine.filter((a) => a.kind === "licence").length };
+}
+
+const counted = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** "3 reminders · 1 vehicle · 1 driver licence": the panel's and the page's first line, the tile's number first. */
+export function reminderSummary(c: { reminders: number; vehicles: number; licences: number }): string {
+  return [counted(c.reminders, "reminder"), c.vehicles ? counted(c.vehicles, "vehicle") : "", c.licences ? counted(c.licences, "driver licence") : ""]
+    .filter(Boolean).join(" · ");
 }
 
 export interface ReminderRow {

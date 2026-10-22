@@ -30,6 +30,7 @@ import { ListWithDetail } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { BulkBar, BulkSheet, IssueGroupBlock, IssueLine } from "./IssueParts";
 import {
+  type BulkAnswer,
   bulkCalls,
   bulkDoneText,
   type BulkAction,
@@ -50,6 +51,7 @@ import {
   outsideNote,
   readStatus,
   SEVERITY_OPTIONS,
+  sendBulk,
   showsGroups,
   SORT_OPTIONS,
   STATUS_FILTERS,
@@ -180,23 +182,25 @@ export default function Issues() {
     }
   }
 
+  /**
+   * Resolve or Dismiss the picked issues, 100 a call. Each call's done ids leave the selection at once; the first call that
+   * fails stops the rest and says how many were done, so Try again sends only what is left.
+   */
   async function act(reason: string) {
     if (!acting) return;
     const calls = bulkCalls([...picked], acting, reason);
     setBusy(true);
     setBulkError(null);
-    let done = 0;
     try {
-      for (const c of calls) {
-        const r = await transport.call<{ done: number; failed?: { id: string; error: string }[] }>("update_issues", c);
-        done += r.done;
-        if (r.failed?.length) throw { code: "partial", message: r.failed[0].error } as FleetError;
+      const r = await sendBulk(calls, (c) => transport.call<BulkAnswer>("update_issues", c), (ids) => setPicked((s) => toggled(s, ids, false)));
+      if (r.error) {
+        const why = errText(r.error as FleetError)[0];
+        setBulkError(r.done ? `${bulkDoneText(r.done, acting)}; the rest were not: ${why}` : why);
+      } else {
+        toast(bulkDoneText(r.done, acting));
+        setActing(null);
+        setPicked(new Set());
       }
-      toast(bulkDoneText(done, acting));
-      setActing(null);
-      setPicked(new Set());
-    } catch (e) {
-      setBulkError(done ? `${bulkDoneText(done, acting)}; the rest were not: ${errText(e as FleetError)[0]}` : errText(e as FleetError)[0]);
     } finally {
       setBusy(false);
       void store.invalidate();

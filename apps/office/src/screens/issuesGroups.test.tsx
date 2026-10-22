@@ -244,6 +244,47 @@ describe("the Open tab: grouped by kind (Round 4–7, item 8)", () => {
     expect(screen.getByRole("status").textContent).toBe("5 issues dismissed");
   });
 
+  // The fresh reviewer (22 October 2026): 120 picked are two calls; the second fails: the first call's 100 leave the
+  // selection, the error says how many were done, and Try again sends only the 20 left (never a done one twice).
+  it("bulk over 100: a failed call stops the rest, the done ones leave the selection, Try again sends only the rest", async () => {
+    const t = await mount("/issues", [...odo(120), card({})]);
+    let fail = true;
+    const answer = t.answer.bind(t);
+    t.answer = (tool, args) => {
+      if (tool === "update_issues" && t.argsOf("update_issues").length === 2 && fail) throw { code: "network", message: "Failed to fetch" };
+      return answer(tool, args);
+    };
+    const call = t.call.bind(t);
+    t.call = <T,>(tool: string, args: Record<string, unknown> = {}) => {
+      try {
+        return call<T>(tool, args);
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    };
+    await screen.findByTestId("issue-group-odometer_flag");
+    fireEvent.click(within(group("odometer_flag")).getByTestId("group-tick"));
+    await act(async () => { fireEvent.click(within(screen.getByTestId("group-select-all")).getByRole("button", { name: "Select all 120 in this group" })); });
+    expect(screen.getByTestId("bulk-bar").textContent).toContain("120 selected");
+    fireEvent.click(within(screen.getByTestId("bulk-bar")).getByRole("button", { name: "Resolve" }));
+    fireEvent.click(within(screen.getByTestId("bulk-sheet")).getByRole("button", { name: "Test data" }));
+    await act(async () => { fireEvent.click(screen.getByTestId("bulk-confirm")); });
+    await flush();
+    expect(t.argsOf("update_issues").map((a) => (a.ids as string[]).length)).toEqual([100, 20]);
+    const sheet = screen.getByTestId("bulk-sheet");
+    expect(sheet.textContent).toContain("100 issues resolved; the rest were not");
+    expect(within(sheet).getByRole("heading", { name: "Resolve 20 issues" })).toBeTruthy();
+    fail = false;
+    await act(async () => { fireEvent.click(screen.getByTestId("bulk-confirm")); });
+    await flush();
+    const sent = t.argsOf("update_issues").map((a) => a.ids as string[]);
+    expect(sent.map((x) => x.length)).toEqual([100, 20, 20]);
+    expect(sent[2]).toEqual(sent[1]);
+    expect(sent[2].some((id) => sent[0].includes(id))).toBe(false);
+    expect(screen.getByRole("status").textContent).toBe("20 issues resolved");
+    expect(screen.queryByTestId("bulk-bar")).toBeNull();
+  });
+
   it("without update_issues (assign_tasks only): no ticks and no bulk bar", async () => {
     const transport = new FakeTransport();
     transport.tools = ["list_issues", "issue_history"];

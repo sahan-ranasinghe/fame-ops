@@ -10,6 +10,7 @@
 // holds the four most used screens for the person's role, then More.
 import type { Permission } from "@fleet/permissions";
 import { can, type Me } from "../transport/types";
+import { type FeatureKey, pageSwitchedOn } from "../screens/switchLogic";
 
 export interface NavItem {
   key: string;
@@ -152,17 +153,21 @@ export function tabsFor(me: Pick<Me, "permissions">): NavItem[] {
 export const SUB_PAGES: (NavItem & { after: string })[] = [
   { key: "task_history", label: "Task history", need: ["assign_tasks"], path: "/tasks/history", after: "tasks" },
   // Round 4–7 (7): the asks for a busy driver or vehicle (holder_asks: everyone's own; a desktop opens it from the
-  // Timeline, a task page and the notifications).
+  // Timeline, a task page and the notifications). Not listed while the switch holder_contact is off (switchLogic PAGE_SWITCH).
   { key: "holder_asks", label: "Asks", need: ["request", "approve", "assign_tasks"], path: "/tasks/asks", after: "timeline" },
 ];
 
 /** NAV with the sub-pages in place, for the More list. */
 const MORE_ORDER: NavItem[] = NAV.flatMap((n) => [n, ...SUB_PAGES.filter((s) => s.after === n.key).map(({ after: _after, ...s }) => s)]);
 
-/** What the More page lists on a phone: every screen the person may open that is not on the tab bar. On a desktop the rail has them all. */
-export function moreFor(me: Pick<Me, "permissions">): NavItem[] {
+/**
+ * What the More page lists on a phone: every screen the person may open that is not on the tab bar. On a desktop the rail
+ * has them all. `off`: the feature switches saved off (Round 4–7): a page one of them turns off is not listed (Asks with
+ * holder_contact off).
+ */
+export function moreFor(me: Pick<Me, "permissions">, off: readonly FeatureKey[] = []): NavItem[] {
   const onBar = new Set(tabsFor(me).map((t) => t.key));
-  return allowed(MORE_ORDER, me).filter((n) => !onBar.has(n.key));
+  return allowed(MORE_ORDER, me).filter((n) => !onBar.has(n.key) && pageSwitchedOn(n.key, off));
 }
 
 /** The driver page (route history) and everything that calls driver_route. */

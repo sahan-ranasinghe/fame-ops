@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { routeOf } from "../data/route";
 import type { DriverRoute } from "../data/types";
-import { daySummary, noGpsLine, stopPins, stopText } from "./dayLogic";
+import { dayIsEmpty, daySummary, noGpsLine, stopPins, stopText } from "./dayLogic";
 
 const day = "2026-10-21";
 const answer: DriverRoute = {
@@ -27,6 +27,15 @@ describe("the day's summary card", () => {
     expect(noGpsLine([])).toBeNull();
     expect(noGpsLine([{ minutes: 0 }])).toBeNull();
     expect(noGpsLine([{ minutes: 25 }])).toBe("No GPS for 25 min");
+  });
+});
+
+describe("a day with nothing recorded (the card's empty state)", () => {
+  it("no point and no kept summary: empty; a day with points, or kept as a summary only, is not", () => {
+    expect(dayIsEmpty(null)).toBe(false);
+    expect(dayIsEmpty(routeOf("nuwan.p", { driver: "Nuwan Perera", date: day, recorded_points: 0, note: "No location was shared in this time." }))).toBe(true);
+    expect(dayIsEmpty(routeOf("nuwan.p", answer))).toBe(false);
+    expect(dayIsEmpty(routeOf("nuwan.p", { driver: "Nuwan Perera", date: day, km: 41.2, first_point: "06:12", last_point: "18:40", note: "Older than the location points are kept: the day's summary only (no line, no stops on a map)." } as DriverRoute))).toBe(false);
   });
 });
 

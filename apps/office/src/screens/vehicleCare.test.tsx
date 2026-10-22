@@ -10,7 +10,7 @@ import type { Attention, VehicleCard } from "../data/types";
 import type { Me, Transport, WatchEvent } from "../transport/types";
 import { ToastProvider } from "../ui/Toast";
 import { Maintenance } from "./Maintenance";
-import { reminderTile } from "./overviewLinks";
+import { reminderCounts, reminderSummary, reminderTile } from "./overviewLinks";
 import { ReminderCards } from "./Reminders";
 import { careCards, careCounts, careOf, docsOf, isDue, readService, serviceOf, summaryText } from "./vehicleCareLogic";
 
@@ -124,8 +124,7 @@ function Where() {
   return <output data-testid="where">{l.pathname + l.search}</output>;
 }
 
-async function mountMaintenance(vehicles: VehicleCard[], needs: Attention[] = []) {
-  const transport = new FakeTransport(vehicles, needs);
+async function mountMaintenance(vehicles: VehicleCard[], needs: Attention[] = [], transport = new FakeTransport(vehicles, needs)) {
   const store = new FleetStore(transport);
   store.watch("overview", "fleet_overview", {}, 30000);
   render(
@@ -176,6 +175,35 @@ describe("Maintenance: the service and documents as cards (Fleetio)", () => {
     expect(line.getAttribute("href")).toBe("/issues");
   });
 
+  // The fresh reviewer (22 October 2026): the drivers' licences were neither a card nor counted; the parity doc says counted.
+  it("the drivers' licences are counted in the line to Issues (they are no vehicle's card)", async () => {
+    await mountMaintenance(fleet(), [
+      { what: "Licence expires", subject: "Kamal Silva", kind: "licence", level: "red", issue_id: "l1" },
+      { what: "Insurance expires", kind: "document", level: "amber", vehicle: "WP CAB-4521" },
+    ]);
+    const line = await screen.findByTestId("maintenance-issues");
+    expect(line.textContent).toContain("1 more thing needs attention");
+    expect(line.textContent).toContain("Driver licences");
+  });
+
+  it("the vehicles list failing: its error with Try again (never a skeleton for ever); Try again loads the cards", async () => {
+    class Failing extends FakeTransport {
+      fail = true;
+      answer(tool: string, args: Record<string, unknown>): unknown {
+        if (tool === "list_vehicles" && this.fail) throw { code: "tool_error", message: "Fame Fleet refused." };
+        return super.answer(tool, args);
+      }
+    }
+    const t = new Failing(fleet());
+    await mountMaintenance(fleet(), [], t);
+    expect((await screen.findByTestId("care-error")).textContent).toBe("Fame Fleet refused.");
+    expect(screen.queryByText("Loading the vehicles…")).toBeNull();
+    t.fail = false;
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Try again" })); });
+    expect((await screen.findByTestId("care-summary")).textContent).toContain("2 of 3 vehicles need attention");
+    expect(screen.queryByTestId("care-error")).toBeNull();
+  });
+
   it("every action the page had is still there: the reports' search and status filter, a report's photos, task, call, status, note, off the road, Save", async () => {
     await mountMaintenance(fleet());
     const reports = await screen.findByTestId("reports-list");
@@ -207,6 +235,24 @@ describe("Reminders: one card per vehicle", () => {
     expect(within(cards[0]).getByRole("meter")).toBeTruthy();
     expect(screen.getByTestId("reminders-due").textContent).toContain("Licence expires");
     expect(screen.getByTestId("reminders-issues").textContent).toContain("1 more needs attention");
+    // The fresh reviewer (22 October 2026): the tile said 3, the panel 1 (vehicles). Now both count the reminders, and the
+    // panel says what they are on: the tile's number is the summary's first.
+    expect(screen.getByTestId("reminders-summary").textContent).toBe(`${reminderTile(items).count} reminders · 2 vehicles · 1 driver licence`);
+    expect(reminderTile(items).count).toBe(4);
+  });
+
+  it("the reminders in numbers: as many as the tile counts, the vehicles and the licences", () => {
+    const items: Attention[] = [
+      { what: "Service overdue", subject: "WP CAB-4521", level: "red", kind: "service_due", vehicle: "WP CAB-4521" },
+      { what: "Insurance expires", subject: "WP CAB-4521", level: "amber", kind: "document", vehicle: "WP CAB-4521" },
+      { what: "Emission test expires", subject: "WP CAB-4521", level: "amber", kind: "document", vehicle: "WP CAB-4521" },
+      { what: "Km allowance", subject: "WP CAB-4521", level: "amber", kind: "allowance", vehicle: "WP CAB-4521" },
+    ];
+    expect(reminderCounts(items)).toEqual({ reminders: 3, vehicles: 1, licences: 0 });
+    expect(reminderCounts(items).reminders).toBe(reminderTile(items).count);
+    expect(reminderSummary(reminderCounts(items))).toBe("3 reminders · 1 vehicle");
+    expect(reminderSummary({ reminders: 1, vehicles: 0, licences: 1 })).toBe("1 reminder · 1 driver licence");
+    expect(reminderCounts(undefined)).toEqual({ reminders: 0, vehicles: 0, licences: 0 });
   });
 
   it("without the issues permission: the vehicles list says what is due", () => {
@@ -214,5 +260,6 @@ describe("Reminders: one card per vehicle", () => {
     const cards = screen.getAllByTestId("reminder-card");
     expect(cards.map((c) => c.dataset.plate)).toEqual(["WP CAB-4521"]);
     expect(cards[0].textContent).toContain("Emission test · missing");
+    expect(screen.getByTestId("reminders-summary").textContent).toBe("1 vehicle due");
   });
 });

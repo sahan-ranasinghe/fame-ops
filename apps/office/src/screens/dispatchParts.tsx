@@ -13,6 +13,7 @@ import type { DefaultVehicle } from "./availabilityLogic";
 import { type DepartureCheck, usedLeave } from "./departureLogic";
 import { DwellPicker } from "./DwellPicker";
 import { type StartFields, WHAT_LABEL } from "./stopsLogic";
+import { type FeatureKey, featureOn, switchesOff } from "./switchLogic";
 import { ANY_TYPES, anyValue, isChoice, ON_THE_DAY, ON_THE_DAY_LABEL } from "./vehicleChoiceLogic";
 
 /** The plan preview is computed this long after the last edit (no Plan now since 21 October 2026): every call may count against a daily cap. */
@@ -22,6 +23,22 @@ export const PLAN_DEBOUNCE_MS = 1500;
 export function useFleetSettings(): Query<SettingsResult> {
   const { me } = useFleet();
   return useQuery<SettingsResult>("settings", "get_settings", {}, { enabled: me.tools.includes("get_settings"), onWrite: false });
+}
+
+/**
+ * A feature switch as a page follows it (Round 4–7; screens/switchLogic.ts): `on` unless saved off; `settled` once
+ * get_settings has answered (or failed, or the person may not call it: on, as absent). A poll waits for `settled`, so a
+ * switched-off feature never asks.
+ */
+export function useSwitch(key: FeatureKey): { on: boolean; settled: boolean } {
+  const { me } = useFleet();
+  const s = useFleetSettings();
+  return { on: featureOn(s.data?.settings, key), settled: !me.tools.includes("get_settings") || s.data !== undefined || s.err !== undefined };
+}
+
+/** The switches saved off (the menus hide the pages they turn off). */
+export function useSwitchesOff(): FeatureKey[] {
+  return switchesOff(useFleetSettings().data?.settings);
 }
 
 /** Hotfix 2 (J): the fleet setting vehicle_on_the_day (off until every driver's phone has the update; absent = off). */

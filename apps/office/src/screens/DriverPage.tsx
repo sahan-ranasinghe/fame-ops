@@ -31,7 +31,8 @@ import { Avatar, Chips, ErrBox, Loading, Notice, Pill, Plate, VehicleThumb } fro
 import { useDateRange } from "../ui/DateRangePicker";
 import { DayStrip } from "../ui/DayPicker";
 import { Icon } from "../ui/icons";
-import { daySummary, stopPins } from "./dayLogic";
+import { dayIsEmpty, daySummary, stopPins } from "./dayLogic";
+import { GAP_ICONS, svgMarkup } from "../map/mapIcons";
 import { gapMarkers, gapsOf } from "./gapsLogic";
 import { clockText, gapWindowsOf, playbackPath } from "./playbackLogic";
 import { type PlaybackSpeed, SPEEDS, usePlayback } from "./usePlayback";
@@ -133,6 +134,7 @@ export function DriverPage() {
     else if (stop) setFocus([{ lat: stop.lat, lng: stop.lng }]);
   };
   const summary = daySummary(route);
+  const noTrips = dayIsEmpty(route);
   const scheme = usePageScheme();
   const speed = speedColors(scheme);
   const markers = useMemo<MapMarker[]>(() => {
@@ -186,6 +188,8 @@ export function DriverPage() {
 
         {/* §33.6 item 1: the day in one card above the map (the day's numbers, the first and last point, the gaps in one line). */}
         <div className="card card-b day-sum" data-testid="day-summary">
+          {/* A day with no position at all: its empty state (what main's "No timeline for this day." said), in the card's words. */}
+          {noTrips && <p className="day-empty" data-testid="day-empty">No trips recorded this day.</p>}
           <dl>
             <div><dt>Km (GPS)</dt><dd><b className="num">{summary?.km != null ? num(summary.km) : "—"}</b><small>km</small></dd><span className="sub">{summary ? `from ${num(summary.points)} points` : ""}</span></div>
             <div><dt>Driving time</dt><dd><b>{minutesText(summary?.drivingMinutes)}</b></dd></div>
@@ -215,7 +219,8 @@ export function DriverPage() {
             <span><i style={{ background: speed.fast }} />Over 60 km/h</span>
             <span><i className="thin" />Poor fix (over 30 m)</span>
             <span><i className="dashed" />No GPS / app not running</span>
-            <span><i className="ring" />Stop</span>
+            {/* A stop is a pin on the map (§33.6 item 1): the same round mark with the pin inside. */}
+            <span data-testid="legend-stop"><i className="pin" dangerouslySetInnerHTML={{ __html: svgMarkup(GAP_ICONS.stop) }} />Stop</span>
           </div>
           {estimatedLegend(route) && (
             <div className="legend" data-testid="estimated-legend">

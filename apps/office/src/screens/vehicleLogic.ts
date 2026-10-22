@@ -88,12 +88,18 @@ export function withFuelGrade(f: Pick<VehicleFields, "fuelType" | "fuelGrade">, 
 }
 
 /**
- * Why the form cannot be saved yet, for the line under the button: the fuel type (register: always; an edit: once the
- * vehicle is known and it has none). Null = it can.
+ * Why the form cannot be saved yet, for the line under the button: the fuel type, on Register only. An edit of a vehicle
+ * with none saves the other changes (the fresh reviewer, 22 October 2026: an older vehicle was blocked from every edit);
+ * it shows "Fuel type: not set" instead (fuelNotSet). Null = it can.
  */
 export function fuelReason(f: Pick<VehicleFields, "fuelType" | "fuelGrade">, isNew: boolean, now?: FuelNow | null): string | null {
-  if (!isNew && now === undefined) return null;
+  if (!isNew) return null;
   return fuelShown(f, now).type ? null : "Pick the fuel type";
+}
+
+/** An edit of a known vehicle with no fuel type, and none picked: the amber "Fuel type: not set" by the chips. */
+export function fuelNotSet(f: Pick<VehicleFields, "fuelType" | "fuelGrade">, isNew: boolean, now?: FuelNow | null): boolean {
+  return !isNew && !!now && !fuelShown(f, now).type;
 }
 
 /** The vehicle's fuel as its page and the list say it ("Petrol 92", "Diesel"), or "Fuel type: not set" (amber). */
@@ -105,8 +111,8 @@ export function fuelLine(v: Pick<VehicleCard, "fuel_type" | "fuel_text">): { tex
 
 /**
  * regNo null = register a new vehicle; otherwise update that plate. `now`: the vehicle's fuel as it is (an edit; undefined
- * = not known yet: only a picked type or grade is sent). The fuel type is required (register_vehicle takes it; an edit sends
- * it and the grade only when they differ from the vehicle's).
+ * = not known yet: only a picked type or grade is sent). The fuel type is required to register (register_vehicle takes it);
+ * an edit sends it and the grade only when they differ from the vehicle's, and saves without one.
  */
 export function vehicleInput(f: VehicleFields, regNo: string | null, now?: FuelNow | null): { error: string } | { input: Record<string, unknown>; tool: "register_vehicle" | "update_vehicle" } {
   const t = (s: string) => s.trim();

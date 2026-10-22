@@ -18,6 +18,7 @@ import { PageTop } from "../../ui/Page";
 import { phoneDisplay } from "../../ui/ContactButtons";
 import { GenericTable } from "../../ui/GenericTable";
 import { useToast } from "../../ui/Toast";
+import { type FeatureKey, featureOn } from "../switchLogic";
 import { PERSONAL_TRIPS_OPTIONS, personalTripsValue } from "../tripPurposeLogic";
 import { officePhoneValue, privacyEmailValue, samePhone } from "./profileLogic";
 import { duration } from "@fleet/durations";
@@ -46,9 +47,10 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /**
  * Round 4–7 (phase8-plan.md §33): the five feature switches, on by default (absent = on), each saved at once; one line of
- * text each, shortened from the server's SETTING_TEXT (supabase/functions/_shared/fleet/settings.ts).
+ * text each, shortened from the server's SETTING_TEXT (supabase/functions/_shared/fleet/settings.ts). The rule itself
+ * (featureOn) is screens/switchLogic.ts, which every page that hides a switched-off part reads.
  */
-export type FeatureKey = "vehicle_check" | "trip_close_prompt" | "fuel_card" | "passengers" | "holder_contact";
+export { type FeatureKey, featureOn };
 export const FEATURES: readonly (readonly [FeatureKey, string, string])[] = [
   ["vehicle_check", "Vehicle check before work", "Whenever a driver takes a vehicle, and before a self-drive or someone-else trip: \"Any damage or problem?\" A problem with photos becomes a pre-trip issue."],
   ["trip_close_prompt", "\"Trip finished?\" for self-drive trips", "Asks for the odometer when the trip ends; an unanswered trip closes as Completed · not confirmed at 09:00 the next day."],
@@ -56,8 +58,6 @@ export const FEATURES: readonly (readonly [FeatureKey, string, string])[] = [
   ["passengers", "Passengers on trips", "The Passengers field on trips; registered passengers are told about the trip and see it in My trips."],
   ["holder_contact", "Who holds a busy driver or vehicle", "The warning names who holds them, with Call, WhatsApp and Ask for it."],
 ];
-/** A feature switch as shown: off only when saved off (absent = on). */
-export const featureOn = (s: Partial<Values> | null | undefined, key: FeatureKey) => s?.[key] !== false;
 
 /** The sections of Fleet settings, in order: each a row on /settings/fleet and a page of its own. */
 export const FLEET_SECTIONS = [
@@ -104,7 +104,7 @@ export function FleetSettings({ section }: { section?: FleetSection } = {}) {
   const head = section
     ? <PageTop title={sectionTitle} sub="Fleet settings" backTo="/settings/fleet" />
     : <div className="ph"><div><div className="eyebrow">Settings · dispatch defaults</div><h1>Fleet settings</h1></div></div>;
-  const { transport } = useFleet();
+  const { transport, store } = useFleet();
   const toast = useToast();
   const lists = useLists();
   const [data, setData] = useState<SettingsResult | null>(null);
@@ -151,6 +151,9 @@ export function FleetSettings({ section }: { section?: FleetSection } = {}) {
       await transport.call("update_settings", { key, value });
       toast("Setting saved");
       ok = true;
+      // Every page on screen that reads the settings (useFleetSettings: a switch, the base place…) asks again now: a
+      // switch changed here is followed in this tab without a reload.
+      store.refetchTool("get_settings");
       await load(key);
     } catch (e) {
       setErr(errText(e as FleetError)[0]);

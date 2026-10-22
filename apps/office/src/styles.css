@@ -415,6 +415,7 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .day-sum .sub { display: block }
 .day-gaps { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--warn); font-weight: 600 }
 .day-gaps svg { width: 16px; height: 16px; flex: none }
+.day-empty { margin: 0; font-weight: 600 }
 @media (max-width: 768px) { .day-sum dl { grid-template-columns: repeat(2, minmax(0, 1fr)) } .day-sum dl > div:last-child { grid-column: 1 / -1 } }
 .driver-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); gap: 20px; align-items: start }
 @media (max-width: 900px) { .driver-layout { grid-template-columns: minmax(0, 1fr) } }
@@ -437,7 +438,9 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .legend i { display: inline-block; width: 22px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px }
 .legend i.dashed { background: repeating-linear-gradient(90deg, var(--muted) 0 5px, transparent 5px 9px) }
 .legend i.thin { height: 2px; opacity: .5; background: var(--live) }
-.legend i.ring { width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 3px solid var(--ink) }
+/* A stop as the map draws it (§33.6 item 1): the round mark with the pin inside. */
+.legend i.pin { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); color: var(--ink); border: 2px solid var(--ink) }
+.legend i.pin svg { width: 11px; height: 11px }
 .play { display: flex; flex-wrap: wrap; gap: 12px; align-items: center }
 .play input[type=range] { flex: 1 1 200px; min-width: 160px; accent-color: var(--accent) }
 .mk-stop { display: flex; align-items: center; gap: 6px; pointer-events: none }
@@ -1293,51 +1296,6 @@ a.pt-banner:hover { filter: brightness(.98) }
 .pt-banner.bad { background: var(--bad-bg); border-color: color-mix(in srgb, var(--bad) 25%, transparent) } .pt-banner.bad .pt-banner-ic { background: var(--bad); color: var(--surface) } .pt-banner.bad .pt-banner-line { color: var(--bad) }
 .pt-banner.muted .pt-banner-line { color: var(--muted) }
 
-.pt-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px }
-.pt-facts.framed { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 12px }
-.pt-fact { display: grid; gap: 4px; min-width: 0; color: var(--muted) }
-.pt-fact svg { width: 18px; height: 18px }
-.pt-fact b { color: var(--ink); font-size: 15px; font-weight: 600 }
-.pt-fact span { font-size: 12.5px }
-
-.pt-steps { list-style: none; margin: 0; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px }
-.pt-step { display: grid; grid-template-columns: 52px 28px minmax(0, 1fr); position: relative; padding-bottom: 18px }
-.pt-step:last-child { padding-bottom: 0 }
-.pt-step::before { content: ""; position: absolute; left: 65px; top: 28px; bottom: 0; width: 2px; background: var(--line-strong) }
-.pt-step:last-child::before { display: none }
-.pt-steps.live .pt-step.done::before { background: var(--live) }
-.pt-time { display: grid; padding-top: 3px; font-size: 15px }
-.pt-time b { font-weight: 600 } .pt-time s { color: var(--muted); font-size: 12px }
-.pt-step.current .pt-time b { color: var(--live) }
-.pt-mark { width: 24px; height: 24px; border-radius: 12px; margin-top: 2px; display: grid; place-items: center; font: 600 11px var(--font-mono); background: var(--ink); color: var(--surface); position: relative; z-index: 1 }
-.pt-step.start .pt-mark { background: var(--accent); color: var(--accent-ink) }
-.pt-step.back .pt-mark { background: var(--surface); color: var(--ink); border: 2px solid var(--ink) }
-.pt-step.done .pt-mark { background: var(--live); color: var(--surface); border: 0 }
-.pt-step.done .pt-mark svg { width: 14px; height: 14px }
-.pt-step.current .pt-mark { background: var(--surface); color: var(--live); border: 3px solid var(--live); box-shadow: 0 0 0 4px var(--live-bg) }
-.pt-step.skipped .pt-mark { background: var(--muted) }
-.pt-steps.live .pt-step.back.todo .pt-mark { border-color: var(--muted); color: var(--muted) }
-.pt-body { padding-left: 10px; min-width: 0; display: grid; gap: 2px }
-.pt-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; min-width: 0 }
-.pt-meta { color: var(--muted); font-size: 13.5px }
-.pt-leg { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-top: 10px }
-.pt-leg svg { width: 14px; height: 14px }
-
-.pt-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; color: var(--ink); text-decoration: none; min-width: 0 }
-a.pt-row:hover { background: var(--surface-2) }
-.pt-row + .pt-row { border-top: 1px solid var(--line) }
-.pt-row-tx { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px }
-.pt-row-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
-.pt-row-meta { color: var(--muted); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
-.pt-row-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--surface-2); color: var(--ink) }
-.pt-row-ic svg { width: 20px; height: 20px }
-.pt-row-ic.live { background: var(--live-bg); color: var(--live) } .pt-row-ic.ok { background: var(--ok-bg); color: var(--ok) }
-.pt-row-ic.warn { background: var(--warn-bg); color: var(--warn) } .pt-row-ic.bad { background: var(--bad-bg); color: var(--bad) }
-
-.pt-bar .btn { min-height: 48px; border-radius: 14px }
-.pt-fab { position: fixed; right: 16px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 25; display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 20px 0 16px; border-radius: 26px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 16px; text-decoration: none; box-shadow: 0 6px 16px rgba(21, 24, 28, .18) }
-.pt-fab svg { width: 20px; height: 20px }
-
 /* The thin top bar: the round back button (44 px, a ring), the small line above the title. */
 .page-top .back { width: 44px; height: 44px; border-radius: 22px; padding: 0; display: grid; place-items: center; border: 1px solid var(--line); background: var(--surface) }
 
@@ -1375,7 +1333,6 @@ a.pt-row:hover { background: var(--surface-2) }
   .td-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "left top" "left rest"; column-gap: 18px; align-items: start }
   .td-top { grid-area: top } .td-left { grid-area: left } .td-rest { grid-area: rest }
 }
-@media (max-width: 768px) { .pt-fab.phone-only { display: inline-flex } }
 /* A short list of stops on the stepper's rail (the passenger's and the no-app trip's pages): a mark per stop, the line. */
 .pt-mini { position: relative; display: grid; gap: 8px; padding-left: 32px }
 .pt-mini::before { content: ""; position: absolute; left: 11px; top: 12px; bottom: 12px; width: 2px; background: var(--line-strong) }

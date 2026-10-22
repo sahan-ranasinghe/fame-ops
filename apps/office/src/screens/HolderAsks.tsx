@@ -3,7 +3,8 @@
 // driver or a vehicle), one title (what and the trip), one grey line (when it is wanted, who asked whom, the note), the
 // answer as a chip (Yes, No, Waiting). An ask to the person not answered yet has Yes / No (answer_holder_ask: the asker
 // and the fleet admins are told; a Yes changes nothing by itself). A row's words open the trip for someone who may open
-// tasks. Reached from More, the Timeline and a task page that has asks (TaskAsksLine).
+// tasks. Reached from More, the Timeline and a task page that has asks (TaskAsksLine); with the switch holder_contact off
+// those three hide it (and the task page asks nothing), a notification's link still opens it.
 import { useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -16,6 +17,7 @@ import { Icon } from "../ui/icons";
 import { EmptyLine, ListHeader, SkeletonRows, useUrlFilter } from "../ui/ListKit";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { useSwitch } from "./dispatchParts";
 import { answerChip, ASK_WHICH, askMeta, asksEmpty, asksFor, askTabs, askTitle, type AskWhich, canAnswer, type HolderAsk, taskAskCount, withAnswers } from "./holderAsksLogic";
 
 export const HOLDER_ASKS_EVERY = 60_000;
@@ -110,10 +112,14 @@ export function HolderAsks() {
   );
 }
 
-/** How many asks are about this task (approve: all of them; else the person's own, to and by them). */
+/**
+ * How many asks are about this task (approve: all of them; else the person's own, to and by them). Nothing is asked while
+ * the switch holder_contact is off, nor before the settings have said it is on.
+ */
 export function useTaskAsks(taskId: string): number {
   const { me, noConnector } = useFleet();
-  const on = !noConnector && !!taskId && me.tools.includes("holder_asks");
+  const holders = useSwitch("holder_contact");
+  const on = !noConnector && !!taskId && me.tools.includes("holder_asks") && holders.settled && holders.on;
   const approve = can(me, "approve");
   const all = useQuery<HolderAsksData>("holderAsks", "holder_asks", { which: "all" }, { enabled: on && approve, every: HOLDER_ASKS_EVERY });
   const toMe = useQuery<HolderAsksData>("holderAsks", "holder_asks", { which: "to_me" }, { enabled: on && !approve, every: HOLDER_ASKS_EVERY });

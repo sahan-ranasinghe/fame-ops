@@ -3,8 +3,9 @@
 // Phase 7 (§28): after the first save Register vehicle stays on the page with
 // the Documents section (/vehicles/new?registered=<plate>): the files need the
 // vehicle saved first.
-// Round 4–7 (5): the fuel type is required (the save button waits with "Pick the fuel type" under it; an edit starts
-// from the vehicle's own), the grade optional and only those that fit the type.
+// Round 4–7 (5): the fuel type is required to register (the save button waits with "Pick the fuel type" under it); an
+// edit starts from the vehicle's own, and a vehicle with none says "Fuel type: not set" in amber and saves the other
+// changes. The grade optional and only those that fit the type.
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -18,7 +19,7 @@ import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { useVehicle, vehicleDates } from "./VehicleDetail";
 import { VehicleDocumentsSection } from "./VehicleDocs";
-import { emptyVehicle, FUEL_GRADE_TEXT, FUEL_TYPES, fuelReason, fuelShown, gradesFor, type VehicleFields, vehicleInput, withFuelGrade, withFuelType } from "./vehicleLogic";
+import { emptyVehicle, FUEL_GRADE_TEXT, FUEL_TYPES, fuelNotSet, fuelReason, fuelShown, gradesFor, type VehicleFields, vehicleInput, withFuelGrade, withFuelType } from "./vehicleLogic";
 import type { FuelGrade, FuelType } from "../data/types";
 import { vehiclePath } from "./Vehicles";
 import { DateField } from "../ui/DayPicker";
@@ -123,6 +124,7 @@ export function VehicleForm() {
               <div role="radiogroup" aria-labelledby="vf-fuel">
                 <Chips<FuelType | ""> options={FUEL_TYPES.map(([k, l]) => [k, l])} value={fuel.type ?? ""} onChange={(k) => { if (k) setF((x) => ({ ...x, ...withFuelType(x, k, now) })); }} />
               </div>
+              {fuelNotSet(f, isNew, now) && <span className="hint status warn" data-testid="fuel-not-set">Fuel type: not set</span>}
             </div>
             {gradesFor(fuel.type).length > 0 && (
               <div className="field" style={{ gridColumn: "1/-1" }} data-testid="fuel-grade">

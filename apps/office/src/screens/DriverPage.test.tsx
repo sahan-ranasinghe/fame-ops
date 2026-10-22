@@ -1,5 +1,5 @@
 import { pickStripDay } from "../test/controls";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -122,6 +122,11 @@ describe("DriverPage", () => {
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
     expect(screen.getByTestId("day-strip")).toBeTruthy();
     expect(screen.getByLabelText("Legend").textContent).toContain("Stop");
+    // A stop is a pin on the map: the legend draws the same pin (the fresh reviewer: it still showed a ring).
+    expect(screen.getByTestId("legend-stop").querySelector("i.pin svg")).toBeTruthy();
+    expect(screen.getByLabelText("Legend").querySelector("i.ring")).toBeNull();
+    // A day with points has numbers, not the empty state.
+    expect(screen.queryByTestId("day-empty")).toBeNull();
   }, 20_000); // the file's first test pays for importing the page (over 5 s while every test file runs at once)
   it("Yesterday asks the tool for that day and says when nothing was shared", async () => {
     const transport = await mount();
@@ -131,6 +136,8 @@ describe("DriverPage", () => {
     expect(transport.calls.some((c) => c.tool === "driver_route" && c.args.date === addDays(day, -1))).toBe(true);
     expect(await screen.findByText("No location was shared on this day.")).toBeTruthy();
     expect(screen.getByTestId("map").textContent).toBe("no route");
+    // The day's empty state in the summary card (main's "No timeline for this day." had gone with the timeline).
+    expect(within(screen.getByTestId("day-summary")).getByTestId("day-empty").textContent).toBe("No trips recorded this day.");
     // The day is in the URL (Phase 7 §8: the date-range control in one-day mode).
     expect(screen.getByTestId("where").textContent).toBe("?range=yesterday");
   });

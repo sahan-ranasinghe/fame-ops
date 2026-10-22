@@ -2,6 +2,7 @@
 // setting sent with the one change), fuel videos' months on the same page, "Never removed", and Run now: the preview first
 // (counts, nothing removed), the second press runs run_retention {confirm: true} and shows its line.
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { StrictMode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it } from "vitest";
 import { FleetProvider } from "../../app/FleetContext";
@@ -70,12 +71,13 @@ class Fake implements Transport {
   }
 }
 
-function mount(t: Fake, me: Me = admin) {
-  render(
+function mount(t: Fake, me: Me = admin, strict = false) {
+  const page = (
     <FleetProvider value={{ store: new FleetStore(t), transport: t, me, noConnector: false }}>
       <ToastProvider><MemoryRouter initialEntries={["/settings/retention"]}><Routes><Route path="/settings/retention" element={<DataRetention />} /></Routes></MemoryRouter></ToastProvider>
-    </FleetProvider>,
+    </FleetProvider>
   );
+  render(strict ? <StrictMode>{page}</StrictMode> : page);
 }
 
 const row = (key: string) => within(screen.getByTestId(`retention-row-${key}`));
@@ -180,6 +182,28 @@ describe("Settings → Data retention", () => {
     await card.findByTestId("retention-nothing");
     expect(card.queryByTestId("retention-remove")).toBeNull();
     expect(t.of("run_retention")).toHaveLength(0);
+  });
+
+  // The fresh reviewer (22 October 2026): React's StrictMode (npm run dev, Playwright's web server) mounts the page, unmounts
+  // it and mounts it again; the "still mounted" flag must be true again after that, or every answer is dropped.
+  it("under StrictMode: Run now comes back from Checking…, Remove from Removing…, and Save from Saving…", async () => {
+    const t = new Fake({ inbox_read_days: 60 });
+    mount(t, admin, true);
+    await screen.findByTestId("retention-table");
+    const card = within(screen.getByTestId("retention-run"));
+    fireEvent.click(card.getByRole("button", { name: "Run now" }));
+    await card.findByTestId("retention-preview");
+    expect(card.queryByText("Checking…")).toBeNull();
+    fireEvent.click(card.getByRole("button", { name: "Remove 4,522 now" }));
+    await card.findByTestId("retention-result");
+    expect(card.queryByText("Removing…")).toBeNull();
+    expect(t.of("run_retention")).toEqual([{ confirm: true }]);
+    fireEvent.change(row("location_days").getByLabelText("Location points: days kept"), { target: { value: "90" } });
+    fireEvent.click(row("location_days").getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(t.of("update_settings")).toEqual([{ key: "retention", value: { location_days: 90 } }]));
+    await waitFor(() => expect(row("location_days").queryByRole("button", { name: /Sav/ })).toBeNull());
+    expect(screen.queryByText("Saving…")).toBeNull();
+    expect((row("location_days").getByLabelText("Location points: days kept") as HTMLInputElement).value).toBe("90");
   });
 
   it("without update_settings the periods are read; without the run tools there is no Run now", async () => {

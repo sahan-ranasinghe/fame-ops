@@ -17,7 +17,7 @@
 // icon and no badge, no towns; "More places" under them shows the rest in place (ui/placeSuggestLogic.ts).
 // Round 4–7 (item 10, Uber / Google Maps): the server answers each row's group, shown under small headers "Saved",
 // "Recent" (the person's own) and, when someone else's request is edited or decided (<SuggestFor request>), "<Name>'s
-// recent" (search_places for_request / for_person).
+// recent" (search_places for_request).
 import { createContext, Fragment, type ReactNode, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import type { GooglePlaceAnswer, PastedPin, PlaceDetail, SearchAnswer, SearchResult } from "../data/types";
@@ -45,8 +45,8 @@ const SuggestForContext = createContext<SuggestForWhom | null>(null);
  * Round 4–7 (item 10): the place boxes under it belong to someone else's trip (an approver editing or deciding another
  * person's request): an empty box adds that person's recent places. Nothing for one's own request.
  */
-export function SuggestFor({ request, person, children }: SuggestForWhom & { children: ReactNode }) {
-  const value = useMemo(() => (request || person ? { request, person } : null), [request, person]);
+export function SuggestFor({ request, children }: SuggestForWhom & { children: ReactNode }) {
+  const value = useMemo(() => (request ? { request } : null), [request]);
   return <SuggestForContext.Provider value={value}>{children}</SuggestForContext.Provider>;
 }
 
