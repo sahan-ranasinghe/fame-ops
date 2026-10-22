@@ -1,19 +1,21 @@
 // Round 4–7, §33.6 (Google Pay / Revolut / PickMe's history): one row per fill or reading, on the Fuel and Mileage tabs'
-// "Recent" card and on the history (app/history.tsx). Gmail's row: an icon for the kind (a fuel pump, an odometer gauge),
-// ONE line with the litres and the amount ("32.5 L · LKR 12,400"; a missing amount reads "–") or the km, ONE grey line
-// with the plate and the date in words; at the end the fill's video: a mark once uploaded, how far while it goes up,
-// waiting for Wi-Fi, or failed (the row then retries it). The rules: lib/history.ts.
+// "Recent" card and on the history (app/history.tsx). Gmail's row (the app's one list row, components/patterns/ListRow):
+// an icon for the kind (a fuel pump, an odometer gauge), ONE line with the litres and the amount ("32.5 L · LKR 12,400"; a
+// missing amount reads "–") or the km, ONE grey line with the plate and the date in words; a fill's video in words under
+// it ("Uploaded", "40 % of 12.3 MB", "Waiting for Wi-Fi", "Failed · tap to retry", "No video") with its mark at the end.
+// A failed video is retried by a tap only while the phone still holds the piece; a failure only the server knows is said,
+// not offered. The rules: lib/history.ts.
 
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Fuel, Gauge, RefreshCw, Video, Wifi } from '@/components/icons';
-import { Card, Mono, Txt } from '@/components/ui';
+import { Fuel, Gauge, RefreshCw, TriangleAlert, Video, Wifi } from '@/components/icons';
+import { ListRow, RowIcon } from '@/components/patterns/ListRow';
+import { Card, Txt } from '@/components/ui';
 import { dateWords } from '@/lib/dateWords';
 import { thousands } from '@/lib/format';
-import { fuelLine, type LogEntry, type Upload, videoMark } from '@/lib/history';
-import { percentOf } from '@/lib/video';
+import { fuelLine, type LogEntry, type Upload, videoMark, videoWords } from '@/lib/history';
 import { videoUploads } from '@/sync';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -32,7 +34,7 @@ export function LogRow({ entry, first, upload, onRetry }: {
   entry: LogEntry;
   first: boolean;
   upload?: Upload;
-  /** A fill whose video failed: tapping the row tries again. */
+  /** A fill whose video failed on this phone: tapping the row tries again. */
   onRetry?: (entry: LogEntry) => void;
 }) {
   const { t, vehicles, wifiOnly } = useApp();
@@ -41,51 +43,36 @@ export function LogRow({ entry, first, upload, onRetry }: {
   const mark = fill ? videoMark(entry, upload, wifiOnly) : null;
   const title = fill ? fuelLine(entry) : `${entry.km === null ? '–' : thousands(entry.km)} ${t('common.km')}`;
   const meta = [plate, dateWords(t, entry.at), entry.onPhone ? t('fuel.savedOffline') : null].filter(Boolean).join(' · ');
-  const retry = mark?.kind === 'failed' && onRetry ? () => onRetry(entry) : undefined;
-  const pct = mark?.kind === 'uploading' ? percentOf(mark.offset, mark.bytes) : 0;
-  const markWords = !mark
-    ? null
-    : mark.kind === 'uploaded' ? t('fuel.uploaded')
-    : mark.kind === 'failed' ? t('fuel.failed')
-    : mark.kind === 'waitingWifi' ? t('fuel.waitingWifi')
-    : mark.kind === 'uploading' ? t('fuel.uploading', { pct })
-    : mark.kind === 'queued' ? t('fuel.uploading', { pct: 0 })
-    : t('fuel.noVideo');
+  // A retry only for a piece the phone's queue still holds (and a screen that retries): never a tap that does nothing.
+  const retry = mark?.kind === 'failed' && mark.retry && onRetry ? () => onRetry(entry) : undefined;
+  const words = mark ? videoWords(mark, !!retry) : null;
+  const markWords = words ? t(words.key, words.vars) : null;
   const Icon = fill ? Fuel : Gauge;
   return (
-    <Pressable
-      accessibilityRole={retry ? 'button' : undefined}
-      accessibilityLabel={[t(fill ? 'mileage.fuel' : 'mileage.odometer'), title, meta, markWords].filter(Boolean).join(', ')}
-      onPress={retry}
-      disabled={!retry}
-      style={[styles.row, !first && styles.divider]}
-      testID={`log-row-${entry.kind}`}
-    >
-      <View style={styles.icon}>
-        <Icon size={20} color={colors.ink} strokeWidth={2.2} />
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Mono size={17} bold numberOfLines={1}>{title}</Mono>
-        <Txt variant="small" numberOfLines={1}>{meta}</Txt>
-      </View>
-      {mark && <VideoBadge mark={mark.kind} pct={pct} />}
-    </Pressable>
+    <View style={!first && styles.divider}>
+      <ListRow
+        inset
+        left={<RowIcon icon={Icon} tone="quiet" />}
+        title={title}
+        titleMono
+        line={meta}
+        line2={markWords ?? undefined}
+        line2Tone={words?.tone}
+        right={mark ? <VideoBadge mark={mark} retry={!!retry} /> : undefined}
+        onPress={retry}
+        accessibilityLabel={[t(fill ? 'mileage.fuel' : 'mileage.odometer'), title, meta, markWords].filter(Boolean).join(', ')}
+        testID={`log-row-${entry.kind}`}
+      />
+    </View>
   );
 }
 
-/** The fill's video at the row's end: a mark once uploaded, the share while it goes up, Wi-Fi, or Retry (red). */
-function VideoBadge({ mark, pct }: { mark: ReturnType<typeof videoMark>['kind']; pct: number }) {
-  if (mark === 'uploaded') return <View testID="video-mark"><Video size={20} color={colors.blue} /></View>;
-  if (mark === 'failed') return <View testID="video-failed"><RefreshCw size={20} color={colors.red} /></View>;
-  if (mark === 'waitingWifi') return <Wifi size={20} color={colors.amberText} />;
-  if (mark === 'uploading' || mark === 'queued') {
-    return (
-      <View style={styles.badge}>
-        <Video size={18} color={colors.amberText} />
-        <Mono size={14} color={colors.amberText}>{`${pct} %`}</Mono>
-      </View>
-    );
-  }
+/** The fill's video at the row's end (its words are on the row's second line): uploaded, going up, Wi-Fi, failed. */
+function VideoBadge({ mark, retry }: { mark: ReturnType<typeof videoMark>; retry: boolean }) {
+  if (mark.kind === 'uploaded') return <View testID="video-mark"><Video size={20} color={colors.blue} /></View>;
+  if (mark.kind === 'failed') return <View testID={retry ? 'video-failed' : 'video-failed-server'}>{retry ? <RefreshCw size={20} color={colors.red} /> : <TriangleAlert size={20} color={colors.red} />}</View>;
+  if (mark.kind === 'waitingWifi') return <Wifi size={20} color={colors.amberText} />;
+  if (mark.kind === 'uploading' || mark.kind === 'queued') return <Video size={20} color={mark.kind === 'uploading' ? colors.blue : colors.amberText} />;
   return null;
 }
 
@@ -121,10 +108,7 @@ export function RecentCard({ entries, empty, seeAll, children }: {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 64 },
   divider: { borderTopWidth: 1, borderTopColor: colors.line },
-  icon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.page, alignItems: 'center', justifyContent: 'center' },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   seeAll: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
 });

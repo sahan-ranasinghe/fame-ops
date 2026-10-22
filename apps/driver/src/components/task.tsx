@@ -1,13 +1,15 @@
-// Pieces for showing a task: the stops timeline and the small text lines.
+// Pieces for showing a task: the stops (on the one route stepper) and the small text lines.
 
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { GoogleCredit } from '@/components/GoogleCredit';
 import { ChevronDown } from '@/components/icons';
+import { RouteStepper, type StepperRow } from '@/components/patterns/RouteStepper';
 import { stopLabel, stopTimeAt } from '@/components/taskLines';
 import { Txt } from '@/components/ui';
 import { phoneDisplay } from '@/lib/contacts';
+import { stopNumber } from '@/lib/dayRules';
 import { durationText, relativeTime } from '@/lib/durations';
 import { cardStops, type StopChange } from '@/lib/taskPreview';
 import { colomboParts, colomboTime } from '@/lib/time';
@@ -16,12 +18,14 @@ import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
 /**
- * Pickup (hollow dot) down to drop-off (filled dot), as on the Today card.
- * compact (the Today card, Hotfix 2 I): every stop in order, up to four; above four the first four and "Show all N
- * stops", which opens the rest in place. A stop with a deadline shows it.
- * Each stop is named by its place in the order ("Stop 2 · Drop", Phase 7 §11) and, when the plan has the times,
- * reads "09:00–10:30 at Kurunegala site" (§17); the start reads "Start · passengers get in here".
- * detailed (the preview): the place, then "arrive 09:00 · leave 10:30 · by 10:00".
+ * The stops of a task on the app's one route stepper (components/patterns/RouteStepper.tsx; review of Round 4–7: never a
+ * stepper of its own): the start as S, each stop by its number, done ticked blue, skipped grey; the words as they were.
+ * Each stop is named by its place in the order ("Stop 2 · Drop", Phase 7 §11) and, when the plan has the times, reads
+ * "09:00–10:30 at Kurunegala site" (§17); the start says "Start · passengers get in here"; the Google credit under a
+ * Google place.
+ * compact: every stop in order, up to four; above four the first four and "Show all N stops", which opens the rest in place.
+ * A stop with a deadline shows it.
+ * detailed (the preview): the place, then "arrive 09:00 · leave 10:30 · by 10:00", and the office's note to the stop.
  * changes (the preview of a changed task): the stops that are new, moved or changed are marked; removed ones are listed
  * after, struck through.
  */
@@ -37,67 +41,62 @@ export function StopTimeline({ stops, compact = false, detailed = false, changes
   const order = { task_stops: stops };
   const { shown, hidden } = compact ? cardStops(stops, expanded) : { shown: stops, hidden: 0 };
   const typeKey: Record<string, string> = { pickup: 'stop.pickup', drop: 'stop.drop', visit: 'stop.visit' };
-  return (
-    <View>
-      {shown.map((stop, index) => {
-        const last = index === shown.length - 1 && hidden === 0 && removed.length === 0;
-        const changed = changes?.[stop.id];
-        const label = `${stopLabel(t, order, stop)}${!detailed && stop.arrive_by ? ` · ${t('task.arriveBy', { time: colomboTime(stop.arrive_by) })}` : ''}`;
-        const times = detailed
-          ? [
-            stop.planned_arrive_at && stop.planned_depart_at
-              ? t('preview.arriveLeave', { arrive: colomboTime(stop.planned_arrive_at), leave: colomboTime(stop.planned_depart_at) })
-              : null,
-            stop.arrive_by ? t('preview.arriveBy', { time: colomboTime(stop.arrive_by) }) : null,
-          ].filter(Boolean).join(' · ')
-          : '';
-        return (
-          <View key={stop.id} style={styles.stop}>
-            <View style={styles.rail}>
-              <View style={[styles.dot, last && { backgroundColor: colors.ink }]} />
-              {!last && <View style={styles.line} />}
-            </View>
-            <View style={[{ flex: 1, paddingBottom: last ? 0 : 14 }]}>
-              <View style={changed ? styles.changed : undefined}>
-                <Txt variant="muted" size={15}>{label}</Txt>
-                <Txt variant="strong" size={18}>{detailed ? stop.place_name : stopTimeAt(t, stop) ?? stop.place_name}</Txt>
-                <GoogleCredit show={!!stop.google_place_id} />
-                {detailed && times !== '' && <Txt variant="muted" size={15}>{times}</Txt>}
-                {stop.is_start && <Txt variant="small">{t('stop.start')}</Txt>}
-                {detailed && stop.note && <Txt variant="small" color={colors.amberText}>{stop.note}</Txt>}
-                {changed && <ChangedTag />}
-              </View>
-            </View>
-          </View>
-        );
-      })}
-      {removed.map((gone, index) => {
-        const last = index === removed.length - 1 && hidden === 0;
-        return (
-          <View key={`removed-${index}`} style={styles.stop}>
-            <View style={styles.rail}>
-              <View style={[styles.dot, { borderColor: colors.muted }]} />
-              {!last && <View style={styles.line} />}
-            </View>
-            <View style={[{ flex: 1, paddingBottom: last ? 0 : 14 }]}>
-              <View style={styles.changed}>
-                {gone.type !== '' && <Txt variant="muted" size={15} style={styles.struck}>{t(typeKey[gone.type] ?? 'stop.visit')}</Txt>}
-                <Txt variant="strong" size={18} color={colors.muted} style={styles.struck}>{gone.place}</Txt>
-                <ChangedTag />
-              </View>
-            </View>
-          </View>
-        );
-      })}
-      {hidden > 0 && (
+  const rows: StepperRow[] = shown.map((stop) => {
+    const changed = changes?.[stop.id];
+    const label = `${stopLabel(t, order, stop)}${!detailed && stop.arrive_by ? ` · ${t('task.arriveBy', { time: colomboTime(stop.arrive_by) })}` : ''}`;
+    const times = detailed
+      ? [
+        stop.planned_arrive_at && stop.planned_depart_at
+          ? t('preview.arriveLeave', { arrive: colomboTime(stop.planned_arrive_at), leave: colomboTime(stop.planned_depart_at) })
+          : null,
+        stop.arrive_by ? t('preview.arriveBy', { time: colomboTime(stop.arrive_by) }) : null,
+      ].filter(Boolean).join(' · ')
+      : '';
+    const extra = stop.google_place_id || (detailed && times !== '') || stop.is_start || (detailed && stop.note) || changed;
+    return {
+      key: stop.id,
+      mark: stop.is_start ? 'S' : String(stopNumber(order, stop.id) || ''),
+      kind: stop.is_start ? 'start' : 'stop',
+      state: stop.status === 'done' ? 'done' : stop.status === 'skipped' ? 'skipped' : 'todo',
+      title: detailed ? stop.place_name : stopTimeAt(t, stop) ?? stop.place_name,
+      titleLines: 2,
+      meta: [{ text: label }],
+      lines: extra ? (
+        <View style={changed ? styles.changed : undefined}>
+          <GoogleCredit show={!!stop.google_place_id} />
+          {detailed && times !== '' && <Txt variant="muted" size={15}>{times}</Txt>}
+          {stop.is_start && <Txt variant="small">{t('stop.start')}</Txt>}
+          {detailed && stop.note && <Txt variant="small" color={colors.amberText}>{stop.note}</Txt>}
+          {changed && <ChangedTag />}
+        </View>
+      ) : undefined,
+      testID: 'stop-timeline-row',
+    };
+  });
+  removed.forEach((gone, index) => rows.push({
+    key: `removed-${index}`,
+    mark: '–',
+    kind: 'stop',
+    state: 'skipped',
+    title: gone.place,
+    titleLines: 2,
+    struck: true,
+    meta: gone.type !== '' ? [{ text: t(typeKey[gone.type] ?? 'stop.visit') }] : undefined,
+    lines: <ChangedTag />,
+    testID: 'stop-timeline-removed',
+  }));
+  if (hidden > 0 && rows.length > 0) {
+    rows[rows.length - 1] = {
+      ...rows[rows.length - 1],
+      after: (
         <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} style={styles.showAll}>
-          <View style={styles.rail}><View style={[styles.dot, { backgroundColor: colors.ink }]} /></View>
           <Txt variant="strong" size={16} style={{ flex: 1 }}>{t('preview.showAll', { n: stops.length })}</Txt>
           <ChevronDown size={22} color={colors.ink} />
         </Pressable>
-      )}
-    </View>
-  );
+      ),
+    };
+  }
+  return <RouteStepper rows={rows} framed={false} testID="stop-timeline" />;
 }
 
 /** "Changed", in amber: what the office changed since the driver last saw the task. */
@@ -169,13 +168,8 @@ export function leaveTime(task: Pick<TaskWithStops, 'leave_by' | 'start_at'>): s
 }
 
 const styles = StyleSheet.create({
-  stop: { flexDirection: 'row', gap: 14 },
   changed: { backgroundColor: '#fdf1d6', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginLeft: -4, gap: 2 },
-  struck: { textDecorationLine: 'line-through' },
   tag: { alignSelf: 'flex-start', backgroundColor: '#fae3a8', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, marginTop: 2 },
   showAll: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 44 },
-  rail: { width: 16, alignItems: 'center', paddingTop: 5 },
-  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: colors.ink, backgroundColor: colors.card },
-  line: { flex: 1, width: 3, backgroundColor: '#cfcac0', marginVertical: 3, borderRadius: 2 },
 });
 

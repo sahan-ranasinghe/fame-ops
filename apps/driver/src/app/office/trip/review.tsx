@@ -54,6 +54,7 @@ import { useTrip } from '@/office/trip/useTrip';
 import { ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
 import { emptyWho } from '@/office/trip/whoDrivesLogic';
 import { passengersOn, ridersLine } from '@/office/trip/passengersLogic';
+import { switchOn } from '@/office/switches';
 import { whoOfDraft } from '@/office/trip/whoWords';
 import { legTextT, reasonLines, reasonText } from '@/office/trip/words';
 import { planNotes, planRows } from '@/office/stepperRows';
@@ -74,7 +75,9 @@ export default function TripReview() {
   const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
   // Round 4–7, item 12 (feature 4 on Review): the picked vehicle's check today, for "✓ Checked" beside it.
   const pickedPlate = d?.fields.vehicle && d.fields.vehicle !== ON_THE_DAY && !/^any /.test(d.fields.vehicle) ? d.fields.vehicle : '';
-  const vehicleCheck = useTool<VehiclesList>('list_vehicles', { filter: 'all', search: pickedPlate, limit: 5 }, { enabled: !!pickedPlate && me.tools.includes('list_vehicles') });
+  // The switch vehicle_check off (get_settings): no "✓ Checked", and nothing read for it.
+  const checksOn = switchOn(settings.data, 'vehicle_check');
+  const vehicleCheck = useTool<VehiclesList>('list_vehicles', { filter: 'all', search: pickedPlate, limit: 5 }, { enabled: checksOn && !!pickedPlate && me.tools.includes('list_vehicles') });
   const fallback = useMemo(() => ({ mode: 'request' as const, fields: { date: '', leaveBy: '', stops: [], returnToBase: false, avoidExpressway: false, end: '', start: '', startPax: false, title: '', buffer: '', driver: '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false }, req: { behalf: '', project: '', need: '', tools: false, note: '', requesterPhone: '' }, rows: [], step: 'review' as const, at: 0 }), []);
   const trip = useTrip(d ?? fallback, settings.data ?? null);
   const [busy, setBusy] = useState<'' | SendKind>('');
@@ -237,7 +240,7 @@ export default function TripReview() {
   const people = Math.max(parseInt(f.pax, 10) || 0, riding ? f.riders?.length ?? 0 : 0);
   const plate = f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : '';
   // Today's vehicle check (feature 4): "✓ Checked" beside the vehicle when the trip is today and the check is in.
-  const check = vehicleCheck.data?.vehicles?.find((v) => v.reg_no === plate)?.check_today;
+  const check = checksOn ? vehicleCheck.data?.vehicles?.find((v) => v.reg_no === plate)?.check_today : undefined;
   // A fact's row opens the Who step to change it (Change stops has no Who step: there the rows are facts).
   const toWho = d.mode === 'stops' ? undefined : () => { updateDraft((x) => ({ ...x, step: 'who' })); router.back(); };
   const showsDriver = (d.mode === 'task' || books) && !!f.driver && !noAppTrip;

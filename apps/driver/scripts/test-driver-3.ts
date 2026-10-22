@@ -21,12 +21,14 @@ import { dirname, join, resolve } from 'node:path';
 import { durationText } from '../src/lib/durations';
 import {
   backAtBaseTime,
+  contactWithoutCall,
   greetingKey,
   leaveChip,
   leaveFromWords,
   openStop,
   peopleWords,
   rowChip,
+  rowChipTone,
   rowMeta,
   sheetStats,
   stepperRows,
@@ -216,6 +218,21 @@ console.log('\nToday keeps every action (read as text)');
     && has(today, /onPress=\{\(\) => setExpanded\(true\)\}[^\n]*testID="stepper-show-all"/) && has(today, /<GoogleCredit show=\{google\} \/>/), 'Today\'s stops on the one route stepper (compact, the time on the right), Show all N stops, the Google credit');
   const stopStepper = readdirSync(src, { recursive: true }).map(String).filter((f) => /\.tsx?$/.test(f) && /\bStopStepper\b/.test(code(f)));
   check(stopStepper.length === 0, 'StopStepper is gone (no file draws or names it)', stopStepper);
+
+  // Review of Round 4–7: a contact with a name and no number was gone from the card; one chip, one plate, one row, one stepper.
+  check(contactWithoutCall({ contact_name: 'Ashan W.' }, []) === 'Ashan W.' && contactWithoutCall({ contact_name: 'Ashan W.' }, [{ kind: 'requester' }]) === 'Ashan W.'
+    && contactWithoutCall({ contact_name: 'Ashan W.' }, [{ kind: 'contact' }, { kind: 'office' }]) === null && contactWithoutCall({ contact_name: ' ' }, []) === null && contactWithoutCall({ contact_name: null }, []) === null,
+    'a contact with no number (or none that can be dialled) is named on the card; one with a call is the call link');
+  check(has(today, /const contactName = next \? contactWithoutCall\(next, calls\) : null;/) && has(today, /\{contactName && <Fact [^\n]*text=\{t\('today\.contact', \{ name: contactName \}\)\} testID="today-contact" \/>\}/),
+    'Today: "Contact: Ashan W." in the facts, no call link');
+  const toneChip = readdirSync(src, { recursive: true }).map(String).filter((f) => /\.tsx?$/.test(f) && /\bToneChip\b/.test(code(f)));
+  check(toneChip.length === 0 && !existsSync(join(src, 'components', 'ToneChip.tsx')), 'ToneChip is gone: the status chips are the one RowChip', toneChip);
+  check(rowChipTone('grey') === 'muted' && rowChipTone('amber') === 'amber' && has(today, /<RowChip text=\{chip\.text\} tone=\{rowChipTone\(chip\.tone\)\} wide testID="next-task-chip" \/>/)
+    && has(rows, /lineChip=\{chip \? \{ text: chip\.text, tone: rowChipTone\(chip\.tone\) \} : null\}/), 'Next task\'s chip and the rows\' chips are RowChip (grey is its muted)');
+  check(has(duty, /<Plate regNo=\{held\.reg_no\} \/>/) && !/plateText/.test(duty), 'the vehicle tile\'s plate is the shared Plate');
+  check(has(rows, /<ListRow\b/) && /<ListRow\b/.test(code('components/LogRows.tsx')) && /<ListRow\b/.test(code('components/ReportRows.tsx')), 'the task rows, the fill and reading rows and the reports are the one list row');
+  const taskParts = code('components/task.tsx');
+  check(/<RouteStepper rows=\{rows\} framed=\{false\} testID="stop-timeline" \/>/.test(taskParts) && !/styles\.(dot|rail)\b/.test(taskParts), 'the preview\'s and the finished task\'s stops are on the one route stepper (no rail or dots of their own)');
 }
 
 console.log('\nThe running task keeps every function (read as text)');

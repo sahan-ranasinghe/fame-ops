@@ -80,7 +80,7 @@ console.log('\nA4: the screens use it (no raw server date on screen)');
     ['app/office/issues/[id].tsx', /when: \(at\) => dateWords\(t, at\)[\s\S]*dateWords\(t, snooze\.until\)[\s\S]*dateWords\(t, h\.report\.reported\)[\s\S]*dateWords\(t, e\.at\)/],
     // Item 8 (Round 4–7): the row's grey line is the server's meta through dueWords (any date in it in words, its last
     // step datesInWords); the opened date moved to the issue page (the line above).
-    ['app/office/issues/index.tsx', /\{dueWords\(t, meta\.rest\)\}[\s\S]*dateWords\(t, snooze\.until\)/],
+    ['app/office/issues/index.tsx', /dueWords\(t, meta\.rest\)[\s\S]*dateWords\(t, snooze\.until\)[\s\S]*dateWords\(t, c\.at\)/],
     ['office/issuesLogic.ts', /export function dueWords[\s\S]*?return relativeWords\(t, s, now\) \?\? datesInWords\(t, s, now\);/],
     ['app/office/maintenance/index.tsx', /dateWords\(t, r\.reported\)/],
     ['app/office/maintenance/[id].tsx', /dateWords\(t, r\.reported\)\]/],

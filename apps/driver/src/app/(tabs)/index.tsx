@@ -37,7 +37,7 @@
 
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronDown, ChevronRight, Ellipsis, MessageCircle, Phone, Play, Road, Route, User } from '@/components/icons';
+import { Check, ChevronDown, ChevronRight, Ellipsis, IdCard, MessageCircle, Phone, Play, Road, Route, User } from '@/components/icons';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,6 +48,7 @@ import { DutyNotices, DutyTiles } from '@/components/DutyCard';
 import { RunningLate } from '@/components/LateSheet';
 import { CallButtons } from '@/components/CallButtons';
 import { GoogleCredit } from '@/components/GoogleCredit';
+import { RowChip } from '@/components/patterns/ListRow';
 import { RouteStepper, type StepperRow } from '@/components/patterns/RouteStepper';
 import { Sheet } from '@/components/patterns/Sheet';
 import { ChangedTag, leaveTime, useDateLabel, useNow, usePeopleLine } from '@/components/task';
@@ -56,7 +57,6 @@ import { PlateText } from '@/components/PlateText';
 import { plateOf } from '@/components/SwapCard';
 import { swapCard, taskTitle } from '@/components/taskLines';
 import { TaskList, useMarkShown } from '@/components/TaskRows';
-import { ToneChip } from '@/components/ToneChip';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { bannerAsk } from '@/lib/asks';
@@ -69,7 +69,7 @@ import { stopProgress } from '@/lib/stopProgress';
 import { nextAbout } from '@/lib/stopProgressWords';
 import { hasChanges, vehicleLine, vehicleWords } from '@/lib/taskPreview';
 import { colomboHour, colomboTime } from '@/lib/time';
-import { type Chip, greetingKey, leaveChip, leaveFromWords, peopleWords, todaySteps, tripKmText } from '@/lib/todayCard';
+import { type Chip, contactWithoutCall, greetingKey, leaveChip, leaveFromWords, peopleWords, rowChipTone, todaySteps, tripKmText } from '@/lib/todayCard';
 import { isSelfTrip } from '@/lib/trips';
 import type { TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
@@ -126,6 +126,8 @@ export default function TodayScreen() {
   const noVehicleWords = next && !nextVehicle ? vehicleWords(t, vehicleLine(next, app.vehicles)) : null;
   const calls = next ? taskCalls(next, app.taskContacts[next.id] ?? null) : [];
   const firstCall = calls[0] ?? null;
+  // A contact with a name and no number to call: their name on the card, no call link.
+  const contactName = next ? contactWithoutCall(next, calls) : null;
   const nextChanged = next?.status === 'assigned' && hasChanges(app.changesFor(next));
   // Round 2: under way, the next stop's "about HH:MM" once the trip has been re-estimated (lib/stopProgress.ts).
   const nextEta = (() => {
@@ -216,10 +218,11 @@ export default function TodayScreen() {
                 {nextEta && (
                   <Txt variant="strong" size={15} color={colors.blue} testID="today-next-about">{t('today.nextStopAbout', { stop: nextEta.place, time: nextEta.time })}</Txt>
                 )}
-                {(people || km || firstCall) && (
+                {(people || km || firstCall || contactName) && (
                   <View style={styles.facts}>
                     {people && <Fact icon={<User size={16} color={colors.iconInk} strokeWidth={2} />} text={people} />}
                     {km && <Fact icon={<Road size={16} color={colors.iconInk} strokeWidth={2} />} text={`${km} ${t('common.km')}`} mono />}
+                    {contactName && <Fact icon={<IdCard size={16} color={colors.iconInk} strokeWidth={2} />} text={t('today.contact', { name: contactName })} testID="today-contact" />}
                     {/* Hotfix 2 (F): who to call; the first one here, every one (with WhatsApp) behind ⋯. */}
                     {firstCall && (
                       <View style={styles.callWrap}>
@@ -338,7 +341,7 @@ function SectionHead({ title, chip }: { title: string; chip: Chip | null }) {
   return (
     <View style={styles.sectionHead}>
       <Txt variant="strong" size={16} style={{ flexShrink: 1 }}>{title}</Txt>
-      {chip && <ToneChip text={chip.text} tone={chip.tone} testID="next-task-chip" />}
+      {chip && <RowChip text={chip.text} tone={rowChipTone(chip.tone)} wide testID="next-task-chip" />}
     </View>
   );
 }
@@ -372,9 +375,9 @@ function NextStops({ task }: { task: TaskWithStops }) {
 }
 
 /** One fact of the card's line: an icon and its words ("3 people", "197 km"). */
-function Fact({ icon, text, mono = false }: { icon: ReactNode; text: string; mono?: boolean }) {
+function Fact({ icon, text, mono = false, testID }: { icon: ReactNode; text: string; mono?: boolean; testID?: string }) {
   return (
-    <View style={styles.fact}>
+    <View style={styles.fact} testID={testID}>
       {icon}
       {mono ? <Mono size={14} color={colors.iconInk}>{text}</Mono> : <Txt size={14} color={colors.iconInk}>{text}</Txt>}
     </View>

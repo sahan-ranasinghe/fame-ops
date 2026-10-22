@@ -253,6 +253,24 @@ export function whoLine(i: Issue, w: WhoWords): string {
   return parts.filter(Boolean).join(' · ');
 }
 
+/**
+ * Who has a row's issue and who closed it, for its words (the review of Round 4–7: the avatar alone said neither, and the
+ * closed time was gone): taken = an active issue's person ("taken by Sahan 10:05"; the time when the server gives it);
+ * closed = a resolved or dismissed one's how, by whom ('system' = by itself) and when.
+ */
+export function rowWho(i: Pick<Issue, 'status' | 'taken_by' | 'assigned_to' | 'resolved_by' | 'resolved_at' | 'resolved'>): {
+  taken?: { name: string; at?: string };
+  closed?: { how: 'resolved' | 'dismissed'; by: string | null; at: string | null };
+} {
+  if (isActive(i.status)) {
+    if (i.taken_by?.name) return { taken: { name: i.taken_by.name, ...(i.taken_by.at ? { at: i.taken_by.at.slice(-5) } : {}) } };
+    return i.assigned_to?.name ? { taken: { name: i.assigned_to.name } } : {};
+  }
+  const at = i.resolved_at ?? i.resolved ?? null;
+  if (!at && !i.resolved_by) return {};
+  return { closed: { how: i.status === 'dismissed' ? 'dismissed' : 'resolved', by: i.resolved_by ?? null, at } };
+}
+
 /** "Snoozed until 2026-10-19 07:00" and by whom, on a snoozed row; nothing when it is not snoozed. */
 export function snoozeParts(i: Pick<Issue, 'snoozed_until' | 'snoozed_by'>): { until: string; by?: string } | undefined {
   if (!i.snoozed_until) return undefined;

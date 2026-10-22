@@ -11,7 +11,8 @@ import { getJson, remove, setJson } from '@/lib/kv';
 import { getOfficeMe } from '../store';
 import type { TripDraft } from './draftLogic';
 import {
-  DRAFT_DAYS_KEY, DRAFT_INDEX_KEY, draftExpired, draftKeyFor, keepDaysFrom, LAST_EMAIL_KEY, LEGACY_DRAFT_KEY, legacyGoesTo, nextIndex, personOf,
+  DRAFT_DAYS_KEY, DRAFT_INDEX_KEY, draftExpired, draftKeyFor, keepDaysFrom, LAST_EMAIL_KEY, LEGACY_DRAFT_KEY, legacyDropAtSignIn, legacyGoesTo, nextIndex,
+  personOf,
 } from './draftKeys';
 
 export * from './draftLogic';
@@ -56,6 +57,15 @@ function load(person: string): TripDraft | null {
     return null;
   }
   return d;
+}
+
+/**
+ * An office sign-in, called BEFORE the e-mail typed is kept (office/auth.ts signInOffice): the phone's old draft (from before
+ * Round 4–7) belonged to the person who signed in last; anyone else signing in has it dropped, never moved to them.
+ */
+export function settleLegacyDraft(signingIn: string): void {
+  if (getJson<TripDraft>(LEGACY_DRAFT_KEY) === null) return;
+  if (legacyDropAtSignIn(signingIn, getJson<string>(LAST_EMAIL_KEY))) remove(LEGACY_DRAFT_KEY);
 }
 
 export function getDraft(): TripDraft | null {

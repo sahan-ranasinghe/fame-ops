@@ -1,7 +1,8 @@
 // Round 4–7, item 8 (docs/phase8-plan.md §33.7): my reports as Gmail's rows, on the Report tab (the last 5 and "See all")
 // and on app/my-reports.tsx (all of them, 20 at a time with Load more). A row: the category's icon, ONE specific line
 // ("Tyre · Front left flat"), ONE grey line (the plate · when in words · "Vehicle check" for a check's report) with the
-// status chip; the office's reply under it in blue when there is one. The words: lib/reportList.ts.
+// status chip; the office's reply under it in blue when there is one. The words: lib/reportList.ts. Drawn by the app's one
+// list row (components/patterns/ListRow.tsx).
 // The pages: the reports the phone keeps (the newest, app.reports) first, then the server's older ones below the oldest
 // held (Hotfix 3, L6: lib/lists.ts, api.fetchReportsBefore); offline the phone's own.
 
@@ -10,6 +11,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Car, CircleDot, MessageCircle, Siren, TriangleAlert, Wrench } from '@/components/icons';
+import { ListRow, RowIcon } from '@/components/patterns/ListRow';
+import type { ToneName } from '@/components/patterns/look';
 import { Txt } from '@/components/ui';
 import { fetchReportsBefore } from '@/lib/api';
 import { loadMore, mergeNewest, oldestOf, PAGE, pageInfo, windowOf } from '@/lib/lists';
@@ -21,33 +24,25 @@ import { colors } from '@/theme';
 
 const ICONS = { Wrench, Siren, CircleDot, TriangleAlert, Car, MessageCircle } as const;
 
-const STATUS_COLOR: Record<string, { text: string; background: string }> = {
-  open: { text: colors.red, background: colors.redChip },
-  in_garage: { text: colors.amberText, background: colors.amberChip },
-  closed: { text: colors.muted, background: '#eceae4' },
-};
+/** A report's status as the row's chip: open red, in the garage amber, closed grey. */
+const STATUS_TONE: Record<string, ToneName> = { open: 'red', in_garage: 'amber', closed: 'muted' };
 
 export function ReportRow({ report, first }: { report: VehicleReport; first: boolean }) {
   const { t, vehicles } = useApp();
-  const tone = STATUS_COLOR[report.status] ?? STATUS_COLOR.closed;
   const plate = vehicles.find((v) => v.id === report.vehicle_id)?.reg_no ?? null;
   const Icon = ICONS[reportIcon(report.category)];
   const danger = report.category === 'accident' || report.category === 'breakdown' || report.needs_vehicle;
   return (
-    <View style={[styles.row, !first && styles.divider]} testID="report-row">
-      <View style={[styles.icon, danger && { backgroundColor: colors.redChip }]}>
-        <Icon size={20} color={danger ? colors.red : colors.ink} strokeWidth={2.2} />
-      </View>
-      <View style={{ flex: 1, gap: 4 }}>
-        <Txt variant="strong" numberOfLines={1}>{reportTitle(t, report)}</Txt>
-        <View style={styles.metaLine}>
-          <Txt variant="small" numberOfLines={1} style={{ flexShrink: 1 }}>{reportMeta(t, report, plate)}</Txt>
-          <View style={[styles.status, { backgroundColor: tone.background }]}>
-            <Txt variant="strong" size={13} color={tone.text}>{t(`report.${report.status}`)}</Txt>
-          </View>
-        </View>
-        {report.office_note ? <Txt variant="small" color={colors.blue} numberOfLines={2}>{t('report.office', { note: report.office_note })}</Txt> : null}
-      </View>
+    <View style={!first && styles.divider}>
+      <ListRow
+        inset
+        left={<RowIcon icon={Icon} tone={danger ? 'red' : 'quiet'} />}
+        title={reportTitle(t, report)}
+        line={reportMeta(t, report, plate)}
+        lineChip={{ text: t(`report.${report.status}`), tone: STATUS_TONE[report.status] ?? 'muted' }}
+        below={report.office_note ? <Txt variant="small" color={colors.blue} numberOfLines={2}>{t('report.office', { note: report.office_note })}</Txt> : undefined}
+        testID="report-row"
+      />
     </View>
   );
 }
@@ -121,9 +116,5 @@ export function useReportPages(base: VehicleReport[]) {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 64 },
   divider: { borderTopWidth: 1, borderTopColor: colors.line },
-  icon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.page, alignItems: 'center', justifyContent: 'center' },
-  metaLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  status: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
 });

@@ -10,7 +10,8 @@
 //   - TaskAsksLink: on a task page, "Asks about this trip · 2" when there are any, opening the Asks page for that trip;
 //   - InboxActions: the notification centre's buttons (an Ask for it's Yes / No): the tool with its args as they are, the
 //     item read, then "You said Yes"; an error in words with Try again.
-// With holder_contact off the server sends no holder and no actions: none of this shows.
+// With holder_contact off the server sends no holder and no actions: none of this shows. The screens check the switch too
+// (office/switches.ts useSwitch): an answer read before the switch went off shows nothing of it either.
 
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -22,6 +23,7 @@ import { Button, Field, Txt } from '@/components/ui';
 import { actionWords, answeredLabel, askArgs, asksFor, askSentence, askedSnack, byLine, busyWords, conflictResource, holderTitle, mayAsk, reachOf, rememberAnswer, type Resource, type Wanted } from '@/office/holderLogic';
 import { sentenceText } from '@/office/statusWords';
 import { useOffice, useTool } from '@/office/state';
+import { useSwitch } from '@/office/switches';
 import type { AskedForIt, Conflict, FleetError, Holder, HolderAsks, InboxItem } from '@/office/types';
 import { Avatar, ErrorNotice } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -52,6 +54,8 @@ export function HolderLine({ holder, resource, what, wanted, testID = 'holder-li
   const { t } = useApp();
   const { me } = useOffice();
   const [asking, setAsking] = useState(false);
+  const on = useSwitch('holder_contact');
+  if (!on) return null;
   const reach = reachOf(holder, me.name);
   const ask = mayAsk(holder, me.tools, me.name);
   return (
@@ -86,6 +90,8 @@ export function HolderStrip({ holder, resource, what, wanted, testID = 'holder-s
   const { t } = useApp();
   const { me } = useOffice();
   const [asking, setAsking] = useState(false);
+  const on = useSwitch('holder_contact');
+  if (!on) return null;
   const ask = mayAsk(holder, me.tools, me.name);
   return (
     <View style={styles.strip} testID={testID}>
@@ -185,7 +191,9 @@ export function InboxActions({ item, onRead }: { item: InboxItem; onRead: (item:
   const [state, setState] = useState<{ busy: string | null; done: string | null; error: FleetError | null; last: number }>(
     () => ({ busy: null, done: answeredLabel(item.id) ?? null, error: null, last: -1 }),
   );
-  const actions = item.actions ?? [];
+  const holdersOn = useSwitch('holder_contact');
+  // The only buttons an item has are an Ask for it's Yes / No (answer_holder_ask): none with the switch off.
+  const actions = (item.actions ?? []).filter((a) => holdersOn || a.tool !== 'answer_holder_ask');
   if (!actions.length) return null;
   async function press(i: number) {
     const a = actions[i];
@@ -233,7 +241,8 @@ export function TaskAsksLink({ taskId }: { taskId: string }) {
   const { t } = useApp();
   const { me } = useOffice();
   const router = useRouter();
-  const may = me.tools.includes('holder_asks');
+  const on = useSwitch('holder_contact');
+  const may = on && me.tools.includes('holder_asks');
   const approver = me.permissions.includes('approve');
   const all = useTool<HolderAsks>('holder_asks', { which: 'all' }, { enabled: may && approver });
   const toMe = useTool<HolderAsks>('holder_asks', { which: 'to_me' }, { enabled: may && !approver });

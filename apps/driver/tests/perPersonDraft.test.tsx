@@ -5,10 +5,26 @@
 // signed in last.
 
 let mockMe: { name: string; email?: string } | null = null;
-jest.mock('@/office/store', () => ({ getOfficeMe: () => mockMe, useOfficeMe: () => mockMe, setOfficeMe: () => undefined }));
+jest.mock('@/office/store', () => ({
+  OFFICE_KEYS: { me: 'office.me', email: 'office.email' },
+  getOfficeMe: () => mockMe,
+  useOfficeMe: () => mockMe,
+  setOfficeMe: (me: { name: string; email?: string } | null) => {
+    mockMe = me;
+  },
+}));
+// The office sign-in (office/auth.ts signInOffice) with Auth and /me answered here: the person /me names signs in.
+let mockSignedIn: { name: string; email: string } | null = null;
+jest.mock('@/config', () => ({ isSupabaseConfigured: true }));
+jest.mock('@/lib/supabase', () => ({
+  supabase: { auth: { signInWithPassword: async () => ({ error: null }), signOut: async () => ({ error: null }), getSession: async () => ({ data: { session: null } }) } },
+}));
+jest.mock('@/office/client', () => ({ officeApi: { me: async () => ({ ...mockSignedIn, role: 'office', permissions: ['request'], tools: [] }) } }));
+jest.mock('@/lib/push', () => ({ registerPush: async () => undefined, unregisterPush: async () => undefined }));
 
 import Storage from 'expo-sqlite/kv-store';
 
+import { signInOffice } from '@/office/auth';
 import { forgetDraftCache, getDraft, newDraft, setDraft, setDraftKeepDays, type TripDraft } from '@/office/trip/draft';
 
 const DAY = 86_400_000;
@@ -101,5 +117,34 @@ test('the old phone-wide draft goes to the person who signed in last, and to nob
   Storage.setItemSync('office.trip.draft', JSON.stringify(draft('Anoja from before')));
   as('kamal@fame.test');
   expect(getDraft()).toBeNull();
+  expect(Storage.getItemSync('office.trip.draft')).toBeNull();
+});
+
+// Review of Round 4–7: the sign-in writes the e-mail typed before the draft is first read, so the old phone-wide draft must
+// be settled first (office/trip/draft.ts settleLegacyDraft, called by signInOffice before it keeps the e-mail).
+test("signing in: another person's old phone-wide draft goes to nobody; the person who signed in last gets theirs", async () => {
+  // Anoja signed in last, before Round 4–7, and left a draft; Kamal signs in on the same phone.
+  Storage.setItemSync('office.email', JSON.stringify('anoja@fame.test'));
+  Storage.setItemSync('office.trip.draft', JSON.stringify(draft('Anoja from before')));
+  mockSignedIn = { name: 'Kamal', email: 'kamal@fame.test' };
+  expect(await signInOffice('Kamal@fame.test', 'secret-password')).toBe('ok');
+  expect(Storage.getItemSync('office.email')).toBe(JSON.stringify('kamal@fame.test'));
+  expect(getDraft()).toBeNull();
+  expect(Storage.getItemSync('office.trip.draft')).toBeNull();
+  expect(stored('kamal@fame.test')).toBeNull();
+  // Anoja signs in again later: nothing of it was kept for anyone.
+  mockSignedIn = { name: 'Anoja', email: 'anoja@fame.test' };
+  expect(await signInOffice('anoja@fame.test', 'secret-password')).toBe('ok');
+  expect(getDraft()).toBeNull();
+
+  // The same person signing in again keeps their old draft (moved to their own key on the first read).
+  Storage.clearSync();
+  forgetDraftCache();
+  Storage.setItemSync('office.email', JSON.stringify('anoja@fame.test'));
+  Storage.setItemSync('office.trip.draft', JSON.stringify(draft('Anoja from before')));
+  mockSignedIn = { name: 'Anoja', email: 'anoja@fame.test' };
+  expect(await signInOffice(' ANOJA@fame.test ', 'secret-password')).toBe('ok');
+  expect(getDraft()?.fields.title).toBe('Anoja from before');
+  expect(stored('anoja@fame.test')).not.toBeNull();
   expect(Storage.getItemSync('office.trip.draft')).toBeNull();
 });

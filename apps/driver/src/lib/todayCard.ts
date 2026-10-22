@@ -27,6 +27,9 @@ export interface Chip {
   tone: ChipTone;
 }
 
+/** The tone as the app's one status chip names it (components/patterns/ListRow.tsx RowChip): grey is its muted. */
+export const rowChipTone = (tone: ChipTone): 'amber' | 'red' | 'blue' | 'green' | 'muted' => (tone === 'grey' ? 'muted' : tone);
+
 /** When to leave: the plan's leave-by, else the office's start time. */
 function leaveAt(task: Pick<TaskWithStops, 'leave_by' | 'start_at'>): string {
   return task.leave_by ?? task.start_at;
@@ -177,6 +180,16 @@ export function todaySteps(t: Translate, task: StepOf, expanded = false): { step
 }
 
 // --- People and km --------------------------------------------------------------------------------------------------
+
+/**
+ * The task's contact person when no call names them (a name with no number, or a number that cannot be dialled): the card
+ * still says who it is ("Contact: Ashan W."), without a call link. Null when there is no name or the contact has a call.
+ */
+export function contactWithoutCall(task: Pick<TaskWithStops, 'contact_name'>, calls: readonly { kind: string }[]): string | null {
+  const name = task.contact_name?.trim();
+  if (!name || calls.some((c) => c.kind === 'contact')) return null;
+  return name;
+}
 
 /** "3 people", "1 person"; null for none. */
 export function peopleWords(t: Translate, passengers: number | null | undefined): string | null {

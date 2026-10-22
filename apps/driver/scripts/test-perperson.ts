@@ -23,7 +23,7 @@ import {
   RETENTION_ROWS, RULE_KEYS, ruleKey, whatKey, withPeriod,
 } from '../src/office/retentionLogic';
 import {
-  DRAFT_KEEP_DAYS, DRAFT_PREFIX, draftExpired, draftKeyFor, keepDaysFrom, LAST_EMAIL_KEY, LEGACY_DRAFT_KEY, legacyGoesTo, nextIndex, personOf,
+  DRAFT_KEEP_DAYS, DRAFT_PREFIX, draftExpired, draftKeyFor, keepDaysFrom, LAST_EMAIL_KEY, LEGACY_DRAFT_KEY, legacyDropAtSignIn, legacyGoesTo, nextIndex, personOf,
 } from '../src/office/trip/draftKeys';
 import { suggestArgs } from '../src/office/trip/locationLogic';
 
@@ -204,6 +204,12 @@ console.log('\nPer person: the trip draft');
   check(draft.includes('getOfficeMe()') && draft.includes('setJson(draftKeyFor(person), next)') && !draft.includes('setJson(LEGACY_DRAFT_KEY') && !draft.includes('setJson(DRAFT_KEY'), 'the store writes only the person\'s own key (never the phone-wide one)');
   check(draft.includes('if (!cached || cached.person !== person)') && draft.includes('draftExpired(d.at, keepDays())'), 'another person\'s draft is never shown (the draft on screen is the person\'s); an expired one is dropped when read');
   const auth = read('office/auth.ts');
+  // Review of Round 4–7: the sign-in kept the new e-mail before the draft was first read, so the old draft moved to anyone.
+  check(legacyDropAtSignIn('kamal@x', 'anoja@x') && legacyDropAtSignIn('kamal@x', null) && legacyDropAtSignIn('', 'kamal@x') && !legacyDropAtSignIn(' Kamal@X ', 'kamal@x'),
+    'at a sign-in the old phone-wide draft is dropped unless the person signing in signed in last');
+  const settle = auth.indexOf('settleLegacyDraft(email)');
+  check(settle > 0 && settle < auth.indexOf('setJson(OFFICE_KEYS.email') && draft.includes('legacyDropAtSignIn(signingIn, getJson<string>(LAST_EMAIL_KEY))'),
+    'the sign-in settles the old draft with the e-mail of the last sign-in, before keeping the new one');
   check(!auth.includes('setDraft(null)') && (auth.match(/forgetDraftCache\(\)/g) ?? []).length === 2, 'sign-in and sign-out leave every person\'s draft on the phone, and show none');
   check(read('app/office/trip/where.tsx').includes('setDraftKeepDays(settings.data?.settings.retention?.drafts_days)'), 'the trip editor remembers the setting\'s period for the store');
 }

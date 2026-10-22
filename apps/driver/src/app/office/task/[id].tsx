@@ -21,7 +21,11 @@
 // route stepper (start, the live timeline, back at base); who rides (their avatars, then a row each); the trip's holder
 // (task_detail.task.holder: asked by / assigned by, Call, WhatsApp); the fuel card; the vehicle check; the rest as before.
 // The bar: the two actions used most (office/detailBanner.ts taskActions: Give a driver when it needs one, Change the task,
-// Reassign driver, Change stops, Swap vehicle, Reopen), the rest and Show the driven route and Cancel task under ⋯ More.
+// Reassign driver, Change stops, Swap vehicle, Reopen), the rest and Show the driven route and Cancel task under ⋯ More;
+// never ⋯ More alone (with none of those, the others go on the bar themselves).
+// Review of Round 4–7: the fleet's switches (office/switches.ts) hide their parts here too (passengers: who rides; the
+// vehicle check; holder_contact: the holder's words, Call and WhatsApp, and the asks; the fuel card); while on the way the
+// trip's row says who made it ("Made by", "Asked by") when no holder is shown, as the header does in the other states.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -52,6 +56,7 @@ import { SavedNotice } from '@/components/office/SavedNotice';
 import { Button, Mono, Txt } from '@/components/ui';
 import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
+import { useSwitch } from '@/office/switches';
 import { DETAIL_LINKS_FRESH_MS, detailTask, fuelCardParts, type LinkKey, linkOf, planDrawable } from '@/office/taskDetailLogic';
 import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
 import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStatusKey } from '@/office/taskLogic';
@@ -196,8 +201,15 @@ export default function TaskDetailScreen() {
     cancel: actions.cancel,
     route: !!task && (task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route'),
   }, !!task?.needs_driver);
-  const holder = task?.holder;
+  // The fleet's switches (office/switches.ts): a part switched off is not shown, whatever an older answer still carries.
+  const ridersOn = useSwitch('passengers');
+  const checksOn = useSwitch('vehicle_check');
+  const holdersOn = useSwitch('holder_contact');
+  const fuelCardOn = useSwitch('fuel_card');
+  const holder = holdersOn ? task?.holder : undefined;
   const holderReach = holder ? reachOf(holder, me.name) : {};
+  // Who asked for it or made it, as the header says in the other states (the header is not drawn over the map).
+  const madeBy = p?.from_request ? t('office.ui3.askedBy', { name: p.from_request.requested_by }) : task?.created_by ? t('office.task.madeBy', { name: task.created_by }) : undefined;
   const openLive = task ? () => router.navigate({ pathname: '/office/(tabs)/live', params: { driver: task.driver ?? '' } }) : undefined;
 
   // One action as a button: on the bar (outlined, half the width) or in the ⋯ sheet (full width). Each opens its own screen
@@ -348,7 +360,7 @@ export default function TaskDetailScreen() {
             </View>
           )}
           {/* Round 4–7 (6): the passengers (the count never under the names), a row each; Share trip for someone without an account. */}
-          {task && (task.passengers || task.passengers_list?.length) ? (
+          {task && ridersOn && (task.passengers || task.passengers_list?.length) ? (
             <View style={styles.list} testID="task-passengers">
               <View style={styles.summary}>
                 {task.passengers_list?.length ? <AvatarStack people={task.passengers_list} /> : <RowIcon icon={Users} tone="quiet" />}
@@ -370,7 +382,8 @@ export default function TaskDetailScreen() {
                 inset
                 left={<RowIcon icon={Briefcase} tone="quiet" />}
                 title={task.title}
-                line={holder ? [t(holder.by === 'asked' ? 'office.ui3.askedBy' : 'office.ui3.assignedBy', { name: holderTitle(holder, me.name, t) }), windowWords(holder, t)].filter(Boolean).join(' · ') : p?.from_request ? t('office.ui3.askedBy', { name: p.from_request.requested_by }) : undefined}
+                line={holder ? [t(holder.by === 'asked' ? 'office.ui3.askedBy' : 'office.ui3.assignedBy', { name: holderTitle(holder, me.name, t) }), windowWords(holder, t)].filter(Boolean).join(' · ') : madeBy}
+                testID="task-holder-row"
                 onPress={p?.from_request && me.permissions.includes('approve') ? () => router.push({ pathname: '/office/request/[id]', params: { id: p.from_request!.id } }) : undefined}
                 right={(
                   <>
@@ -382,9 +395,9 @@ export default function TaskDetailScreen() {
             </View>
           ) : null}
           {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none). */}
-          {task?.fuel_card ? <FuelCardSection card={task.fuel_card} started={!!task.started || task.status === 'in_progress' || task.status === 'completed'} /> : null}
+          {fuelCardOn && task?.fuel_card ? <FuelCardSection card={task.fuel_card} started={!!task.started || task.status === 'in_progress' || task.status === 'completed'} /> : null}
           {/* Round 4–7 (4): the vehicle check of the task's day by its person, with the photos. */}
-          {task?.vehicle_checks?.length ? <Section look="list" title={t('office.checks.title')}><View style={styles.inner}><TaskCheckLines checks={task.vehicle_checks} /></View></Section> : null}
+          {checksOn && task?.vehicle_checks?.length ? <Section look="list" title={t('office.checks.title')}><View style={styles.inner}><TaskCheckLines checks={task.vehicle_checks} /></View></Section> : null}
           {p && task && <TripPurposeCard p={p} />}
           {task && (task.km != null || task.gps_km != null) && (
             <Txt variant="muted" size={15}>{[task.km != null ? t('office.task.taskKm', { km: task.km }) : '', task.gps_km != null ? t('office.task.gpsKm', { km: task.gps_km }) : ''].filter(Boolean).join(' · ')}</Txt>

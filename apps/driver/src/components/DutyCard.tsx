@@ -15,14 +15,14 @@
 
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { Check, Play, Radio, RadioOff, ShieldCheck, TriangleAlert, Van, X } from '@/components/icons';
-import { Txt } from '@/components/ui';
+import { Plate, Txt } from '@/components/ui';
 import { colomboTime } from '@/lib/time';
 import { checkToday } from '@/lib/vehicleCheck';
 import { useApp } from '@/state/app';
-import { colors, fonts, hoverStyle } from '@/theme';
+import { colors, hoverStyle } from '@/theme';
 
 /** Today's two tiles: on / off duty and the vehicle held. */
 export function DutyTiles() {
@@ -183,9 +183,7 @@ function VehicleTile({ taskRunning }: { taskRunning: boolean }) {
         testID="vehicle-tile-change"
       >
         {held ? (
-          <View style={styles.plate}>
-            <Text style={styles.plateText}>{held.reg_no}</Text>
-          </View>
+          <Plate regNo={held.reg_no} />
         ) : (
           <Txt variant="strong" size={14}>{t('duty.noVehicle')}</Txt>
         )}
@@ -261,8 +259,6 @@ const styles = StyleSheet.create({
   // The check's state beside the van: it shrinks (and wraps) before it leaves the tile (Sinhala at 390 px).
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 8, minHeight: 26, flexShrink: 1, marginLeft: 8 },
   badgeText: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, marginLeft: 8 },
-  plate: { alignSelf: 'flex-start', borderWidth: 1, borderColor: colors.ink, borderRadius: 6, paddingHorizontal: 6 },
-  plateText: { fontFamily: fonts.monoSemiBold, fontSize: 14, color: colors.ink },
   notice: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, paddingVertical: 12, paddingLeft: 14, paddingRight: 6, backgroundColor: colors.amberSoft },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });

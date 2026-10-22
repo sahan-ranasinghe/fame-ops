@@ -5,7 +5,7 @@
 // each name, Call only with a phone, nothing with the switch off. The reminder: 30 minutes, on the reminders channel, its
 // tap carrying the task; cancelled with the one in the tray.
 // The words: en.json with the strings sidecars (src/i18n/parts) merged in while they exist; a missing key fails the test.
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react-native';
 
 let mockSettings: Record<string, unknown> = {};
 let mockOffline = false;
@@ -74,6 +74,7 @@ jest.mock('expo-notifications', () => ({
 import { FuelCard } from '@/components/FuelCard';
 import { PassengerList } from '@/components/Passengers';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
+import { useFuelReminderSwitch } from '@/lib/fuelReminderSwitch';
 import { armFuelReminder, disarmFuelReminder } from '@/lib/notifications';
 import type { TaskWithStops, Vehicle } from '@/lib/types';
 
@@ -181,6 +182,19 @@ describe('"Fill up on the way? Log fuel"', () => {
     });
     await disarmFuelReminder();
     expect(mockCancel).toHaveBeenCalledWith('fuel-reminder');
+    expect(mockDismiss).toHaveBeenCalledWith('fuel-reminder');
+  });
+
+  // Review of Round 4–7: the office turns the switch fuel_card off while a reminder is armed: it never fires.
+  it('the switch going off cancels a reminder already armed (and the one in the tray); on, nothing is cancelled', async () => {
+    await armFuelReminder('t1', { title: 'Fill up on the way?', body: 'Tap to log fuel.' }, 30 * 60_000);
+    mockCancel.mockClear();
+    mockDismiss.mockClear();
+    const { rerender } = renderHook(({ on }: { on: boolean }) => useFuelReminderSwitch(on), { initialProps: { on: true } });
+    await act(async () => undefined);
+    expect(mockCancel).not.toHaveBeenCalled();
+    rerender({ on: false });
+    await waitFor(() => expect(mockCancel).toHaveBeenCalledWith('fuel-reminder'));
     expect(mockDismiss).toHaveBeenCalledWith('fuel-reminder');
   });
 });

@@ -7,7 +7,7 @@
 // with update_settings (no dead UI);
 // with get_settings alone the values are read. The laptop-only line at the bottom. The rules: office/peopleLogic.ts.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { TimeField } from '@/components/patterns/TimeField';
@@ -19,6 +19,7 @@ import {
   type SettingProblem, type SwitchKey, switchValue, withSetting, FEATURE_KEYS,
 } from '@/office/peopleLogic';
 import { useOffice, useTool } from '@/office/state';
+import { noteSettings, noteSwitch } from '@/office/switches';
 import type { FleetError, SettingsResult } from '@/office/types';
 import { BackHeader, Divider, ErrorNotice, Loading, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -46,6 +47,8 @@ export default function QuickSettings() {
   const [phoneText, setPhoneText] = useState<string | null>(null);
   const settings = q.data?.settings ?? null;
   const defaults = q.data?.defaults ?? null;
+  // The five feature switches as read here are every screen's (office/switches.ts): a part switched off hides at once.
+  useEffect(() => { if (q.data) noteSettings(me, q.data); }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setRow = (key: QuickKey, patch: RowState) => setRows((r) => ({ ...r, [key]: { ...r[key], ...patch } }));
 
@@ -59,6 +62,7 @@ export default function QuickSettings() {
     try {
       await api.call('update_settings', r.input);
       q.patch((p) => ({ ...p, settings: withSetting(p.settings, key, r.input.value) }));
+      if ((FEATURE_KEYS as readonly string[]).includes(key)) noteSwitch(me, key as (typeof FEATURE_KEYS)[number], r.input.value !== false);
       setRow(key, { busy: false, saved: true });
       setTimeout(() => setRow(key, { saved: false }), SAVED_FOR_MS);
       return true;

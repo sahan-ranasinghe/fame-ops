@@ -15,6 +15,7 @@ import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty } from '@/components/patterns/ListState';
 import { MORE_SECTION, type MoreItem, type MoreSection, moreFor } from '@/office/nav';
 import { useOffice } from '@/office/state';
+import { useSwitch } from '@/office/switches';
 import { Avatar, DarkHeader, Divider, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -55,7 +56,9 @@ export default function MoreTab() {
   const [busy, setBusy] = useState(false);
   // Task history also needs its tool (list_tasks): never a row that would open a screen the person cannot use.
   // Round 4–7 (7): the timeline and the asks need their tools too (day_timeline, holder_asks).
-  const items = moreFor(me.permissions).filter((key) => (key !== 'task_history' || me.tools.includes('list_tasks')) && (key !== 'timeline' || me.tools.includes('day_timeline')) && (key !== 'holder_asks' || me.tools.includes('holder_asks')));
+  // The asks for a busy driver or vehicle are the holder feature's: none while holder_contact is off (office/switches.ts).
+  const holders = useSwitch('holder_contact');
+  const items = moreFor(me.permissions).filter((key) => (key !== 'task_history' || me.tools.includes('list_tasks')) && (key !== 'timeline' || me.tools.includes('day_timeline')) && (key !== 'holder_asks' || (holders && me.tools.includes('holder_asks'))));
   // The search at the top of More (docs/phase8-plan.md §16): the rows whose words match, as the person types.
   const [find, setFind] = useState('');
   const lineOf = (key: MoreItem) => (key === 'people_drivers' ? t('office.more.driversLine') : key === 'people_users' ? t('office.more.officeUsersLine') : key === 'settings' ? t('office.more.quickSettingsLine') : key === 'activity' ? t('office.more.activityLine') : key === 'timeline' ? t('office.holders.timelineLine') : key === 'holder_asks' ? t('office.holders.asksLine') : key === 'retention' ? t('office.more.retentionLine') : undefined);

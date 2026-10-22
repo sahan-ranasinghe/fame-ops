@@ -4,8 +4,9 @@
 // "+ Add a company" (add_rental_company) when allowed, the custodian by name or e-mail ("none" clears). Register saves
 // through register_vehicle, an update through update_vehicle; both go back to the vehicle. Documents and photos are
 // laptop work (their upload tools are web-only).
-// Round 4–7 (5): the fuel type as chips, required (the button waits with "Pick the fuel type" above it; an edit starts
-// from the vehicle's own), and the grade that fits it (optional; Not set).
+// Round 4–7 (5): the fuel type as chips, required to Register (the button waits with "Pick the fuel type" above it); an
+// edit starts from the vehicle's own, and a vehicle with none says "Fuel type: not set" in amber while the other changes
+// still save; the grade that fits it (optional; Not set).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -16,7 +17,7 @@ import { DateField } from '@/components/patterns/Calendar';
 import { ChoiceChips } from '@/components/patterns/Select';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Txt } from '@/components/ui';
-import { companyInput, emptyVehicle, FUEL_TYPES, fuelMissing, fuelShown, gradesFor, VEHICLE_TYPES, vehicleFormDirty, type VehicleFields, vehicleInput, withFuelGrade, withFuelType } from '@/office/manageLogic';
+import { companyInput, emptyVehicle, FUEL_TYPES, fuelMissing, fuelShown, fuelUnset, gradesFor, VEHICLE_TYPES, vehicleFormDirty, type VehicleFields, vehicleInput, withFuelGrade, withFuelType } from '@/office/manageLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriversList, FleetError, FuelGrade, FuelType, VehicleCard, VehiclesList } from '@/office/types';
 import { BackHeader, ErrorNotice, Screen, StickyActions } from '@/office/ui';
@@ -144,6 +145,8 @@ export default function VehicleFormScreen() {
         <View style={{ gap: 6 }} testID="vehicle-fuel">
           <Txt variant="label" color={colors.muted}>{t('office.vehicles.f_fuelType').toUpperCase()}</Txt>
           <ChoiceChips<FuelType> options={FUEL_TYPES.map((k) => ({ key: k, label: t(`office.fuel.type_${k}`) }))} value={fuel.type} onChange={(k) => setF((x) => ({ ...x, ...withFuelType(x, k, now) }))} />
+          {/* An edit of a vehicle with no fuel type: said in amber, the other changes still save (Register needs one). */}
+          {fuelUnset(f, isNew, now) ? <Txt variant="strong" size={14} color={colors.amberText} testID="vehicle-fuel-unset">{t('office.fuel.notSet')}</Txt> : null}
         </View>
         {gradesFor(fuel.type).length > 0 && (
           <View style={{ gap: 6 }} testID="vehicle-grade">

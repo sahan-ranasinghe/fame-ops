@@ -60,6 +60,7 @@ import {
   rememberAnswer,
   rememberFilled,
 } from '@/lib/fuelCard';
+import { useFuelReminderSwitch } from '@/lib/fuelReminderSwitch';
 import { type ArrivalFlag, canMarkDone, taskKmSoFar, withSwapReading } from '@/lib/dayRules';
 import { noteArrivalUndone } from '@/lib/stopCorrections';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
@@ -468,6 +469,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [shift, setShift] = useState<api.DriverSettings>(() => ({ ...api.DEFAULT_DRIVER_SETTINGS, ...(getJson<Partial<api.DriverSettings>>(KEYS.shift) ?? {}) }));
   const shiftRef = useRef(shift);
   shiftRef.current = shift;
+  // The switch fuel_card off: a fill-up reminder armed before is cancelled (lib/fuelReminderSwitch.ts).
+  useFuelReminderSwitch(shift.fuel_card);
   // Round 4–7 (§33.2): "Enough fuel?" as answered on this phone, and the fills logged since (the line and the reminder).
   const [fuelMemos, setFuelMemos] = useState<FuelMemos>(() => getJson<FuelMemos>(KEYS.fuelMemos) ?? {});
   const fuelMemosRef = useRef(fuelMemos);
