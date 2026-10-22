@@ -180,7 +180,9 @@ async function main() {
   const vehicles = await api.fetchVehicles(client);
   const mine = vehicles.filter((v) => v.reg_no.includes(run.toUpperCase()));
   check(mine.length === 2 && !mine.some((v) => v.id === gone.id), 'fetchVehicles returns the active vehicles only', mine.map((v) => v.reg_no));
-  check(Object.keys(mine[0] ?? {}).sort().join(',') === VEHICLE_COLUMNS.split(', ').sort().join(','), 'vehicles carry exactly the allowed columns (with the photo paths)', Object.keys(mine[0] ?? {}));
+  check(Object.keys(mine[0] ?? {}).sort().join(',') === VEHICLE_COLUMNS.split(', ').sort().join(','), 'vehicles carry exactly the allowed columns (with the photo paths, the fuel type and grade)', Object.keys(mine[0] ?? {}));
+  check(VEHICLE_COLUMNS.split(', ').includes('fuel_type') && VEHICLE_COLUMNS.split(', ').includes('fuel_grade') && 'fuel_type' in (mine[0] ?? {}),
+    'Round 4–7 (§33.2): a driver reads the vehicle\'s fuel type and grade (Log fuel preselects them)', mine[0]);
   const star = await client.from('vehicles').select('*').limit(1);
   check(star.error?.code === '42501', 'select * on vehicles is refused, as the database promises', star.error);
   const aiFromPhone = await client.from('odometer_logs').insert({ vehicle_id: van.id, employee_id: a.row.id, reading_km: 84500, kind: 'manual', ai_value: 84500 });
@@ -189,6 +191,7 @@ async function main() {
   const since = new Date(Date.now() - 3600000);
   let tasks = await api.fetchTasks(client, since);
   check(tasks.length === 2 && tasks.every((t) => t.employee_id === a.row.id) && !tasks.some((t) => t.id === taskOfB), 'fetchTasks returns my 2 tasks and not the other driver\'s', tasks.map((t) => t.title));
+  check(tasks.every((t) => Array.isArray(t.task_passengers)), 'Round 4–7 (§33.3): fetchTasks reads each task\'s passengers (the driver\'s own tasks, through RLS)', tasks.map((t) => t.task_passengers));
   check(tasks[0]?.id === task1 && tasks[0].task_stops.map((s) => s.type).join('>') === 'pickup>visit>drop', 'tasks come soonest first, stops in order (pickup, visit, drop)', tasks[0]?.task_stops.map((s) => s.seq));
   check(tasks[0]?.task_stops.length === 3 && !tasks[0].task_stops.some((s) => s.place_name === 'Wariyapola junction'), 'a stop the office removed is not shown', tasks[0]?.task_stops.map((s) => s.status));
   check(tasks[0]?.task_stops[1]?.dwell_min === 10 && tasks[0]?.task_stops[1]?.note === 'Collect the cable drums' && tasks[0]?.task_stops[1]?.what === 'goods', 'a stop carries its minutes, note and what', tasks[0]?.task_stops[1]);

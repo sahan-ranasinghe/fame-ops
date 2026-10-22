@@ -7,15 +7,21 @@
 // With no connection (or when the search gets no answer) it says so and offers only what works offline: our places
 // the phone knows (lib/trips.ts offlineMatches) and the typed words.
 // Round 1 item 6 (docs/ui-patterns.md "Where suggestions"): an empty box offers our places the phone knows (offices
-// first), at most 5 rows with a building icon, and "More places" for the rest (components/patterns/WhereSuggestions.tsx);
-// drivers get no "used before" from driver-api. The server's badge words are shown in the driver's language.
+// first), at most 5 rows with a building icon, and "More places" for the rest (components/patterns/WhereSuggestions.tsx).
+// The server's badge words are shown in the driver's language.
+// Round 4–7 (item 10, docs/phase8-plan.md §33.9): with a connection an empty box asks driver-api {suggest, near} once
+// (the phone's last known position, never a permission prompt) and shows Uber's two groups with their small headers:
+// Saved (the company's places, a building) then Recent (the driver's OWN trips' places, personal ones too, a clock),
+// about 5 rows. Skeleton rows while it asks; no answer, no connection or nothing suggested: the phone's own list as above
+// (our places only). Typing is unchanged.
 
 import * as Crypto from 'expo-crypto';
+import * as Location from 'expo-location';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { SkeletonRows } from '@/components/patterns/ListState';
 import { WhereSuggestions } from '@/components/patterns/WhereSuggestions';
 import { badgeKey, officesFirst, whereRows } from '@/lib/placeSuggestLogic';
-import { SUGGEST_TIMEOUT_MS, withTimeout } from '@/lib/patterns/listLogic';
+import { POSITION_TIMEOUT_MS, SUGGEST_TIMEOUT_MS, withTimeout } from '@/lib/patterns/listLogic';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { GoogleCredit } from '@/components/GoogleCredit';
@@ -35,11 +41,26 @@ import {
   SEARCH_DEBOUNCE_MS,
   type SearchResult,
   shouldSearch,
+  suggestGroups,
 } from '@/lib/trips';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
 type Status = 'idle' | 'searching' | 'done' | 'offline';
+/** The empty box's suggestions from the server: not asked, asking, answered, or no answer (the phone's own list then). */
+type Suggest = { status: 'idle' | 'loading' | 'failed' } | { status: 'done'; saved: SearchResult[]; recent: SearchResult[] };
+
+/** The phone's last known position, only when Location is already allowed (never a prompt), within 3 s; else none. */
+async function lastPosition(): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const perm = await withTimeout(Location.getForegroundPermissionsAsync(), POSITION_TIMEOUT_MS);
+    if (!perm.granted) return null;
+    const pos = await withTimeout(Location.getLastKnownPositionAsync(), POSITION_TIMEOUT_MS);
+    return pos ? { lat: pos.coords.latitude, lng: pos.coords.longitude } : null;
+  } catch {
+    return null;
+  }
+}
 
 interface Props {
   /** The phone has a data connection (app.dataAvailable). */
@@ -67,6 +88,38 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
   const session = useRef<string | null>(null);
   // Only the newest request's answer is shown.
   const asked = useRef(0);
+  // Round 4–7 (item 10): the empty box's Saved and Recent, asked once per box when there is a connection.
+  const [suggest, setSuggest] = useState<Suggest>({ status: 'idle' });
+  const suggestAsked = useRef(false);
+  const empty = text.trim() === '';
+  const wantSuggest = empty && !pick && online;
+  useEffect(() => {
+    if (!wantSuggest || suggestAsked.current) return;
+    suggestAsked.current = true;
+    let live = true;
+    let answered = false;
+    setSuggest({ status: 'loading' });
+    void (async () => {
+      try {
+        const near = await lastPosition();
+        const answer = await withTimeout(driverApi.suggestPlaces(near), SUGGEST_TIMEOUT_MS);
+        answered = true;
+        if (live) setSuggest({ status: 'done', ...suggestGroups(answer.results) });
+      } catch {
+        // No answer in time, or none at all: the phone's own list (our places), as offline.
+        answered = true;
+        if (live) setSuggest({ status: 'failed' });
+      }
+    })();
+    return () => {
+      live = false;
+      // Typing (or a pick) before the answer came: ask again the next time the box is empty; an answer is kept.
+      if (!answered) {
+        suggestAsked.current = false;
+        setSuggest((now) => (now.status === 'loading' ? { status: 'idle' } : now));
+      }
+    };
+  }, [wantSuggest]);
 
   useEffect(() => {
     if (pick) return;
@@ -111,8 +164,10 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
   const results = status === 'done' ? answer?.results ?? [] : [];
   const pin = status === 'done' ? answer?.pin : undefined;
   const nothing = status === 'done' && results.length === 0 && !pin;
-  const empty = text.trim() === '';
-  const where = empty ? whereRows(officesFirst(known), [], (p) => p.name) : null;
+  // The server's groups when it suggested something; else (offline, no answer, nothing) the phone's own list.
+  const served = online && suggest.status === 'done' && suggest.saved.length + suggest.recent.length > 0 ? suggest : null;
+  const loadingSuggest = empty && online && !served && (suggest.status === 'loading' || suggest.status === 'idle');
+  const where = empty && !served && !loadingSuggest ? whereRows(officesFirst(known), [], (p) => p.name) : null;
   const badgeText = (badge: string | null | undefined, layer: string) => {
     const key = badgeKey(badge, layer);
     return key ? t(key) : null;
@@ -154,8 +209,40 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
           {status === 'offline' && <Notice tone="warn" text={t('trip.offlineOnly')} />}
           {status === 'searching' && <SkeletonRows rows={3} lines={2} testID="trip-search-skeleton" />}
 
+          {empty && loadingSuggest && <SkeletonRows rows={3} lines={2} testID="trip-suggest-skeleton" />}
+
+          {/* Round 4–7 (item 10): Saved (the company's) then Recent (the driver's own), each with its small header. */}
+          {empty && served && (
+            <>
+              {served.saved.length > 0 && (
+                <SuggestGroup title={t('where.badge.saved')} testID="suggest-saved">
+                  <WhereSuggestions
+                    lists={{ top: served.saved.map((item) => ({ item, icon: 'building' as const })), more: [] }}
+                    keyOf={(r, i) => `saved-${r.id ?? r.name}-${i}`}
+                    title={(r) => r.name}
+                    detail={(r) => r.detail}
+                    onPick={(r) => choose(pickFromResult(r, null))}
+                    testID="where-saved"
+                  />
+                </SuggestGroup>
+              )}
+              {served.recent.length > 0 && (
+                <SuggestGroup title={t('where.recent')} testID="suggest-recent">
+                  <WhereSuggestions
+                    lists={{ top: served.recent.map((item) => ({ item, icon: 'clock' as const })), more: [] }}
+                    keyOf={(r, i) => `recent-${r.name}-${i}`}
+                    title={(r) => r.name}
+                    detail={(r) => r.detail}
+                    onPick={(r) => choose(pickFromResult(r, null))}
+                    testID="where-recent"
+                  />
+                </SuggestGroup>
+              )}
+            </>
+          )}
+
           {where && where.top.length > 0 && (
-            <Card style={{ paddingVertical: 4, paddingHorizontal: 12 }}>
+            <SuggestGroup title={t('where.badge.saved')} testID="suggest-known">
               <WhereSuggestions
                 lists={where}
                 keyOf={(place) => place.id}
@@ -163,7 +250,7 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
                 detail={(place) => [place.site_id, place.address].filter(Boolean).join(' · ')}
                 onPick={(place) => choose(pickFromKnown(place))}
               />
-            </Card>
+            </SuggestGroup>
           )}
 
           {local.length > 0 && (
@@ -215,6 +302,16 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
           )}
         </>
       )}
+    </View>
+  );
+}
+
+/** An empty box's group: its small header, then the rows in one card (Uber's "Saved", "Recent"). */
+function SuggestGroup({ title, children, testID }: { title: string; children: ReactNode; testID?: string }) {
+  return (
+    <View style={{ gap: 6 }} testID={testID}>
+      <Txt variant="label" color={colors.muted} style={{ marginLeft: 6 }}>{title}</Txt>
+      <Card style={{ paddingVertical: 4, paddingHorizontal: 12 }}>{children}</Card>
     </View>
   );
 }

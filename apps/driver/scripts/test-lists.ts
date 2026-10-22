@@ -157,16 +157,25 @@ const today = code('app/(tabs)/index.tsx');
 const report = code('app/(tabs)/report.tsx');
 const fuel = code('app/(tabs)/fuel.tsx');
 const mileage = code('app/(tabs)/mileage.tsx');
+// Round 4–7 (§33.6, §33.7): the tabs show the last 5 with "See all"; the pages (20 at a time) are on their own screens.
+const history = code('app/history.tsx');
+const myReports = code('app/my-reports.tsx');
+const reportRows = code('components/ReportRows.tsx');
 const taskScreen = code('app/task/[id].tsx');
 const api = code('lib/api.ts');
 check(/todayLists\(tasks, now\)/.test(today) && /tasks=\{shownToday\}/.test(today) && /tasks=\{shownUpcoming\}/.test(today) && !/tasks=\{laterToday\}|tasks=\{upcoming\}/.test(today),
   'Today shows the capped lists (never the whole later list)');
 check(/t\('today\.allTasks'\)/.test(today) && /t\('today\.moreLater', \{ n: moreToday \}\)/.test(today) && /lists\.allRow &&/.test(today), 'Today has the row with "{n} more later today"');
 check(/useMarkShown\(\[\.\.\.\(next \? \[next\] : \[\]\), \.\.\.shownToday, \.\.\.shownUpcoming\]\)/.test(today), 'Today marks seen only the tasks on screen');
-check(/windowOf\(rows, shown\)/.test(fuel) && /<LoadMore /.test(fuel), 'Fuel: the fills 20 at a time');
+check(/recentEntries\(entries\)/.test(fuel) && /seeAll="fuel"/.test(fuel) && !/<LoadMore /.test(fuel), 'Fuel: the last 5 fills and See all (no growing list on the tab)');
+check(/windowOf\(merged\.rows, shown\)/.test(history) && /<LoadMore /.test(history) && /fetchFuelBefore\(supabase, cursor, HISTORY_PAGE\)/.test(history)
+  && /fetchOdometerBefore\(supabase, cursor, HISTORY_PAGE\)/.test(history), 'the history: 20 at a time from the server, below the oldest held');
 check(/windowOf\(todayTasks, shown\)/.test(mileage) && /visibleTasks\(tasks, now\)/.test(mileage) && /<LoadMore /.test(mileage), 'Mileage: today\'s tasks 20 at a time, never a missed one');
-check(/pages\.visible\.map/.test(report) && /fetchReportsBefore\(supabase, cursor\(\), PAGE\)/.test(report) && /fetchReportsBefore\(supabase, cursor\(\), 0\)/.test(report) && /<LoadMore /.test(report),
-  'Report: my reports 20 at a time, the older ones from the server (and their count) below the oldest held');
+check(/newest\.slice\(0, RECENT_REPORTS\)/.test(report) && /reportsSeeAll\(newest\.length\)/.test(report) && /router\.push\('\/my-reports'\)/.test(report) && !/<LoadMore /.test(report),
+  'Report: the last 5 of my reports and See all');
+check(/pages\.visible\.map/.test(myReports) && /useReportPages\(reports\)/.test(myReports) && /fetchReportsBefore\(supabase, cursor\(\), PAGE\)/.test(reportRows)
+  && /fetchReportsBefore\(supabase, cursor\(\), 0\)/.test(reportRows) && /<LoadMore /.test(myReports),
+  'My reports (See all): 20 at a time, the older ones from the server (and their count) below the oldest held');
 check(/!isMissed\(item, Date\.now\(\)\)/.test(taskScreen), 'the task screen (and its preview) treats a missed task as gone');
 check(/\.neq\('status', 'missed'\)/.test(api), 'the task list read from the server never has a missed task');
 

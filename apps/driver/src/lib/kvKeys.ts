@@ -87,6 +87,10 @@ export const KEYS = {
   vehicleChecks: 'cache.vehicleChecks',
   /** Round 4–7 (§33.1): how the vehicle held was taken ({vehicleId, how}): the Today card's check says so. */
   heldHow: 'duty.heldHow',
+  /** Round 4–7 (§33.2): the fuel card's estimates as last read ({taskId: FuelEstimate}, the newest 10): shown offline. */
+  fuelEstimates: 'cache.fuelEstimates',
+  /** Round 4–7 (§33.2): "Enough fuel?" as answered on this phone, and when a fill was logged ({taskId: FuelMemo}). */
+  fuelMemos: 'fuel.cardMemos',
   /** When the refused points were last put back in line (ms), and for which app update. */
   rejectedRetryAt: 'sync.rejectedRetryAt',
   rejectedRetryUpdate: 'sync.rejectedRetryUpdate',

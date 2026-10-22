@@ -1,6 +1,8 @@
 // Round 1 item 6: the "Where" suggestions of an empty place box (docs/ui-patterns.md "Where suggestions"), on both place
 // boxes of the app: Office mode's (and /m/'s) and the driver's Start a trip. At most 5 rows, our places first then 3 recent,
 // an icon per row (never a text badge), no towns, "More places" for the rest; while typing the badges are translated.
+// Round 4–7 (item 10): the driver's box with a connection asks driver-api {suggest} once and shows Saved, then the
+// driver's own Recent, each under its small header; with no connection (or no answer) the phone's own list as before.
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { answers, FIX, resetFake } from './fakeOffice';
@@ -10,7 +12,8 @@ jest.mock('@/state/app', () => ({ useApp: () => require('./fakeOffice').mockUseA
 jest.mock('@/office/store', () => ({ useOfficeMe: () => require('./fakeOffice').FIX('me'), getOfficeMe: () => require('./fakeOffice').FIX('me'), setOfficeMe: () => undefined }));
 jest.mock('@/components/office/PinAdjust', () => ({ PinAdjust: () => null }));
 const mockSearch = jest.fn();
-jest.mock('@/lib/driverApiClient', () => ({ driverApi: { searchPlaces: (...a: unknown[]) => mockSearch(...a) } }));
+const mockSuggest = jest.fn();
+jest.mock('@/lib/driverApiClient', () => ({ driverApi: { searchPlaces: (...a: unknown[]) => mockSearch(...a), suggestPlaces: (...a: unknown[]) => mockSuggest(...a) } }));
 
 /* eslint-disable import/first */
 import { PlaceSearch as DriverPlaceSearch } from '@/components/PlaceSearch';
@@ -28,6 +31,7 @@ const town = (name: string) => ({ layer: 'town', badge: 'Town', name, pinned: tr
 beforeEach(() => {
   resetFake();
   mockSearch.mockReset();
+  mockSuggest.mockReset();
 });
 
 function office() {
@@ -96,9 +100,9 @@ describe('The driver\'s Start a trip: the empty box', () => {
     { id: 'e', name: 'Store E', address: null, lat: 7, lng: 80 },
   ];
 
-  it('our places, the office first, 5 rows with a building icon, More places for the rest', () => {
+  it('no connection: our places, the office first, 5 rows with a building icon, More places for the rest', () => {
     const picks: unknown[] = [];
-    render(<DriverPlaceSearch online known={known} pick={null} onPick={(p) => picks.push(p)} text="" onTextChange={() => undefined} />);
+    render(<DriverPlaceSearch online={false} known={known} pick={null} onPick={(p) => picks.push(p)} text="" onTextChange={() => undefined} />);
     const rows = screen.getAllByTestId('where-row');
     expect(rows).toHaveLength(5);
     expect(rows[0].props.accessibilityLabel).toBe('Head office, Our place');
@@ -109,6 +113,44 @@ describe('The driver\'s Start a trip: the empty box', () => {
     fireEvent.press(screen.getByText('Head office'));
     expect(picks).toHaveLength(1);
     expect(mockSearch).not.toHaveBeenCalled();
+    expect(mockSuggest).not.toHaveBeenCalled();
+  });
+
+  it('with a connection: Saved (the company\'s) then Recent (the driver\'s own), each under its header, asked once', async () => {
+    mockSuggest.mockResolvedValue({
+      text: '',
+      suggested: true,
+      results: [
+        { ...place('Head office', 'office', 'Colombo 05 · 2.1 km'), group: 'saved', group_label: 'Saved' },
+        { ...place('Store A'), group: 'saved', group_label: 'Saved' },
+        { ...recent('Kandy depot'), group: 'recent', group_label: 'Recent' },
+        { ...recent('Galle site'), group: 'recent', group_label: 'Recent' },
+      ],
+    });
+    const picks: { name: string; lat: number | null; destination: unknown }[] = [];
+    render(<DriverPlaceSearch online known={known} pick={null} onPick={(p) => p && picks.push(p)} text="" onTextChange={() => undefined} />);
+    await waitFor(() => expect(screen.getAllByTestId('where-row')).toHaveLength(4));
+    expect(mockSuggest).toHaveBeenCalledTimes(1);
+    expect(mockSuggest).toHaveBeenCalledWith(null);
+    expect(screen.getByTestId('suggest-saved')).toBeTruthy();
+    expect(screen.getByTestId('suggest-recent')).toBeTruthy();
+    expect(screen.getByText('Saved')).toBeTruthy();
+    expect(screen.getByText('Used recently')).toBeTruthy();
+    expect(screen.getAllByTestId('where-icon-building')).toHaveLength(2);
+    expect(screen.getAllByTestId('where-icon-clock')).toHaveLength(2);
+    // The phone's own list is not shown beside the server's groups.
+    expect(screen.queryByText('Store E')).toBeNull();
+    fireEvent.press(screen.getByText('Kandy depot'));
+    expect(picks[0]).toMatchObject({ name: 'Kandy depot', lat: 7, destination: { lat: 7, lng: 80, name: 'Kandy depot' } });
+    expect(mockSearch).not.toHaveBeenCalled();
+  });
+
+  it('with a connection and no answer: the phone\'s own list (our places only)', async () => {
+    mockSuggest.mockRejectedValue(new Error('no answer'));
+    render(<DriverPlaceSearch online known={known} pick={null} onPick={() => undefined} text="" onTextChange={() => undefined} />);
+    await waitFor(() => expect(screen.getAllByTestId('where-row')).toHaveLength(5));
+    expect(screen.getAllByTestId('where-icon-building')).toHaveLength(5);
+    expect(screen.queryByTestId('suggest-recent')).toBeNull();
   });
 
   it('typing hides the suggestions; the server badges are translated', async () => {
