@@ -1233,6 +1233,33 @@ One theme value drives the page and the map: the website's dark theme → a dark
 style), light → light; the app and /m/ are light-only today, so their maps are light, and follow the theme when the app gets
 a dark one. Checked on every map: Live, the task, Review, the driver's route, playback.
 
+### 33.13 Item 12: build to the approved mockups (approved by Charuka, 22 October 2026)
+
+`design/mockups/2026-10-22/` (png/ the targets at 390 px, html/ the exact colours, sizes, spacing and icons, README.md the
+tokens and patterns). They REPLACE item 11 for their screens; item 11's rules stay for every other detail screen, in the
+same style.
+
+| Mockup | Built as |
+|---|---|
+| 1 office-home | Office mode Home and /m/ Home; the site's Overview takes the same structure at desktop width |
+| 2 office-review | trip Review (step 4): Office mode, /m/, the site's assign / request / book review |
+| 3 office-request-approve | the request page for approvers: Office mode, /m/, the site |
+| 4 office-trip-on-the-way | the task / trip page while on the way: Office mode, /m/, the site; requesters and passengers the same without the office's actions |
+| 5 driver-today | the driver app's Today |
+| 6 driver-task-in-progress | the driver app's task in progress (with Round 2's slide control) |
+
+- Shared components (app `components/patterns`, the site's `ui/`): the thin top bar, StatsRow with icons, StatusBanner,
+  RouteStepper with planned and actual times, the list row, the sticky BottomActionBar, the floating New trip button, the
+  driver's tiles, the slide control. At desktop width the site puts the map and the stepper on the left, people and actions
+  on the right (Uber for Business, Linear's detail layout).
+- The fuel card, passengers, the vehicle check and "who holds it" join these screens in the same style (the passengers'
+  avatars on Review, the "Checked" vehicle tile on Today); a feature switched off hides its part.
+- C (the map follows the app's theme) in the same batch. Sinhala fits at 390 px on every screen.
+- The checkpoint: each screen built beside its mockup (English and Sinhala at phone width, the site at desktop width) as a CI
+  artifact (Playwright's mockups project, the design pages of `apps/driver/src/design` for the driver's two screens, the
+  e2e build only), and the differences with why.
+- The connector suite's clock (Sahan, 22 October 2026): no new Docker images; the 21:15–01:40 start guard stays.
+
 ### 33.5 Also in the round
 - `docs/voice-calls-plan.md` (doc only): WebRTC through a service (LiveKit, Agora, Twilio Voice) with their current prices
   and free tiers (cited), the native modules (react-native-webrtc, CallKeep / ConnectionService, FCM high priority to
