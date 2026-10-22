@@ -214,6 +214,9 @@ test("the website at a desktop's width: the Overview, a task on the way, a reque
   await expect(page.getByTestId("task-detail")).toBeVisible();
   await expect(page.getByTestId("task-banner")).toBeVisible();
   await settled(page);
+  // The first CI run photographed it while it loaded again: wait until no part of the page is still loading.
+  await expect(page.getByText(/Loading the task/)).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByTestId("task-banner")).toBeVisible();
   await page.screenshot({ path: join(OUT, "site-task.png"), fullPage: true });
 
   await page.goto(`/requests/${rq.request.id}/decide`);

@@ -1202,6 +1202,8 @@ input[type="checkbox"]:disabled, input[type="radio"]:disabled { opacity: .5; cur
 .dpick:hover { border-color: var(--ink) }
 .dpick:disabled { opacity: .5; cursor: not-allowed }
 .dpick .grow { min-width: 0 }
+/* The chevron at the end (the site's Icon has no size of its own: first seen at 1440 px, Round 4–7's mockup pictures). */
+.dpick > svg { width: 18px; height: 18px; flex: none; color: var(--muted) }
 .dpick-empty { color: var(--muted) }
 .dpick-list { display: grid; gap: 2px; margin-top: 8px }
 .dpick-search { width: 100% }
