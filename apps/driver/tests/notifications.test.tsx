@@ -115,7 +115,7 @@ describe('Office notification settings', () => {
     await screen.findByTestId('notif-group-mine');
     for (const g of ['requests', 'tasks', 'vehicles', 'mine']) expect(screen.getByTestId(`notif-group-${g}`)).toBeTruthy();
     for (const g of ['issues', 'drivers', 'other']) expect(screen.queryByTestId(`notif-group-${g}`)).toBeNull();
-    expect(screen.getByText(`${t('office.notif.group.mine.sub')} · ${t('office.notif.nOfM', { on: 7, total: 8 })}`)).toBeTruthy();
+    expect(screen.getByText(`${t('office.notif.group.mine.sub')} · ${t('office.notif.nOfM', { on: 10, total: 11 })}`)).toBeTruthy();
     expect(screen.getAllByText(t('office.notif.allOn'))).toHaveLength(3);
     expect(screen.getByTestId('notif-phone-sound')).toBeTruthy();
 
@@ -173,7 +173,7 @@ describe('Office notification settings', () => {
     await waitFor(() => expect(checked('notif-pause')).toBe(false));
     expect(saved['request.arrived']).toBe(false);
     expect(saved['request.on_the_way']).toBe(true);
-    expect(screen.getByText(`${t('office.notif.group.mine.sub')} · ${t('office.notif.nOfM', { on: 7, total: 8 })}`)).toBeTruthy();
+    expect(screen.getByText(`${t('office.notif.group.mine.sub')} · ${t('office.notif.nOfM', { on: 10, total: 11 })}`)).toBeTruthy();
   });
 });
 

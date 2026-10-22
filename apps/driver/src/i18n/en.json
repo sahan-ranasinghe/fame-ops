@@ -295,7 +295,6 @@
     "other": "Other",
     "note": "Describe it",
     "notePlaceholder": "A few words for the office",
-    "photos": "Photos ({n} of 3)",
     "addPhoto": "Add photo",
     "vehicle": "Vehicle",
     "send": "Send to office",
@@ -312,7 +311,9 @@
     "sentBody": "The office will see it.",
     "needVehicle": "I need another vehicle",
     "needVehicleHint": "The fleet admins are told at once.",
-    "needVehicleSent": "The office knows you need another vehicle."
+    "needVehicleSent": "The office knows you need another vehicle.",
+    "damage": "Damage",
+    "photosOf": "Photos ({n} of {max})"
   },
   "me": {
     "code": "Employee no.",
@@ -3164,5 +3165,35 @@
     "today": "Today",
     "yesterday": "Yesterday",
     "tomorrow": "Tomorrow"
+  },
+  "vehicleCheck": {
+    "title": "Vehicle check",
+    "question": "Any damage or problem with {plate}?",
+    "hint": "Walk around it: body, glass, tyres, lights, warning lights on the dash.",
+    "required": "Answer before you drive.",
+    "allGood": "No, all good",
+    "problem": "Yes, report a problem",
+    "problemHint": "Add 1 to 6 photos. The office is told at once.",
+    "savedTitle": "All good",
+    "savedAt": "Check saved {time}",
+    "problemAt": "Problem reported {time}",
+    "addPhotos": "Add 4 photos (front, back, left, right)",
+    "photosAdded": "Photos added: {n}",
+    "continue": "Continue",
+    "photosTitle": "Add 4 photos",
+    "photosHint": "A photo of each side. Stand back so the whole side shows.",
+    "takeSide": "Take photo: {side}",
+    "retakeHint": "Tap a photo to take it again.",
+    "savePhotos": "Save photos",
+    "side": {
+      "front": "Front",
+      "back": "Back",
+      "left": "Left",
+      "right": "Right"
+    },
+    "cardTitle": "Vehicle check · {plate}",
+    "cardBody": "Check it before you drive.",
+    "checkNow": "Check now",
+    "startWaits": "Start task waits for the vehicle check."
   }
 }
