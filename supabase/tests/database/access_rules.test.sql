@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  63::bigint, 'there are 63 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included, geocode_cache; Part 4b: site_import_presets, place_imports, place_import_changes, api_minute_calls; Part 5: google_calls, google_pins; 5b: route_gap_lines; Phase 7: vehicle_assignments, task_vehicle_segments; Part 3: request_stops, vehicle_documents, media_links; Hotfix 2: office_inbox, notification_prefs, employee_changes, request_viewers; Hotfix 3: office_prefs; Part 3b: driver_unavailability, driver_asks, driver_ask_answers; Part 6: driver_map_state; Hotfix O2-H2: app_errors)');
+  68::bigint, 'there are 68 tables in public (Round 4–7: vehicle_checks, task_passengers, request_passengers, holder_asks, driver_day_summaries; the dispatch tables of Phase 5, the route-quality tables and request_events included, geocode_cache; Part 4b: site_import_presets, place_imports, place_import_changes, api_minute_calls; Part 5: google_calls, google_pins; 5b: route_gap_lines; Phase 7: vehicle_assignments, task_vehicle_segments; Part 3: request_stops, vehicle_documents, media_links; Hotfix 2: office_inbox, notification_prefs, employee_changes, request_viewers; Hotfix 3: office_prefs; Part 3b: driver_unavailability, driver_asks, driver_ask_answers; Part 6: driver_map_state; Hotfix O2-H2: app_errors)');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -118,7 +118,7 @@ select is(
 -- task_vehicle_segments_select_own; 40 with Part 3: vehicle_documents_driver_held.
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  44::bigint, 'there are 44 policies on public tables (Part 3: vehicle_documents_driver_held; Hotfix 2: office_inbox_select_own; Part 3b: driver_unavailability_select_own, driver_asks_select_asked, driver_ask_answers_select)');
+  47::bigint, 'there are 47 policies on public tables (Round 4–7: vehicle_checks_select_own, vehicle_checks_insert_own, task_passengers_select_driver; Part 3: vehicle_documents_driver_held; Hotfix 2: office_inbox_select_own; Part 3b: driver_unavailability_select_own, driver_asks_select_asked, driver_ask_answers_select)');
 
 select is(
   (select count(*) from pg_policies
@@ -138,9 +138,9 @@ select results_eq(
      where a.attrelid = 'public.vehicles'::regclass and a.attnum > 0 and not a.attisdropped
        and has_column_privilege('authenticated', a.attrelid, a.attnum, 'SELECT')
      order by a.attname $$,
-  array['active', 'current_odometer_km', 'id', 'in_garage', 'make_model',
+  array['active', 'current_odometer_km', 'fuel_grade', 'fuel_type', 'id', 'in_garage', 'make_model',
         'monthly_km_allowance', 'photo_path', 'photo_thumb_path', 'photo_updated_at', 'reg_no', 'seats', 'vehicle_type'],
-  'drivers can read exactly twelve vehicle columns, no others (Part 3: the photo, its thumbnail, when)');
+  'drivers can read exactly fourteen vehicle columns, no others (Part 3: the photo, its thumbnail, when; Round 4–7: the fuel type and grade)');
 
 select is(
   (select public from storage.buckets where id = 'driver-photos'),
@@ -844,10 +844,13 @@ select ok((select relrowsecurity from pg_class where oid = 'public.odometer_read
 
 select ok(not has_function_privilege('authenticated', 'public.prune_location_points(integer, integer)', 'EXECUTE'),
   'drivers cannot run prune_location_points');
-select is((select count(*) from cron.job where jobname = 'prune-location-points'), 1::bigint,
-  'the nightly prune job is scheduled');
-select is((select schedule from cron.job where jobname = 'prune-location-points'), '30 21 * * *',
-  'it runs at 21:30 UTC (03:00 Colombo)');
+-- Round 4–7 (item 9): the one nightly retention job (its periods are the settings') replaced the points' prune.
+select is((select count(*) from cron.job where jobname = 'retention'), 1::bigint,
+  'the nightly retention job is scheduled');
+select is((select count(*) from cron.job where jobname = 'prune-location-points'), 0::bigint,
+  'the old points prune is gone (the retention job keeps them 6 months, each day as a summary)');
+select is((select schedule from cron.job where jobname = 'retention'), '15 21 * * *',
+  'it runs at 21:15 UTC (02:45 Colombo)');
 
 insert into public.duty_sessions (id, employee_id, started_at, ended_at, end_reason) values
   ('60000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-0000000000a1', now() - interval '100 days', now() - interval '100 days' + interval '1 hour', 'driver');

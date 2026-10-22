@@ -56,6 +56,8 @@ as $$
   end::numeric
 $$;
 
+revoke all on function public.fuel_default_km_per_l(text, text) from public, anon, authenticated;
+
 -- The estimate for a task: its planned km, the vehicle's km per litre and the litres as a range (±10 %). The task's own
 -- driver, or the office's tools (service role). Answers null when the task is not theirs.
 create function public.fuel_estimate(p_task_id uuid)
@@ -79,7 +81,10 @@ begin
   if not found then
     return null;
   end if;
-  if current_user = 'authenticated' and t.employee_id is distinct from public.current_employee_id() then
+  -- A signed-in caller (the app: the request's role is authenticated) reads only their own task; the office's tools run as
+  -- the service role. (Inside a security definer function current_user is the owner, so the request's claims say who.)
+  if coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', '') = 'authenticated'
+     and t.employee_id is distinct from public.current_employee_id() then
     return null;
   end if;
   select * into v from public.vehicles where id = t.vehicle_id;

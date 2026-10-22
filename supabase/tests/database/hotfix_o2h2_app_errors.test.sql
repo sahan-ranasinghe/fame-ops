@@ -15,7 +15,8 @@ select ok(not has_table_privilege('authenticated', 'public.app_errors', 'select'
   and not has_table_privilege('anon', 'public.app_errors', 'insert'), 'no driver, office person or visitor reads or writes it directly');
 select ok(not has_function_privilege('authenticated', 'public.prune_app_errors()', 'execute')
   and not has_function_privilege('anon', 'public.prune_app_errors()', 'execute'), 'only the server runs the prune');
-select is((select count(*) from cron.job where jobname = 'prune-app-errors'), 1::bigint, 'the nightly prune is scheduled');
+-- Round 4–7 (item 9): app errors go with the one nightly retention job (90 days, a setting).
+select is((select count(*) from cron.job where jobname = 'retention'), 1::bigint, 'the nightly retention job removes them');
 
 insert into public.app_errors (side, fatal, message, received_at) values
   ('office', true, 'old', now() - interval '91 days'),

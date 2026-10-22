@@ -193,7 +193,9 @@ begin
   end if;
   select * into v_task from public.tasks where id = new.task_id;
   if not found or v_task.demo or v_task.status not in ('assigned', 'in_progress')
-     or new.employee_id = v_task.employee_id then
+     or new.employee_id = v_task.employee_id
+     -- the person who asked has their own notices (request.*)
+     or exists (select 1 from public.vehicle_requests r where r.id = v_task.request_id and r.requested_by_employee_id = new.employee_id) then
     return null;
   end if;
   perform public.queue_notification('passenger.trip', jsonb_build_object(

@@ -20,12 +20,13 @@ alter table public.tasks drop constraint tasks_started_fields;
 alter table public.tasks add constraint tasks_started_fields check (
   status not in ('in_progress', 'completed')
   or (started_at is not null and start_odometer_km is not null)
-  or (status = 'completed' and finish_flag ->> 'kind' = 'not_confirmed')
+  -- coalesce: a CHECK passes on NULL, and a task with no flag must still have its readings.
+  or (status = 'completed' and coalesce(finish_flag ->> 'kind', '') = 'not_confirmed')
 );
 alter table public.tasks drop constraint tasks_completed_fields;
 alter table public.tasks add constraint tasks_completed_fields check (
   status <> 'completed'
-  or (completed_at is not null and (end_odometer_km is not null or finish_flag ->> 'kind' = 'not_confirmed'))
+  or (completed_at is not null and (end_odometer_km is not null or coalesce(finish_flag ->> 'kind', '') = 'not_confirmed'))
 );
 
 -- The finish check (completed early) is the driver app's: a no-app trip's readings are typed by the person who drove,
