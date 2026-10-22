@@ -1204,6 +1204,35 @@ drafts, recent searches, last-used driver / vehicle / project, filters and sort,
 presets, Home's "Needs you now" and counts (by permission), the notification inbox and settings, My trips, Ask drivers'
 questions and answers, the map's last view.
 
+### 33.10 A: the design is a reference only (Sahan, 22 October 2026, final)
+
+The boss's design (`design/png`, `design/office/png`, `design/fame-fleet.pdf`) was itself made by an AI: it is a reference,
+never a constraint. CLAUDE.md now says: follow today's best commercial apps (name the app per pattern); keep the brand
+colours and the fonts. Whatever the round kept only because the design showed it is decided by the industry pattern instead,
+and listed at the checkpoint (e.g. the driver's Today header, the IN PROGRESS wording, the task page's four buttons). The
+design pass stays parked until Sahan brings approved mockups.
+
+### 33.11 Item 11: the detail screens' text cleaned up (Uber / PickMe's trip summary; not a redesign)
+
+The screens: trip Review (step 4), the task page, the request page (office and requester), Approve / decide, the driver's
+task screen, the site's task and request pages; every surface where they exist. The look, colours, fonts and components
+stay; only the text is restructured:
+1. Facts, not sentences: the key numbers as icon + value in one row at the top (distance, drive time, back at, passengers,
+   vehicle type); explanations ("planned from the arrive-by times", "Google traffic") behind a small ⓘ.
+2. Each fact once per screen.
+3. The route as a stepper: a thin line joining the stops, the time on the left, the stop's name on ONE line with its status
+   chip ("on time", "late"), ONE meta line under it with small icons (stay, leave, arrive-by), each leg as one small line
+   "🚗 99 km · 2 h 23 min".
+4. Short labels: a pickup icon instead of "Pickup · passengers get in"; "Back at base" when the base is the office.
+The parked pilot's RouteStepper (phase9-rd) is reused where it follows these rules; nothing else of the pilot. Before /
+after screenshots (English and Sinhala at phone width, the site at desktop width) as a CI artifact.
+
+### 33.12 C: the map follows the app's theme (Google Maps, Uber)
+
+One theme value drives the page and the map: the website's dark theme → a dark map (Google's dark scheme, a dark free-map
+style), light → light; the app and /m/ are light-only today, so their maps are light, and follow the theme when the app gets
+a dark one. Checked on every map: Live, the task, Review, the driver's route, playback.
+
 ### 33.5 Also in the round
 - `docs/voice-calls-plan.md` (doc only): WebRTC through a service (LiveKit, Agora, Twilio Voice) with their current prices
   and free tiers (cited), the native modules (react-native-webrtc, CallKeep / ConnectionService, FCM high priority to
