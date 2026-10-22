@@ -160,13 +160,14 @@ describe("the issues list (§9)", () => {
     expect(screen.getByTestId("where").textContent).toBe("/issues?status=in_progress");
   }, 20_000);
 
-  it("a link's Dismissed (or All) still opens under the Resolved tab, this month as before; its Filter has no Status", async () => {
+  it("Dismissed stays a tap away: the Resolved tab's Filter offers Resolved and Dismissed (no tab says Dismissed)", async () => {
     const t = await mount("/issues?status=dismissed");
     expect(t.argsOf("list_issues")[0]).toMatchObject({ status: "dismissed", from: month.from, to: month.to });
     expect(await screen.findByText(/^Nothing dismissed \(/)).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Resolved" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(screen.getByTestId("filter-button"));
-    expect(within(screen.getByTestId("filter-panel")).queryByRole("group", { name: "Status" })).toBeNull();
+    const status = within(screen.getByTestId("filter-panel")).getByRole("group", { name: "Status" });
+    expect(within(status).getAllByRole("radio").map((r) => r.closest("label")?.textContent?.trim())).toEqual(["Resolved", "Dismissed"]);
   });
 
   it("an issue opens beside the list with what it shows; the X and Esc close it, the filters kept", async () => {

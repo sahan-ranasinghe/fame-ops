@@ -45,6 +45,7 @@ import {
   type IssueStatusFilter,
   type IssueTab,
   listRows,
+  CLOSED_STATUS_FILTERS,
   OPEN_STATUS_FILTERS,
   readSeverity,
   readSort,
@@ -220,7 +221,11 @@ export default function Issues() {
   const total = Math.max(0, list.total - (list.items.length - rows.length));
   const options = filterOptions(list.items, { kind: kind || undefined, vehicle: vehicle || undefined }, lists.vehicles?.map((v) => v.reg_no));
   const filterDefs: FilterDef[] = [
-    ...(tab === "open" ? [pairsDef("status", "Status", OPEN_STATUS_FILTERS, DEFAULT_STATUS)] : []),
+    ...(tab === "open"
+      ? [pairsDef("status", "Status", OPEN_STATUS_FILTERS, DEFAULT_STATUS)]
+      : tab === "resolved"
+      ? [pairsDef("status", "Status", CLOSED_STATUS_FILTERS, TAB_STATUS.resolved)]
+      : []),
     listDef("kind", "Kind", "All kinds", options.kinds.map(([value, l]) => ({ value, label: l })), kind),
     listDef("vehicle", "Vehicle", "All vehicles", options.vehicles.map((v) => ({ value: v, label: v })), vehicle),
     pairsDef("severity", "Severity", SEVERITY_OPTIONS, ""),

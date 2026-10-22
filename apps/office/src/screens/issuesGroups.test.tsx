@@ -220,15 +220,17 @@ describe("the Open tab: grouped by kind (Round 4–7, item 8)", () => {
     expect(screen.getByTestId("where").textContent).toBe("/issues?status=resolved");
     expect(t.argsOf("list_issues").at(-1)).toEqual({ status: "resolved", from: month.from, to: month.to, sort: "newest", limit: 25 });
     expect(await screen.findByText(/^Nothing resolved/)).toBeTruthy();
-    // Round 4–7 (Sahan's OK, 22 October 2026): Snoozed, Resolved, Dismissed and All repeated the tabs and left the Filter;
-    // under Snoozed and Resolved the tab says the status (no Status section); the Open tab's Filter keeps its own three.
+    // Round 4–7 (Sahan's OK, 22 October 2026): Snoozed, Resolved and All repeated the tabs and left the Filter; under
+    // Snoozed the tab says the status (no Status section); the Resolved tab's Filter offers Resolved and Dismissed (no tab
+    // says Dismissed); the Open tab's Filter keeps its own three.
     expect(screen.getByTestId("date-range-button").textContent).toMatch(/^This month/);
     // Resolved keeps its date range as before: no "Any time" among its presets.
     fireEvent.click(screen.getByTestId("date-range-button"));
     expect(within(screen.getByTestId("date-range-sheet")).queryByRole("button", { name: "Any time" })).toBeNull();
     expect(within(screen.getByTestId("date-range-sheet")).getByRole("button", { name: "This month" })).toBeTruthy();
     fireEvent.click(screen.getByTestId("date-range-button"));
-    expectNoFilterSection("Status");
+    for (const s of ["Resolved", "Dismissed"]) expectFilterChoice("Status", s);
+    for (const s of ["Active", /^Snoozed/, "All"]) expectNoFilterChoice("Status", s);
     for (const s of ["Kind", "Vehicle", "Severity"]) expectFilterSection(s);
     fireEvent.click(screen.getByRole("tab", { name: "Snoozed · 1" }));
     await flush();

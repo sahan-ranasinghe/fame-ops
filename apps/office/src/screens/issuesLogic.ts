@@ -27,6 +27,8 @@ export const STATUS_FILTERS: [IssueStatusFilter, string][] = [
  * a link with ?status=dismissed or ?status=all still opens them (STATUS_FILTERS reads the URL), under the Resolved tab.
  */
 export const OPEN_STATUS_FILTERS: [IssueStatusFilter, string][] = STATUS_FILTERS.filter(([k]) => k === "active" || k === "open" || k === "in_progress");
+/** The Resolved tab's own: Resolved or Dismissed (no tab of its own says Dismissed, so it stays reachable by a tap). */
+export const CLOSED_STATUS_FILTERS: [IssueStatusFilter, string][] = STATUS_FILTERS.filter(([k]) => k === "resolved" || k === "dismissed");
 /** The page opens on everything that still needs attention (open or in progress), the most urgent group first. */
 export const DEFAULT_STATUS: IssueStatusFilter = "active";
 /** The issues page's store entry (the panel patches it after a change) and the bell's (navBadges.ts). */
