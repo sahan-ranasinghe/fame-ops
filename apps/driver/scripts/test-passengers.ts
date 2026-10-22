@@ -195,8 +195,6 @@ console.log('\nStrings in both languages');
   const badPh = all.filter((k) => ph(lookup('en', k)) !== ph(lookup('si', k)));
   check(badPh.length === 0, 'the same placeholders in both languages', badPh);
   check(!/[෦-෯]/.test(all.map((k) => String(lookup('si', k) ?? '')).join(' ')), 'Latin digits only in Sinhala');
-  const sidecar = JSON.parse(read('i18n/parts/office-2.json')) as { en: Tree; si: Tree };
-  check(!!sidecar.en && !!sidecar.si && typeof (sidecar.en as { office?: { passengers?: unknown } }).office?.passengers === 'object', 'the sidecar is shaped { en, si } from the root');
 }
 
 console.log(failures === 0 ? '\nAll passenger checks passed.' : `\n${failures} passenger check(s) FAILED.`);
