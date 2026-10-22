@@ -7,6 +7,8 @@
 // Part 3 (§6): each vehicle shows its photo beside the plate; one without a photo has "Add a photo"
 // (the camera only). The photo is queued like every other photo, so it works offline; when another
 // photo got there first the driver is told and the server's photo stays.
+// Round 4–7 (§33.1): a vehicle taken (Start work or Change vehicle) that has no check by this driver today goes on to the
+// vehicle check (app/vehicle-check.tsx), which takes this screen's place: back from it, or after it, is Today.
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +24,7 @@ import { Button, Mono, Notice, Txt } from '@/components/ui';
 import type { VehicleChoice } from '@/lib/api';
 import { takeVehiclePhoto } from '@/lib/photos';
 import type { Vehicle } from '@/lib/types';
+import type { CheckHow } from '@/lib/vehicleCheck';
 import { useApp } from '@/state/app';
 import { onVehiclePhotoAnswer } from '@/sync';
 import { colors } from '@/theme';
@@ -103,6 +106,11 @@ export default function VehicleScreen() {
   if (!me) return <Redirect href="/login" />;
 
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  /** The vehicle is taken: on to its check when it has none today (in this screen's place), else back to Today. */
+  const afterTake = (vehicleId: string | null, how: CheckHow) => {
+    if (vehicleId && app.checkNeeded(vehicleId)) router.replace({ pathname: '/vehicle-check', params: { vehicleId, how } });
+    else goBack();
+  };
 
   async function addPhoto(vehicleId: string) {
     if (photoBusy) return;
@@ -128,7 +136,7 @@ export default function VehicleScreen() {
     if (picked === undefined || busy) return;
     if (mode === 'change') {
       app.changeVehicle(picked);
-      goBack();
+      afterTake(picked, 'change');
       return;
     }
     setNeedLocation(false);
@@ -136,7 +144,7 @@ export default function VehicleScreen() {
     const outcome = await app.startWork(picked);
     if (outcome === 'on') {
       allowLeave();
-      goBack();
+      afterTake(picked, 'clock_in');
       return;
     }
     setBusy(false);

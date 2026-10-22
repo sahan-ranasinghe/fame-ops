@@ -24,17 +24,22 @@
 // Hotfix 2 (J): Start task on a task made without a vehicle asks "Which vehicle?" first
 // (components/VehicleConfirm.tsx); the odometer step follows once the vehicle is set (or kept on the
 // phone to be sent before the start).
+// Round 4–7 (§33.1): Start task waits for the vehicle check. When the task's vehicle (set by the office, or just confirmed
+// above) has no check by this driver today, the check (app/vehicle-check.tsx) is pushed on top at once, once per vehicle;
+// after it this screen goes on to the odometer with its state kept. Back from the check without answering leaves the
+// "Vehicle check" card here in place of the odometer step (components/VehicleCheckCard.tsx): the start cannot go on.
 
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Camera, ChevronLeft, Video } from '@/components/icons';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { PlateText } from '@/components/PlateText';
+import { VehicleCheckCard } from '@/components/VehicleCheckCard';
 import { VehicleConfirm } from '@/components/VehicleConfirm';
 import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/ui';
 import { earlyFinish, stretchStartKm, swapReadingsWaiting, taskKmSoFar } from '@/lib/dayRules';
@@ -135,6 +140,19 @@ export default function LogMileageScreen() {
   // Unsaved input asks "Discard changes?" on back; nothing is asked after a save or while one runs.
   const dirty = step.kind !== 'none' || typedFuelKm !== '' || litres.trim() !== '' || amount.trim() !== '' || receipt !== null || video !== null;
   const { allowLeave } = useLeaveGuard(dirty, saving || confirmBusy);
+  // J: a task made without a vehicle confirms one before the odometer.
+  const confirming = mode === 'start' && !!task && needsVehicle(task) && !vehicleConfirmed;
+  // Round 4–7: the task's vehicle (the office's, or the one confirmed above) needs its check today: Start task waits.
+  const checkVehicleId = mode === 'start' && task && !confirming ? task.vehicle_id : null;
+  const checkFirst = app.checkNeeded(checkVehicleId);
+  const checkHow = vehicleConfirmed ? 'vehicle_confirm' : 'task_start';
+  // The check is asked at once, once per vehicle on this visit (back from it without an answer leaves the card here).
+  const askedCheck = useRef<string | null>(null);
+  useEffect(() => {
+    if (!checkFirst || !checkVehicleId || !task || askedCheck.current === checkVehicleId) return;
+    askedCheck.current = checkVehicleId;
+    router.push({ pathname: '/vehicle-check', params: { vehicleId: checkVehicleId, how: checkHow, taskId: task.id } });
+  }, [checkFirst, checkVehicleId, checkHow, task, router]);
   // Back from the recording screen: take what it left.
   useFocusEffect(
     useCallback(() => {
@@ -153,9 +171,7 @@ export default function LogMileageScreen() {
   if ((mode === 'finish' || mode === 'start' || swapMode) && !task) return <Redirect href="/" />;
   if (swapMode && !swapVehicleId) return <Redirect href="/" />;
 
-  // J: a task made without a vehicle confirms one before the odometer.
-  const confirming = mode === 'start' && !!task && needsVehicle(task) && !vehicleConfirmed;
-  const needsOdometer = mode !== 'fuel' && !confirming;
+  const needsOdometer = mode !== 'fuel' && !confirming && !checkFirst;
   const showFuel = mode === 'finish' || mode === 'fuel';
   const typedKm = parseWhole(odometer);
   const stepPhoto = step.kind === 'none' ? null : step.photo;
@@ -245,6 +261,8 @@ export default function LogMileageScreen() {
 
   async function save() {
     if (saving) return;
+    // Start task waits for the vehicle check (the card above says so).
+    if (checkFirst) return;
     if ((mode === 'manual' || mode === 'fuel') && !vehicle) return setProblem(t('log.needVehicle'));
     const fuel = fuelEntry();
     if (fuel === 'invalid') return setProblem(t('log.needFuel'));
@@ -340,6 +358,10 @@ export default function LogMileageScreen() {
         </View>
 
         {confirming && task && <VehicleConfirm task={task} onBusy={setConfirmBusy} onConfirmed={() => setVehicleConfirmed(true)} />}
+
+        {checkFirst && checkVehicleId && task && (
+          <VehicleCheckCard vehicleId={checkVehicleId} how={checkHow} taskId={task.id} body="vehicleCheck.startWaits" />
+        )}
 
         {needsOdometer && step.kind === 'none' && (
           <Pressable accessibilityRole="button" onPress={photographOdometer} style={styles.photoCard}>

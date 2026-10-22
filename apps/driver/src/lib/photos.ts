@@ -19,6 +19,9 @@ import { odometerFromText } from './format';
 import { lastPosition } from './location';
 import {
   fitWithin,
+  type PhotoLinks,
+  photoOp,
+  photoStoragePath,
   PROFILE_QUALITY,
   PROFILE_SIDE,
   squareCrop,
@@ -26,8 +29,9 @@ import {
   VEHICLE_THUMB_SIDE,
   vehiclePhotoPaths,
 } from './photoRules';
-import { colomboDate } from './time';
 import type { PhotoKind } from './types';
+
+export { photoStoragePath };
 
 const MAX_SIDE = 1600;
 
@@ -167,25 +171,12 @@ export function discardPhoto(photo: LocalPhoto): void {
   removeFile(photo.uri);
 }
 
-/** Where a photo lives in the private bucket: <employee>/<day>/<photo id>.jpg. */
-export function photoStoragePath(photo: LocalPhoto, employeeId: string): string {
-  return `${employeeId}/${colomboDate(photo.takenAt)}/${photo.id}.jpg`;
-}
-
-/** Puts a photo in the queue: the file is uploaded and its record saved when there is a connection. */
-export function queuePhoto(photo: LocalPhoto, kind: PhotoKind, employeeId: string, vehicleReportId: string | null = null): void {
-  enqueue({
-    kind: 'photo',
-    id: photo.id,
-    employee_id: employeeId,
-    photo_kind: kind,
-    storage_path: photoStoragePath(photo, employeeId),
-    local_uri: photo.uri,
-    taken_at: photo.takenAt,
-    lat: photo.lat,
-    lng: photo.lng,
-    vehicle_report_id: vehicleReportId,
-  });
+/**
+ * Puts a photo in the queue: the file is uploaded and its record saved when there is a connection. `links`: the report it
+ * belongs to, or (Round 4–7) the vehicle check and the side (lib/photoRules.ts photoOp).
+ */
+export function queuePhoto(photo: LocalPhoto, kind: PhotoKind, employeeId: string, links: PhotoLinks = {}): void {
+  enqueue(photoOp(photo, kind, employeeId, links));
 }
 
 export interface PhotoScan {

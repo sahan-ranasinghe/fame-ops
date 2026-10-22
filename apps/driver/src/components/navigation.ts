@@ -90,6 +90,21 @@ export function anyFormDirty(): boolean {
   return dirtyForms.size > 0;
 }
 
+/**
+ * Only the mark that unsaved input is on screen (anyFormDirty: a notification tap then pushes the task on top), for a
+ * screen that handles its own back (app/vehicle-check.tsx steps back inside the screen first).
+ */
+export function useDirtyMark(dirty: boolean): void {
+  const [key] = useState(() => `form-${++nextKey}`);
+  useEffect(() => {
+    if (dirty) dirtyForms.add(key);
+    else dirtyForms.delete(key);
+    return () => {
+      dirtyForms.delete(key);
+    };
+  }, [key, dirty]);
+}
+
 export function useLeaveGuard(dirty: boolean, busy: boolean): { allowLeave: () => void } {
   const navigation = useNavigation();
   const { t, me } = useApp();

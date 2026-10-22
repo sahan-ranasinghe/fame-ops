@@ -6,6 +6,8 @@
 // Hotfix 3 (L6): my reports 20 at a time with "Load more": the newest ones the phone keeps first (app.reports), then the
 // older ones from the server, 20 at a time below the oldest held, with their count (lib/lists.ts, api.fetchReportsBefore).
 // Offline: the phone's own, 20 at a time.
+// Round 4–7 (§33.1): Damage is a category here too (components/ReportForm.tsx); a report made by the vehicle check before
+// work reads "… · Vehicle check" under its category.
 
 import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -73,7 +75,8 @@ export default function ReportScreen() {
                       <Txt variant="strong" size={14} color={tone.text}>{t(`report.${report.status}`)}</Txt>
                     </View>
                   </View>
-                  <Txt variant="small">{`${dateLabel(report.created_at)} ${colomboTime(report.created_at)}`}</Txt>
+                  {/* Round 4–7: a problem found by the vehicle check before work says so. */}
+                  <Txt variant="small">{[`${dateLabel(report.created_at)} ${colomboTime(report.created_at)}`, report.check_id ? t('vehicleCheck.title') : null].filter(Boolean).join(' · ')}</Txt>
                   {report.needs_vehicle && <Txt variant="strong" size={15} color={colors.red}>{t('report.needVehicle')}</Txt>}
                   {report.note && <Txt variant="muted">{report.note}</Txt>}
                   {report.office_note && <Txt variant="strong" size={15} color={colors.blue}>{t('report.office', { note: report.office_note })}</Txt>}

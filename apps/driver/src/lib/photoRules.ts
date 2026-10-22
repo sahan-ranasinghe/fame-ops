@@ -1,7 +1,9 @@
 // Phase 7 Part 3 (docs/phase7-plan.md §5, §6, §28): the rules behind the driver's photo, the vehicle photos and the
 // vehicle's documents on the phone. Pure code with no phone modules, so scripts/test-rules.ts runs it as it is.
 
-import type { Employee } from './types';
+import type { Op } from '../sync/engine';
+import { colomboDate } from './time';
+import type { CheckSide, Employee, PhotoKind } from './types';
 
 // --- "Add your photo" (§5) -------------------------------------------------------------------------------------------
 
@@ -48,6 +50,52 @@ export function squareCrop(width: number, height: number): { originX: number; or
   if (width === height) return null;
   const side = Math.min(width, height);
   return { originX: Math.floor((width - side) / 2), originY: Math.floor((height - side) / 2), width: side, height: side };
+}
+
+// --- Photos in the queue ---------------------------------------------------------------------------------------------
+
+/** A photo taken on the phone, as the queue needs it (lib/photos.ts LocalPhoto). */
+export interface QueuedPhoto {
+  id: string;
+  uri: string;
+  takenAt: string;
+  lat: number | null;
+  lng: number | null;
+}
+
+/** Where a photo lives in the private bucket: <employee>/<the Colombo day it was taken>/<photo id>.jpg. */
+export function photoStoragePath(photo: Pick<QueuedPhoto, 'id' | 'takenAt'>, employeeId: string): string {
+  return `${employeeId}/${colomboDate(photo.takenAt)}/${photo.id}.jpg`;
+}
+
+/** What a photo belongs to: a vehicle report, or (Round 4–7, §33.1) an all-good vehicle check with the photo's side. */
+export interface PhotoLinks {
+  vehicle_report_id?: string | null;
+  vehicle_check_id?: string | null;
+  side?: CheckSide | null;
+}
+
+export type PhotoOp = Extract<Op, { kind: 'photo' }>;
+
+/**
+ * The queue op of a photo (lib/photos.ts queuePhoto puts it in the queue): the file is uploaded, then its row saved. A
+ * check's link and side are in the op only when set, so every other photo's op is what it always was.
+ */
+export function photoOp(photo: QueuedPhoto, kind: PhotoKind, employeeId: string, links: PhotoLinks = {}): PhotoOp {
+  return {
+    kind: 'photo',
+    id: photo.id,
+    employee_id: employeeId,
+    photo_kind: kind,
+    storage_path: photoStoragePath(photo, employeeId),
+    local_uri: photo.uri,
+    taken_at: photo.takenAt,
+    lat: photo.lat,
+    lng: photo.lng,
+    vehicle_report_id: links.vehicle_report_id ?? null,
+    ...(links.vehicle_check_id ? { vehicle_check_id: links.vehicle_check_id } : {}),
+    ...(links.side ? { side: links.side } : {}),
+  };
 }
 
 // --- Vehicle photos (§6) ---------------------------------------------------------------------------------------------

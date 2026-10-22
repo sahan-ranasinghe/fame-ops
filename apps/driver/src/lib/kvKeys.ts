@@ -83,6 +83,10 @@ export const KEYS = {
   monthTotals: 'me.monthTotals',
   /** Part 3b (H1): my availability entries as last read (UnavailabilityRow[]): Me → Availability shows them offline. */
   availability: 'cache.availability',
+  /** Round 4–7 (§33.1): my vehicle checks of today (VehicleCheck[]), so the Today card and the rule work offline. */
+  vehicleChecks: 'cache.vehicleChecks',
+  /** Round 4–7 (§33.1): how the vehicle held was taken ({vehicleId, how}): the Today card's check says so. */
+  heldHow: 'duty.heldHow',
   /** When the refused points were last put back in line (ms), and for which app update. */
   rejectedRetryAt: 'sync.rejectedRetryAt',
   rejectedRetryUpdate: 'sync.rejectedRetryUpdate',

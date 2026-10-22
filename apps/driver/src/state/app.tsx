@@ -31,6 +31,21 @@ import {
 import type { OfficeContacts, TaskContacts } from '@/lib/contacts';
 import { type PushChanges, pushChanges, type SeenCopy, seenCopy, type TaskChanges, taskChanges } from '@/lib/taskPreview';
 import { type ConfirmAnswer, refusalWords, refusedAnswer, taskVehicleOp, wantedType } from '@/lib/vehicleConfirm';
+import {
+  type CheckHow,
+  checkOp,
+  checkRow,
+  type HeldHow,
+  heldHowFor,
+  mergeChecks,
+  needsCheck,
+  parseCheck,
+  problemOps,
+  reportOps,
+  reportRow,
+  sidePhotoOps,
+  type VehicleCheck,
+} from '@/lib/vehicleCheck';
 import { type DutyEnded, onDutyEnded } from '@/lib/duty';
 import { type ArrivalFlag, canMarkDone, taskKmSoFar, withSwapReading } from '@/lib/dayRules';
 import { noteArrivalUndone } from '@/lib/stopCorrections';
@@ -68,7 +83,7 @@ import {
   withAddedStop,
   withCard,
 } from '@/lib/trips';
-import type { Employee, Language, ReportCategory, TaskStop, TaskWithStops, Vehicle, VehicleReport } from '@/lib/types';
+import type { CheckSide, Employee, Language, ReportCategory, TaskStop, TaskWithStops, Vehicle, VehicleReport } from '@/lib/types';
 import { applyDownloadedUpdate, checkForUpdate, forgetDownloadedUpdate, runningUpdateId, type UpdateOutcome } from '@/lib/updates';
 import {
   enqueue,
@@ -165,6 +180,20 @@ export interface TripProblem {
   key: 'trip.failed' | 'trip.stopFailed' | 'vehicleConfirm.failed';
   reason: string;
 }
+
+/**
+ * Round 4–7 (§33.1): the answer to "Any damage or problem with <plate>?": "No, all good" (one tap), or a problem with its
+ * report (a category, 1 to 6 photos, a note). `how`: the way the vehicle was taken; `taskId`: the task it is for, if any.
+ */
+export type CheckAnswer =
+  | { vehicleId: string; how: CheckHow; taskId: string | null; result: 'ok' }
+  | {
+    vehicleId: string;
+    how: CheckHow;
+    taskId: string | null;
+    result: 'problem';
+    report: { category: ReportCategory; note: string; photos: LocalPhoto[] };
+  };
 
 /** Hotfix 2 (J): the vehicle of a task made without one: set now, kept on the phone for the queue, or refused (the word). */
 export type ConfirmVehicleOutcome = { kind: 'ok' } | { kind: 'queued' } | { kind: 'refused'; answer: ConfirmAnswer | string };
@@ -338,7 +367,10 @@ export interface AppValue {
   rememberPush: (data: TapData) => void;
   tripProblem: TripProblem | null;
   clearTripProblem: () => void;
-  /** needsVehicle: "I need another vehicle" (a breakdown or accident during a task, Phase 7). */
+  /**
+   * needsVehicle: "I need another vehicle" (a breakdown or accident during a task, Phase 7). check (Round 4–7): a pre-trip
+   * report, made by that vehicle check: the check goes in the queue first, the report names it (check_id), its photos follow.
+   */
   sendReport: (
     category: ReportCategory,
     note: string,
@@ -346,7 +378,18 @@ export interface AppValue {
     taskId: string | null,
     vehicleId?: string,
     needsVehicle?: boolean,
+    check?: VehicleCheck,
   ) => void;
+  /** Round 4–7 (§33.1): my vehicle checks of today (kept on the phone, read back from the server on refresh). */
+  vehicleChecks: VehicleCheck[];
+  /** THE rule (lib/vehicleCheck.ts needsCheck): this vehicle needs its check before work (the switch on, none by me today). */
+  checkNeeded: (vehicleId: string | null | undefined) => boolean;
+  /** How the vehicle held was taken (clock_in, change, task_start): Today's card answers the check with it. */
+  heldHow: (vehicleId: string) => CheckHow;
+  /** Records the answer (the phone's copy at once, the queue: the check, then a problem's report and photos); offline too. */
+  answerVehicleCheck: (input: CheckAnswer) => VehicleCheck | null;
+  /** The optional four photos of an all-good check (front, back, left, right), queued after the check. */
+  addCheckPhotos: (check: VehicleCheck, shots: { side: CheckSide; photo: LocalPhoto }[]) => void;
   /** Part 3b (H3): the office's questions as last read (open and closed today), with the answers given on this phone. */
   asks: AskRow[];
   /** The questions with an answer still waiting on the phone (ask ids). */
@@ -387,6 +430,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>(() => getJson<Vehicle[]>(KEYS.vehicles) ?? []);
   const [tasks, setTasks] = useState<TaskWithStops[]>(() => getJson<TaskWithStops[]>(KEYS.tasks) ?? []);
   const [reports, setReports] = useState<VehicleReport[]>(() => getJson<VehicleReport[]>(KEYS.reports) ?? []);
+  // Round 4–7 (§33.1): my vehicle checks of today (the card and the rule work offline).
+  const [checks, setChecks] = useState<VehicleCheck[]>(() =>
+    mergeChecks((getJson<unknown[]>(KEYS.vehicleChecks) ?? []).flatMap((row) => parseCheck(row) ?? []), [], Date.now())
+  );
+  const checksRef = useRef(checks);
+  checksRef.current = checks;
   const [sharing, setSharingState] = useState(() => getSharing() !== null);
   const [shift, setShift] = useState<api.DriverSettings>(() => ({ ...api.DEFAULT_DRIVER_SETTINGS, ...(getJson<Partial<api.DriverSettings>>(KEYS.shift) ?? {}) }));
   const [wifiOnly, setWifiOnlyState] = useState<boolean>(() => getJson<boolean>(KEYS.videoWifiOnly) === true);
@@ -486,6 +535,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setJson(KEYS.asks, next);
   }, []);
 
+  const saveChecks = useCallback((next: VehicleCheck[]) => {
+    checksRef.current = next;
+    setChecks(next);
+    setJson(KEYS.vehicleChecks, next);
+  }, []);
+  /** Notes how the vehicle held was taken (Today's check card answers with it). */
+  const noteHeld = useCallback((vehicleId: string, how: CheckHow) => setJson(KEYS.heldHow, { vehicleId, how } satisfies HeldHow), []);
+
   const forgetEverything = useCallback(() => {
     saveMe(null);
     setMeFresh(false);
@@ -501,6 +558,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     asksRef.current = [];
     setAsks([]);
     remove(KEYS.documents);
+    remove(KEYS.vehicleChecks);
+    remove(KEYS.heldHow);
+    checksRef.current = [];
+    setChecks([]);
     saveTasks([]);
     setVehicles([]);
     setReports([]);
@@ -696,12 +757,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // The driver asked (or the app came back): refused points get another go, and the upload backoff is ignored.
       maybeRetryRejected('refresh');
       const sent = await flushNow(true);
-      const [row, vehicleRows, taskRows, reportRows, shiftSettings] = await Promise.all([
+      const [row, vehicleRows, taskRows, reportRows, shiftSettings, checkRows] = await Promise.all([
         api.fetchMe(supabase),
         api.fetchVehicles(supabase),
         api.fetchTasks(supabase, startOfColomboDay(colomboDate())),
         api.fetchReports(supabase),
         api.fetchDriverSettings(supabase).catch(() => null),
+        // Round 4–7: my checks of today (after a fresh sign-in too); none read = the phone's copy stays.
+        api.fetchMyChecks(supabase, startOfColomboDay(colomboDate())).catch(() => null),
       ]);
       if (!row) {
         // No row: the office switched this account off, or the request went without a session because an expired token
@@ -727,6 +790,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setShift(shiftSettings);
         setJson(KEYS.shift, shiftSettings);
       }
+      // The server's checks of today with the phone's own still on their way (a check answered offline is kept).
+      if (checkRows) saveChecks(mergeChecks(checksRef.current, checkRows, Date.now()));
       // While something is still waiting on the phone, keep what the driver did rather than the older server copy.
       // A trip this phone just made stays until the list has it (the list may have been read a moment before).
       if (!sent.offline) {
@@ -757,7 +822,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setRefreshing(false);
     }
-  }, [forgetEverything, saveMe, saveTasks, setLastVehicleId, loadOurPlaces, pruneTaskMemory, loadTaskContacts, loadOfficeContacts]);
+  }, [forgetEverything, saveMe, saveTasks, saveChecks, setLastVehicleId, loadOurPlaces, pruneTaskMemory, loadTaskContacts, loadOfficeContacts]);
 
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
@@ -1119,24 +1184,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSharingState(outcome.result === 'on');
     setDutySince(getSharing()?.startedAt ?? null);
     if (outcome.result === 'on') {
-      if (vehicleId) setLastVehicleId(vehicleId);
+      if (vehicleId) {
+        setLastVehicleId(vehicleId);
+        noteHeld(vehicleId, 'clock_in');
+      }
       setVehicleTaken(null);
       setDutyEnded(null);
       remove(KEYS.dutyEnded);
       void checkTrackingNow();
     }
     return outcome.result;
-  }, [saveMe, serviceTexts, checkTrackingNow, requireLocation, setLastVehicleId]);
+  }, [saveMe, serviceTexts, checkTrackingNow, requireLocation, setLastVehicleId, noteHeld]);
 
   const changeVehicle = useCallback((vehicleId: string | null) => {
     const current = meRef.current;
     if (!current || current.current_vehicle_id === vehicleId) return;
     saveMe({ ...current, current_vehicle_id: vehicleId });
-    if (vehicleId) setLastVehicleId(vehicleId);
+    if (vehicleId) {
+      setLastVehicleId(vehicleId);
+      noteHeld(vehicleId, 'change');
+    }
     enqueue({ kind: 'vehicle_change', id: Crypto.randomUUID(), vehicle_id: vehicleId, at: new Date().toISOString() });
     setVehicleTaken(null);
     void flushNow();
-  }, [saveMe, setLastVehicleId]);
+  }, [saveMe, setLastVehicleId, noteHeld]);
 
   const finishWork = useCallback(async (): Promise<'off' | 'task'> => {
     if (tasksRef.current.some((task) => task.status === 'in_progress')) return 'task';
@@ -1324,7 +1395,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setGpsKm(kmCounters());
         // The task's vehicle is now the one being driven: the server records it from the task's start (Phase 7);
         // the duty session opened below (when off duty) carries it too.
-        if (current.current_vehicle_id !== vehicleId) saveMe({ ...current, current_vehicle_id: vehicleId });
+        if (current.current_vehicle_id !== vehicleId) {
+          saveMe({ ...current, current_vehicle_id: vehicleId });
+          noteHeld(vehicleId, 'task_start');
+        }
         // Starting a task turns location sharing on (clocks in when off duty).
         const result = await startSharing(serviceTexts);
         setSharingState(result === 'on');
@@ -1333,7 +1407,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         void flushNow();
       });
     },
-    [bumpOdometer, patchLocalTask, saveMe, serviceTexts, checkTrackingNow, requireLocation],
+    [bumpOdometer, patchLocalTask, saveMe, serviceTexts, checkTrackingNow, requireLocation, noteHeld],
   );
 
   const queueFuel = useCallback((fuel: FuelEntry, vehicleId: string, taskId: string | null, odometerKm: number | null, at: string) => {
@@ -1476,34 +1550,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
     taskId: string | null,
     vehicleId?: string,
     needsVehicle = false,
+    check?: VehicleCheck,
   ) => {
     const current = meRef.current;
-    const vehicle = vehicleId ?? current?.current_vehicle_id ?? lastVehicleRef.current;
+    const vehicle = check?.vehicle_id ?? vehicleId ?? current?.current_vehicle_id ?? lastVehicleRef.current;
     if (!current || !vehicle) return;
-    const id = Crypto.randomUUID();
     const now = new Date().toISOString();
-    const row = {
-      id,
+    const row = reportRow({ id: Crypto.randomUUID(), vehicleId: vehicle, employeeId: current.id, taskId, category, note, at: now, needsVehicle, checkId: check?.id });
+    // The report first, then its photos: a photo may only point at a report that exists. A pre-trip report: its check
+    // before both (the report names it).
+    enqueue(...(check ? problemOps(check, row, photos, current.id) : reportOps(row, photos, current.id)));
+    // The phone's copy for the list (demo is the server's, set from the driver; never sent).
+    const local: VehicleReport = {
+      id: row.id,
       vehicle_id: vehicle,
       employee_id: current.id,
       task_id: taskId,
       category,
-      note: note.trim() === '' ? null : note.trim(),
+      note: row.note ?? null,
       created_at: now,
-      // Sent only when ticked, so a report is the same row as before otherwise.
-      ...(needsVehicle ? { needs_vehicle: true } : {}),
+      needs_vehicle: needsVehicle,
+      check_id: check?.id ?? null,
+      status: 'open',
+      closed_at: null,
+      office_note: null,
+      demo: current.demo,
     };
-    // The report first, then its photos: a photo may only point at a report that exists.
-    enqueue({ kind: 'report', row });
-    for (const photo of photos) queuePhoto(photo, 'vehicle_report', current.id, id);
     setReports((list) => {
-      // The phone's copy for the list (demo is the server's, set from the driver; never sent).
-      const next = [{ check_id: null, ...row, needs_vehicle: needsVehicle, status: 'open', closed_at: null, office_note: null, demo: current.demo }, ...list];
+      const next = [local, ...list];
       setJson(KEYS.reports, next);
       return next;
     });
     void flushNow();
   }, []);
+
+  // --- Round 4–7 (§33.1): the vehicle check before work ----------------------------------------------------------------
+  const checkNeeded = useCallback(
+    (vehicleId: string | null | undefined) => needsCheck(vehicleId, checks, Date.now(), shift, me?.id),
+    [checks, shift, me?.id],
+  );
+  const heldHow = useCallback((vehicleId: string) => heldHowFor(getJson<HeldHow>(KEYS.heldHow), vehicleId), []);
+
+  const answerVehicleCheck = useCallback((input: CheckAnswer): VehicleCheck | null => {
+    const current = meRef.current;
+    if (!current) return null;
+    const check = checkRow({
+      id: Crypto.randomUUID(),
+      vehicleId: input.vehicleId,
+      employeeId: current.id,
+      taskId: input.taskId,
+      at: new Date().toISOString(),
+      result: input.result,
+      // The odometer when the phone knows it (the vehicle's last reading); never asked here.
+      odometerKm: vehiclesRef.current.find((v) => v.id === input.vehicleId)?.current_odometer_km ?? null,
+      how: input.how,
+    });
+    // The phone's copy at once: the card goes and Start task goes on, offline too.
+    saveChecks(mergeChecks([...checksRef.current, check], [], Date.now()));
+    if (input.result === 'problem') {
+      const { category, note, photos } = input.report;
+      sendReport(category, note, photos, input.taskId, input.vehicleId, false, check);
+    } else {
+      enqueue(checkOp(check));
+      void flushNow();
+    }
+    return check;
+  }, [saveChecks, sendReport]);
+
+  const addCheckPhotos = useCallback((check: VehicleCheck, shots: { side: CheckSide; photo: LocalPhoto }[]) => {
+    const current = meRef.current;
+    if (!current || shots.length === 0) return;
+    enqueue(...sidePhotoOps(check, shots, current.id));
+    void flushNow();
+  }, []);
+
+  // A check the server refused for good (a phone clock far ahead): not on the server, so the question comes back.
+  useEffect(() => onOpRefused((op) => {
+    if (op.kind === 'vehicle_check') saveChecks(checksRef.current.filter((check) => check.id !== op.row.id));
+  }), [saveChecks]);
 
   // --- Phase 7 Part 3: the driver's photo and vehicle photos ------------------------
   const saveProfilePhoto = useCallback(async (photo: LocalProfilePhoto): Promise<ProfilePhotoOutcome> => {
@@ -1780,6 +1904,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dutySince, startWork, changeVehicle, finishWork, loadVehicleChoices, vehicleTaken, dismissVehicleTaken, dutyEnded, clearDutyEnded,
     acceptTask, declineTask, notice, clearNotice,
     startTask, completeTask, logOdometer, logFuel, sendReport,
+    vehicleChecks: checks, checkNeeded, heldHow, answerVehicleCheck, addCheckPhotos,
     saveProfilePhoto, pendingVehiclePhotos: vehiclePhotos, addVehiclePhoto,
     knownPlaces, loadKnownPlaces, startTrip, addTripStop, cancelTrip, tripProblem, clearTripProblem,
     confirmTaskVehicle, taskContacts, loadTaskContacts, officeContacts, loadOfficeContacts,

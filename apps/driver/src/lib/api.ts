@@ -110,7 +110,20 @@ export interface DriverSettings {
   map_package: 'google' | 'open';
   /** Part 6: seconds to wait for Google's map to finish loading while online before showing the free map (30 by default). */
   phone_map_wait_s: number;
+  /**
+   * Round 4–7 (§33): the office's five switches (Settings → Dispatch; no row = on). vehicle_check: the check before work
+   * (off: nothing asks and Start task is never held); trip_close_prompt, fuel_card, passengers, holder_contact: the other
+   * features of the round.
+   */
+  vehicle_check: boolean;
+  trip_close_prompt: boolean;
+  fuel_card: boolean;
+  passengers: boolean;
+  holder_contact: boolean;
 }
+/** The five switches of Round 4–7, each on unless the server says false. */
+export const FEATURE_SWITCHES = ['vehicle_check', 'trip_close_prompt', 'fuel_card', 'passengers', 'holder_contact'] as const;
+export type FeatureSwitch = (typeof FEATURE_SWITCHES)[number];
 export const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { key: 'plate', en: 'Number plate', si: 'අංක තහඩුව' },
   { key: 'zero', en: 'Pump display at zero before pumping', si: 'පොම්ප කිරීමට පෙර පොම්ප තිරය බිංදුවේ' },
@@ -127,7 +140,17 @@ export const DEFAULT_DRIVER_SETTINGS: DriverSettings = {
   half_day_split: '13:00',
   map_package: 'google',
   phone_map_wait_s: 30,
+  vehicle_check: true,
+  trip_close_prompt: true,
+  fuel_card: true,
+  passengers: true,
+  holder_contact: true,
 };
+
+/** A switch as the server answered it: on unless it is exactly false (absent, from a server before Round 4–7, is on). */
+export function switchOn(value: unknown): boolean {
+  return value !== false;
+}
 
 export async function fetchDriverSettings(client: Client): Promise<DriverSettings> {
   const res = await client.rpc('get_driver_settings');
@@ -154,6 +177,11 @@ export async function fetchDriverSettings(client: Client): Promise<DriverSetting
     phone_map_wait_s: typeof value?.phone_map_wait_s === 'number' && Number.isInteger(value.phone_map_wait_s) && value.phone_map_wait_s >= 1 && value.phone_map_wait_s <= 120
       ? value.phone_map_wait_s
       : DEFAULT_DRIVER_SETTINGS.phone_map_wait_s,
+    vehicle_check: switchOn(value?.vehicle_check),
+    trip_close_prompt: switchOn(value?.trip_close_prompt),
+    fuel_card: switchOn(value?.fuel_card),
+    passengers: switchOn(value?.passengers),
+    holder_contact: switchOn(value?.holder_contact),
   };
 }
 
@@ -303,11 +331,16 @@ export type OdometerInsert = Tables['odometer_logs']['Insert'] & { id: string };
 export type FuelInsert = Tables['fuel_logs']['Insert'] & { id: string };
 export type ReportInsert = Pick<
   Tables['vehicle_reports']['Insert'],
-  'vehicle_id' | 'employee_id' | 'task_id' | 'category' | 'note' | 'created_at' | 'needs_vehicle'
+  'vehicle_id' | 'employee_id' | 'task_id' | 'category' | 'note' | 'created_at' | 'needs_vehicle' | 'check_id'
 > & { id: string };
 export type PhotoInsert = Pick<
   Tables['photos']['Insert'],
-  'employee_id' | 'kind' | 'storage_path' | 'taken_at' | 'lat' | 'lng' | 'vehicle_report_id'
+  'employee_id' | 'kind' | 'storage_path' | 'taken_at' | 'lat' | 'lng' | 'vehicle_report_id' | 'vehicle_check_id' | 'side'
+> & { id: string };
+/** Round 4–7 (§33.1): a vehicle check before work, as the driver may write it (the insert grant's columns). */
+export type VehicleCheckInsert = Pick<
+  Tables['vehicle_checks']['Insert'],
+  'vehicle_id' | 'employee_id' | 'task_id' | 'checked_at' | 'result' | 'odometer_km' | 'how'
 > & { id: string };
 export type PointInsert = Pick<
   Tables['location_points']['Insert'],
@@ -603,6 +636,22 @@ export async function insertFuelLog(client: Client, row: FuelInsert): Promise<vo
 
 export async function insertReport(client: Client, row: ReportInsert): Promise<void> {
   check(await client.from('vehicle_reports').upsert(row, { onConflict: 'id', ignoreDuplicates: true }), 'report');
+}
+
+/** Round 4–7 (§33.1): a vehicle check (a resend after a lost answer changes nothing: the id is the phone's). */
+export async function insertVehicleCheck(client: Client, row: VehicleCheckInsert): Promise<void> {
+  check(await client.from('vehicle_checks').upsert(row, { onConflict: 'id', ignoreDuplicates: true }), 'vehicle check');
+}
+
+/** The columns of my vehicle checks the phone keeps (lib/vehicleCheck.ts VehicleCheck). */
+export const CHECK_COLUMNS = 'id, vehicle_id, employee_id, task_id, checked_at, result, odometer_km, how' as const;
+
+/** My vehicle checks since `since` (today's, read back on refresh and after a fresh sign-in), oldest first. */
+export async function fetchMyChecks(client: Client, since: Date): Promise<VehicleCheckInsert[]> {
+  return check(
+    await client.from('vehicle_checks').select(CHECK_COLUMNS).gte('checked_at', since.toISOString()).order('checked_at').limit(200),
+    'vehicle checks',
+  );
 }
 
 // ---------------------------------------------------------------------------
