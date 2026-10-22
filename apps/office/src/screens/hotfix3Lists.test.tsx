@@ -164,6 +164,17 @@ describe("Drivers", () => {
     expect(screen.getByTestId("where").textContent).toBe("/drivers");
   });
 
+  // Round 4–7 (the list audit's proposed removal, approved by Sahan 22 October 2026): no "· 0 declined"; a declined count stays.
+  it("Last 30 days: the accepted count; the declined count only when there is one", async () => {
+    const t = new FakeTransport({ list_drivers: () => ({ count: 2, drivers: [driver(1), { ...driver(2), last_30_days: { accepted: 4, declined: 2 } }] }) });
+    await mount(t, "/drivers");
+    const [none, some] = screen.getAllByTestId("driver-row").map((r) => r.querySelector('[data-label="Last 30 days"]')!);
+    expect(none.textContent).toBe("1 accepted");
+    expect(none.textContent).not.toContain("declined");
+    expect(some.textContent).toBe("4 accepted · 2 declined");
+    expect(some.querySelector(".status.bad")?.textContent).toBe(" · 2 declined");
+  });
+
   it("Manage finds the driver by the list's search, not the whole list", async () => {
     const t = new FakeTransport({ list_drivers: () => ({ count: 2, drivers: [driver(1), driver(11)] }) });
     await mount(t, "/drivers/d1/edit");

@@ -2,12 +2,13 @@
 // Done): Open, Snoozed and Resolved. Open shows the issues grouped by kind (Samsara alerts, Sentry, GitHub notifications):
 // the most urgent group first, each "Missed tasks · 12" with its 3 newest, collapsible, and "Show all 12" (?kind=: that
 // kind 25 at a time with Load more / page numbers); words searched for list the results as one list. Snoozed and Resolved
-// are flat, 25 at a time. Every tab is over the opened days (the date range, this month by default, as before; "N more
-// were opened outside these dates · Show the last 12 months"), and the Filter's Status keeps every status (Active, Open,
-// In progress, Snoozed, Resolved, Dismissed, All). Every row is Gmail's: the kind's icon tinted by severity, ONE title
-// line (the server's headline: never the kind again), ONE grey line (plate · driver · when), the Pre-trip tag. With
-// update_issues, rows are ticked (one by one, the rows of a group, or "Select all 12 in this group") and resolved or
-// dismissed together with one reason. An issue opens beside the list on a desktop (/issues/:id, a panel with an X; Esc
+// are flat, 25 at a time. Every tab is over the opened days (the date range): the Open tab any time by default (an open
+// issue is open whenever it was opened), Snoozed and Resolved this month as before. The Filter's Status is the Open tab's
+// own (Active, Open, In progress): Snoozed, Resolved, Dismissed and All repeated the tabs and are gone (Sahan's OK, 22
+// October 2026), as is the "N more were opened outside these dates" note. Every row is Gmail's: the kind's icon tinted
+// by severity, ONE title line (the server's headline: never the kind again), ONE grey line (plate · driver · when), the
+// Pre-trip tag. With update_issues, rows are ticked (one by one, the rows of a group, or "Select all 12 in this group")
+// and resolved or dismissed together with one reason. An issue opens beside the list on a desktop (/issues/:id, a panel with an X; Esc
 // closes it) and as a full page with Back on a phone. Every filter is in the URL. The lists are watched every 60 s; on
 // the web the Realtime channel on issues reloads them within a second.
 import { useEffect, useRef, useState } from "react";
@@ -18,10 +19,8 @@ import type { Issue, IssuesList } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
-import { addDays } from "../lib/format";
 import { ErrBox, Notice, Segmented, StaleNote } from "../ui/basics";
 import { DateRangePicker, useDateRange } from "../ui/DateRangePicker";
-import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
 import { FilterBar } from "../ui/FilterBar";
 import { type FilterDef, type FilterValues, listDef, pairsDef } from "../ui/filterLogic";
@@ -46,9 +45,9 @@ import {
   type IssueStatusFilter,
   type IssueTab,
   listRows,
+  OPEN_STATUS_FILTERS,
   readSeverity,
   readSort,
-  outsideNote,
   readStatus,
   SEVERITY_OPTIONS,
   sendBulk,
@@ -73,10 +72,11 @@ export default function Issues() {
   const { id } = useParams();
   const { search } = useLocation();
   const navigate = useNavigate();
-  const dates = useDateRange("month", { maxDays: MAX_DAYS });
   const [params, setParams] = useSearchParams();
   const status = readStatus(params);
   const tab = tabOf(status);
+  // The Open tab: any time by default (Round 4–7); Snoozed and Resolved: this month, as before.
+  const dates = useDateRange(tab === "open" ? "any" : "month", { maxDays: MAX_DAYS });
   const sort = readSort(params, status);
   const severity = readSeverity(params);
   const kind = params.get("kind") || "";
@@ -89,7 +89,8 @@ export default function Issues() {
     const next = new URLSearchParams(p);
     next.delete("tab"); // the old links' tab= gives way to status=
     const put = (key: string, value: string, def = "") => (value && value !== def ? next.set(key, value) : next.delete(key));
-    const st = ((v.status as string) || DEFAULT_STATUS) as IssueStatusFilter;
+    // The Status section is the Open tab's only; under Snoozed and Resolved the tab's status stays.
+    const st = ((v.status as string) || (tab === "open" ? DEFAULT_STATUS : status)) as IssueStatusFilter;
     put("status", st, DEFAULT_STATUS);
     put("kind", v.kind as string);
     put("vehicle", v.vehicle as string);
@@ -219,7 +220,7 @@ export default function Issues() {
   const total = Math.max(0, list.total - (list.items.length - rows.length));
   const options = filterOptions(list.items, { kind: kind || undefined, vehicle: vehicle || undefined }, lists.vehicles?.map((v) => v.reg_no));
   const filterDefs: FilterDef[] = [
-    pairsDef("status", "Status", STATUS_FILTERS, DEFAULT_STATUS, { snoozed: answer?.snoozed || undefined }),
+    ...(tab === "open" ? [pairsDef("status", "Status", OPEN_STATUS_FILTERS, DEFAULT_STATUS)] : []),
     listDef("kind", "Kind", "All kinds", options.kinds.map(([value, l]) => ({ value, label: l })), kind),
     listDef("vehicle", "Vehicle", "All vehicles", options.vehicles.map((v) => ({ value: v, label: v })), vehicle),
     pairsDef("severity", "Severity", SEVERITY_OPTIONS, ""),
@@ -233,11 +234,6 @@ export default function Issues() {
   const label = STATUS_FILTERS.find(([k]) => k === status)?.[1] ?? "Issues";
   const headerTitle = kind ? kindName : label;
   const groupTotal = (answer?.groups ?? []).reduce((n, g) => n + g.count, 0);
-  // The active issues opened outside the chosen days (the Open tab, nothing narrowed): said, with the last 12 months.
-  const outside = answer && !stale && !text && tabOf(status) === "open" && !kind
-    ? outsideNote({ ...answer, ...(grouped ? { count: groupTotal, total: groupTotal } : {}) }, status, !!(vehicle || severity))
-    : undefined;
-  const today = colomboDay();
 
   return (
     <section className="view">
@@ -276,11 +272,6 @@ export default function Issues() {
         ) : answer ? (
           <div aria-busy={updating || undefined}>
             {!stale && !grouped && <StaleNote entry={list.entry} />}
-            {outside && (
-              <div style={{ marginBottom: 12 }}>
-                <Notice tone="info" action={<button type="button" className="btn small" onClick={() => dates.setCustom(addDays(today, -365), today)}>Show the last 12 months</button>}>{outside}</Notice>
-              </div>
-            )}
             {pickable && <BulkBar n={picked.size} onAct={(a) => { setBulkError(null); setActing(a); }} onClear={() => setPicked(new Set())} />}
             {grouped ? (
               <div className="card issue-groups" data-testid="issues-list" style={stale ? { opacity: 0.6 } : undefined}>

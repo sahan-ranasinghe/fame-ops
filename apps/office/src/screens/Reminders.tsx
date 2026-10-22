@@ -58,16 +58,19 @@ function ReminderGroup({ title, rows, testId }: { title: string; rows: ReminderR
   );
 }
 
-/** The reminders in two groups; `issues` = the person reads every kind (else only the task kinds reach them). */
+/**
+ * The reminders that are not about one vehicle (the drivers' licences) as rows; `issues` = the person reads every kind
+ * (else only the task kinds reach them). Round 4–7 (the list audit's proposed removal, approved by Sahan 22 October 2026):
+ * the "Also needs attention" group is gone; ReminderCards passes only reminders, so nothing ever reached it.
+ */
 export function ReminderList({ items, issues }: { items: Attention[]; issues: boolean }) {
   const g = reminderGroups(items);
-  if (!g.due.length && !g.other.length) {
+  if (!g.due.length) {
     return <div className="card"><EmptyLine>{issues ? "Nothing is due. Documents, services and km allowances are in order." : "No task needs attention right now."}</EmptyLine></div>;
   }
   return (
     <div className="stack" data-testid="reminders">
       {g.due.length > 0 && <ReminderGroup title="Documents and services due" rows={g.due} testId="reminders-due" />}
-      {g.other.length > 0 && <ReminderGroup title={g.due.length ? "Also needs attention" : "Needs attention"} rows={g.other} testId="reminders-other" />}
     </div>
   );
 }

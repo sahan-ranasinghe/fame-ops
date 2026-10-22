@@ -1,7 +1,7 @@
 // Round 4–7 (item 8, §33.7; Fleetio): Maintenance and Reminders hold only service and documents, one card per vehicle.
 // The rules (vehicleCareLogic.ts), the Maintenance page's cards beside the drivers' problem reports (every action of
 // the page is still there), and the Reminders cards (the server's reminders per vehicle, the rest counted to Issues).
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { describe, expect, it } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -11,7 +11,7 @@ import type { Me, Transport, WatchEvent } from "../transport/types";
 import { ToastProvider } from "../ui/Toast";
 import { Maintenance } from "./Maintenance";
 import { reminderCounts, reminderSummary, reminderTile } from "./overviewLinks";
-import { ReminderCards } from "./Reminders";
+import { ReminderCards, ReminderList } from "./Reminders";
 import { careCards, careCounts, careOf, docsOf, isDue, readService, serviceOf, summaryText } from "./vehicleCareLogic";
 
 const TODAY = "2026-10-22";
@@ -239,6 +239,25 @@ describe("Reminders: one card per vehicle", () => {
     // panel says what they are on: the tile's number is the summary's first.
     expect(screen.getByTestId("reminders-summary").textContent).toBe(`${reminderTile(items).count} reminders · 2 vehicles · 1 driver licence`);
     expect(reminderTile(items).count).toBe(4);
+  });
+
+  // Round 4–7 (the list audit's proposed removal, approved by Sahan 22 October 2026): ReminderList has one group; its
+  // "Also needs attention" group (never reached: only reminders are passed to it) is gone, and so is dueFromVehicles.
+  it("the licences are one group of rows; nothing is ever under \"Also needs attention\"", () => {
+    const items: Attention[] = [
+      { what: "Licence expires", subject: "Kamal Silva", due: "in 3 days", level: "red", kind: "licence", issue_id: "i4" },
+      { what: "Missed task", subject: "Team drop", due: "2 h ago", level: "red", kind: "missed_task", issue_id: "i5" },
+    ];
+    render(<MemoryRouter><ReminderCards items={items} issues /></MemoryRouter>);
+    expect(within(screen.getByTestId("reminders-due")).getAllByTestId("reminder-row").map((r) => r.textContent?.slice(0, 15))).toEqual(["Licence expires"]);
+    expect(screen.queryByTestId("reminders-other")).toBeNull();
+    expect(screen.queryByText(/^(Also needs|Needs) attention$/)).toBeNull();
+    expect(screen.getByTestId("reminders-issues").textContent).toContain("1 more needs attention");
+    cleanup();
+    // Given anything that is not a reminder, the list says nothing is due (it never makes a second group).
+    render(<MemoryRouter><ReminderList items={[items[1]]} issues /></MemoryRouter>);
+    expect(screen.queryByTestId("reminders-other")).toBeNull();
+    expect(screen.getByTestId("empty-line").textContent).toBe("Nothing is due. Documents, services and km allowances are in order.");
   });
 
   it("the reminders in numbers: as many as the tile counts, the vehicles and the licences", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANY_TIME,
   addMonths,
   colomboDay,
   customRange,
@@ -118,6 +119,22 @@ describe("date range: the URL", () => {
     expect(readRange(url("range=week"), "today", today, true)).toEqual({ range: "today", from: today, to: today });
     expect(readRange(url("range=yesterday"), "today", today, true)).toEqual({ range: "yesterday", from: "2026-10-14", to: "2026-10-14" });
     expect(readRange(url("range=custom&from=2026-10-03&to=2026-10-09"), "today", today, true)).toEqual({ range: "custom", from: "2026-10-03", to: "2026-10-03" });
+  });
+
+  // Round 4–7: "Any time", only on a page whose default it is (the Issues page's Open tab).
+  it("Any time: no dates; read only where it is the default; written like any other choice", () => {
+    expect(readRange(url(""), "any", today)).toEqual({ range: "any", from: "", to: "" });
+    expect(readRange(url("range=month"), "any", today)).toEqual({ range: "month", from: "2026-10-01", to: "2026-10-31" });
+    expect(readRange(url("range=custom&from=nonsense"), "any", today)).toEqual({ range: "any", from: "", to: "" });
+    // Another page's default: range=any is not one of its ranges.
+    expect(readRange(url("range=any"), "month", today)).toEqual({ range: "month", from: "2026-10-01", to: "2026-10-31" });
+    expect(readRange(url("range=any"), "any", today, true)).toEqual({ range: "today", from: today, to: today });
+    expect(writeRange(url("status=open&range=month"), { range: "any" }, "any").toString()).toBe("status=open");
+    expect(writeRange(url("status=open"), { range: "month" }, "any").toString()).toBe("status=open&range=month");
+    expect(writeRange(url("status=resolved"), { range: "any" }, "month").toString()).toBe("status=resolved&range=any");
+    expect(pickerText("any", "", "", today)).toBe("Any time");
+    expect(ANY_TIME).toEqual(["any", "Any time"]);
+    expect(PRESETS.map(([k]) => k)).not.toContain("any");
   });
 
   it("writes the choice, keeping the page's other parameters; the default leaves no trace", () => {

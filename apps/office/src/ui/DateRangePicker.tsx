@@ -8,7 +8,7 @@
 import { useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Calendar } from "./Calendar";
-import { addMonths, colomboDay, customRange, daysIn, type Picking, pickedRange, pickerText, PRESETS, type RangeKey, rangeText, readRange, tapDay, tooLong, writeRange, yesterdayOf } from "./dateRange";
+import { ANY_TIME, addMonths, colomboDay, customRange, daysIn, type Picking, pickedRange, pickerText, PRESETS, type RangeKey, rangeText, readRange, tapDay, tooLong, writeRange, yesterdayOf } from "./dateRange";
 import { Icon } from "./icons";
 import { useIsPhone } from "./phone";
 import { Sheet } from "./Sheet";
@@ -21,6 +21,8 @@ export interface DateRangeValue {
   oneDay: boolean;
   /** The page's limit in days (none = no limit). */
   maxDays?: number;
+  /** The page's default is Any time (range "any": from and to empty, no dates sent); its presets start with it. */
+  anyTime?: boolean;
   /** Over the page's limit (maxDays): the sentence to show instead of loading. */
   error?: string;
   setRange: (range: RangeKey) => void;
@@ -50,7 +52,8 @@ export function useDateRange(defaultRange: RangeKey = "today", opts: { oneDay?: 
     to,
     oneDay,
     maxDays: opts.maxDays,
-    error: tooLong(from, to, opts.maxDays),
+    anyTime: defaultRange === "any" && !oneDay,
+    error: from && to ? tooLong(from, to, opts.maxDays) : undefined,
     // Custom starts from the dates on screen.
     setRange: (k) => write(k === "custom" ? { range: k, from, to } : { range: k }),
     setCustom,
@@ -71,7 +74,7 @@ export function DateRangePicker({ value, label = "Dates", future = false }: { va
   const [picking, setPicking] = useState<Picking>({ from, to });
   const [msg, setMsg] = useState<string | undefined>();
   const text = pickerText(range, from, to, today);
-  const presets = value.oneDay ? PRESETS.filter(([k]) => k === "today" || k === "yesterday") : PRESETS;
+  const presets = value.oneDay ? PRESETS.filter(([k]) => k === "today" || k === "yesterday") : value.anyTime ? [ANY_TIME, ...PRESETS] : PRESETS;
 
   const show = () => {
     setPicking({ from, to });
@@ -91,15 +94,15 @@ export function DateRangePicker({ value, label = "Dates", future = false }: { va
   };
   const picked = pickedRange(picking);
   const months = phone ? 1 : 2;
-  // Two months: the later one is To's (history reads backwards); one month: To's.
-  const toMonth = to.slice(0, 7);
-  const initialMonth = months === 2 ? (from.slice(0, 7) !== toMonth ? from.slice(0, 7) : addMonths(toMonth, -1)) : toMonth;
+  // Two months: the later one is To's (history reads backwards); one month: To's. Any time: this month's.
+  const toMonth = (to || today).slice(0, 7);
+  const initialMonth = months === 2 ? (from && from.slice(0, 7) !== toMonth ? from.slice(0, 7) : addMonths(toMonth, -1)) : toMonth;
   const limit = maxDays ? `At most ${maxDays} days at a time.` : undefined;
 
   return (
     <div className="dr" data-testid="date-range">
       <button ref={btn} type="button" className="btn dr-btn" aria-haspopup="dialog" aria-expanded={open} aria-label={`${label}: ${text}`}
-        title={rangeText(from, to)} onClick={() => (open ? setOpen(false) : show())} data-testid="date-range-button">
+        title={from ? rangeText(from, to) : text} onClick={() => (open ? setOpen(false) : show())} data-testid="date-range-button">
         <Icon name="calendar" />
         <span>{text}</span>
         <Icon name="down" />

@@ -39,6 +39,19 @@ export function holderPhone(h: Pick<Holder, "phone" | "phone_display" | "call" |
   return { phone: h.phone, phone_display: h.phone_display ?? h.phone, call: h.call, whatsapp: h.whatsapp ?? "" };
 }
 
+/**
+ * Round 4–7 (approved by Sahan 22 October 2026): a conflict card whose holder is the busy trip's requester shows that
+ * person's Call and WhatsApp once, on the holder line; the requester's own pair under the card would repeat them and is
+ * left out. With no holder (the switch holder_contact off), a holder who is someone else, or a holder line without a
+ * number (the person's own trip, no number), the requester's buttons stay as before.
+ */
+export function requesterOnHolderLine(c: Pick<Conflict, "kind" | "holder" | "requester">, meName?: string | null): boolean {
+  const h = c.kind !== "garage" ? c.holder : undefined;
+  if (!h || !c.requester) return false;
+  const same = h.name.trim().toLowerCase() === c.requester.name.trim().toLowerCase();
+  return same && !isMe(h, meName) && !!holderPhone(h);
+}
+
 /** May this person ask for it: the tool, someone else's trip, never a vehicle in the garage. */
 export const canAskFor = (tools: readonly string[], h: Pick<Holder, "name">, meName?: string | null, kind?: Conflict["kind"]): boolean =>
   tools.includes("ask_for_it") && !isMe(h, meName) && kind !== "garage";

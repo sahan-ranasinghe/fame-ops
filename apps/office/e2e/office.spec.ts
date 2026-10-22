@@ -1017,7 +1017,8 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   await expect(page.getByRole("status")).toHaveText("Issue resolved");
   await expect(page.getByTestId("issue-page")).toHaveCount(0);
   await expect(page).toHaveURL(/status=in_progress/);
-  await applyFilter(page, "Status", "Resolved");
+  // Round 4–7 (Sahan's OK, 22 October 2026): Resolved is the tab (the Filter's Status keeps only the Open tab's choices).
+  await page.getByRole("tab", { name: "Resolved" }).click();
   await ourRow().click();
   await expect(page.getByText(/Resolved by E2E Fleet Admin/)).toBeVisible();
   await expect(page.getByTestId("issue-report")).toContainText("closed");

@@ -1,6 +1,6 @@
 // The task page's maps (Phase 7, §20, §21, §26): the plan map from task_detail asked with its lines, and the task's
-// route snapped by default with its Gaps list under the map.
-import { act, fireEvent, render, screen } from "@testing-library/react";
+// route snapped by default with its gaps as one line under the map and markers on it (Round 4–7: no Gaps list).
+import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -43,6 +43,7 @@ const route: DriverRoute = {
   driver: "Kamal Silva", date: day, recorded_points: 3, km: 60,
   route: { columns: ["time", "lat", "lng", "km/h", "at"], points: [["07:30", 6.93, 79.86, 0, iso("07:30")], ["08:00", 7.1, 80.0, 40, iso("08:00")], ["08:30", 7.3, 80.2, 40, iso("08:30")]] },
   holes: [{ from_at: iso("08:00"), to_at: iso("08:30"), minutes: 30, kind: "no_data", text: "App not running · 30 min" }],
+  gaps: [{ from: "08:00", to: "08:30", minutes: 30, kind: "no_data" }],
   snapped: { provider: "google_roads", status: "ok" },
 };
 
@@ -86,10 +87,15 @@ describe("the task page's maps", () => {
     ]);
     expect(screen.getByTestId("plan-with-map")).toBeTruthy();
     expect(transport.calls.find((c) => c.tool === "driver_route")?.args).toMatchObject({ task_id: "t1", snap: true, estimate_gaps: true });
-    const row = screen.getByTestId("gap-row");
-    expect(row.textContent).toBe("08:00–08:30App not running30 min");
-    fireEvent.click(row);
-    expect(screen.getByTestId("route-map-view").dataset.open).toBe(last("route")?.gaps?.[0].id);
+    // Round 4–7 (approved by Sahan 22 October 2026, the driver's day page's way): no Gaps list; ONE line, and the gap's
+    // marker on the map, which opens its card.
+    expect(screen.queryByTestId("gaps-list")).toBeNull();
+    expect(screen.queryByTestId("gap-row")).toBeNull();
+    expect(screen.getByTestId("route-gaps").textContent).toBe("No GPS for 30 min");
+    const marker = last("route")?.gaps?.[0];
+    expect(marker?.kind).toBe("no_data");
+    act(() => last("route")!.onGap!(marker!.id));
+    expect(screen.getByTestId("route-map-view").dataset.open).toBe(marker!.id);
     expect(screen.getByLabelText("Recorded points")).toBeTruthy();
   });
 });

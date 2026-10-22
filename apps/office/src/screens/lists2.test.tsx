@@ -18,7 +18,7 @@ import { boardAnswer } from "./__fixtures__/driversBoard";
 import { DriversBoard } from "./DriversBoard";
 import { Fuel } from "./Fuel";
 import {
-  boardFinishText, boardStatusShown, createdTagShown, liveRest, placeKindShown, requestPillShown, requestStepWords, tripStatusShown, vehicleStatusShown, videoCellWords,
+  boardFinishText, boardStatusShown, createdTagShown, docsAllValid, liveRest, placeKindShown, requestPillShown, requestStepWords, tripStatusShown, validDocsWords, vehicleStatusShown, videoCellWords,
 } from "./lists2Logic";
 import { MyTrips } from "./MyTrips";
 import { Places } from "./Places";
@@ -268,6 +268,48 @@ describe("Vehicles (item 8): one status, quiet valid documents", () => {
     expect(t.argsOf("list_vehicles").at(-1)).toMatchObject({ filter: "in_garage" });
     fireEvent.click(screen.getAllByTestId("vehicle-row")[0]);
     expect(where()).toMatch(/^\/vehicles\/WP%20CAB-4521/);
+  });
+});
+
+// Round 4–7 (the list audit's proposed removal, approved by Sahan 22 October 2026): three valid documents = one line.
+describe("Vehicles: \"Documents valid\" when all three are", () => {
+  const valid = { lic: { chip: "ok", expiry: "2027-03-12" }, ins: { chip: "ok", expiry: "2027-04-01" }, emi: { chip: "ok", expiry: "2027-07-05" } };
+  const rows = [
+    vehicle("WP OK-1", { documents: valid }),
+    vehicle("WP OK-2", { documents: valid, documents_missing: ["registration"], documents_missing_text: "1 document missing: CR" }),
+    vehicle("WP OK-3", { documents: { lic: valid.lic, ins: valid.ins } }),
+    vehicle("WP OK-4"),
+  ];
+  const answers: Record<string, Answer> = {
+    list_vehicles: (a) => ({ filter: a.filter, counts: { all: 4, on_task: 0, available: 4, in_garage: 0, documents_expiring: 1, inactive: 0 }, total: rows.length, vehicles: rows }),
+  };
+
+  it("one quiet line with each expiry for the screen reader; expiring, expired, not set or missing keep the chips", async () => {
+    await mount(vehicleAdmin, answers, "/vehicles");
+    const r = screen.getAllByTestId("vehicle-row");
+    const line = within(r[0]).getByTestId("docs-valid");
+    expect(shown(line)).toBe("Documents valid");
+    expect(line.textContent).toBe(`Documents valid: ${validDocsWords(valid)}`);
+    expect(validDocsWords(valid, new Date("2026-10-22T10:00:00+05:30"))).toBe("licence to Fri 12 Mar 2027, insurance to Thu 1 Apr 2027, emission test to Mon 5 Jul 2027");
+    expect(line.getAttribute("title")).toBe(`Valid: ${validDocsWords(valid)}`);
+    expect(within(r[0]).queryByTestId("doc-ok")).toBeNull();
+    expect(within(r[0]).queryByText("Lic")).toBeNull();
+    // A missing document: the three chips (quiet ticks) and "no document", as before.
+    expect(within(r[1]).queryByTestId("docs-valid")).toBeNull();
+    expect(within(r[1]).getAllByTestId("doc-ok").map(shown)).toEqual(["Lic", "Ins", "Emi"]);
+    expect(within(r[1]).getByText("no document")).toBeTruthy();
+    // One not set: the chips; Emi dashed (not set).
+    expect(within(r[2]).queryByTestId("docs-valid")).toBeNull();
+    expect(within(r[2]).getByText("Emi").className).toContain("unset");
+    // Expiring and expired: the chips in colour.
+    expect(within(r[3]).queryByTestId("docs-valid")).toBeNull();
+    expect(within(r[3]).getByText("Ins").className).toContain("warn");
+    expect(within(r[3]).getByText("Emi").className).toContain("bad");
+    // The rule itself.
+    expect(docsAllValid({ documents: valid })).toBe(true);
+    expect(docsAllValid({ documents: valid, documents_missing: ["lease"] })).toBe(false);
+    expect(docsAllValid({ documents: { ...valid, ins: { chip: "orange", expiry: "2026-11-05" } } })).toBe(false);
+    expect(docsAllValid({})).toBe(false);
   });
 });
 
