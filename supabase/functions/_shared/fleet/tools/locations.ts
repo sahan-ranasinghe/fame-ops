@@ -472,9 +472,10 @@ export const driverRoute = tool({
     const iso = (ms: number) => new Date(ms).toISOString();
     const linePoint = (p: LinePoint) => [t(p.at), p.lat, p.lng, p.kmh, iso(p.at), p.acc ?? null];
 
-    // Snap to roads: the driving legs through Google (the google package, for the web's Google map only: the
-    // Roads terms forbid its lines on any other map) or OSRM when the setting names it (stored per leg; a leg
-    // still growing goes in whole 5 km chunks, its tail raw meanwhile; Phase 7, §26).
+    // Snap to roads: the driving legs through Google (the google package, for a Google map only: the Roads terms
+    // forbid its lines on any other map; Round 48: never stored, kept 30 minutes in the isolate's memory) or OSRM
+    // when the setting names it (kept per leg in route_matched; a leg still growing goes in whole 5 km chunks, its
+    // tail raw meanwhile; Phase 7, §26). The website asks it on its Google map; Office mode and /m/ since Round 48.
     const provider = snapProvider(settings, actor.channel);
     let snapped: { provider: string; status: string; legs?: number; matched?: number } = { provider, status: "off" };
     let routeSnapped: { columns: string[]; points: (string | number | null)[][] } | undefined;
