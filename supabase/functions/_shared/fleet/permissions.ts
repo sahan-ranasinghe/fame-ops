@@ -220,7 +220,8 @@ export const PRESETS: Record<
 > = {
   fleet_admin: { label: "Fleet admin", permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues"] },
   // Round 2b (Sahan, 21 October 2026): the records and the trips, never approve or users; a task they assign waits for
-  // a fleet admin's OK while tasks_need_approval is on.
+  // a fleet admin's OK while tasks_need_approval is on. Round 48 (item 1): so does every change they make to a task's
+  // driver, vehicle, day, time or stops (reassign_task, update_task, update_task_stops; tools/changes.ts).
   coordinator: { label: "Coordinator", permissions: ["view", "request", "assign_tasks", "vehicles", "issues", "office_users"] },
   dispatcher: { label: "Dispatcher", permissions: ["view", "request", "assign_tasks"] },
   // Phase 7 (§12): any permission implies view, so the Requester preset carries it (view = what a viewer sees).
