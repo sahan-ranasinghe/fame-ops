@@ -573,6 +573,24 @@ check("google_caps.routes.month: a whole number from 0 to 4750" in r, "update_se
 caps = {**gs["settings"]["google_caps"], "roads": {"day": 50, "month": 1000}}
 check(tool("update_settings", {"key": "google_caps", "value": caps})["value"]["roads"] == {"day": 50, "month": 1000}, "update_settings: the caps saved")
 tool("update_settings", {"key": "google_caps", "value": gs["settings"]["google_caps"]})
+# Round 48 (6a): the server's own odometer checks have a cap (500 a day, at most 5,000), and every capped counter at 80 % of
+# its cap opens ONE warning issue of kind usage_cap (critical at 100 %, updated in place, resolved when the counter is gone).
+r = tool("update_settings", {"key": "odometer_server_daily_cap", "value": 6000}, expect_error=True)
+check("odometer_server_daily_cap: a whole number from 0 to 5000" in r and gs["settings"]["odometer_server_daily_cap"] == 500,
+      "update_settings: the server's odometer checks a day default to 500 and never go above 5,000", r)
+psql("insert into google_calls (feature, day, calls) values ('routes', (now() at time zone 'Asia/Colombo')::date, 177) on conflict (feature, day) do update set calls = 177")
+code, sj = fleet_jobs()
+uc = tool("list_issues", {"kind": "usage_cap"})["issues"]
+check(code == 200 and len(uc) == 1 and uc[0]["severity"] == "warning" and uc[0]["title"] == "Google routes at 82% of today's cap",
+      "Routes at 177 of 215 today: one usage_cap warning, 'Google routes at 82% of today's cap'", json.dumps(uc)[:300])
+psql("update google_calls set calls = 215 where feature = 'routes' and day = (now() at time zone 'Asia/Colombo')::date")
+fleet_jobs()
+uc2 = tool("list_issues", {"kind": "usage_cap"})["issues"]
+check(len(uc2) == 1 and uc2[0]["id"] == uc[0]["id"] and uc2[0]["severity"] == "critical" and "100%" in uc2[0]["title"],
+      "at the cap the same issue is critical, updated in place (no second row)", json.dumps(uc2)[:300])
+psql("delete from google_calls where feature = 'routes'")
+fleet_jobs()
+check(tool("list_issues", {"kind": "usage_cap"})["issues"] == [], "the counter gone (as on the next day): the issue resolves by itself")
 # A Google place picked earlier (its pin kept by place id): a stop takes it with the name; the stop is marked by the trigger.
 GPID = f"ChIJ-suite-{uuid.uuid4().hex[:8]}"
 psql(f"insert into google_pins (google_place_id, lat, lng, address) values ('{GPID}', 7.2931, 80.635, 'Kandy City Centre, Kandy')")

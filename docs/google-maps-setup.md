@@ -246,8 +246,15 @@ plan. The only Google products on the phone are the Maps SDK for Android (free) 
 | Maps SDK for Android (Mobile Native Dynamic Maps: no charge, unlimited; no map id) | the driver app's task map, the Google engine | `GOOGLE_ANDROID_MAPS_KEY` (in the APK; Android apps + SHA-1; Maps SDK for Android only) | none: free | the phone shows the free map by itself (section 8) | `npm run test:maps` |
 | Google Maps URLs (Navigate, All stops) | the driver app's buttons, the office's links | none | free | | `npm run test:nav` |
 
-Not Maps Platform, listed for completeness: Gemini (`read-odometer`, `GEMINI_API_KEY`, 60 reads a driver a day), Firebase
-Cloud Messaging (push, free) and Google Fonts (the website's CSS, no key).
+Not Maps Platform, listed for completeness: Gemini (`read-odometer`, `GEMINI_API_KEY`: since Round 48 counted BEFORE each
+call like the Google calls, `odometer_take` in `odometer_calls`: 60 reads a driver a day, and the server's own checks under
+the setting `odometer_server_daily_cap`, 500; a counter that cannot be read refuses the call), Firebase Cloud Messaging
+(push, free) and Google Fonts (the website's CSS, no key). Every counter here (Google, openrouteservice, Gemini) opens one
+warning issue of kind `usage_cap` at 80 % of its day or month cap, critical at 100 % (`issues.ts` `usageCapIssues`). The
+doors themselves are rate-limited (Round 48, `_shared/fleet/rateLimit.ts`): 30 calls a minute per person, driver or
+connector key on the tools that can make one of these calls, on top of the general limits, and 20 refusals a minute per
+address before Supabase Auth or the key lookup is asked; the site and the app stop a screen that asks one tool over 30
+times a minute by themselves (the circuit breaker, `transport/breaker.ts` / `lib/breaker.ts`) and report it once.
 
 Every fallback works on either map, on the phones and the website: the server's fallbacks (openrouteservice, the estimate)
 answer the same whatever map shows; a plan leg's line is drawn where that map may show it (Google's on Google's map only,
