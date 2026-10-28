@@ -447,7 +447,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Enter your code" })).toBeVisible();
   await page.getByLabel("6-digit code").fill(totp(secret));
@@ -530,7 +530,7 @@ test("a wrong password is refused", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("E-mail").fill("nobody@fame.test");
-  await page.getByLabel("Password").fill("not the password");
+  await page.getByLabel("Password", { exact: true }).fill("not the password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText("Wrong e-mail or password.")).toBeVisible();
 });
@@ -2037,7 +2037,7 @@ test("Hotfix 3 (L7): with 100 open issues and 50 waiting requests the Overview f
     // The set-password link works once: the phone signs in with the e-mail and the password.
     await phone.goto("/");
     await phone.getByLabel("E-mail").fill(`e2e.l7.${stamp}@fame.test`);
-    await phone.getByLabel("Password").fill(`L7 approver ${stamp}!`);
+    await phone.getByLabel("Password", { exact: true }).fill(`L7 approver ${stamp}!`);
     await phone.getByRole("button", { name: "Sign in" }).click();
     await expect(phone.getByRole("heading", { name: "Overview" })).toBeVisible();
     await expect(phone.locator('[data-section="attention"]')).toBeVisible();
