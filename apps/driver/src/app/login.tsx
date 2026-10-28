@@ -9,8 +9,9 @@ import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Check, Eye, EyeOff } from '@/components/icons';
+import { Check } from '@/components/icons';
 import { LanguagePill } from '@/components/LanguageSwitch';
+import { SecretInput } from '@/components/SecretInput';
 import { PRIVACY_URL } from '@/config';
 import { Button, Card, Field, Notice, Txt } from '@/components/ui';
 import { getJson } from '@/lib/kv';
@@ -51,7 +52,6 @@ export default function LoginScreen() {
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState(() => getJson<string>(OFFICE_KEYS.email) ?? '');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -132,13 +132,13 @@ export default function LoginScreen() {
                 returnKeyType="next"
                 style={{ fontFamily: fonts.mono }}
               />
-              <Field
+              <SecretInput
+                kind="pin"
                 label={t('login.pin')}
                 mono
                 value={pin}
                 onChangeText={(text) => setPin(text.replace(/\D/g, '').slice(0, 6))}
                 keyboardType="number-pad"
-                secureTextEntry
                 maxLength={6}
                 returnKeyType="done"
                 onSubmitEditing={submit}
@@ -159,28 +159,16 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 returnKeyType="next"
               />
-              <View>
-                <Field
-                  label={t('office.login.password')}
-                  value={password}
-                  onChangeText={setPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="password"
-                  secureTextEntry={!showPassword}
-                  returnKeyType="done"
-                  onSubmitEditing={submit}
-                  style={{ paddingRight: 56 }}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t(showPassword ? 'office.login.hidePassword' : 'office.login.showPassword')}
-                  onPress={() => setShowPassword((v) => !v)}
-                  style={styles.eye}
-                >
-                  {showPassword ? <EyeOff size={22} color={colors.muted} /> : <Eye size={22} color={colors.muted} />}
-                </Pressable>
-              </View>
+              <SecretInput
+                label={t('office.login.password')}
+                value={password}
+                onChangeText={setPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="password"
+                returnKeyType="done"
+                onSubmitEditing={submit}
+              />
               <Pressable accessibilityRole="button" onPress={() => Alert.alert(t('office.login.forgotTitle'), t('office.login.forgotBody'))} style={{ alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' }}>
                 <Txt variant="strong" size={16} color={colors.blue}>{t('office.login.forgot')}</Txt>
               </Pressable>
@@ -208,5 +196,4 @@ const styles = StyleSheet.create({
   logo: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.amber, alignItems: 'center', justifyContent: 'center' },
   switch: { flexDirection: 'row', marginTop: 18, backgroundColor: colors.darkSurface, borderRadius: 16, padding: 4 },
   side: { flex: 1, minHeight: 52, borderRadius: 13, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
-  eye: { position: 'absolute', right: 6, bottom: 4, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
 });

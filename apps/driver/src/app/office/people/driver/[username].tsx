@@ -22,6 +22,7 @@ import { PhotoPick } from '@/components/office/PhotoPick';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { DateField } from '@/components/patterns/Calendar';
 import { Sheet } from '@/components/patterns/Sheet';
+import { SecretInput } from '@/components/SecretInput';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Field, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
@@ -452,7 +453,7 @@ export default function ManageDriver() {
             <Txt variant="muted">{name}</Txt>
             <Txt variant="small">{t('office.people.pinHint')}</Txt>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
-              <Field label={t('office.people.pinLabel')} value={pin} onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 6))} maxLength={6} keyboardType="number-pad" editable={!pinBusy} mono style={{ fontSize: 26, fontFamily: fonts.monoSemiBold }} autoFocus />
+              <SecretInput kind="pin" label={t('office.people.pinLabel')} value={pin} onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 6))} maxLength={6} keyboardType="number-pad" editable={!pinBusy} mono style={{ fontSize: 26, fontFamily: fonts.monoSemiBold }} autoFocus testID="pin-input" />
               <Button kind="outline" label={t('office.people.generate')} onPress={() => setPin(randomPin())} disabled={pinBusy} style={{ minHeight: 56 }} />
             </View>
             {pinBad && <Notice tone="danger" text={t('office.people.pinBad')} />}

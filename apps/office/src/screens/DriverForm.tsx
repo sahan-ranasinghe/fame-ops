@@ -9,6 +9,7 @@ import type { FleetError } from "../transport/types";
 import { Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
+import { SecretField } from "../ui/SecretField";
 import { useToast } from "../ui/Toast";
 import { type DriverFields, emptyDriver, randomPin, validateNewDriver } from "./driverLogic";
 
@@ -74,7 +75,7 @@ export function DriverForm() {
           <div className="grid2">
             <div className="field"><label htmlFor="nd-user">Username</label><input id="nd-user" maxLength={40} placeholder="nuwan.p" autoComplete="off" value={f.username} onChange={(e) => set("username", e.target.value)} /><span className="hint">Letters, numbers, dot, dash, underscore.</span></div>
             <div className="field"><label htmlFor="nd-pin">6-digit PIN</label>
-              <div style={{ display: "flex", gap: 8 }}><input id="nd-pin" maxLength={6} inputMode="numeric" autoComplete="off" className="mono" value={f.pin} onChange={(e) => set("pin", e.target.value)} /><button type="button" className="btn" onClick={() => set("pin", randomPin())}>New</button></div>
+              <div style={{ display: "flex", gap: 8 }}><SecretField kind="pin" id="nd-pin" maxLength={6} inputMode="numeric" autoComplete="off" className="mono" value={f.pin} onChange={(e) => set("pin", e.target.value)} /><button type="button" className="btn" onClick={() => set("pin", randomPin())}>New</button></div>
             </div>
           </div>
           <p className="hint" style={{ margin: 0 }}>The PIN is shown only now. Give it to the driver straight away.</p>
