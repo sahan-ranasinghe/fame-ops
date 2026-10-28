@@ -55,9 +55,9 @@ console.log('The window the forms ask for');
   const card = { fields: { date: '2026-10-29', time: '09:00' }, trip: { leave_by: '09:00', stops: [], timeline: { items: [], totals: { drive_min: 60, km: 40, ends: '13:10' } } } } as unknown as RequestCard;
   const args = availabilityArgs(card);
   check(same(args, { at: '2026-10-29 09:00', planned_end: '13:10' }), 'Approve: the request\'s plan end as planned_end when it has no back-by', args);
-  check(same(availabilityAt(args, { date: '2026-10-29', leaveBy: '09:00', back: '' }), args), 'the times as asked keep the plan\'s end');
-  check(same(availabilityAt(args, { date: '2026-10-29', leaveBy: '10:00', back: '' }), { at: '2026-10-29 10:00' }), 'a new leave time drops it (the trip is planned again when decided)');
-  check(same(availabilityAt(args, { date: '2026-10-29', leaveBy: '09:00', back: '12:00' }), { at: '2026-10-29 09:00', until: '12:00' }), 'a typed back-by replaces it');
+  check(same(availabilityAt(args, { date: '2026-10-29', leaveBy: '09:00', back: '', fromDwell: null, toDwell: null }), args), 'the times as asked keep the plan\'s end');
+  check(same(availabilityAt(args, { date: '2026-10-29', leaveBy: '10:00', back: '', fromDwell: null, toDwell: null }), { at: '2026-10-29 10:00' }), 'a new leave time drops it (the trip is planned again when decided)');
+  check(same(availabilityAt(args, { date: '2026-10-29', leaveBy: '09:00', back: '12:00', fromDwell: null, toDwell: null }), { at: '2026-10-29 09:00', until: '12:00' }), 'a typed back-by replaces it');
 }
 
 console.log('\nThe chip says the trip\'s day, in both languages');
