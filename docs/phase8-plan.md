@@ -981,6 +981,22 @@ update group `093e3162-c2d6-471e-b804-29239796dc89`, runtime 1.3.0-gmaps, "Round
 who holds it, lists, retention, per person, new screens"). Nothing unmerged on main's side; `phase9-rd` (the design pilot) and
 the `design-pilot-*` branches stay parked (§32); the r47 worktrees (`fame-ops-r47-*`) are merged and can go.
 
+**Deployed (28 October 2026, Sahan's chained go after CI run 40666236974 on `phase9-r48` passed: 49 e2e tests, none
+flaky):**
+1. Server: `db push` applied `20261028100000_round48_proposed_changes`, `20261028110000_round48_no_stored_google_roads`
+   and `20261028120000_round48_cost_controls` (the dry run listed those three alone); `office-api`, `office-mcp`,
+   `driver-api`, `fleet-jobs` and `read-odometer` deployed. Checked live: `get_settings` answers `odometer_server_daily_cap`
+   500 and the Google caps with today's usage; `retention_preview` names the stored lines as OSRM only; the queue answers
+   with the new card shapes. The one live call as a non-approver (a reassignment answering waiting_for_approval) was not
+   made from this session (a personal key for another person's account is not Claude's to create): the e2e on this build
+   proves it; Sahan checks it on the site as sashen.
+2. Main fast-forwarded to `0e0540c` (`~/projects/fame-ops-main`), key scan 0, pushed; main's CI 40671302432.
+3. Website and /m/: `scripts/deploy-pages.sh --deploy`, scan: nothing found, https://7908df6b.fame-fleet.pages.dev; `/`,
+   `/m/`, `/m/offline` and `/privacy` answer 200.
+4. Native check against `99dbab9`: only test scripts changed in `apps/driver/package.json`. EAS update "R48: approvals for
+   changes, map pages, trip-date availability, snap in app, cost guards": group **d08b4396-cff9-49e6-b688-d7a1b886870b**,
+   Android 01a1820a-1cdd-7443-a7f9-62c76ae1fb7e, runtime 1.3.0-gmaps, commit 0e0540c.
+
 ### 34.1 Item 1: the approval bypass (security, done first)
 
 The hole: with `tasks_need_approval` on, only `create_task` went to the fleet admin (§33). A dispatcher (assign_tasks, no
