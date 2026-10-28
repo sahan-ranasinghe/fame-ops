@@ -1,10 +1,12 @@
 // The HTML elements the two real maps (MapLibre, Google) place on the map (Phase 7, Part 2b): a
 // gap's marker with its card, a plan's pin with its chip, the playback marker. The same elements
 // and CSS on both maps; each map only positions them.
+import { type Cluster, clusterLabel, clusterTitle } from "./cluster";
 import { cardPlacement, gapCardLines } from "./gapLogic";
+import { isPin } from "./layers";
 import { GAP_ICONS, svgMarkup } from "./mapIcons";
 import { pinChip } from "./planDraw";
-import type { GapMarker, MapRoute, PlanPin } from "./types";
+import type { GapMarker, GapMarkerKind, MapRoute, PlanPin } from "./types";
 
 /** A gap marker is made again only when this changes. */
 export const gapKey = (g: GapMarker) => `${g.kind}|${g.lat}|${g.lng}|${g.text}`;
@@ -21,13 +23,25 @@ export function placeCard(el: HTMLElement, container: HTMLElement | null) {
 }
 
 /**
+ * Round 48 (item 3, z-order): a stop's dot is drawn UNDER the route line by the map itself (MapLibre: a circle layer below
+ * the line's layer; Google: an element in the mapPane, under the polylines' pane; the drawn map: a circle before the line),
+ * so the line reads over the clutter; the HTML button above keeps the hit area, the card and the name but draws nothing
+ * ("under"), and shows its own dot only while open or hovered. Pins, event marks and clusters stay above the line.
+ */
+export const underLine = (kind: GapMarkerKind): boolean => kind === "stop";
+
+/** Where a mark's element sits on its point: a pin's tip, every other mark's centre. */
+export const markAnchor = (kind: GapMarkerKind): "bottom" | "center" => (isPin(kind) ? "bottom" : "center");
+
+/**
  * A gap's marker: a small grey round button with the kind's icon; its card (the words) shows on hover (desktop) or
  * while open (a tap, a Gaps list row). The button's name is the whole text, so a screen reader hears it without the card.
+ * Round 48: also a stop's dot ("stop", drawn under the line: underLine) and the route's pins ("start", "end": a pin shape).
  */
 export function gapMarkEl(g: GapMarker, on: { toggle: (id: string) => void; close: () => void; container: () => HTMLElement | null }): HTMLButtonElement {
   const el = document.createElement("button");
   el.type = "button";
-  el.className = `gap-mk ${g.kind}`;
+  el.className = `gap-mk ${g.kind}${isPin(g.kind) ? " pin" : ""}${underLine(g.kind) ? " under" : ""}`;
   el.dataset.gap = g.id;
   el.setAttribute("aria-label", g.text);
   el.setAttribute("aria-expanded", "false");
@@ -63,6 +77,45 @@ export function gapMarkEl(g: GapMarker, on: { toggle: (id: string) => void; clos
 export function setGapOpen(el: HTMLElement, open: boolean) {
   el.classList.toggle("open", open);
   el.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+/** Round 48: the dot the map draws under the line for a stop (the HTML maps place it in a pane below the lines). */
+export function underDotEl(): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "mk-under-dot";
+  el.setAttribute("aria-hidden", "true");
+  return el;
+}
+
+/**
+ * A cluster's circle (Round 48, item 3; MarkerClusterer): the count in a round ink button, named "N marks here · zoom in
+ * to see them"; a tap zooms the map to its marks. Kept above the line, like the pins.
+ */
+export function clusterEl(onZoom: (ids: string[]) => void): HTMLButtonElement {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "mk-cluster";
+  el.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    onZoom((el.dataset.ids ?? "").split("|").filter(Boolean));
+  });
+  return el;
+}
+
+export function setCluster(el: HTMLElement, c: Cluster) {
+  el.dataset.ids = c.ids.join("|");
+  el.dataset.cluster = c.id;
+  el.textContent = clusterLabel(c.ids.length);
+  el.title = clusterTitle(c.ids.length);
+  el.setAttribute("aria-label", clusterTitle(c.ids.length));
+}
+
+/** A mark folded into a cluster is hidden (its element stays, so an open card survives a zoom). */
+export function setClustered(el: HTMLElement, clustered: boolean) {
+  el.classList.toggle("clustered", clustered);
+  el.setAttribute("aria-hidden", clustered ? "true" : "false");
+  if (clustered) el.setAttribute("tabindex", "-1");
+  else el.removeAttribute("tabindex");
 }
 
 /** A plan's pin (§20): a round number ("S" for the start) with its chip beside it; red when late, highlighted when selected. */

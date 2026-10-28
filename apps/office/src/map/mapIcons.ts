@@ -8,8 +8,12 @@ export const GAP_ICONS: Record<GapMarkerKind, string[]> = {
   no_data: ["M18.36 6.64a9 9 0 1 1-12.73 0", "M12 2v10"],
   no_gps: ["M12 2v3", "M12 19v3", "M2 12h3", "M19 12h3", "M12 5.5a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13", "M3.5 3.5l17 17"],
   late: ["M16 16l-4-4-4 4", "M12 12v9", "M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"],
-  // A stop on a driver's day (§33.6 item 1): a map pin.
+  // A stop on a driver's day (§33.6 item 1): a map pin. Round 48: the stop is drawn as a small dot on the map (the pin
+  // path stays for the dot's legend and for any mark that wants it).
   stop: ["M20 10c0 5-5.5 10.2-7.4 11.8a1 1 0 0 1-1.2 0C9.5 20.2 4 15 4 10a8 8 0 0 1 16 0", "M12 7a3 3 0 1 0 0 6a3 3 0 1 0 0-6"],
+  // Round 48: the route's two pins. Start: a play triangle; end: a flag.
+  start: ["M8 5l11 7-11 7z"],
+  end: ["M5 21V4", "M5 4h12l-2 4 2 4H5"],
 };
 
 /** The compass needle: the north half (red) and the south half. */

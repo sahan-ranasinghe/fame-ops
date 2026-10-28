@@ -16,7 +16,10 @@
 // same page, as a swap during the task), and "declined the 09:00 task" /
 // "hasn't accepted the 09:00 task" in red while that task needs a driver.
 // Part 4 (§16): the chip is in the URL (/live?filter=road is the Overview's "Vehicles on the road"); ?task=<id> selects the
-// driver on that task first (a task page's on-the-way banner).
+// driver on that task first (a task page's on-the-way banner). Round 48: the shown route's first and last point are
+// pins, its stops dots, its event marks a layer (the Filter's Layers section, ?layers=events, off by default; a Gaps
+// list row still shows its own mark), overlapping marks a cluster; the card's legend is the compact row with ⓘ
+// (docs/ui-patterns.md §18).
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -40,7 +43,7 @@ import {
 } from "../data/live";
 import { megabytes } from "./fuelLogic";
 import { moveMode } from "./moveLogic";
-import { estimatedLegend, insertPoint, mapRouteOf, mergeRoute, type Route, routeOf, snapControl, trailOf } from "../data/route";
+import { insertPoint, mapRouteOf, mergeRoute, type Route, routeOf, trailOf } from "../data/route";
 import { useWatchDrivers } from "../data/watchDrivers";
 import type { DriverRoute, LiveDriver } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
@@ -49,7 +52,9 @@ import { MapView } from "../map/MapView";
 import { useGoogleMap } from "../map/google/useGoogleMap";
 import { snapAllowed } from "../map/mapChoice";
 import type { MapMarker, MapRoute, RoutePoint } from "../map/types";
-import { GapsList, useGaps } from "./GapsList";
+import { GapsList, useRouteMarks } from "./GapsList";
+import { eventsOn, LAYERS_DEF } from "../map/layers";
+import { RouteLegend } from "./RouteInfo";
 import { filterFromWord, firstSelected, LIVE_FILTER_WORDS, withParam } from "./overviewLinks";
 import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
@@ -62,8 +67,8 @@ import { useFleetSettings, vehicleOnTheDay } from "./dispatchParts";
 import { Icon } from "../ui/icons";
 import { linksFromCall } from "../ui/phoneLinks";
 import { duration } from "@fleet/durations";
-import { FilterBar } from "../ui/FilterBar";
-import { pairsDef } from "../ui/filterLogic";
+import { FilterBar, useUrlFilters } from "../ui/FilterBar";
+import { type FilterValues, pairsDef, writeFilters } from "../ui/filterLogic";
 import { SkeletonRows } from "../ui/ListKit";
 
 /** The trails and the shown route are fetched again this often (the fallback when Realtime is not delivering). */
@@ -87,7 +92,13 @@ export function Live() {
   // a reload keeps it, and a chip changes it in place (the history keeps one entry; other parameters are kept).
   const [params, setParams] = useSearchParams();
   const filter = filterFromWord<LiveFilter>(LIVE_FILTER_WORDS, params.get("filter"), "all");
-  const setFilter = (f: LiveFilter) => setParams((p) => withParam(p, "filter", LIVE_FILTER_WORDS[f]), { replace: true });
+  // The Events layer of the shown route (Round 48): the same Filter button's Layers section, ?layers=events.
+  const layers = useUrlFilters([LAYERS_DEF]);
+  const events = eventsOn(layers.values);
+  // ONE write of the URL for both sections (two setSearchParams in a row each start from the params of this render, so
+  // the second would drop the first's change).
+  const applyFilters = (v: FilterValues) =>
+    setParams((p) => writeFilters(withParam(p, "filter", LIVE_FILTER_WORDS[((v.filter as string) || "all") as LiveFilter]), [LAYERS_DEF], { layers: v.layers ?? [] }), { replace: true });
   const [selected, setSelected] = useState<string | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
   const [routeBusy, setRouteBusy] = useState(false);
@@ -199,8 +210,9 @@ export function Live() {
   const shownRoute = route && route.username === sel?.username ? route : null;
   const mapRoute = useMemo<MapRoute | null>(() => mapRouteOf(shownRoute, null, shownSnap), [shownRoute, shownSnap]);
   const mapTrails = useMemo<MapRoute[]>(() => (trails ? [...trailMap.values()].filter((r) => !(mapRoute && r.username === sel?.username)).map(trailOf) : []), [trails, trailMap, mapRoute, sel?.username]);
-  // The shown route's gaps: markers on the map, the list in the driver's card (§21).
-  const gaps = useGaps(shownRoute, shownSnap, setFocus);
+  // The shown route's marks: the pins, the dots and (by the layer) the gaps' events on the map, the Gaps list in the
+  // driver's card (§21); a row opens its mark whatever the layer.
+  const gaps = useRouteMarks(shownRoute, shownSnap, setFocus, { events, latest: true });
 
   async function showRoute(username: string, snap = shownSnap) {
     setRouteBusy(true);
@@ -235,8 +247,8 @@ export function Live() {
         {d && (
           <div className="ph-actions">
             {/* Who the list shows: the Filter with the counts beside each choice (docs/ui-patterns.md §1); ?filter= kept. */}
-            <FilterBar filters={[pairsDef("filter", "Show", LIVE_FILTERS, "all", counts)]} values={{ filter }}
-              onChange={(v) => setFilter(((v.filter as string) || "all") as LiveFilter)} />
+            <FilterBar filters={[pairsDef("filter", "Show", LIVE_FILTERS, "all", counts), LAYERS_DEF]} values={{ filter, layers: layers.values.layers ?? [] }}
+              onChange={applyFilters} />
           </div>
         )}
       </div>
@@ -276,11 +288,11 @@ export function Live() {
         <div className="stack live-map">
           <MapView markers={markers} route={mapRoute} trails={mapTrails} focus={focus} onPick={(id) => setSelected(id)}
             trailsToggle={routes ? { on: trails, toggle: () => setTrails((t) => !t) } : undefined}
-            gaps={gaps.markers} openGap={gaps.open} onGap={gaps.setOpen} />
+            gaps={gaps.marks} openGap={gaps.open} onGap={gaps.onMark} />
           {sel && (
             <Detail key={sel.username} x={sel} routes={routes} route={shownRoute} busy={routeBusy} err={routeErr} onRoute={() => void showRoute(sel.username)}
               onHide={() => { setRoute(null); setFocus(null); }}
-              snap={shownSnap} onRecorded={setRecorded} gaps={<GapsList rows={gaps.rows} open={gaps.open} onOpen={gaps.pick} bare />} />
+              snap={shownSnap} onRecorded={setRecorded} events={events} gaps={<GapsList rows={gaps.rows} open={gaps.open} onOpen={gaps.pick} bare />} />
           )}
         </div>
       </div>
@@ -288,19 +300,13 @@ export function Live() {
   );
 }
 
-/** The shown route's line: "Recorded points" (ticked = the raw line) where snapping is possible, and what the line is. */
-function RouteSnap({ route, snap, busy, onRecorded }: { route: Route; snap: boolean; busy: boolean; onRecorded: (raw: boolean) => void }) {
-  const ui = snapControl(route, snap);
-  // The gaps' estimated lines are openrouteservice's: their legend carries its credit (Part 6).
-  const estimated = estimatedLegend(route);
-  if (!ui.toggle && !ui.note && !estimated) return null;
-  return (
-    <div className="legend" data-testid="snap-legend">
-      {ui.toggle && <label><input type="checkbox" checked={!snap} disabled={busy} onChange={(e) => onRecorded(e.target.checked)} /> Recorded points</label>}
-      {ui.note && <span>{ui.note}</span>}
-      {estimated && <span data-testid="estimated-legend">{estimated}</span>}
-    </div>
-  );
+/**
+ * The shown route's legend (Round 48: the compact row with ⓘ, docs/ui-patterns.md §18): "Recorded points" (ticked = the
+ * raw line) where snapping is possible and what the line is; the estimated lines' credit (openrouteservice's, kept visible
+ * by its terms) and their sentence behind ⓘ.
+ */
+function RouteSnap({ route, snap, busy, onRecorded, events }: { route: Route; snap: boolean; busy: boolean; onRecorded: (raw: boolean) => void; events: boolean }) {
+  return <RouteLegend route={route} snap={snap} onSnap={onRecorded} busy={busy} events={events} />;
 }
 
 /**
@@ -322,7 +328,7 @@ function DutyChip({ x }: { x: LiveDriver }) {
   return <span className={`duty ${dutyOf(x)}`} data-testid="duty-chip">{dutyLine(x)}</span>;
 }
 
-function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded, gaps }: {
+function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded, events, gaps }: {
   x: LiveDriver;
   routes: boolean;
   route: Route | null;
@@ -333,6 +339,8 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded
   /** The shown route is asked snapped to roads (§26); onRecorded(true) asks for the recorded points instead. */
   snap: boolean;
   onRecorded: (raw: boolean) => void;
+  /** The Events layer is on (Round 48). */
+  events: boolean;
   /** The shown route's Gaps list (§21). */
   gaps: ReactNode;
 }) {
@@ -431,7 +439,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded
               <b>Today: {num(route.km)} km</b> from {route.count} points{route.first ? `, ${route.first}–${route.last}` : ""}. {route.stops.length ? "Stops over 10 min: " + route.stops.map((s) => s.text).join("; ") : "No stops over 10 minutes."}
             </Notice>
           )}
-          {!err && route && <RouteSnap route={route} snap={snap} busy={busy} onRecorded={onRecorded} />}
+          {!err && route && <RouteSnap route={route} snap={snap} busy={busy} onRecorded={onRecorded} events={events} />}
           {!busy && !err && route && gaps}
         </div>
       )}

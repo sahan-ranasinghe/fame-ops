@@ -6,11 +6,15 @@
 // lighter, a focus zooms in. Phase 7 (Part 2b): gap markers with their card instead of labels
 // (§21), the plan's pins (Google's pins too: this is Google's map) and Google's road line of each
 // leg (§20), and the one control cluster with the compass (§24, §25). The map itself is the tab's
-// one Google map (googleMaps.ts), moved in and out of this page's box.
+// one Google map (googleMaps.ts), moved in and out of this page's box. Round 48 (item 3; Google Maps Timeline,
+// MarkerClusterer): the route's first and last point are pins, a stop is a dot drawn in the mapPane UNDER the polylines
+// (z-order: the line reads over the clutter; the HTML button above keeps the card), the event marks are a layer the page
+// turns on, and marks that overlap at this zoom are one numbered circle (cluster.ts, re-grouped when the map is idle).
 import { speedClass } from "@fleet/route";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { clusterItems, meanOf } from "../cluster";
 import { compassShown, fixedHeight } from "../controlsLogic";
-import { cursorEl, gapKey, gapMarkEl, placeCard, planPinEl, setCursor, setGapOpen, setPlanPin } from "../domMarks";
+import { clusterEl, cursorEl, gapKey, gapMarkEl, markAnchor, placeCard, planPinEl, setCluster, setClustered, setCursor, setGapOpen, setPlanPin, underDotEl, underLine } from "../domMarks";
 import { plainRuns } from "../DrawnMap";
 import { needsCentre, useGapOpen } from "../gapLogic";
 import { MapControls } from "../MapControls";
@@ -33,6 +37,23 @@ interface Placed {
   marker: HtmlMarker;
   el: HTMLButtonElement;
   key: string;
+  lat: number;
+  lng: number;
+  kind: string;
+  /** The dot drawn under the polylines (a stop), shown while the mark is single. */
+  under?: HtmlMarker;
+}
+
+/** A plan's pin (§20). */
+interface PlacedPin {
+  marker: HtmlMarker;
+  el: HTMLButtonElement;
+  key: string;
+}
+
+interface PlacedCluster {
+  marker: HtmlMarker;
+  el: HTMLButtonElement;
 }
 
 /** Google's road line of a plan's leg (§20): solid, in the map's ink (dark on the light map, light on the dark one), under the pins. */
@@ -102,7 +123,9 @@ export default function GoogleMap({
   const planLines = useRef<google.maps.Polyline[]>([]);
   const cursor = useRef<HtmlMarker | null>(null);
   const gapEls = useRef(new Map<string, Placed>());
-  const pinEls = useRef(new Map<string, Placed>());
+  const clusterEls = useRef(new Map<string, PlacedCluster>());
+  const pinEls = useRef(new Map<string, PlacedPin>());
+  const recluster = useRef<() => void>(() => undefined);
   const pick = useRef(onPick);
   const pinTap = useRef(onPin);
   const fitted = useRef(false);
@@ -130,6 +153,8 @@ export default function GoogleMap({
     const listeners = [
       m.addListener("heading_changed", turned),
       m.addListener("tilt_changed", turned),
+      // Round 48: the marks are grouped again once the map is idle after a zoom or a move.
+      m.addListener("idle", () => recluster.current()),
       // A tap on the map closes an open gap card.
       m.addListener("click", () => {
         if (openRef.current) setOpen(null);
@@ -148,8 +173,13 @@ export default function GoogleMap({
       planLines.current = [];
       cursor.current?.setMap(null);
       cursor.current = null;
-      gapEls.current.forEach((g) => g.marker.setMap(null));
+      gapEls.current.forEach((g) => {
+        g.marker.setMap(null);
+        g.under?.setMap(null);
+      });
       gapEls.current.clear();
+      clusterEls.current.forEach((c) => c.marker.setMap(null));
+      clusterEls.current.clear();
       pinEls.current.forEach((p) => p.marker.setMap(null));
       pinEls.current.clear();
       fittedPlan.current = "";
@@ -235,11 +265,7 @@ export default function GoogleMap({
     for (const e of route.estimated ?? []) {
       if (e.points.length > 1) lines.push(dashed(maps, m, e.points, estimatedColor(scheme), 3, 1.5, "8px"));
     }
-    const start = document.createElement("div");
-    start.style.cssText = "width:14px;height:14px;border-radius:50%;background:var(--map-pin-ink);border:4px solid " + canvas.line + ";pointer-events:none";
-    const startMark = htmlMarker(maps, start, ll(route.points[0]), "center");
-    startMark.setMap(m);
-    marks.push(startMark);
+    // Round 48: the start's own circle moved into the start pin (the page's marks: routeMarks.endPins).
     for (const s of route.stops ?? []) {
       const el = document.createElement("div");
       el.className = "mk-stop";
@@ -295,6 +321,55 @@ export default function GoogleMap({
     fitTo(m, maps, focus.map(ll), 16);
   }, [focus, maps]);
 
+  // Round 48 (item 3): the marks grouped by their pixel distance at this zoom (cluster.ts: MarkerClusterer's grid), from
+  // the map's world coordinates scaled to this zoom. A grouped mark is hidden (and its dot under the line removed) and
+  // its group drawn as one numbered circle (a tap zooms in two steps on it); the open mark is never grouped.
+  recluster.current = () => {
+    const m = map.current;
+    const proj = m?.getProjection();
+    if (!m || !proj) return;
+    const scale = Math.pow(2, m.getZoom() ?? 0);
+    const items = [...gapEls.current.entries()].map(([id, g]) => {
+      const p = proj.fromLatLngToPoint(new maps.LatLng({ lat: g.lat, lng: g.lng }));
+      return { id, x: (p?.x ?? NaN) * scale, y: (p?.y ?? NaN) * scale };
+    });
+    const { singles, clusters } = clusterItems(items, { keep: openRef.current ? [openRef.current] : [] });
+    const single = new Set(singles);
+    gapEls.current.forEach((g, id) => {
+      setClustered(g.el, !single.has(id));
+      if (g.under) g.under.setMap(single.has(id) ? m : null);
+    });
+    const seen = new Set<string>();
+    for (const c of clusters) {
+      seen.add(c.id);
+      const members = c.ids.map((id) => gapEls.current.get(id)).filter((g): g is Placed => !!g);
+      const at = meanOf(members);
+      let placed = clusterEls.current.get(c.id);
+      if (!placed) {
+        const el = clusterEl((ids) => {
+          const mm = map.current;
+          if (!mm) return;
+          const pts = ids.map((id) => gapEls.current.get(id)).filter((g): g is Placed => !!g);
+          if (!pts.length) return;
+          mm.panTo(meanOf(pts));
+          mm.setZoom(Math.min((mm.getZoom() ?? 7) + 2, 18));
+        });
+        maps.OverlayView.preventMapHitsAndGesturesFrom(el);
+        const marker = htmlMarker(maps, el, at, "center");
+        marker.setMap(m);
+        placed = { marker, el };
+        clusterEls.current.set(c.id, placed);
+      } else placed.marker.setPosition(at);
+      setCluster(placed.el, c);
+    }
+    for (const [id, c] of clusterEls.current) {
+      if (!seen.has(id)) {
+        c.marker.setMap(null);
+        clusterEls.current.delete(id);
+      }
+    }
+  };
+
   // The gaps' markers (§21): made again only when a gap changes, so an open card stays open across refreshes.
   useEffect(() => {
     const m = map.current;
@@ -306,6 +381,7 @@ export default function GoogleMap({
       const had = gapEls.current.get(g.id);
       if (had && had.key === key) continue;
       had?.marker.setMap(null);
+      had?.under?.setMap(null);
       const el = gapMarkEl(g, {
         toggle: (id) => setOpen(openRef.current === id ? null : id),
         close: () => setOpen(null),
@@ -314,21 +390,30 @@ export default function GoogleMap({
       // A tap on the marker is the marker's, not the map's (no map click, no drag from it).
       maps.OverlayView.preventMapHitsAndGesturesFrom(el);
       setGapOpen(el, openRef.current === g.id);
-      const marker = htmlMarker(maps, el, { lat: g.lat, lng: g.lng }, "center");
+      const marker = htmlMarker(maps, el, { lat: g.lat, lng: g.lng }, markAnchor(g.kind));
       marker.setMap(m);
-      gapEls.current.set(g.id, { marker, el, key });
+      // A stop's dot under the polylines (z-order); the button above draws nothing of its own.
+      let under: HtmlMarker | undefined;
+      if (underLine(g.kind)) {
+        under = htmlMarker(maps, underDotEl(), { lat: g.lat, lng: g.lng }, "center", "mapPane");
+        under.setMap(m);
+      }
+      gapEls.current.set(g.id, { marker, el, key, lat: g.lat, lng: g.lng, kind: g.kind, under });
     }
     for (const [id, g] of gapEls.current) {
       if (!seen.has(id)) {
         g.marker.setMap(null);
+        g.under?.setMap(null);
         gapEls.current.delete(id);
       }
     }
+    recluster.current();
   }, [gaps, maps, setOpen]);
 
   // The open card (a Gaps list row or a tap): shown, and centred gently when its marker sits near the edge.
   useEffect(() => {
     gapEls.current.forEach((g, id) => setGapOpen(g.el, id === open));
+    recluster.current();
     const m = map.current;
     const g = open ? gapEls.current.get(open) : undefined;
     if (!m || !g) return;

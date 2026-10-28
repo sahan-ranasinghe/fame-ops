@@ -122,4 +122,50 @@ describe("the drawn map (Phase 7, Part 2b)", () => {
     expect(cursor.querySelector("polygon")!.getAttribute("transform")).toContain("rotate(45");
     expect(cursor.textContent).toBe("11:10:00");
   });
+
+  // Round 48 (item 3): pins, dots under the line, clusters.
+  it("the route's first and last point are pins with their words; a stop is a dot drawn before the line (z-order), its button after", () => {
+    const marks: GapMarker[] = [
+      { id: "start", kind: "start", lat: 6.9, lng: 79.86, text: "Start · 08:01" },
+      { id: "stop:0", kind: "stop", lat: 7.0, lng: 79.95, text: "Stopped near Kelaniya · 10:05–10:31 · 26 min" },
+      { id: "end", kind: "end", lat: 7.3, lng: 80.2, text: "End · 12:40" },
+    ];
+    const { container } = render(<DrawnMap markers={[]} route={route} gaps={marks} onPick={() => undefined} />);
+    const pins = container.querySelectorAll('[data-testid="route-pin"]');
+    expect(pins).toHaveLength(2);
+    expect(pins[0].getAttribute("aria-label")).toBe("Start · 08:01");
+    expect(pins[1].getAttribute("aria-label")).toBe("End · 12:40");
+    const line = container.querySelector('[data-testid="drawn-route"]')!;
+    const dot = container.querySelector('[data-testid="under-dot"]')!;
+    const button = container.querySelector('[data-testid="stop-pin"]')!;
+    // The dot is drawn before the line (the line over it), the button (the hit area with the card) after it.
+    expect(dot.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(line.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(button.getAttribute("aria-label")).toBe(marks[1].text);
+    fireEvent.mouseEnter(button);
+    expect(svgText(container)).toContain("Stopped near Kelaniya");
+  });
+  it("marks that overlap are one numbered circle; the open one stays out of it; a tap on the circle zooms to its marks", () => {
+    const near: GapMarker[] = [
+      { id: "a", kind: "no_data", lat: 7.0, lng: 79.95, text: "App not running · 09:12–09:54 · 42 min" },
+      { id: "b", kind: "late", lat: 7.003, lng: 79.95, text: "Offline here · uploaded 14:20" },
+      { id: "c", kind: "no_gps", lat: 7.25, lng: 80.15, text: "Stopped · no GPS signal · 11:02–11:20 · 18 min" },
+    ];
+    const { container, rerender } = render(<DrawnMap markers={[]} route={route} gaps={near} onPick={() => undefined} />);
+    const cluster = container.querySelector('[data-testid="mark-cluster"]')!;
+    expect(cluster).toBeTruthy();
+    expect(cluster.getAttribute("aria-label")).toBe("2 marks here · zoom in to see them");
+    expect(cluster.textContent).toContain("2");
+    expect(container.querySelectorAll('[data-testid="gap-marker"]')).toHaveLength(1); // c alone
+    // The open mark is never clustered.
+    rerender(<DrawnMap markers={[]} route={route} gaps={near} openGap="a" onPick={() => undefined} />);
+    expect(container.querySelector('[data-testid="mark-cluster"]')).toBeNull();
+    expect(container.querySelectorAll('[data-testid="gap-marker"]')).toHaveLength(3);
+    rerender(<DrawnMap markers={[]} route={route} gaps={near} openGap={null} onPick={() => undefined} />);
+    expect(container.querySelector('[data-testid="mark-cluster"]')).toBeTruthy();
+    // A tap zooms to the two marks: the view fits them and they come apart.
+    fireEvent.click(container.querySelector('[data-testid="mark-cluster"]')!);
+    expect(container.querySelector('[data-testid="mark-cluster"]')).toBeNull();
+    expect(container.querySelectorAll('[data-testid="gap-marker"]').length).toBeGreaterThanOrEqual(2);
+  });
 });

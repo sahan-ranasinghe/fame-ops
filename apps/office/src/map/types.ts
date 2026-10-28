@@ -55,9 +55,13 @@ export interface MapRoute {
 /** What a gap was (Phase 7, §21): the app not running, no GPS signal, or recorded but uploaded late. */
 /** §33.6 item 1 (Round 4–7): "stop" = a stop of 10 minutes or more on a driver's day page, a pin whose card says
  * "Stopped near Kurunegala · 06:56–07:15 · 19 min" (the same marker, card, hover and tap as a gap's). */
-export type GapMarkerKind = "no_data" | "no_gps" | "late" | "stop";
+/** Round 48 (item 3; Google Maps Timeline): "start" and "end" = the route's first and last point, drawn as pins ("Start ·
+ * 08:01", "End · 16:31"); a stop is a small dot; the events (no_data, no_gps, late) are a layer, off by default (layers.ts).
+ * Marks that overlap at the map's zoom are one numbered circle until zoomed in (cluster.ts). */
+export type GapMarkerKind = "no_data" | "no_gps" | "late" | "stop" | "start" | "end";
 
-/** A gap's marker (Phase 7, §21): one small grey marker at the middle of its dashed line; its words on hover or tap. */
+/** A gap's marker (Phase 7, §21): one small grey marker at the middle of its dashed line; its words on hover or tap.
+ * Since Round 48 also a stop's dot and the route's two pins: the same card, hover and tap. */
 export interface GapMarker {
   id: string;
   kind: GapMarkerKind;

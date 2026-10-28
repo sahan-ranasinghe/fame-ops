@@ -14,17 +14,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
-import { estimatedLegend, type Route, mapRouteOf, minutesText, routeOf, snapControl } from "../data/route";
+import { type Route, mapRouteOf, minutesText, routeOf } from "../data/route";
 import type { DriverRoute, TaskDetail as TaskDetailData } from "../data/types";
 import { cap, hhmm, joinDots, num, plateOf, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { MapView } from "../map/MapView";
 import { useGoogleMap } from "../map/google/useGoogleMap";
+import { eventsOn, LAYERS_DEF } from "../map/layers";
 import { snapAllowed } from "../map/mapChoice";
 import type { RoutePoint } from "../map/types";
-import { useGaps } from "./GapsList";
+import { useRouteMarks } from "./GapsList";
 import { noGpsLine } from "./dayLogic";
+import { RouteLegend } from "./RouteInfo";
+import { useRouteLayout } from "./routeLayout";
+import { RouteMapPane } from "./RouteMapPane";
+import { FilterBar, useUrlFilters } from "../ui/FilterBar";
 import { LateReportLine } from "./LateReport";
 import { StopArrival } from "./StopArrival";
 import { StopProgress } from "./StopProgress";
@@ -622,6 +627,9 @@ function ReopenTask({ id, onDone }: { id: string; onDone: () => Promise<void> })
  * The route between Start task and Save & finish (or now), on the same map as the driver page, with GPS km next to the
  * odometer. Snapped to roads by default where the server allows it (§26), "Recorded points" shows the raw line; the gaps
  * as markers on the map (§21) and one "No GPS for …" line under it (Round 4–7: the Gaps list went, as on a driver's day).
+ * Round 48: the task page is itself the right pane of the Tasks split view, so its route is the stacked pane (the map at
+ * a fixed height), with the same compact legend, ⓘ sheet, Layers filter, pins, dots and clusters as the driver page
+ * (docs/ui-patterns.md §18).
  */
 function TaskRoute({ id, started }: { id: string; started?: string | null }) {
   const { transport } = useFleet();
@@ -644,13 +652,16 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
     return () => { alive = false; };
   }, [id, started, transport, snap]);
   const mapRoute = useMemo(() => mapRouteOf(route, null, snap), [route, snap]);
-  const gaps = useGaps(route, snap, setFocus);
+  // The Events layer (Round 48): the Filter button on the strip, the value in the URL (?layers=events), off by default.
+  const layers = useUrlFilters([LAYERS_DEF]);
+  const events = eventsOn(layers.values);
+  const marks = useRouteMarks(route, snap, setFocus, { events, latest: !route?.window?.to });
+  const layout = useRouteLayout(true);
   if (!started) return null;
   const noGps = route ? noGpsLine(route.gaps) : null;
   const line = route && !route.note
     ? joinDots([`GPS ${num(route.km)} km`, `driving ${minutesText(route.drivingMinutes)}`, `stopped ${minutesText(route.stoppedMinutes)}`, route.stopsCount ? `${route.stopsCount} stop${route.stopsCount > 1 ? "s" : ""} of 10 min or more` : "no stops of 10 min or more"])
     : route?.note;
-  const snapUi = snapControl(route, snap);
   return (
     <>
       <div className="section-t">Route</div>
@@ -658,15 +669,14 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
         {busy && !route && <Loading>Loading the route…</Loading>}
         {err && <Notice tone="bad">{err}</Notice>}
         {route && route.points.length > 0 && (
-          <MapView markers={[]} route={mapRoute} focus={focus} onPick={() => undefined} gaps={gaps.markers} openGap={gaps.open} onGap={gaps.setOpen} />
+          <RouteMapPane
+            layout={layout}
+            strip={<RouteLegend route={route} snap={snap} onSnap={(raw) => setSnap(!raw)} busy={busy} events={events} extra={<FilterBar filters={[LAYERS_DEF]} values={layers.values} onChange={layers.apply} />} />}
+            map={<MapView markers={[]} route={mapRoute} focus={focus} onPick={() => undefined} gaps={marks.marks} openGap={marks.open} onGap={marks.onMark} height={layout.mapHeight} />}
+          />
         )}
-        {line && <p className="muted small" style={{ margin: 0 }}>{line}{snapUi.note ? ` · ${snapUi.note}` : ""}</p>}
-        {snapUi.toggle && (
-          <label className="muted small" data-testid="recorded-points">
-            <input type="checkbox" checked={!snap} disabled={busy} onChange={(e) => setSnap(!e.target.checked)} /> Recorded points
-          </label>
-        )}
-        {estimatedLegend(route) && <p className="muted small" style={{ margin: 0 }} data-testid="estimated-legend">{estimatedLegend(route)}</p>}
+        {/* What the line is (snapped, raw) moved to the legend strip and the ⓘ sheet (Round 48). */}
+        {line && <p className="muted small" style={{ margin: 0 }}>{line}</p>}
         {/* Round 4–7 (approved by Sahan 22 October 2026; the driver's day page's way, §33.6): the gaps as ONE line, "No GPS for
             2 h 10 min" (driver_route's gaps added up), in place of the Gaps list; each gap keeps its marker on the map. */}
         {noGps && <p className="day-gaps" data-testid="route-gaps"><Icon name="alert" />{noGps}{route && route.gaps.length > 1 ? ` · ${route.gaps.length} gaps` : ""}</p>}
