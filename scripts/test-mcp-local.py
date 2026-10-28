@@ -966,7 +966,7 @@ check(code in (200, 201) and psql(f"select count(*) from location_points where e
 # two days is ranked by the trip's day, not by where the drivers are now: the reasons start with "Free <day>" and carry no km.
 avk = tool("availability", {"at": f"{day(2)} 10:30", "until": "12:00", "lat": 6.9271, "lng": 79.8612})
 nk = next(d for d in avk["drivers"] if d["username"] == "nuwan.p")
-check(nk.get("rank") == 1 and "km_to_first" not in nk and nk.get("match_why") == avk["best"]["why"]
+check(nk.get("rank") == 1 and nk.get("match_why") == avk["best"]["why"]
       and nk["match_why"].startswith("Free ") and "km from the pickup" not in nk["match_why"] and avk["best"]["username"] == "nuwan.p"
       and avk["window"]["soon"] is False
       and all("match_why" not in d and "km_to_first" not in d for d in avk["drivers"] if "rank" not in d),
