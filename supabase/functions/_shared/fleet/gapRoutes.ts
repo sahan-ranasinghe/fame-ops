@@ -23,6 +23,8 @@ export const GAP_NEW_PER_ROUTE = 25;
 export const GAP_CACHE_DAYS = 30;
 export const GAP_SIMPLIFY_M = 8;
 export const GAP_MAX_POINTS = 400;
+/** The counter could not be read: no call is made (fail closed). */
+export const COUNTER_NOTE = "Estimated lines paused: the call counter could not be read; the gaps are straight";
 
 export interface EstimatedLine {
   from: number;
@@ -105,7 +107,16 @@ export async function estimatedLines(
       note = `${misses.length - made} more gaps are straight: at most ${GAP_NEW_PER_ROUTE} new estimated lines a view`;
       break;
     }
-    const [mine, ors] = await Promise.all([callsToday(db, GAP_PROVIDER), callsToday(db, "ors")]);
+    // The counters first; one that cannot be read means no call (Round 48, fail closed): the gaps stay straight.
+    let mine: number;
+    let ors: number;
+    try {
+      [mine, ors] = await Promise.all([callsToday(db, GAP_PROVIDER), callsToday(db, "ors")]);
+    } catch (error) {
+      console.error(`gap line: the call counter could not be read: ${error instanceof Error ? error.message : String(error)}`);
+      note = COUNTER_NOTE;
+      break;
+    }
     if (mine >= settings.ors_gap_daily_cap || mine + ors >= ORS_DAILY_BUDGET) {
       note = "Estimated line limit reached for today: the other gaps are straight";
       break;
@@ -126,6 +137,8 @@ export async function estimatedLines(
         },
         "",
         fetchFn as typeof fetch,
+        // The new host's 404 or 410 was a request too: counted as failed before the old host is tried.
+        () => bump(db, GAP_PROVIDER, false),
       );
       const json = await res.json();
       if (!res.ok) throw new Error(`ors ${res.status}`);

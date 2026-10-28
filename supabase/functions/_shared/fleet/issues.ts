@@ -25,7 +25,9 @@ import {
   vehicleLabel,
 } from "./fleet.ts";
 import { thousands } from "./format.ts";
-import { loadSettings } from "./settings.ts";
+import { GOOGLE_FEATURES, type GoogleFeature, loadSettings, type Settings } from "./settings.ts";
+import { ORS_DAILY_BUDGET } from "./routing.ts";
+import { ODOMETER_DRIVER_DAILY_CAP } from "./odometerGate.ts";
 import { needsAttention } from "./status.ts";
 import { colomboDate, colomboDayTime, colomboTime, daysBetween, minutesSince, shortDate } from "./time.ts";
 import { duration, whenText } from "./durations.ts";
@@ -90,6 +92,7 @@ export const KIND_TEXT: Record<string, string> = {
   routing_failed: "Routing failed",
   map_fallback: "Google map failed",
   trip_not_confirmed: "Trip not confirmed",
+  usage_cap: "Usage near its cap",
 };
 
 /** A thing that should be an active issue now. */
@@ -848,8 +851,156 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         sort_key: 0,
       });
     }
+    // Round 48 (6a): every capped counter (Google, openrouteservice, Gemini) at 80 % of its day or month cap.
+    wanted.push(...usageCapIssues(await usageCounters(db, settings, today, (id) => refs.emp.get(id)?.name ?? null), today));
   }
   return wanted;
+}
+
+// ---- Round 48 (item 6a): the counters near their caps ---------------------------------------------------------------
+
+/** From this share of a cap on, one warning issue per feature and period; at the cap it is critical. */
+export const USAGE_WARN_PCT = 80;
+
+export interface UsageCounter {
+  /** The ref_key's feature part (one issue per feature, period and day). */
+  feature: string;
+  /** The words of the title: "Google routes", "openrouteservice directions", "Odometer checks (server)". */
+  text: string;
+  period: "day" | "month";
+  used: number;
+  cap: number;
+  /** What happens at the cap, for the detail ("the open package takes over"). */
+  at_cap: string;
+  employee_id?: string | null;
+}
+
+/** The ref_key of a counter's issue: a new one each day or month, so the old one resolves by itself when the period rolls over. */
+export const usageRefKey = (c: Pick<UsageCounter, "feature" | "period">, today: string): string =>
+  `usage:${c.feature}:${c.period}:${c.period === "day" ? today : today.slice(0, 7)}`;
+
+/** The issues the counters want now (pure): one per feature and period from 80 % of the cap, critical at 100 %. */
+export function usageCapIssues(counters: readonly UsageCounter[], today: string): Wanted[] {
+  const out: Wanted[] = [];
+  for (const c of counters) {
+    if (c.cap <= 0 || c.used <= 0) continue;
+    const pct = Math.floor((c.used / c.cap) * 100);
+    if (pct < USAGE_WARN_PCT) continue;
+    const period = c.period === "day" ? "today's" : "the month's";
+    out.push({
+      kind: "usage_cap",
+      ref_key: usageRefKey(c, today),
+      severity: pct >= 100 ? "critical" : "warning",
+      title: `${c.text} at ${pct}% of ${period} cap`,
+      detail: `${thousands(c.used)} of ${thousands(c.cap)} calls ${c.period === "day" ? "today" : "this month"} · at the cap ${c.at_cap} until ${
+        c.period === "day" ? "tomorrow" : "the 1st"
+      } (Settings → Fleet)`,
+      due: c.period === "day" ? "today" : "this month",
+      sort_key: pct >= 100 ? -1 : 0,
+      ...(c.employee_id ? { employee_id: c.employee_id } : {}),
+    });
+  }
+  return out;
+}
+
+const GOOGLE_WORDS: Record<GoogleFeature, string> = {
+  map_loads: "Google map loads",
+  places_autocomplete: "Google place search",
+  places_details: "Google place details",
+  routes: "Google routes",
+  roads: "Google snap to roads",
+};
+const GOOGLE_AT_CAP: Record<GoogleFeature, string> = {
+  map_loads: "the free map shows",
+  places_autocomplete: "openrouteservice's search answers",
+  places_details: "a Google place is refused",
+  routes: "the open package's road times are used",
+  roads: "the raw GPS line is drawn",
+};
+
+/**
+ * Every capped counter as it stands (google_calls this month, routing_calls and odometer_calls today). Each table is
+ * read on its own: one that cannot be read (a deploy ahead of its migration, a dropped query) is logged and skipped,
+ * never the whole sync stopped.
+ */
+export async function usageCounters(
+  db: Db,
+  settings: Pick<Settings, "google_caps" | "ors_gap_daily_cap" | "ors_autocomplete_daily_cap" | "odometer_server_daily_cap">,
+  today: string,
+  nameOf: (employeeId: string) => string | null = () => null,
+): Promise<UsageCounter[]> {
+  const out: UsageCounter[] = [];
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const [google, routing, odometer] = await Promise.all([
+    db.from("google_calls").select("feature, day, calls").gte("day", monthStart).lte("day", today),
+    db.from("routing_calls").select("provider, calls").eq("day", today),
+    db.from("odometer_calls").select("mode, scope, calls").eq("day", today),
+  ]);
+  if (google.error) console.error(`issues: google_calls skipped: ${google.error.message}`);
+  else {
+    for (const f of GOOGLE_FEATURES) {
+      const rows = (google.data ?? []).filter((r) => r.feature === f);
+      const day = rows.filter((r) => r.day === today).reduce((n, r) => n + r.calls, 0);
+      const month = rows.reduce((n, r) => n + r.calls, 0);
+      const cap = settings.google_caps[f];
+      out.push({ feature: `google_${f}`, text: GOOGLE_WORDS[f], period: "day", used: day, cap: cap.day, at_cap: GOOGLE_AT_CAP[f] });
+      out.push({ feature: `google_${f}`, text: GOOGLE_WORDS[f], period: "month", used: month, cap: cap.month, at_cap: GOOGLE_AT_CAP[f] });
+    }
+  }
+  if (routing.error) console.error(`issues: routing_calls skipped: ${routing.error.message}`);
+  else {
+    const calls = (p: string) => (routing.data ?? []).filter((r) => r.provider === p).reduce((n, r) => n + r.calls, 0);
+    out.push({
+      feature: "ors_directions",
+      text: "openrouteservice directions",
+      period: "day",
+      used: calls("ors") + calls("ors_gap"),
+      cap: ORS_DAILY_BUDGET,
+      at_cap: "the legs are estimated and the gaps stay straight",
+    });
+    out.push({
+      feature: "ors_gap",
+      text: "openrouteservice estimated lines",
+      period: "day",
+      used: calls("ors_gap"),
+      cap: settings.ors_gap_daily_cap,
+      at_cap: "the gaps stay straight",
+    });
+    out.push({
+      feature: "ors_autocomplete",
+      text: "openrouteservice map search",
+      period: "day",
+      used: calls("ors_autocomplete"),
+      cap: settings.ors_autocomplete_daily_cap,
+      at_cap: "only our own places show",
+    });
+  }
+  if (odometer.error) console.error(`issues: odometer_calls skipped: ${odometer.error.message}`);
+  else {
+    for (const r of odometer.data ?? []) {
+      if (r.mode === "server") {
+        out.push({
+          feature: "odometer_server",
+          text: "Odometer checks (server)",
+          period: "day",
+          used: r.calls,
+          cap: settings.odometer_server_daily_cap,
+          at_cap: "the checks wait",
+        });
+      } else {
+        out.push({
+          feature: `odometer_driver:${r.scope}`,
+          text: `Odometer reads by ${nameOf(r.scope) ?? "a driver"}`,
+          period: "day",
+          used: r.calls,
+          cap: ODOMETER_DRIVER_DAILY_CAP,
+          at_cap: "the phone reads no more photos",
+          employee_id: r.scope,
+        });
+      }
+    }
+  }
+  return out;
 }
 
 /** A phone's map report that the office hears of (Part 6): the same phone failed twice in a row, or two phones within an hour. Pure. */

@@ -1,6 +1,8 @@
 // The reconcile step of the issues centre (docs/dispatch-plan.md, section 8), pure.
 import { assertEquals } from "@std/assert";
-import { type ActiveRow, dueText, mapAlarms, reconcile, scopeOf, syncIsFresh, type Wanted } from "./issues.ts";
+import { type ActiveRow, dueText, mapAlarms, reconcile, scopeOf, syncIsFresh, type UsageCounter, usageCapIssues, usageCounters, type Wanted } from "./issues.ts";
+import type { Db } from "./db.ts";
+import { SETTINGS_DEFAULTS } from "./settings.ts";
 
 const row = (over: Partial<ActiveRow> & { ref_key: string }): ActiveRow => ({
   id: `id-${over.ref_key}`,
@@ -146,4 +148,99 @@ Deno.test("Part 6: the office hears of a Google map failure only on a second try
     "b:two_phones",
   ], "two phones within the hour");
   assertEquals(mapAlarms([row("a", 1, 10), row("b", 1, 70)], now), [], "two phones, but not within the hour");
+});
+
+// ---- Round 48 (item 6a): a counter near its cap opens one warning issue per feature, period and day ----
+
+const counter = (over: Partial<UsageCounter> = {}): UsageCounter => ({
+  feature: "google_routes",
+  text: "Google routes",
+  period: "day",
+  used: 177,
+  cap: 215,
+  at_cap: "the open package's road times are used",
+  ...over,
+});
+
+Deno.test("Round 48: at 82 % of today's cap one warning opens, with the numbers; under 80 % nothing; a cap of 0 never", () => {
+  const w = usageCapIssues([counter()], "2026-10-28");
+  assertEquals(w.length, 1);
+  assertEquals(w[0].kind, "usage_cap");
+  assertEquals(w[0].ref_key, "usage:google_routes:day:2026-10-28");
+  assertEquals(w[0].severity, "warning");
+  assertEquals(w[0].title, "Google routes at 82% of today's cap");
+  assertEquals(w[0].detail, "177 of 215 calls today · at the cap the open package's road times are used until tomorrow (Settings → Fleet)");
+  assertEquals(w[0].due, "today");
+  assertEquals(usageCapIssues([counter({ used: 171 })], "2026-10-28"), [], "79 %: nothing");
+  assertEquals(usageCapIssues([counter({ used: 172 })], "2026-10-28").length, 1, "80 %: the warning");
+  assertEquals(usageCapIssues([counter({ cap: 0, used: 5 })], "2026-10-28"), [], "a cap of 0 (the feature is off) is never an issue");
+  assertEquals(usageCapIssues([counter({ used: 0 })], "2026-10-28"), []);
+});
+
+Deno.test("Round 48: at 100 % it is critical; the month's cap has its own key and words", () => {
+  const [day] = usageCapIssues([counter({ used: 215 })], "2026-10-28");
+  assertEquals([day.severity, day.title, day.sort_key], ["critical", "Google routes at 100% of today's cap", -1]);
+  const [month] = usageCapIssues([counter({ period: "month", used: 4040, cap: 4750 })], "2026-10-28");
+  assertEquals([month.ref_key, month.title, month.due], ["usage:google_routes:month:2026-10", "Google routes at 85% of the month's cap", "this month"]);
+  assertEquals(month.detail, "4,040 of 4,750 calls this month · at the cap the open package's road times are used until the 1st (Settings → Fleet)");
+  const ors = usageCapIssues([counter({ feature: "ors_directions", text: "openrouteservice directions", used: 1615, cap: 1900, at_cap: "the legs are estimated" })], "2026-10-28");
+  assertEquals(ors[0].title, "openrouteservice directions at 85% of today's cap");
+});
+
+Deno.test("Round 48: a second sync updates the same issue in place as the number grows; the next day resolves it", () => {
+  const first = usageCapIssues([counter({ used: 177 })], "2026-10-28");
+  const opened = reconcile([], first);
+  assertEquals(opened.open.length, 1);
+  const active = [row({ ref_key: first[0].ref_key, kind: "usage_cap", severity: "warning", title: first[0].title, detail: first[0].detail, due: "today", sort_key: 0 })];
+  const grown = reconcile(active, usageCapIssues([counter({ used: 215 })], "2026-10-28"));
+  assertEquals([grown.open.length, grown.update.length, grown.resolve.length], [0, 1, 0]);
+  assertEquals(grown.update[0].patch.severity, "critical");
+  assertEquals(grown.update[0].patch.title, "Google routes at 100% of today's cap");
+  const nextDay = reconcile(active, usageCapIssues([counter({ used: 3 })], "2026-10-29"));
+  assertEquals([nextDay.open, nextDay.resolve.map((r) => r.ref_key)], [[], ["usage:google_routes:day:2026-10-28"]]);
+  // Two counters near their caps are two issues (one per feature and period), never one.
+  const two = usageCapIssues([counter(), counter({ period: "month", used: 4000, cap: 4750 })], "2026-10-28");
+  assertEquals(two.map((w) => w.ref_key), ["usage:google_routes:day:2026-10-28", "usage:google_routes:month:2026-10"]);
+});
+
+Deno.test("Round 48: the counters are read from the three tables; a table that cannot be read is skipped, never the sync stopped", async () => {
+  const tables: Record<string, { data: unknown[] | null; error: { message: string } | null }> = {
+    google_calls: {
+      data: [
+        { feature: "routes", day: "2026-10-28", calls: 180 },
+        { feature: "routes", day: "2026-10-27", calls: 200 },
+        { feature: "map_loads", day: "2026-10-28", calls: 1 },
+      ],
+      error: null,
+    },
+    routing_calls: { data: [{ provider: "ors", calls: 1500 }, { provider: "ors_gap", calls: 250 }, { provider: "ors_autocomplete", calls: 10 }], error: null },
+    odometer_calls: { data: [{ mode: "server", scope: "server", calls: 410 }, { mode: "driver", scope: "e1", calls: 50 }], error: null },
+  };
+  const chain = (table: string) => {
+    const q = { select: () => q, gte: () => q, lte: () => q, eq: () => q, then: (r: (v: unknown) => unknown) => Promise.resolve(tables[table]).then(r) };
+    return q;
+  };
+  const db = { from: chain } as unknown as Db;
+  const settings = { google_caps: SETTINGS_DEFAULTS.google_caps, ors_gap_daily_cap: 300, ors_autocomplete_daily_cap: 2500, odometer_server_daily_cap: 500 };
+  const all = await usageCounters(db, settings, "2026-10-28", (id) => (id === "e1" ? "Kamal Perera" : null));
+  const by = (f: string, p: string) => all.find((c) => c.feature === f && c.period === p)!;
+  assertEquals([by("google_routes", "day").used, by("google_routes", "day").cap], [180, 215]);
+  assertEquals([by("google_routes", "month").used, by("google_routes", "month").cap], [380, 4750]);
+  assertEquals([by("ors_directions", "day").used, by("ors_directions", "day").cap], [1750, 1900]);
+  assertEquals([by("ors_gap", "day").used, by("ors_autocomplete", "day").used], [250, 10]);
+  assertEquals([by("odometer_server", "day").used, by("odometer_server", "day").cap], [410, 500]);
+  assertEquals([by("odometer_driver:e1", "day").text, by("odometer_driver:e1", "day").cap, by("odometer_driver:e1", "day").employee_id], ["Odometer reads by Kamal Perera", 60, "e1"]);
+  const issues = usageCapIssues(all, "2026-10-28");
+  assertEquals(issues.map((w) => w.title).sort(), [
+    "Google routes at 83% of today's cap",
+    "Odometer checks (server) at 82% of today's cap",
+    "Odometer reads by Kamal Perera at 83% of today's cap",
+    "openrouteservice directions at 92% of today's cap",
+    "openrouteservice estimated lines at 83% of today's cap",
+  ]);
+  assertEquals(issues.find((w) => w.ref_key.startsWith("usage:odometer_driver:e1"))?.employee_id, "e1");
+  // odometer_calls missing (a deploy ahead of its migration): the other counters still come.
+  tables.odometer_calls = { data: null, error: { message: "relation does not exist" } };
+  const some = await usageCounters(db, settings, "2026-10-28");
+  assertEquals([some.some((c) => c.feature.startsWith("odometer")), some.some((c) => c.feature === "ors_directions")], [false, true]);
 });

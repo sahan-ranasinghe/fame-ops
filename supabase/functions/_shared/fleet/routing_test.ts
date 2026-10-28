@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { cacheKey, estimateLeg, minuteLimiter, orsRequest, orsResponse, providerFromEnv, rushHourFactor } from "./routing.ts";
+import { cacheKey, estimateLeg, legMinutes, minuteLimiter, orsRequest, orsResponse, providerFromEnv, rushHourFactor } from "./routing.ts";
 import { SETTINGS_DEFAULTS } from "./settings.ts";
 
 const COLOMBO = { lat: 6.9344, lng: 79.8428 };
@@ -74,4 +74,80 @@ Deno.test("Part 6: openrouteservice's answer keeps its road line (encoded polyli
   const leg = orsResponse(json);
   assertEquals([leg.km, leg.minutes, leg.line], [12.3, 25, "_p~iF~ps|U_ulLnnqC"]);
   assertEquals("line" in orsResponse({ routes: [{ summary: { distance: 1000, duration: 60 } }] }), false);
+});
+
+// ---- Round 48 (6a): the directions call's own budget, through legMinutes with the ors provider ----
+
+const ORS_ANSWER = { routes: [{ summary: { distance: 12345, duration: 1500 }, extras: { waycategory: { values: [] } } }] };
+
+/** The route cache (empty) and the day counter, which may be broken; every bump recorded. */
+function orsDb(counter: "ok" | "error" = "ok", calls = 0) {
+  const bumps: { provider: string; ok: boolean }[] = [];
+  const q = {
+    select: () => q,
+    match: () => q,
+    eq: () => q,
+    gte: () => q,
+    maybeSingle: () => Promise.resolve({ data: null, error: null }),
+    upsert: () => Promise.resolve({ error: null }),
+  };
+  const rc = {
+    select: () => rc,
+    eq: () => rc,
+    maybeSingle: () =>
+      counter === "error" ? Promise.resolve({ data: null, error: { message: "connection reset" } }) : Promise.resolve({ data: { calls }, error: null }),
+  };
+  const db = {
+    from: (table: string) => (table === "routing_calls" ? rc : q),
+    rpc: (_name: string, args: { p_provider: string; p_ok: boolean }) => {
+      bumps.push({ provider: args.p_provider, ok: args.p_ok });
+      return Promise.resolve({ error: null });
+    },
+  } as unknown as import("./db.ts").Db;
+  return { db, bumps };
+}
+
+async function withOrs<T>(run: () => Promise<T>): Promise<T> {
+  const before = [Deno.env.get("ROUTING_PROVIDER"), Deno.env.get("ORS_KEY")];
+  Deno.env.set("ROUTING_PROVIDER", "ors");
+  Deno.env.set("ORS_KEY", "KEY");
+  try {
+    return await run();
+  } finally {
+    before[0] === undefined ? Deno.env.delete("ROUTING_PROVIDER") : Deno.env.set("ROUTING_PROVIDER", before[0]);
+    before[1] === undefined ? Deno.env.delete("ORS_KEY") : Deno.env.set("ORS_KEY", before[1]);
+  }
+}
+
+Deno.test("Round 48: a day counter that cannot be read makes no openrouteservice call: the leg is the estimate, never a thrown plan", async () => {
+  await withOrs(async () => {
+    const { db, bumps } = orsDb("error");
+    let fetched = 0;
+    const leg = await legMinutes(db, COLOMBO, GALLE, at("2026-10-19", "11:00"), { avoid_expressway: false }, SETTINGS_DEFAULTS, (() => {
+      fetched += 1;
+      return Promise.resolve(Response.json(ORS_ANSWER));
+    }) as unknown as typeof fetch);
+    assertEquals([leg.source, fetched, bumps.length], ["estimate", 0, 0]);
+  });
+});
+
+Deno.test("Round 48: at the budget no call; under it one call counted ok; the new host's 404 is counted as failed before the old host", async () => {
+  await withOrs(async () => {
+    const full = orsDb("ok", 1900);
+    let fetched = 0;
+    const leg = await legMinutes(full.db, COLOMBO, GALLE, at("2026-10-19", "11:00"), { avoid_expressway: false }, SETTINGS_DEFAULTS, (() => {
+      fetched += 1;
+      return Promise.resolve(Response.json(ORS_ANSWER));
+    }) as unknown as typeof fetch);
+    assertEquals([leg.source, fetched], ["estimate", 0]);
+    const { db, bumps } = orsDb("ok", 10);
+    const urls: string[] = [];
+    const fetcher = ((url: string) => {
+      urls.push(url);
+      return Promise.resolve(url.includes("api.heigit.org") ? new Response("gone", { status: 410 }) : Response.json(ORS_ANSWER));
+    }) as unknown as typeof fetch;
+    const ok = await legMinutes(db, COLOMBO, GALLE, at("2026-10-19", "11:00"), { avoid_expressway: false }, SETTINGS_DEFAULTS, fetcher);
+    assertEquals([ok.source, ok.km, urls.length], ["ors", 12.3, 2]);
+    assertEquals(bumps, [{ provider: "ors", ok: false }, { provider: "ors", ok: true }]);
+  });
 });

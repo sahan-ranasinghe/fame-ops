@@ -113,6 +113,8 @@ export interface Settings {
   phone_map_wait_s: number;
   /** Part 6: the contact e-mail on the public privacy page (/privacy); null = the page shows the office phone instead. */
   privacy_email: string | null;
+  /** Round 48 (6a): the server's own Gemini odometer reads a day (check-odometer-photos), counted before each call; a driver's own 60 are fixed. */
+  odometer_server_daily_cap: number;
 }
 
 export type MapPackage = "google" | "open";
@@ -218,6 +220,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   },
   phone_map_wait_s: 30,
   privacy_email: null,
+  odometer_server_daily_cap: 500,
 };
 
 export type SettingKey = keyof Settings;
@@ -285,6 +288,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "The driver app's map: how many seconds a phone waits for Google's map to finish loading while it is online (1 to 120, 30 by default; 1 forces the free map for a test); after that the phone shows the free map (OpenFreeMap), the office gets an issue, and the phone tries Google again the next time the app opens",
   privacy_email:
     "The contact e-mail on the public privacy page (/privacy), shown as a mailto: link; null removes it and the page shows the office phone instead. Use Fame's shared address before the store submission",
+  odometer_server_daily_cap:
+    "The server's own odometer photo checks a day (Gemini, for readings typed with no connection; the pg_cron job check-odometer-photos): counted before each call and refused at the cap until the next Colombo day; a driver's own reads stay at 60 a day each. 0 pauses the checks",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -441,6 +446,8 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
     }
     case "phone_map_wait_s":
       return number(value, key, 1, 120, true);
+    case "odometer_server_daily_cap":
+      return number(value, key, 0, 5000, true);
     case "privacy_email": {
       if (value === null || value === "") return null;
       const email = typeof value === "string" ? value.trim().toLowerCase() : "";
