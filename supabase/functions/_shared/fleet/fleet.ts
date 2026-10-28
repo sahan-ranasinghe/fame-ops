@@ -21,6 +21,7 @@ import {
 } from "./time.ts";
 import { whenText } from "./durations.ts";
 import { unavailableWarning } from "./presence.ts";
+import { tripWindow } from "./window.ts";
 
 export type Employee = Row<"employees">;
 export type Vehicle = Row<"vehicles">;
@@ -505,8 +506,9 @@ function overlaps(aStart: string, aEnd: string | null, b: Pick<Task, "start_at" 
   const a0 = new Date(aStart).getTime();
   const a1 = aEnd ? new Date(aEnd).getTime() : a0;
   const b0 = new Date(b.start_at).getTime();
-  const bEnd = taskEnd(b);
-  const b1 = bEnd ? new Date(bEnd).getTime() : b0;
+  // Round 48: the other task with no end and no plan runs to the end of its day (Who's available's rule), not a point.
+  const bEnd = taskEnd(b) ?? dayRange(colomboDate(b.start_at)).to;
+  const b1 = new Date(bEnd).getTime();
   return a0 <= b1 && b0 <= a1;
 }
 
@@ -557,8 +559,10 @@ export interface Conflict {
 /** The warnings (words, as always) and the overlaps as structured cards. */
 export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warnings: string[]; conflicts: Conflict[] }> {
   const { driver, vehicle, startAt } = check;
-  const endBy = check.endBy ?? check.plannedEnd ?? null;
   const date = colomboDate(startAt);
+  // Round 48: the trip's window is the one rule of availability.ts tripWindow (the end time, else the plan's end, else
+  // the rest of the day), so the overlap cards agree with Who's available (a trip with no end was a single point here).
+  const endBy = tripWindow({ start: startAt, endBy: check.endBy, plannedEnd: check.plannedEnd, dayEnd: dayRange(date).to }).to;
   const warnings: string[] = [];
   const conflicts: Conflict[] = [];
 

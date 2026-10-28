@@ -6,11 +6,19 @@ import { unwrap } from "./db.ts";
 import { docChip, loadRefs, openTasksOn, type Task, taskWindow } from "./fleet.ts";
 import { overlapping, type Unavailable, unavailableText } from "./presence.ts";
 import { colomboDate, colomboTime, dayRange } from "./time.ts";
+import { busyPieces, busyText, freeText, taskEndMs, tripWindow, windowWords, type WindowEndSource } from "./window.ts";
+
+// Round 48 (item 4): the window rule and the chip words live in window.ts (fleet.ts reads them too); re-exported here
+// so every tool keeps importing them from availability.ts.
+export { busyPieces, busyText, freeText, SOON_MS, startsSoon, taskEndMs, tripDayWords, tripWindow, type TripWindow, type WindowEndSource, windowWords } from "./window.ts";
 
 export interface FreeDriver {
   name: string;
   username: string | null;
   availability: string;
+  /** Round 48: "Free Thu 29 Oct" (the trip's day). */
+  free_text: string;
+  free_day: string;
 }
 export interface FreeVehicle {
   reg_no: string;
@@ -18,19 +26,28 @@ export interface FreeVehicle {
   type: string;
   seats: number | null;
   availability: string;
+  free_text: string;
+  free_day: string;
 }
 
-/** Active drivers and vehicles (not in the garage) with no task overlapping the window, free-all-day first. */
+/**
+ * Active drivers and vehicles (not in the garage) with no task overlapping the window, free-all-day first. Round 48: the
+ * window is the trip's (tripWindow: the end time, else the plan's end, else the rest of the day).
+ */
 export async function freeAt(
   db: Db,
   startAt: string,
   endBy: string | null,
   ignoreTaskId?: string,
-): Promise<{ drivers: FreeDriver[]; vehicles: FreeVehicle[] }> {
-  const day = colomboDate(startAt);
-  const dayEnd = new Date(dayRange(day).to).getTime();
-  const from = new Date(startAt).getTime();
-  const to = endBy ? new Date(endBy).getTime() : dayEnd;
+  plannedEnd?: string | null,
+  today?: string,
+): Promise<{ drivers: FreeDriver[]; vehicles: FreeVehicle[]; window: { from: string; to: string; end_source: WindowEndSource; words: string } }> {
+  const w = tripWindow({ start: startAt, endBy, plannedEnd });
+  const day = w.day;
+  const from = new Date(w.from).getTime();
+  const to = new Date(w.to).getTime();
+  const todayIs = today ?? colomboDate(new Date().toISOString());
+  const freeWords = { free_text: freeText(day, todayIs), free_day: day };
   const [refs, open, offRes] = await Promise.all([
     loadRefs(db),
     openTasksOn(db, day),
@@ -40,7 +57,8 @@ export async function freeAt(
   ]);
   const away = new Set(unwrap(offRes, "availability").map((u) => u.employee_id));
   const tasks = open.filter((t) => t.id !== ignoreTaskId);
-  const busy = (t: Task) => new Date(t.start_at).getTime() < to && from < (t.end_by ? new Date(t.end_by).getTime() : dayEnd);
+  const busy = (t: Task) =>
+    new Date(t.start_at).getTime() < to && from < taskEndMs({ end_by: t.end_by, ends_planned: (t.plan_json as { ends_at?: string } | null)?.ends_at }, w.day_end);
   const availability = (mine: Task[]): string | null => {
     if (mine.some(busy)) return null;
     return mine.length === 0 ? "free all day" : `free at that time (other task ${taskWindow(mine[0])})`;
@@ -52,17 +70,17 @@ export async function freeAt(
     .filter((e) => e.role === "driver" && e.active && !away.has(e.id))
     .flatMap((e) => {
       const text = availability(tasks.filter((t) => t.employee_id === e.id));
-      return text ? [{ name: e.name, username: e.username, availability: text }] : [];
+      return text ? [{ name: e.name, username: e.username, availability: text, ...freeWords }] : [];
     })
     .sort(rank);
   const vehicles = refs.vehicles
     .filter((v) => v.active && !v.in_garage)
     .flatMap((v) => {
       const text = availability(tasks.filter((t) => t.vehicle_id === v.id));
-      return text ? [{ reg_no: v.reg_no, make_model: v.make_model, type: v.vehicle_type, seats: v.seats, availability: text }] : [];
+      return text ? [{ reg_no: v.reg_no, make_model: v.make_model, type: v.vehicle_type, seats: v.seats, availability: text, ...freeWords }] : [];
     })
     .sort(rank);
-  return { drivers, vehicles };
+  return { drivers, vehicles, window: { from: w.from, to: w.to, end_source: w.end_source, words: windowWords(w, todayIs) } };
 }
 
 // ---------------------------------------------------------------------------
@@ -130,16 +148,26 @@ export interface DriverAvailability {
   busy_with?: string;
   /** Part 3b (H1): "Not available · half day, back 13:00" when an entry overlaps the window: never free then. */
   not_available?: string;
+  /** Round 48: the chip for the trip's day: "Free Thu 29 Oct" (free), with the day as YYYY-MM-DD. */
+  free_text?: string;
+  free_day?: string;
+  /** Round 48: "Busy 09:00–13:00 that day · Team drop" (a task overlapping the window) with its pieces. */
+  busy_text?: string;
+  busy_from?: string;
+  busy_to?: string;
+  busy_title?: string;
 }
 
 const hhmm = (iso: string) => colomboTime(iso);
 
-/** True when the task's window and the asked window overlap (a task with no end runs to the end of its day). */
-export function taskBusy(t: Pick<TaskLite, "start_at" | "end_by">, w: AvailabilityWindow): boolean {
+/**
+ * True when the task's window and the asked window overlap (a task with no end runs to its plan's end, else to the end
+ * of its day: the one rule of tripWindow, Round 48).
+ */
+export function taskBusy(t: Pick<TaskLite, "start_at" | "end_by"> & { ends_planned?: string | null }, w: AvailabilityWindow): boolean {
   const from = new Date(w.from).getTime();
   const to = new Date(w.to ?? w.day_end).getTime();
-  const tEnd = t.end_by ? new Date(t.end_by).getTime() : new Date(w.day_end).getTime();
-  return new Date(t.start_at).getTime() < to && from < tEnd;
+  return new Date(t.start_at).getTime() < to && from < taskEndMs(t, w.day_end);
 }
 
 /** The status chip and the free flag of one driver. Pure. */
@@ -190,6 +218,9 @@ export function driverAvailability(d: DriverDay, w: AvailabilityWindow, today: s
     free: !busy && !away,
     busy_with: busy ? `${busy.title} ${taskWindow(busy)}` : away ? unavailableText(away) : undefined,
     not_available: away ? unavailableText(away) : undefined,
+    // Round 48: the trip's chip (Google Calendar's room picker: free or busy for the meeting's time, never now).
+    ...(!busy && !away ? { free_text: freeText(colomboDate(w.from), today), free_day: colomboDate(w.from) } : {}),
+    ...(busy ? { busy_text: busyText(busy), ...busyPieces(busy) } : away ? { busy_text: unavailableText(away) } : {}),
   };
 }
 
@@ -207,6 +238,7 @@ export interface MatchInput {
   free: boolean;
   /** Straight-line km from the last position to the first stop; null when either is unknown. */
   km_to_first: number | null;
+  /** The driver's tasks on the trip's day (today for a trip today). */
   tasks_today: number;
 }
 
@@ -214,32 +246,53 @@ export interface BestMatch {
   name: string;
   username: string | null;
   rank: number;
-  /** "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today" */
+  /** "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today" (a trip starting soon); "Free tomorrow 08:00–12:00 · 1 task that day" (later). */
   why: string;
+  /** Round 48: the trip's day (YYYY-MM-DD) when the ranking is for a later trip (free then, not on duty now). */
+  free_day?: string;
 }
 
 /**
- * The best match for a task: drivers on duty with no task overlapping the window, nearest to the first stop by straight
- * line from their last position (those with no position after those with one), then the fewest tasks today. Pure.
+ * The best match for a task (Google Calendar's room picker, Round 48: free for the trip's time, never "now"). A trip
+ * starting soon (`soon`, within SOON_MS; the rule before Round 48): drivers on duty now with no task overlapping the
+ * window, nearest to the first stop by straight line from their last position (those with no position after those
+ * with one), then the fewest tasks today. A trip later (or on another day): every driver free in the window, on duty now
+ * or not (a driver on a running task now but free then is free), the fewest tasks that day first, then on duty now as
+ * the tie-break, then by name; the km from where they are now say nothing about where they will be, so they are left
+ * out. Pure.
  */
-export function rankMatches(rows: MatchInput[], windowText: string, firstStopWord = "the first stop"): BestMatch[] {
-  return rows
-    .filter((r) => r.state === "on_duty" && r.free)
-    .sort((a, b) =>
+export function rankMatches(
+  rows: MatchInput[],
+  windowText: string,
+  firstStopWord = "the first stop",
+  opts: { soon?: boolean; day?: string; dayWords?: string } = {},
+): BestMatch[] {
+  const soon = opts.soon ?? true;
+  const dutyOrder: Record<DriverState, number> = { on_duty: 0, on_task: 1, off_duty: 2 };
+  const picked = soon ? rows.filter((r) => r.state === "on_duty" && r.free) : rows.filter((r) => r.free);
+  const sorted = soon
+    ? picked.sort((a, b) =>
       (a.km_to_first === null ? 1 : 0) - (b.km_to_first === null ? 1 : 0) ||
       (a.km_to_first ?? 0) - (b.km_to_first ?? 0) ||
       a.tasks_today - b.tasks_today ||
       a.name.localeCompare(b.name)
     )
-    .map((r, i) => ({
-      name: r.name,
-      username: r.username,
-      rank: i + 1,
-      why: [
+    : picked.sort((a, b) => a.tasks_today - b.tasks_today || dutyOrder[a.state] - dutyOrder[b.state] || a.name.localeCompare(b.name));
+  return sorted.map((r, i) => ({
+    name: r.name,
+    username: r.username,
+    rank: i + 1,
+    why: soon
+      ? [
         "On duty",
         `free ${windowText}`,
         r.km_to_first !== null ? `${Math.round(r.km_to_first * 10) / 10} km from ${firstStopWord}` : null,
         `${r.tasks_today} task${r.tasks_today === 1 ? "" : "s"} today`,
-      ].filter(Boolean).join(" · "),
-    }));
+      ].filter(Boolean).join(" · ")
+      : [
+        `Free ${opts.dayWords ?? "that day"} ${windowText}`,
+        `${r.tasks_today} task${r.tasks_today === 1 ? "" : "s"} that day`,
+      ].join(" · "),
+    ...(!soon && opts.day ? { free_day: opts.day } : {}),
+  }));
 }

@@ -4,7 +4,7 @@
 // page, the request form's "Assign now" and the task form read it.
 
 import { z } from "zod";
-import { type AvailabilityWindow, taskBusy } from "../availability.ts";
+import { type AvailabilityWindow, taskBusy, tripWindow } from "../availability.ts";
 import { ToolError } from "../db.ts";
 import { loadRefs, openTasksOn } from "../fleet.ts";
 import { holdersOf } from "../holders.ts";
@@ -38,7 +38,10 @@ export const availability = tool({
   readOnly: true,
   input: z.object({
     at: z.string().min(1).describe('When the vehicle is needed: "YYYY-MM-DD HH:MM" (Colombo) or an ISO time'),
-    until: z.string().optional().describe("Until when: HH:MM the same day, or an ISO time. Default: the rest of the day"),
+    until: z.string().optional().describe("Until when: HH:MM the same day, or an ISO time. Default: the plan's end (planned_end), else the rest of the day"),
+    planned_end: z.string().optional().describe(
+      "Round 48: the plan's end (HH:MM the same day, or an ISO time) when the trip has no end time: the window ends there",
+    ),
     need_type: zVehicleType.optional(),
     pax: z.number().int().min(0).max(80).optional(),
     first_stop: zText(160).optional().describe("The first stop (a saved place or site id): the best match is the nearest free driver"),
@@ -52,7 +55,13 @@ export const availability = tool({
       ? (/^([01]\d|2[0-3]):[0-5]\d$/.test(args.until.trim()) ? utcIso(day, args.until.trim()) : parseAt(args.until))
       : null;
     if (to && to <= from) throw new ToolError("until must be later than at.");
-    const w: AvailabilityWindow = { from, to, day_end: dayRange(day).to };
+    const plannedEnd = args.planned_end
+      ? (/^([01]\d|2[0-3]):[0-5]\d$/.test(args.planned_end.trim()) ? utcIso(day, args.planned_end.trim()) : parseAt(args.planned_end))
+      : null;
+    // Round 48: one rule for the window (the end asked, else the plan's end, else the rest of the day). `to` stays null
+    // for the rest of the day, as before, so the rows' words and the contract do not change.
+    const tw = tripWindow({ start: from, endBy: to, plannedEnd, dayEnd: dayRange(day).to });
+    const w: AvailabilityWindow = { from, to: tw.end_source === "day_end" ? null : tw.to, day_end: dayRange(day).to };
 
     const refs = await loadRefs(db);
     const place = args.lat !== undefined && args.lng !== undefined
@@ -60,20 +69,29 @@ export const availability = tool({
       : args.first_stop
       ? await findPlace(db, args.first_stop).then((p) => (p?.lat != null && p?.lng != null ? { lat: p.lat, lng: p.lng } : null))
       : null;
-    const { rows: ranked, best } = await driverRows(db, refs, w, now, place, undefined, { presence: true });
+    const { rows: ranked, best, window_words, soon } = await driverRows(db, refs, w, now, place, undefined, { presence: true });
 
     const dayTasks = await openTasksOn(db, day);
     const holders = await holdersOf(db, dayTasks.filter((t) => taskBusy(t, w)));
     const vehicles = await availabilityFor(db, refs, {
       neededAt: from,
-      backBy: to,
+      backBy: w.to,
       need_type: args.need_type ?? null,
       pax: args.pax ?? null,
     });
     return {
       result: {
         as_of: colomboDateTime(now),
-        window: { from: colomboDayTime(from), until: to ? colomboTime(to) : "end of the day", day },
+        window: {
+          from: colomboDayTime(from),
+          until: w.to ? colomboTime(w.to) : "end of the day",
+          day,
+          // Round 48: the window in words, where its end came from, and whether the best match is "on duty now" (soon)
+          // or "free then".
+          words: window_words,
+          end_source: tw.end_source,
+          soon,
+        },
         // Hotfix 2 (F): Call and WhatsApp per driver (the people who approve or assign tasks).
         // Part 3b (G): WhatsApp to the driver's WhatsApp number when they gave one.
         drivers: ranked.map((r) => {

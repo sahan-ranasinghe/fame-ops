@@ -868,6 +868,28 @@ check(av["window"]["until"] == "12:00" and av["window"]["day"] == day(2) and kas
       "availability: Kasun busy with the Matara trip, Nuwan off duty but free with today's counts, the vehicle groups, free first", json.dumps(av)[:600])
 r = tool("availability", {"at": "yesterday"}, expect_error=True)
 check("not a time" in r, "availability refuses a time it cannot read", r)
+# Round 48 (item 4): free / busy by the trip's date (Google Calendar's room picker). Nobody is on duty now, yet the trip is
+# in two days: Nuwan (off duty now, free then) is the best match; every chip says the trip's day, Kasun's the Matara
+# trip's window that day; the window's words and where its end came from travel with the answer.
+day2_words = (today + dt.timedelta(days=2)).strftime("%a %-d %b")
+check(av.get("best", {}).get("username") == "nuwan.p" and av["best"]["why"].startswith(f"Free {day2_words} 10:30–12:00 · ") and av["best"].get("free_day") == day(2)
+      and nuw["free_text"] == f"Free {day2_words}" and nuw["free_day"] == day(2) and "free_text" not in kas and "busy_text" not in nuw
+      and kas["busy_text"] == "Busy 06:30–18:00 that day · Trip · Matara sites" and kas["busy_from"] == "06:30" and kas["busy_to"] == "18:00"
+      and kas["busy_title"] == "Trip · Matara sites" and av["window"]["words"] == f"{day2_words} 10:30–12:00" and av["window"]["end_source"] == "end_by"
+      and av["window"]["soon"] is False,
+      "R48: a trip in two days with nobody on duty now: the driver off duty now but free then is the best match; the chips say the trip's day", json.dumps(av)[:700])
+sv2 = tool("suggest_vehicles", {"date": day(2), "time": "10:30", "back_by": "12:00"})
+check(sv2["window"]["words"] == f"{day2_words} 10:30–12:00" and sv2["window"]["end_source"] == "end_by"
+      and all(v["free_text"] == f"Free {day2_words}" and v["free_day"] == day(2) for v in sv2["groups"]["free_pool"] + sv2["groups"]["free_assigned"])
+      and all(v["busy_text"].startswith("Busy ") and " that day · " in v["busy_text"] and v["busy_from"] for v in sv2["groups"]["busy"])
+      and all(v["garage_now"] is True and v["garage_text"] == f"In the garage now · not known for {day2_words}" for v in sv2["groups"]["in_garage"])
+      and all(d["free_text"] == f"Free {day2_words}" for d in sv2["drivers"] if d["username"] == "nuwan.p")
+      and all(d["busy_text"].startswith("Busy 06:30–18:00 that day") for d in sv2["drivers"] if d["username"] == "kasun.s"),
+      "R48: suggest_vehicles for that day: free chips say the trip's day, busy ones its window that day, the garage group says NOW and not known for that day", json.dumps(sv2["groups"])[:600])
+sv3 = tool("suggest_vehicles", {"request_id": R1, "date": day(3), "time": "09:00", "back_by": "10:00"})
+check(sv3["window"]["when"].endswith("09:00") and sv3["window"]["back_by"] == "10:00"
+      and next(d for d in sv3["drivers"] if d["username"] == "kasun.s")["free_text"] == f"Free {(today + dt.timedelta(days=3)).strftime('%a %-d %b')}",
+      "R48: suggest_vehicles with a request AND the approver's edited day and times judges the groups for the edited window (Kasun free that other day)", json.dumps(sv3["window"]))
 check(tool("get_settings")["settings"]["shift_start"] == "08:00" and tool("get_settings")["settings"]["shift_days"] == [1, 2, 3, 4, 5], "get_settings: the shift nudge defaults (Monday to Friday since Part 4b)")
 tool("update_settings", {"key": "shift_start", "value": "07:30"})
 tool("update_settings", {"key": "shift_days", "value": [5, 1, 1, 3]})
@@ -929,6 +951,18 @@ check(nk.get("rank") == 1 and isinstance(nk.get("km_to_first"), (int, float)) an
       and "km from the pickup" in nk["match_why"] and avk["best"]["username"] == "nuwan.p"
       and all("match_why" not in d and "km_to_first" not in d for d in avk["drivers"] if "rank" not in d),
       "availability: the ranked row carries km_to_first and match_why (the best match's reasons); unranked rows neither", json.dumps(nk)[:400])
+# Round 48: a trip in three days; Nuwan is on duty NOW but gets a task then: busy for that trip (never "off duty" or
+# "free now"); Kasun, off duty now, is free then and the best match. The task is cancelled again at once.
+r48 = tool("create_task", {"title": "R48 busy check", "date": day(3), "start_time": "10:00", "end_time": "11:00", "driver": "nuwan.p", "vehicle": "cab4521",
+                           "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+av3 = tool("availability", {"at": f"{day(3)} 10:30", "until": "12:00"})
+nu3 = next(d for d in av3["drivers"] if d["username"] == "nuwan.p")
+ka3 = next(d for d in av3["drivers"] if d["username"] == "kasun.s")
+check(nu3["state"] == "on_duty" and nu3["free"] is False and nu3["busy_text"] == "Busy 10:00–11:00 that day · R48 busy check" and "free_text" not in nu3
+      and ka3["state"] == "off_duty" and ka3["free"] is True and av3["best"]["username"] == "kasun.s" and av3["best"]["why"].startswith("Free ")
+      and av3["drivers"][0]["username"] == "kasun.s",
+      "R48: a driver on duty now but with a task then is busy for that trip; the one off duty now but free then is the best match and listed first", json.dumps(av3)[:600])
+tool("cancel_task", {"task_id": r48["task_id"], "reason": "R48 check only"})
 
 code, row = app.patch("tasks?id=eq." + T1, {"status": "in_progress", "start_odometer_km": 84530})
 check(code == 200 and row[0]["status"] == "in_progress" and row[0]["started_at"], "driver starts the task with start odometer 84,530", str(row)[:200])
