@@ -17,7 +17,11 @@
     "badTime": "Enter the time as HH:MM, e.g. 14:30.",
     "privacy": "Privacy policy",
     "back": "Back",
-    "tryAgainLater": "please try again in a minute"
+    "tryAgainLater": "please try again in a minute",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "showPin": "Show PIN",
+    "hidePin": "Hide PIN"
   },
   "days": [
     "Sun",
@@ -864,8 +868,6 @@
       "office": "Office",
       "email": "Work email",
       "password": "Password",
-      "showPassword": "Show password",
-      "hidePassword": "Hide password",
       "forgot": "Forgot password?",
       "forgotTitle": "Forgot password?",
       "forgotBody": "Ask the fleet admin for a new sign-in link.",

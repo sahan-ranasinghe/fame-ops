@@ -459,6 +459,27 @@ playback marker and the snap-to-roads toggle are unchanged.
 | Website | `screens/RouteMapPane.tsx` (the pane), `screens/RouteInfo.tsx` (`RouteLegend`, `RouteInfo`: the row and the ⓘ sheet on `ui/Sheet.tsx`), the Layers section on `ui/FilterBar.tsx`, the marks on the three maps (`map/domMarks.ts`, `map/MapLibreMap.tsx`, `map/google/GoogleMap.tsx`, `map/DrawnMap.tsx`) | `screens/routeLayout.ts` (the split or stacked choice, the phone's height), `screens/routeInfo.ts` (the row's items, the sheet's sections, the visible credits), `screens/routeMarks.ts` (the pins, the dots, the events, what a tap zooms to), `map/layers.ts` (the Layers filter, which marks the map draws), `map/cluster.ts` (the grid) |
 | App (Office mode, /m/) | not yet: the driver app and Office mode keep their maps until their own round | — |
 
+## 19. Password and PIN fields (Round 48, 28 October 2026)
+
+**The pattern.** Material's password field with the visibility toggle (Google's sign-in, Gmail, every Android and iOS
+sign-in): the typed value is dots by default, an **eye** icon inside the field at the right shows it as plain text and
+hides it again. The eye is a real button, 48 px on a phone, 40 px on the site, reachable by keyboard, with its state in
+words for a reader: "Show password" / "Hide password", and for a 6-digit PIN "Show PIN" / "Hide PIN" (English and
+Sinhala; `aria-pressed` on the site). Everything else stays the field's own: its id and label, autoComplete, maxLength 6,
+the number pad / `inputMode="numeric"` for a PIN, the digits-only rule, the form's checks. The value is never logged and
+never in an error report (the reports carry a message, a screen and a stack only). Every password and PIN field uses the
+component; a screen never builds its own eye.
+
+| Codebase | Component | Used by |
+|---|---|---|
+| App (both sides, and /m/ through react-native-web's `type="password"`) | `components/SecretInput.tsx` (`kind` password or pin; the words `common.showPassword` … `common.hidePin`) | the driver's PIN and the Office password on Sign in, Add a driver's PIN, Reset PIN |
+| Website | `ui/SecretField.tsx` (`kind`; the CSS "Secret field" in `styles.css`; the icons `eye` / `eye_off`) | Sign in, Choose a password (both boxes), Add driver's 6-digit PIN, the driver page's New PIN |
+
+Checked by source: `npm run test:secret-fields` (apps/driver): no `secureTextEntry` / `type="password"` outside the two
+components, every field of the list above with its rules, the words in both languages, the reports without a value.
+
+---
+
 ## The reviewer's checklist (each checkpoint)
 
 For every screen changed or added: the filters are one Filter button + sheet + chips; a date range is one button + one

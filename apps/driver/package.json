@@ -142,7 +142,8 @@
     "test:snap": "tsx scripts/test-snap.ts",
     "test:breaker": "tsx scripts/test-breaker.ts",
     "test:trip-window": "tsx scripts/test-trip-window.ts",
-    "test:proposed-change": "tsx scripts/test-proposed-change.ts"
+    "test:proposed-change": "tsx scripts/test-proposed-change.ts",
+    "test:secret-fields": "tsx scripts/test-secret-fields.ts"
   },
   "private": true,
   "expo": {

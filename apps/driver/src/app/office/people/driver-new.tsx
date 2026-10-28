@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useLeaveGuard } from '@/components/navigation';
+import { SecretInput } from '@/components/SecretInput';
 import { Button, Field, Mono, Notice, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
 import { type DriverFields, type DriverProblem, emptyDriver, randomPin, validateNewDriver } from '@/office/peopleLogic';
@@ -89,7 +90,7 @@ export default function DriverNew() {
           <Txt variant="small">{t('office.people.usernameHint')}</Txt>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
-          <Field label={t('office.people.pin')} value={f.pin} onChangeText={(v) => set('pin', v.replace(/\D/g, '').slice(0, 6))} maxLength={6} keyboardType="number-pad" editable={!busy} mono style={{ fontSize: 24 }} />
+          <SecretInput kind="pin" label={t('office.people.pin')} value={f.pin} onChangeText={(v) => set('pin', v.replace(/\D/g, '').slice(0, 6))} maxLength={6} keyboardType="number-pad" editable={!busy} mono style={{ fontSize: 24 }} />
           <Button kind="outline" label={t('office.people.generate')} onPress={() => set('pin', randomPin())} disabled={busy} style={{ minHeight: 56 }} />
         </View>
         <Txt variant="small">{t('office.people.pinOnce')}</Txt>
