@@ -19,14 +19,24 @@ export const ORS_AUTOCOMPLETE_URLS = [
   "https://api.openrouteservice.org/geocode/autocomplete",
 ];
 
-/** The new host, then (on 404 or 410 only) the old one. `query` is appended to each URL. */
-export async function orsFetch(urls: string[], init: RequestInit, query = "", fetcher: typeof fetch = fetch): Promise<Response> {
+/**
+ * The new host, then (on 404 or 410 only) the old one. `query` is appended to each URL. `onFallback` is called before
+ * the old host is tried: the first request was made and counts against the quota too (Round 48: every request counted).
+ */
+export async function orsFetch(
+  urls: string[],
+  init: RequestInit,
+  query = "",
+  fetcher: typeof fetch = fetch,
+  onFallback?: () => unknown,
+): Promise<Response> {
   let last: Response | null = null;
   for (const [i, url] of urls.entries()) {
     const res = await fetcher(url + query, init);
     if ((res.status === 404 || res.status === 410) && i < urls.length - 1) {
       await res.body?.cancel().catch(() => undefined);
       last = res;
+      if (onFallback) await onFallback();
       continue;
     }
     return res;

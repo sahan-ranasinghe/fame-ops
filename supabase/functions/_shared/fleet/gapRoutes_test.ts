@@ -2,7 +2,7 @@
 // gap, the daily cap inside the directions budget, no key. A fake database and a fake fetch.
 import { assert, assertEquals } from "@std/assert";
 import type { Db } from "./db.ts";
-import { estimatedLines, GAP_NEW_PER_ROUTE, gapGeometry, gapKey, gapRequestBody } from "./gapRoutes.ts";
+import { COUNTER_NOTE, estimatedLines, type Fetcher, GAP_NEW_PER_ROUTE, gapGeometry, gapKey, gapRequestBody } from "./gapRoutes.ts";
 import { buildRoute, type Jump, jumpsOf, type LinePoint } from "./route.ts";
 
 const NOW = new Date("2026-10-16T04:30:00Z");
@@ -153,5 +153,41 @@ Deno.test("the caps: its own daily cap, the directions budget shared with the ro
     const c = counted();
     const r = await estimatedLines(db, { ors_gap_daily_cap: 300 }, [jump(0)], NOW, c.fetchFn);
     assertEquals([r.lines.length, c.n(), r.note], [0, 0, "Estimated lines need the openrouteservice key: the other gaps are straight"]);
+  });
+});
+
+Deno.test("Round 48: a counter that cannot be read makes no call (fail closed): the gaps stay straight, with the note", async () => {
+  await withKey("KEY", async () => {
+    const { db } = fakeDb();
+    const broken = {
+      ...db,
+      from: (table: string) => {
+        const q = (db as unknown as { from: (t: string) => Record<string, unknown> }).from(table);
+        if (table !== "routing_calls") return q;
+        return {
+          ...q,
+          select: () => ({
+            eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: { message: "connection reset" } }) }) }),
+          }),
+        };
+      },
+    } as unknown as Db;
+    const { fetchFn, n } = counted();
+    const r = await estimatedLines(broken, { ors_gap_daily_cap: 300 }, [jump(0)], NOW, fetchFn);
+    assertEquals([r.lines.length, n(), r.note], [0, 0, COUNTER_NOTE]);
+  });
+});
+
+Deno.test("Round 48: the new host's 404 is a request too: counted as failed, then the old host answers (one line, two counts)", async () => {
+  await withKey("KEY", async () => {
+    const { db, counts } = fakeDb();
+    const urls: string[] = [];
+    const fetchFn = (url: string) => {
+      urls.push(url);
+      return Promise.resolve(url.includes("api.heigit.org") ? new Response("gone", { status: 404 }) : Response.json(ANSWER));
+    };
+    const r = await estimatedLines(db, { ors_gap_daily_cap: 300 }, [jump(0)], NOW, fetchFn as unknown as Fetcher);
+    assertEquals([r.lines.length, urls.length, counts.ors_gap], [1, 2, 2]);
+    assert(urls[0].includes("api.heigit.org") && urls[1].includes("api.openrouteservice.org"));
   });
 });

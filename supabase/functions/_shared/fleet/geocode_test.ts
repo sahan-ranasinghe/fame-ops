@@ -1,7 +1,7 @@
 // The map search (Part 4): openrouteservice's answer, the 30-day cache, the daily cap; a fake fetch and a fake database.
 import { assert, assertEquals } from "@std/assert";
 import type { Db } from "./db.ts";
-import { BUSY_NOTE, LIMIT_NOTE, normaliseQuery, orsAutocomplete, orsPlaces } from "./geocode.ts";
+import { BUSY_NOTE, COUNTER_NOTE, LIMIT_NOTE, normaliseQuery, orsAutocomplete, orsPlaces } from "./geocode.ts";
 
 const ANSWER = {
   features: [
@@ -129,4 +129,65 @@ Deno.test("the throttle: over the calls a minute, no call and the busy note", as
   const never = (() => Promise.reject(new Error("must not be called"))) as unknown as typeof fetch;
   const r = await orsAutocomplete("Galle Face", { db, key: "KEY", cap: 2500, perMinute: 90, focus: null, now: new Date(), fetch: never });
   assertEquals(r, { places: [], note: BUSY_NOTE });
+});
+
+Deno.test("Round 48: a day counter that cannot be read makes no call (fail closed), with the note; nothing is bumped", async () => {
+  const { db, state } = fakeDb();
+  const broken = {
+    ...db,
+    from: (table: string) => {
+      const q = (db as unknown as { from: (t: string) => Record<string, unknown> }).from(table);
+      if (table !== "routing_calls") return q;
+      return {
+        ...q,
+        select: () => ({
+          eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: { message: "timeout" } }) }) }),
+        }),
+      };
+    },
+  } as unknown as Db;
+  const never = (() => Promise.reject(new Error("must not be called"))) as unknown as typeof fetch;
+  const r = await orsAutocomplete("Galle Face", {
+    db: broken,
+    key: "KEY",
+    cap: 2500,
+    perMinute: 90,
+    focus: null,
+    now: new Date(),
+    fetch: never,
+  });
+  assertEquals([r.places.length, r.note, state.bumped], [0, COUNTER_NOTE, 0]);
+});
+
+Deno.test("Round 48: a minute counter that errors or answers no number makes no call either (before: the call went out)", async () => {
+  const never = (() => Promise.reject(new Error("must not be called"))) as unknown as typeof fetch;
+  for (const answer of [{ data: null, error: { message: "permission denied" } }, { data: "many", error: null }]) {
+    const { db, state } = fakeDb();
+    const broken = {
+      ...db,
+      rpc: (name: string) =>
+        name === "bump_minute_calls" ? Promise.resolve(answer) : (db as unknown as { rpc: (n: string) => unknown }).rpc(name),
+    } as unknown as Db;
+    const r = await orsAutocomplete("Galle Face", {
+      db: broken,
+      key: "KEY",
+      cap: 2500,
+      perMinute: 90,
+      focus: null,
+      now: new Date(),
+      fetch: never,
+    });
+    assertEquals([r.places.length, r.note, state.bumped], [0, COUNTER_NOTE, 0]);
+  }
+});
+
+Deno.test("Round 48: the new host's 404 counts as a failed request before the old host answers (two bumps, one answer)", async () => {
+  const { db, state } = fakeDb();
+  const urls: string[] = [];
+  const fetcher = ((url: URL) => {
+    urls.push(String(url));
+    return Promise.resolve(String(url).includes("api.heigit.org") ? new Response("gone", { status: 404 }) : Response.json(ANSWER));
+  }) as unknown as typeof fetch;
+  const r = await orsAutocomplete("Matara", { db, key: "KEY", cap: 2500, perMinute: 90, focus: null, now: new Date(), fetch: fetcher });
+  assertEquals([r.places.length, urls.length, state.bumped], [2, 2, 2]);
 });

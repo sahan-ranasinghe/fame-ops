@@ -1386,6 +1386,8 @@ export interface FleetSettings {
   phone_map_wait_s?: number;
   /** Part 6: the public privacy page's contact e-mail; absent = the page shows the office phone. */
   privacy_email?: string | null;
+  /** Round 48 (6a): the server's own odometer photo checks a day (Gemini), counted before each call; 0 pauses them. */
+  odometer_server_daily_cap?: number;
 }
 
 export type GoogleFeature = "map_loads" | "places_autocomplete" | "places_details" | "routes" | "roads";

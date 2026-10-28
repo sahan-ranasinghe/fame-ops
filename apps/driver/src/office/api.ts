@@ -8,6 +8,7 @@
 // Signed out only on a 401 or 403: a /me that still fails is "did not answer", the session kept (office/auth.ts).
 // No phone-only code here (the token and fetch are passed in), so scripts/test-office.ts runs it with a fake server.
 
+import { LOOP_ERROR, LoopBreaker, loopReportBody, sendLoopReport } from '../lib/breaker';
 import type { FleetError, Me } from './types';
 import { normalisePermissions, permissionsForRole } from './permissions';
 
@@ -81,7 +82,8 @@ export function mapHttpError(status: number, body: ApiErrorBody | null): FleetEr
   }
   if (status === 404) return { code: 'no_such_tool', message: 'That tool does not exist.', status };
   if (status === 409) return { code: 'tool_error', message: err || 'Fame Fleet refused the request.', status };
-  if (status === 429) return { code: 'rate_limited', message: 'Too many calls in a minute. Wait a moment.', status };
+  // Round 48: the server's own sentence when it sends one ("Too many requests · try again in a minute").
+  if (status === 429) return { code: 'rate_limited', message: (body as { message?: string } | null)?.message || 'Too many requests · try again in a minute', status };
   return { code: 'upstream_error', message: err || 'Fame Fleet did not answer.', status };
 }
 
@@ -107,6 +109,10 @@ export interface OfficeApiDeps {
   /** For tests: no wait before the retry. */
   retryWaitMs?: number;
   timeoutMs?: number;
+  /** Round 48 (6c): the circuit breaker per tool (tests pass one with their own clock). */
+  breaker?: LoopBreaker;
+  /** What the one loop report says about where it happened (the screen, the app's version); none in tests. */
+  context?: () => { screen?: string; app_version?: string };
 }
 
 export interface OfficeApi {
@@ -117,6 +123,18 @@ export interface OfficeApi {
 export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
   const doFetch = deps.fetch ?? fetch;
   const base = deps.baseUrl.replace(/\/$/, '');
+  const breaker = deps.breaker ?? new LoopBreaker();
+
+  /** The breaker before a tool call: a looping screen is stopped here and reported once (never a report per refused call). */
+  async function guard(tool: string): Promise<void> {
+    const v = breaker.check(tool);
+    if (!v.open) return;
+    if (v.report) {
+      const token = await deps.token().catch(() => null);
+      if (token) sendLoopReport(base, deps.apiKey, token, loopReportBody(tool, v.calls, 'office', deps.context?.() ?? {}), doFetch);
+    }
+    throw { ...LOOP_ERROR } satisfies FleetError;
+  }
 
   async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, tool?: string): Promise<T> {
     const token = await deps.token();
@@ -169,6 +187,7 @@ export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
       return { ...m, permissions: m.permissions ? normalisePermissions(m.permissions) : permissionsForRole(m.role) };
     },
     async call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {
+      await guard(tool);
       const run = async () => (await request<{ result: T }>('POST', `/tools/${tool}`, args, tool)).result;
       try {
         return await onceMore(run, (e) => mayRetry(tool, e), deps.retryWaitMs);

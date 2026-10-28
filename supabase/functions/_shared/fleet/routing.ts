@@ -174,20 +174,34 @@ export async function bump(db: Db, provider: string, ok: boolean): Promise<void>
   await db.rpc("bump_routing_calls", { p_provider: provider, p_ok: ok }).then(() => undefined, () => undefined);
 }
 
+/** Today's directions calls (ors + ors_gap, the shared budget); null when the counter could not be read. */
+export async function orsCallsToday(db: Db): Promise<number | null> {
+  try {
+    return (await callsToday(db, "ors")) + (await callsToday(db, "ors_gap"));
+  } catch (error) {
+    console.error(`routing ors: the call counter could not be read: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
 async function callOrs(
   db: Db,
   from: PlanPoint,
   to: PlanPoint,
   opts: { avoid_expressway: boolean },
+  fetchFn: typeof fetch = fetch,
 ): Promise<LegAnswer | null> {
   const key = Deno.env.get("ORS_KEY");
   if (!key) return null;
-  // The directions quota is shared with the gaps' estimated lines (ors_gap): together never over the budget.
-  if ((await callsToday(db, "ors")) + (await callsToday(db, "ors_gap")) >= ORS_DAILY_BUDGET || !orsMinute()) return null;
+  // The directions quota is shared with the gaps' estimated lines (ors_gap): together never over the budget. A counter
+  // that cannot be read makes no call (Round 48, fail closed): the leg is estimated, the plan never thrown away.
+  const used = await orsCallsToday(db);
+  if (used === null || used >= ORS_DAILY_BUDGET || !orsMinute()) return null;
   const req = orsRequest(from, to, opts, key);
   try {
     const init = { method: "POST", headers: req.headers, body: JSON.stringify(req.body), signal: AbortSignal.timeout(TIMEOUT_MS) };
-    const res = await orsFetch(ORS_DIRECTIONS_URLS, init);
+    // A 404 or 410 from the new host is a request made all the same: counted as a failed one before the old host is tried.
+    const res = await orsFetch(ORS_DIRECTIONS_URLS, init, "", fetchFn, () => bump(db, "ors", false));
     const json = await res.json();
     if (!res.ok) throw new Error(`ors ${res.status}`);
     const leg = orsResponse(json);
@@ -211,6 +225,7 @@ export async function legMinutes(
   departAt: string,
   opts: { avoid_expressway: boolean },
   settings: Settings,
+  fetchFn: typeof fetch = fetch,
 ): Promise<LegResult> {
   const provider = providerFromEnv(Deno.env.get("ROUTING_PROVIDER"));
   const factor = rushHourFactor(from, to, departAt, settings.rush_hour);
@@ -228,7 +243,7 @@ export async function legMinutes(
     const key = cacheKey(from, to, opts.avoid_expressway, "ors");
     const hit = await cached(db, key).catch(() => null);
     if (hit) return withFactor(hit, "ors", true);
-    const fresh = await callOrs(db, from, to, opts);
+    const fresh = await callOrs(db, from, to, opts, fetchFn);
     if (fresh) {
       await store(db, key, fresh).catch(() => undefined);
       return withFactor(fresh, "ors", false);

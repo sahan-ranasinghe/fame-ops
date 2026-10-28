@@ -917,7 +917,9 @@
       "timeout": "Fame Fleet took too long to answer.",
       "writeTimeout": "Fame Fleet took too long to answer: it may have been saved. Check before trying again.",
       "uploadFailed": "The photo did not go up. Check the connection and try again.",
-      "uploadExpired": "The upload link ran out. Try again."
+      "uploadExpired": "The upload link ran out. Try again.",
+      "rateLimited": "Too many requests · try again in a minute",
+      "loop": "This screen asked the server too often · try again in a minute"
     },
     "home": {
       "morning": "Morning, {name}",
@@ -1779,7 +1781,8 @@
         "push_failed": "Push failed",
         "routing_failed": "Routing failed",
         "map_fallback": "Google map failed",
-        "trip_not_confirmed": "Trip not confirmed"
+        "trip_not_confirmed": "Trip not confirmed",
+        "usage_cap": "Usage near its cap"
       },
       "filterStatus": "Status",
       "filterSeverity": "Severity",
@@ -1836,7 +1839,8 @@
         "push_failed": "Pushes failed",
         "routing_failed": "Routing failed",
         "map_fallback": "Google map failed",
-        "trip_not_confirmed": "Trips not confirmed"
+        "trip_not_confirmed": "Trips not confirmed",
+        "usage_cap": "Usage near its cap"
       },
       "showAll": "Show all {n}",
       "allKinds": "All kinds",

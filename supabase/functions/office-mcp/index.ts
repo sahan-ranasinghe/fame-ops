@@ -7,18 +7,18 @@
 // create_office_key) runs the tools as that person with their permissions
 // and puts their name in the audit log; the shared OFFICE_MCP_KEY still works
 // as an admin key (every permission) during the switch. The request URL
-// contains the key, so it is never logged from here.
+// contains the key, so it is never logged from here. The door (who is calling,
+// 120 a minute per key, 20 refusals a minute per address before any lookup) is
+// gate.ts, run with fakes by gate_test.ts.
 
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import { type Actor, adminClient, isRole, normalisePermissions, OFFICE_ROLES, PERMISSIONS } from "../_shared/fleet/index.ts";
-import { isAuthorized, keyFromPath, sha256Hex } from "./key.ts";
+import { type Actor, adminClient, isRole, normalisePermissions, OFFICE_ROLES } from "../_shared/fleet/index.ts";
+import { defaultLimits, gateRequest } from "./gate.ts";
+import { sha256Hex } from "./key.ts";
 import { buildServer } from "./server.ts";
 
 const db = adminClient();
-
-function notFound(): Response {
-  return new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
-}
+const limits = defaultLimits();
 
 /** The person behind a personal key, or null. */
 async function personForKey(key: string): Promise<Actor | null> {
@@ -40,18 +40,12 @@ async function personForKey(key: string): Promise<Actor | null> {
 }
 
 Deno.serve(async (request) => {
-  const pathname = new URL(request.url).pathname;
-  const key = keyFromPath(pathname);
-  // A wrong key, a missing key and any other path all get the same 404.
-  let actor: Actor | null = key ? await personForKey(key) : null;
-  if (!actor && (await isAuthorized(pathname, Deno.env.get("OFFICE_MCP_KEY")))) {
-    actor = { employeeId: null, name: "Office (shared key)", role: "admin", permissions: [...PERMISSIONS], channel: "claude" };
-  }
-  if (!actor) return notFound();
+  const gated = await gateRequest(request, { personForKey, sharedKey: Deno.env.get("OFFICE_MCP_KEY"), limits });
+  if (!gated.ok) return gated.response;
 
   try {
     // A fresh MCP server per request, for this person: the function keeps no session state.
-    const mcp = createMcpHandler(() => buildServer(db, actor), {
+    const mcp = createMcpHandler(() => buildServer(db, gated.actor, { paid: limits.paid, key: gated.limitKey }), {
       onerror: (error) => console.error(`mcp: ${error.message}`),
     });
     return await mcp.fetch(request);

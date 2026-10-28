@@ -37,3 +37,21 @@ Deno.test("any other answer from the new host is the answer (a bad key, the quot
   const res = await orsFetch(ORS_DIRECTIONS_URLS, {}, "", answering({ "api.heigit.org": 404, "api.openrouteservice.org": 410 }, seen));
   assertEquals([res.status, seen.length], [410, 2]);
 });
+
+Deno.test("Round 48: onFallback runs once, before the old host is tried, and never when the new host answers", async () => {
+  const seen: string[] = [];
+  let fallbacks = 0;
+  const order: string[] = [];
+  const f = ((url: string) => {
+    order.push(new URL(url).host);
+    return answering({ "api.heigit.org": 404 }, seen)(url);
+  }) as unknown as typeof fetch;
+  await orsFetch(ORS_DIRECTIONS_URLS, {}, "", f, () => {
+    fallbacks += 1;
+    order.push("counted");
+  });
+  assertEquals([fallbacks, order], [1, ["api.heigit.org", "counted", "api.openrouteservice.org"]]);
+  let none = 0;
+  await orsFetch(ORS_DIRECTIONS_URLS, {}, "", answering({}, []), () => void (none += 1));
+  assertEquals(none, 0);
+});

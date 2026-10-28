@@ -54,8 +54,13 @@ export function errText(e: FleetError | undefined): [string, Fix] {
       return ["You have more than one connector called Fame Fleet. Keep one, then reload.", null];
     case "blocked_by_policy":
       return ["Your organisation’s settings block this Fame Fleet tool.", null];
-    case "server_unavailable":
     case "rate_limited":
+      // Round 48: the server's budget (rateLimit.ts): the one sentence, nothing to fix but wait.
+      return [cleanMsg(e.message) || "Too many requests · try again in a minute", null];
+    case "loop":
+      // Round 48: this page's own breaker (transport/breaker.ts) stopped a screen asking the same tool over and over.
+      return [cleanMsg(e.message) || "This screen asked the server too often · try again in a minute", null];
+    case "server_unavailable":
     case "upstream_error":
     case "network":
       // A write is never repeated on its own (transport/retryRule.ts): the person is told, and Try again repeats it.

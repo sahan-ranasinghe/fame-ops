@@ -8,10 +8,14 @@ export type Fix = 'retry' | 'signin' | null;
 /** The i18n key of the sentence, with the server's own words where it gave them, and the fix. */
 export function errorText(e: FleetError | undefined | null): { key: string; words?: string; fix: Fix } {
   switch (e?.code) {
+    // Round 48: the server's budget (rateLimit.ts) and this phone's own breaker (lib/breaker.ts): nothing to fix but wait.
+    case 'rate_limited':
+      return { key: 'office.error.rateLimited', fix: null };
+    case 'loop':
+      return { key: 'office.error.loop', fix: null };
     case 'network':
     case 'upstream_error':
     case 'server_unavailable':
-    case 'rate_limited':
       return e.write ? { key: 'office.error.writeDropped', fix: 'retry' } : { key: 'office.error.dropped', fix: 'retry' };
     case 'timeout':
       return e.write ? { key: 'office.error.writeTimeout', fix: 'retry' } : { key: 'office.error.timeout', fix: 'retry' };

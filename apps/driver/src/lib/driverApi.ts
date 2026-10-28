@@ -13,6 +13,7 @@
 // message, code 'refused') and any other 4xx; not permanent for no answer, 401, 408, 429 and 5xx.
 
 import { ApiError } from './api';
+import { LOOP_ERROR, LoopBreaker, loopReportBody, sendLoopReport } from './breaker';
 import type { ProfilePatch } from './profile';
 import { answerKind, errorWords, parseSearchAnswer, parseTripAnswer, type SearchAnswer, type StopRequest, type TripAnswer, type TripRequest } from './trips';
 
@@ -53,12 +54,27 @@ export interface DriverApiDeps {
   /** The signed-in session's access token, or null. */
   token: () => Promise<string | null>;
   fetch?: typeof fetch;
+  /** Round 48 (6c): the circuit breaker per route (tests pass one with their own clock). */
+  breaker?: LoopBreaker;
+  /** What the one loop report says about where it happened; none in tests. */
+  context?: () => { screen?: string; app_version?: string };
 }
 
 export function createDriverApi(deps: DriverApiDeps) {
   const doFetch = deps.fetch ?? fetch;
+  const breaker = deps.breaker ?? new LoopBreaker();
 
   async function post(path: string, body: unknown, what: string, timeoutMs: number): Promise<unknown> {
+    // A screen asking the same route over and over (a loop) is stopped here and reported once (lib/breaker.ts); the
+    // error is not permanent: the queue or the person tries again later.
+    const verdict = breaker.check(path);
+    if (verdict.open) {
+      if (verdict.report) {
+        const t = await deps.token().catch(() => null);
+        if (t) sendLoopReport(deps.baseUrl, deps.apiKey, t, loopReportBody(path, verdict.calls, 'driver', deps.context?.() ?? {}), doFetch);
+      }
+      throw new ApiError(`${what}: ${LOOP_ERROR.message}`, false, LOOP_ERROR.code);
+    }
     const token = await deps.token();
     if (!token) throw new ApiError(`${what}: not signed in`, false, undefined, 401);
     const controller = new AbortController();

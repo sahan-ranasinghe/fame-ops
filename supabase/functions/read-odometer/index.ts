@@ -10,7 +10,7 @@
 //       reading_km is set only for ok. out_of_range = under the last reading, or more than
 //       last + gps + 500 km; raw_reading_km then still says what was read.
 //   401 not signed in · 403 not an active driver, or someone else's photo
-//   429 daily limit reached · 404 photo not uploaded · 502 the model failed
+//   429 daily limit reached · 503 the counter could not be read (no call made) · 404 photo not uploaded · 502 the model failed
 //
 // Server mode (pg_cron job check-odometer-photos, for readings typed with no connection):
 //   POST with header x-server-key: <SERVER_KEY>  { "log_id": "<odometer log id>" }
@@ -21,14 +21,20 @@
 // here with Supabase Auth, and the photo path must be inside the caller's own
 // folder. Secrets: GEMINI_API_KEY (required), SERVER_KEY (required for server
 // mode), GEMINI_MODEL (optional). Every model call is written to
-// odometer_reads (service role only), which is also what the daily limit counts.
+// odometer_reads (service role only). Round 48 (item 6a): the daily limits are the counter odometer_calls, taken
+// BEFORE the model is asked (odometer_take, like google_take: per driver in driver mode, 60 a day; one counter for
+// server mode under the setting odometer_server_daily_cap, 500 by default); a cap reached answers 429 and any error
+// reading the counter or the setting answers 503 counter_unavailable without asking the model (fail closed).
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { encodeBase64 } from "@std/encoding/base64";
+import { gatedOdometerRead, ODOMETER_DRIVER_DAILY_CAP, ODOMETER_SERVER_SCOPE } from "../_shared/fleet/odometerGate.ts";
 
 const BUCKET = "driver-photos";
 const DEFAULT_MODEL = "gemini-3.5-flash-lite";
-const DAILY_LIMIT = 60;
+const DAILY_LIMIT = ODOMETER_DRIVER_DAILY_CAP;
+/** The server's own checks a day when the setting is missing. */
+const SERVER_DAILY_CAP_DEFAULT = 500;
 const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
 const MODEL_TIMEOUT_MS = 25_000;
 /** Below this confidence an "ok" answer is treated as unsure. */
@@ -36,7 +42,6 @@ const MIN_CONFIDENCE = 0.6;
 /** A reading may be this much above last reading + km driven since (by GPS) before it is out of range. */
 const ABOVE_EXPECTED_SLACK_KM = 500;
 const PATH_SHAPE = /^[0-9a-f-]{36}\/\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.jpg$/;
-const COLOMBO_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 const MODEL_STATUSES = ["ok", "no_odometer", "trip_meter_only", "blurry", "covered_or_dark", "not_dashboard", "unsure"] as const;
 type ModelStatus = (typeof MODEL_STATUSES)[number];
@@ -77,13 +82,6 @@ function env(name: string): string {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`${name} is not set`);
   return value;
-}
-
-/** 00:00 today in Colombo, as UTC ISO. */
-function startOfColomboToday(now: Date): string {
-  const wall = new Date(now.getTime() + COLOMBO_OFFSET_MS);
-  const midnight = Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate()) - COLOMBO_OFFSET_MS;
-  return new Date(midnight).toISOString();
 }
 
 function num(v: unknown): number | null {
@@ -261,11 +259,6 @@ async function driverMode(request: Request, token: string): Promise<Response> {
   const vehicleId = typeof body.vehicle_id === "string" && body.vehicle_id.length === 36 ? body.vehicle_id : null;
 
   const admin = adminClient();
-  const now = new Date();
-  const { count } = await admin.from("odometer_reads").select("id", { count: "exact", head: true })
-    .eq("employee_id", me.id).eq("mode", "driver").gte("created_at", startOfColomboToday(now));
-  if ((count ?? 0) >= DAILY_LIMIT) return json(429, { error: "daily_limit", limit: DAILY_LIMIT });
-
   const row = {
     employee_id: me.id,
     vehicle_id: vehicleId,
@@ -276,7 +269,13 @@ async function driverMode(request: Request, token: string): Promise<Response> {
   };
   const started = Date.now();
   try {
-    const v = await readPhoto(admin, path, expect);
+    // Counted before the model is asked; refused at the cap or when the counter cannot be read (fail closed).
+    const gated = await gatedOdometerRead(admin, "driver", me.id, DAILY_LIMIT, () => readPhoto(admin, path, expect));
+    if (!gated.ok) {
+      if (gated.gate.reason === "day") return json(429, { error: "daily_limit", limit: DAILY_LIMIT });
+      return json(503, { error: "counter_unavailable" });
+    }
+    const v = gated.value;
     await record(admin, row, { verdict: v, ms: Date.now() - started });
     return json(200, {
       status: v.status,
@@ -298,6 +297,17 @@ async function driverMode(request: Request, token: string): Promise<Response> {
 // ---------------------------------------------------------------------------
 // Server mode: check the photo of a log typed with no connection
 // ---------------------------------------------------------------------------
+
+/** The setting odometer_server_daily_cap (the default when unset); null when it could not be read (then no call). */
+async function serverDailyCap(admin: Admin): Promise<number | null> {
+  const { data, error } = await admin.from("fleet_settings").select("value").eq("key", "odometer_server_daily_cap").maybeSingle();
+  if (error) {
+    console.error(`read-odometer (server): the cap could not be read: ${error.message}`);
+    return null;
+  }
+  const v = (data as { value?: unknown } | null)?.value;
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : SERVER_DAILY_CAP_DEFAULT;
+}
 
 async function serverMode(request: Request): Promise<Response> {
   let body: Record<string, unknown>;
@@ -333,6 +343,9 @@ async function serverMode(request: Request): Promise<Response> {
     status = earlier.status as Status;
     value = earlier.reading_km;
   } else {
+    // The job's own cap (the setting odometer_server_daily_cap): a setting that cannot be read refuses too.
+    const cap = await serverDailyCap(admin);
+    if (cap === null) return json(503, { error: "counter_unavailable" });
     const started = Date.now();
     const row = {
       employee_id: log.employee_id,
@@ -344,7 +357,12 @@ async function serverMode(request: Request): Promise<Response> {
       log_id: log.id,
     };
     try {
-      const v = await readPhoto(admin, path, expect);
+      const gated = await gatedOdometerRead(admin, "server", ODOMETER_SERVER_SCOPE, cap, () => readPhoto(admin, path, expect));
+      if (!gated.ok) {
+        if (gated.gate.reason === "day") return json(429, { error: "daily_limit", limit: cap });
+        return json(503, { error: "counter_unavailable" });
+      }
+      const v = gated.value;
       await record(admin, row, { verdict: v, ms: Date.now() - started });
       status = v.status;
       value = v.raw;

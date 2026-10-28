@@ -489,6 +489,19 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"odometer_calls": {
+                  Row: {
+                    "calls": number,"day": string,"mode": string,"refused": number,"scope": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "calls"?: number,"day": string,"mode": string,"refused"?: number,"scope": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "calls"?: number,"day"?: string,"mode"?: string,"refused"?: number,"scope"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                  ]
                 },"google_calls": {
                   Row: {
                     "calls": number,"day": string,"feature": string,"refused": number,"updated_at": string
@@ -1823,6 +1836,9 @@ isOneToOne: false
                            },
 "google_take":
 { Args: { "p_day_cap": number,"p_feature": string,"p_month_cap": number }; Returns: Json
+                           },
+"odometer_take":
+{ Args: { "p_day_cap": number,"p_mode": string,"p_scope": string }; Returns: Json
                            },
 "import_place_rows":
 { Args: { "p_attach_m"?: number,"p_import_id"?: string,"p_preset": string,"p_rows": Json }; Returns: Json

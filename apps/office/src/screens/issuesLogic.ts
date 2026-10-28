@@ -97,6 +97,8 @@ export const KIND_TEXT: Record<string, string> = {
   vehicle_needed: "Needs another vehicle",
   // Round 4–7 (4b): a trip nobody drives with the app, closed at 09:00 the next day without its odometer.
   trip_not_confirmed: "Trip not confirmed",
+  // Round 48 (6a): a paid or capped counter (Google, openrouteservice, Gemini) at 80 % of its day or month cap.
+  usage_cap: "Usage near its cap",
 };
 
 export const kindText = (i: Pick<Issue, "kind" | "kind_text">) => i.kind_text ?? KIND_TEXT[i.kind] ?? i.kind;
@@ -183,6 +185,7 @@ export const GROUP_TEXT: Record<string, string> = {
   routing_failed: "Routing failed",
   map_fallback: "Google map failed",
   trip_not_confirmed: "Trips not confirmed",
+  usage_cap: "Usage near its cap",
 };
 export const groupText = (g: Pick<IssueGroup, "kind" | "kind_text">): string => GROUP_TEXT[g.kind] ?? g.kind_text ?? g.kind;
 
@@ -192,7 +195,7 @@ const KIND_ICON: Record<string, string> = {
   licence: "licence", allowance: "gauge", rental: "calendar", garage_booked: "maintenance", signal: "live", late_start: "clock",
   running_late: "clock", not_accepted: "person", declined: "person", request_waiting: "requests", vehicle_conflict: "car",
   app_stopped: "phone", arrival_override: "pin", completed_early: "check", vehicle_needed: "vehicles", missed_task: "calendar",
-  push_failed: "inbox", routing_failed: "route", map_fallback: "live", trip_not_confirmed: "tasks",
+  push_failed: "inbox", routing_failed: "route", map_fallback: "live", trip_not_confirmed: "tasks", usage_cap: "gauge",
 };
 export const kindIcon = (kind: string): string => KIND_ICON[kind] ?? "alert";
 

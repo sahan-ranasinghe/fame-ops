@@ -35,6 +35,8 @@ export const ORS_AUTOCOMPLETE_URL = ORS_AUTOCOMPLETE_URLS[0];
 export const BUSY_NOTE = "Map search is busy, try again in a minute";
 export const COUNTER = "ors_autocomplete";
 export const LIMIT_NOTE = "Map search limit reached for today";
+/** A counter that could not be read: no call is made (fail closed). */
+export const COUNTER_NOTE = "Map search paused: the call counter could not be read";
 
 export interface PublicPlace {
   provider: "ors" | "google";
@@ -125,11 +127,20 @@ export async function orsAutocomplete(text: string, deps: OrsDeps): Promise<Publ
     .maybeSingle();
   if (!hit.error && hit.data) return { places: (hit.data.answer as unknown as PublicPlace[]) ?? [], cached: true };
   if (!deps.key) return { places: [], note: "Map search is not set up" };
+  // Both counters fail closed (Round 48): one that cannot be read means no call, and the box says so.
   const used = await db.from("routing_calls").select("calls").eq("day", today(now)).eq("provider", COUNTER).maybeSingle();
+  if (used.error) {
+    console.error(`map search: the day counter could not be read: ${used.error.message}`);
+    return { places: [], note: COUNTER_NOTE };
+  }
   if ((used.data?.calls ?? 0) >= deps.cap) return { places: [], note: LIMIT_NOTE };
   // The throttle: this call's number in the current minute (counted whether or not it goes out).
   const minute = await db.rpc("bump_minute_calls", { p_provider: COUNTER });
-  if (!minute.error && typeof minute.data === "number" && minute.data > deps.perMinute) return { places: [], note: BUSY_NOTE };
+  if (minute.error || typeof minute.data !== "number") {
+    if (minute.error) console.error(`map search: the minute counter could not be read: ${minute.error.message}`);
+    return { places: [], note: COUNTER_NOTE };
+  }
+  if (minute.data > deps.perMinute) return { places: [], note: BUSY_NOTE };
   const params = new URLSearchParams();
   params.set("text", text.trim().slice(0, 100));
   params.set("boundary.country", "LK");
@@ -147,6 +158,8 @@ export async function orsAutocomplete(text: string, deps: OrsDeps): Promise<Publ
       { headers: { Authorization: deps.key, Accept: "application/json" }, signal: AbortSignal.timeout(6000) },
       `?${params.toString()}`,
       deps.fetch,
+      // The new host's 404 or 410 was a request too: counted as failed before the old host is tried.
+      () => db.rpc("bump_routing_calls", { p_provider: COUNTER, p_ok: false }).then(() => undefined, () => undefined),
     );
     if (res.status === 429) note = BUSY_NOTE;
     else if (!res.ok) note = "Map search did not answer";
