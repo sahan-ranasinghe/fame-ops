@@ -3245,7 +3245,7 @@ if CHANNEL == "api":
         hist = psql(f"select actor from task_assignment_events where task_id = '{t48_id}' and action = 'reassigned' order by id desc limit 1")
         check(hist == ACTOR_NAME, f"{tag}: the reassignment is in the admin's name (applied by the approver)", hist)
         # A time change waits too; the proposer withdraws it.
-        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        pv = tool("task_detail", {"task_id": t48_id})["task"]["plan_version"]
         ok, body = as_coordinator(ch, "update_task", {"task_id": t48_id, "plan_version": pv, "time": "10:30"})
         r48b = result_of(body)
         check(ok and r48b.get("waiting_for_approval") is True and time_of() == "09:00",
@@ -3254,7 +3254,7 @@ if CHANNEL == "api":
         check(ok and '"was": "waiting"' in body.replace('":"', '": "') and time_of() == "09:00",
               f"{tag}: the proposer withdraws it (cancel_request); the task is untouched", body[:200])
         # Review M1: the names sent with a gated change wait with it (never on the task before the approval).
-        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        pv = tool("task_detail", {"task_id": t48_id})["task"]["plan_version"]
         riders = lambda: psql(f"select count(*) from task_passengers where task_id = '{t48_id}' and removed_at is null")
         ok, body = as_coordinator(ch, "update_task", {"task_id": t48_id, "plan_version": pv, "time": "10:30",
                                                       "passenger_list": [{"name": f"Guest {u}", "phone": "+94 77 1234567"}]})
@@ -3265,7 +3265,7 @@ if CHANNEL == "api":
         check(d.get("decision") == "approved" and time_of() == "10:30" and riders() == "1",
               f"{tag}: approved: the time and the names go to the task together", f"{time_of()} riders={riders()}")
         # Review L1: the task moved since the proposal (the approver changed its time): the proposal is refused, not applied over it.
-        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        pv = tool("task_detail", {"task_id": t48_id})["task"]["plan_version"]
         ok, body = as_coordinator(ch, "update_task", {"task_id": t48_id, "plan_version": pv, "time": "11:00"})
         r48l = result_of(body)
         check(ok and r48l.get("waiting_for_approval") is True, f"{tag}: another time change waits", body[:160])
@@ -3275,7 +3275,7 @@ if CHANNEL == "api":
               f"{tag}: a proposal whose task moved since is refused at approval (the card's 'from' is stale)", r[:200])
         tool("decide_request", {"request_id": r48l.get("request_id", ""), "decision": "decline", "reason": "moved it myself"})
         # New stops wait too; the admin declines: nothing changes.
-        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        pv = tool("task_detail", {"task_id": t48_id})["task"]["plan_version"]
         ok, body = as_coordinator(ch, "update_task_stops", {"task_id": t48_id, "plan_version": pv,
                                                             "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]})
         r48c = result_of(body)
@@ -3287,7 +3287,7 @@ if CHANNEL == "api":
         check(d["request"]["status"] == "declined" and stops_after == stops_before and "Kandy" not in stops_after,
               f"{tag}: the fleet admin declines it: the task's stops are as they were", f"{stops_before} -> {stops_after}")
         # The words alone go straight to the task (title, passengers, contact, notes).
-        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        pv = tool("task_detail", {"task_id": t48_id})["task"]["plan_version"]
         ok, body = as_coordinator(ch, "update_task", {"task_id": t48_id, "plan_version": pv, "title": f"Round 48 task {u} renamed"})
         check(ok and "waiting_for_approval" not in body and psql(f"select title from tasks where id = '{t48_id}'") == f"Round 48 task {u} renamed",
               f"{tag}: a title change alone goes straight to the task", body[:200])
