@@ -1012,6 +1012,112 @@ both channels (the reassignment waits, the task keeps its driver and gets no pus
 it; approve → only then the driver changes, in the admin's name; a time change withdrawn; a stop change declined leaves the
 stops; a title alone goes straight; the setting off = direct); the site's `changeDecide.test.tsx` and `giveDriver.test.tsx`.
 
+### 34.2 Items 2 and 3: the driver's day and route pages (site, Office mode, /m/)
+
+Patterns: Airbnb's split view / Google Maps Timeline (the layout), Apple Maps' and Google Maps' info sheet (the ⓘ), Google
+Maps' Layers inside the one Filter sheet (ui-patterns §1), Google Maps' marker clustering (a grid by zoom, no new native
+module: `apps/office/src/map/cluster.ts`, `apps/driver/src/lib/cluster.ts`). The standard is `docs/ui-patterns.md` §18.
+
+- **Site** (`DriverPage`, the task page's route, Live's shown route): a desktop shows the map in a sticky pane that never
+  scrolls with the page, the details in their own column, the playback bar overlaid on the map's bottom edge (34 px above
+  Google's logo and the free map's attribution); under 768 px the map is a fixed-height pane (45 % of the viewport, min
+  300 px) with the playback under it and the content below. The wheel over the map zooms it (MapLibre `cooperativeGestures`
+  off, Google `gestureHandling: greedy`); the page never zooms it. The explanatory sentences ("Dashed slate…", "Km from GPS,
+  drift filtered…", "Line: N of M points") and the full credits live behind the ⓘ "About this map" sheet (the existing
+  `ui/Sheet`); the legend is one compact row; the licence credits stay on the map (Google's logo and terms; "© OpenStreetMap
+  contributors · OpenFreeMap"; "Route © openrouteservice.org by HeiGIT · map data © OpenStreetMap contributors" in the row
+  whenever an estimated line is drawn). Start and end are pins, stops are dots under the line, the event markers (no GPS, app
+  not running, stops) are off until Layers → Events (`?layers=events`); a timeline or gap row still opens its mark with the
+  layer off; overlapping marks cluster into one numbered circle (tap = zoom in); the route line draws above the dots (a
+  layer before `route-line` on MapLibre, `mapPane` on Google, the SVG order on the drawn map); pins, event marks and
+  clusters stay above it so they can be tapped. The mockup picture spec gains `7-driver-day` (1440 × 900 and 412 × 915 of the
+  same page with a 49-point route).
+- **Office mode and /m/** (`components/office/DayRoute.tsx` owns the layout; the driver's day, a task's driven route, Live;
+  the task pages' maps at the same height rule): the map at `mapHeight` (45 % of the window, min 300 px) outside any
+  scroll, the control row [ⓘ · Filter(Layers)], the snap note, the playback bar, then the content in its own scroll (pull
+  to refresh). The ⓘ sheet (`office/routeInfo.ts`) holds the legend drawn as on the map, the notes and the full credits; the
+  credit line stays on every map. Start/end pins, stop dots (the time on tap or Layers → Stop times), gap markers via Layers
+  → Gaps and signal loss; the summary's gaps line opens a Gaps sheet whose row highlights the spot; clusters by zoom on
+  both engines (`lib/cluster.ts`). The driver's running task keeps the approved 50 % (mockup 6); TaskPreview and Review's
+  map card are not route/playback screens and stay.
+- **Not achievable, said plainly:** "the route line above the markers" on the native SDKs (Google Maps Android draws every
+  marker above every polyline; MapLibre RN markers are native views) and for HTML markers on the web maps. The stop dots are
+  12 px with a ring so the 5 px line reads through; the playback marker stays on top.
+- **For Sahan:** the Filter/ⓘ row sits between the map and the playback bar in the app (Live's order); the summary card's
+  "No GPS for …" line now repeats the gaps sheet (a proposed removal, kept); the site's "Line: N of M points" sentence and
+  the legend's "Start / end" item (proposed removals, kept).
+
+### 34.3 Item 4: free or busy by the trip's date (Google Calendar's room and attendee picker)
+
+One window rule on the server (`_shared/fleet/window.ts` `tripWindow`: start → end_by, else the plan's end, else the rest of
+the trip's day; the same for the other tasks, so Who's available and the assign warnings agree), used by `availability`,
+`suggest_vehicles`, the needs-a-driver best match, `task_detail.suggestions`, `assignCheck`, `ask_drivers` and
+`drivers_board`. The best match: a trip starting within 2 hours keeps the old rule (on duty now, nearest the first stop);
+a later trip ranks everyone free THEN (off duty now or on a running task now included), fewest tasks that day, no km. The
+words: "Free Thu 29 Oct" / "Free today" / "Free tomorrow", "Busy 09:00–13:00 that day · Title" (with the pieces for the
+app's Sinhala), the window as "tomorrow 09:00–13:00"; "In the garage now · not known for Thu 29 Oct" (the garage is the one
+thing only known now). Additive tool fields: `availability` (`planned_end` in; `window.words / end_source / soon`, per row
+`free_text / free_day / busy_text / busy_from / busy_to / busy_title`, `best.free_day / soon`), `suggest_vehicles`
+(`planned_end`, and `date / time / back_by` honoured with `request_id`; the chips; `garage_now / garage_text`),
+`drivers_board` (`trip_date / trip_from / trip_to`; `trip_free` and the chips), the needs-driver rows (`window_words`),
+`task_detail.suggestions` (the chips and `window`). The clients send the plan's end, show the trip's chip on every list
+(Who's available, Who can take it, Give it a driver, Approve, the vehicle select on New task and Change, Ask drivers, the Ask
+sheet) and keep every "now" line (status, last seen, next task, "Free now") beside it. Left as a default on purpose:
+`defaultVehicleFor` / `pickVehicle` (the held or regular vehicle; `vehicle_on_the_day` covers later days). The audit table
+(path | window before | after | words | surfaces | test) is in Checkpoint 48.
+
+### 34.4 Item 5: snap to roads in Office mode and /m/, display only
+
+Provenance: `route_matched` stored each driving leg's road geometry for `google_roads` (Google's Roads API answers) and
+`osrm`, written only by `snapLegs` from the website's `driver_route snap`; Google rows went 30 days after `matched_at`
+(`prune_google_content`), but a growing leg's re-snap reset `matched_at`, and the retention rule removed them with the
+points (183 days). **Sahan's decision applied:** Google's answers are never written: `snapLegs` keeps them in the isolate's
+memory (`googleRoadsStore`, 30 minutes from the last match, 200 legs); migration `20261028110000` deletes the stored
+google_roads rows and the provider check allows `osrm` only; `retention.ts` and the app's Data retention say so. The app and
+/m/ ask `snap` on Google's map (or under the open package, like the site's `snapAllowed`: OSRM users keep snapping; "Google
+engine only" is a one-line change in `office/snapLogic.ts`), draw `route_snapped` labelled "Snapped to roads", else the raw
+GPS line + the dashed estimates labelled "GPS line"; a chip in the map's control cluster; km from the odometer. The cost:
+about one Roads call per 100 thinned points per driving leg per cold view (a new isolate or a leg not asked in 30 minutes);
+every call counted before it is made, fail closed, caps 215 a day / 4,750 a month; a day of 8 legs and 80 km ≈ 16 calls
+cold; 10 drivers viewed cold once a day ≈ 160, near the day cap. **Sahan can keep this or go back to the 30-day cache
+Google's Service Specific Terms allow** (revert the store choice in `matching.ts` and the constraint).
+
+### 34.5 Item 6: cost and security controls
+
+- **6a, every paid call fails closed and is counted first.** Unchanged (already so): the Maps JS load, Places Autocomplete,
+  Place Details, Routes, Roads. Fixed: the Gemini odometer read in driver mode (counted BEFORE the model call by the new
+  `odometer_take('driver', employee, 60)` under an advisory lock; a counter error = 503, no call; before it counted after
+  the call, failed open and raced past 60), the Gemini server mode (no cap → `odometer_server_daily_cap`, default 500, max
+  5,000), openrouteservice's directions and gap lines (a counter read error used to throw the whole plan; now no call and
+  the estimate; the 404/410 host fallback's first request counted), the map search's autocomplete (failed open on both
+  counters; now closed). Uncapped by design: OSRM (self-hosted, free) and the Google short-link resolver (free, 5 hops). New
+  issue kind `usage_cap`: one warning per feature per day or month at 80 % of its cap ("Google routes at 82% of today's
+  cap"), critical at 100 %, updated in place, resolved when the period rolls over; under the issues permission. Migration
+  `20261028120000` (`odometer_calls`, `odometer_take`). Still "check before, bump after" (not atomic): the ORS directions
+  and gap counters (a follow-up: an atomic `routing_take`).
+- **6b, rate limits** (`_shared/fleet/rateLimit.ts`, token buckets, bounded, one body `429 { code: "rate_limited", message:
+  "Too many requests · try again in a minute" }`): office-api 120 a minute per person as before + 30 a minute per person on
+  the paid tools (search_places, google_place, register_map_load, plan_task, create_task, update_task_stops, update_task,
+  reassign_task, create_request, update_request, decide_request, redecide_request, book_vehicle, driver_route; not
+  task_detail, whose one Google call is cached 15 minutes) + 20 refusals a minute per address on the unauthenticated /
+  401 / 403 / 404 path BEFORE Auth; driver-api 60 a minute per driver + 30 on the paid routes + the same per-address bucket;
+  office-mcp 120 a minute per key (the shared key, or a personal key by a hash prefix, never the key) + 30 on the paid tools
+  as a tool error + 20 wrong or missing keys a minute per address before the `office_keys` lookup. Tests for every wrapper.
+- **6c, the clients' circuit breaker** (site `transport/breaker.ts`, app `lib/breaker.ts`): the same tool called more than
+  30 times in a minute (a page polls at most twice a minute; a loop reaches 30 in seconds; 30 = the server's paid budget, so
+  the client stops first) stops for 60 s with `{ code: "loop", message: "This screen asked the server too often · try again
+  in a minute" }` and sends ONE app-error report per tool per 10 minutes (Sentry's throttling) through POST /errors; the
+  artifact's connector transport stops the loop but has no /errors to report to. Tested with a forced effect loop.
+- **6d, the security pass:** a fresh reviewer's report and the fixes are in Checkpoint 48.
+
+### 34.6 Also this round
+- The Ask drivers sheet's initial state read the trip-window rows before they were declared (a crash on open under
+  Hermes; jest's Babel turned it into "undefined.filter"): caught by five component suites on the merged tree, fixed.
+- `task_detail` is not in the paid-tools bucket (above); the Ask drivers page tests wait the 400 ms the board query now
+  debounces.
+- pgTAP on the merged tree: a proposed change always carries its proposed driver (`vehicle_requests_proposed_check`),
+  `odometer_calls` is one more table (69) and service_role may not delete from it.
+
 ## 33. Round 4–7 plan (Sahan, 22 October 2026, branch `phase9-r47` from main `e6057b2`, worktree `~/projects/fame-ops-r47`)
 
 Rounds 4, 5, 6 and 7 are one round: build everything, then test once, review once, deploy once. Each feature has its own

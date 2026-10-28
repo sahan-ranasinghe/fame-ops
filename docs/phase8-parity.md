@@ -810,3 +810,15 @@ The others:
 - **The holder's conflict card (both):** the requester's own Call / WhatsApp is not drawn again when the holder line shows
   that number.
 - **Kept:** the Pre-trip tag when the vehicle_check switch is off.
+
+## Round 48, item 1: a proposed change (28 October 2026)
+
+| Site | Office mode / /m/ | Tool |
+|---|---|---|
+| Requests (the queue): "Change · <task>" row with "<summary> · proposed by <name>" | Approve tab row, Home's request lines | list_requests kind change |
+| /requests/:id/decide for a change (ChangeDecide): the task, each line from → to, Approve the change / Decline… with a reason, Open the task | the request page's change screen (ChangeDecide: one sticky bar; Decline through the ReasonSheet) | decide_request |
+| /requests/:id: the change explained, Open the task, Withdraw (the proposer, while it waits) | the same screen for the proposer: "The fleet admin will approve or decline this change…", Withdraw the change | cancel_request |
+| The task page, the board's cards, the needs-a-driver rows: "Change waiting for approval · <name> · …" → Decide it / Open the request | the task page's card, the Tasks tab's cards and rows, Home's needs-a-driver rows | task_detail / task_board pending_change |
+| Change, Give it a driver, Stops: "Waiting for the fleet admin's OK · the task is unchanged" and back | Give it a driver, Change time, the stops editor: the same snackbar and back | update_task / reassign_task / update_task_stops |
+| My trips: "Change · <task>" | My trips | my_trips |
+
