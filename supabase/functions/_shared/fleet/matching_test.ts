@@ -1,14 +1,21 @@
 // Map matching: the pieces sent to a provider, the two providers' answers with a
 // recorded sample and a mocked response, the call counting, and the fallback.
 import { assert, assertEquals, assertRejects } from "@std/assert";
+import type { Db } from "./db.ts";
 import {
   chunkForMatching,
+  GOOGLE_MEMORY_MAX,
+  GOOGLE_MEMORY_TTL_MS,
   googleRoadsRequest,
   googleRoadsResponse,
+  googleRoadsStore,
   type MatchInput,
   matchPoints,
+  MemoryMatchStore,
   osrmRequest,
   osrmResponse,
+  snapLegs,
+  type StoredLeg,
   tailToSend,
   thinBySpacing,
 } from "./matching.ts";
@@ -161,4 +168,240 @@ Deno.test("a growing leg goes in whole chunks only: 100 thinned points each, or 
   assertEquals(tailToSend(run(199), true)?.points.length, 199, "199: two whole chunks sharing a point");
   assertEquals(tailToSend(run(20), false)?.points.length, 20, "the leg ended: the rest goes");
   assertEquals(tailToSend(run(1), false), null, "one point is nothing to send");
+});
+
+// ---- Round 48 item 5 (28 October 2026, Sahan's decision): Google's road-snapped lines are never stored -----------------
+
+/** The database as snapLegs sees it: what it reads (route_matched, OSRM rows only), writes, counts and takes. */
+function fakeDb(osrmRows: Record<string, unknown>[] = []) {
+  const upserts: Record<string, unknown>[] = [];
+  const updates: Record<string, unknown>[] = [];
+  const takes: string[] = [];
+  const bumps: string[] = [];
+  const done = (data: unknown) => ({ data, error: null });
+  const db = {
+    from: (table: string) => {
+      assertEquals(table, "route_matched");
+      const q = {
+        select: () => q,
+        eq: () => q,
+        then: (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => Promise.resolve(done(osrmRows)).then(ok, bad),
+        upsert: (row: Record<string, unknown>) => {
+          upserts.push(row);
+          return Promise.resolve(done(null));
+        },
+        update: (row: Record<string, unknown>) => {
+          updates.push(row);
+          const u = {
+            eq: () => u,
+            then: (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => Promise.resolve(done(null)).then(ok, bad),
+          };
+          return u;
+        },
+      };
+      return q;
+    },
+    rpc: (name: string, args: Record<string, unknown>) => {
+      if (name === "google_take") {
+        takes.push(String(args.p_feature));
+        return Promise.resolve(
+          done({ allowed: true, reason: null, day: takes.length, month: takes.length, day_cap: 215, month_cap: 4750 }),
+        );
+      }
+      assertEquals(name, "bump_routing_calls");
+      bumps.push(String(args.p_provider));
+      return Promise.resolve(done(null));
+    },
+  } as unknown as Db;
+  return { db, upserts, updates, takes, bumps };
+}
+
+const CAPS = {
+  map_loads: { day: 430, month: 9500 },
+  places_autocomplete: { day: 430, month: 9500 },
+  places_details: { day: 430, month: 9500 },
+  routes: { day: 215, month: 4750 },
+  roads: { day: 215, month: 4750 },
+};
+
+/** A Google server that snaps every point onto itself, counting its calls. */
+function googleEcho() {
+  const state = { calls: 0 };
+  const fetchFn = (url: string) => {
+    state.calls += 1;
+    const path = decodeURIComponent(new URL(url).searchParams.get("path") ?? "");
+    const snappedPoints = path.split("|").map((pair, i) => {
+      const [lat, lng] = pair.split(",").map(Number);
+      return { location: { latitude: lat, longitude: lng }, originalIndex: i };
+    });
+    return Promise.resolve(
+      new Response(JSON.stringify({ snappedPoints }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+  };
+  return { state, fetchFn };
+}
+
+const withEnv = async (keys: Record<string, string>, run: () => Promise<void>) => {
+  const before = Object.fromEntries(Object.keys(keys).map((k) => [k, Deno.env.get(k)]));
+  for (const [k, v] of Object.entries(keys)) Deno.env.set(k, v);
+  try {
+    await run();
+  } finally {
+    for (const [k, v] of Object.entries(before)) v === undefined ? Deno.env.delete(k) : Deno.env.set(k, v);
+  }
+};
+
+Deno.test("Round 48: a Google leg is matched, kept in memory and never written; asked again within 30 minutes it makes no Roads call and takes no count; after 30 minutes it is asked again", async () => {
+  await withEnv({ GOOGLE_SERVER_KEY: "K" }, async () => {
+    googleRoadsStore.clear();
+    const { db, upserts, updates, takes, bumps } = fakeDb();
+    const google = googleEcho();
+    const now = new Date("2026-10-28T04:00:00Z");
+    const leg = { from: SAMPLE[0].at, to: SAMPLE[4].at, points: SAMPLE };
+    const first = await snapLegs(db, "e1", "2026-10-28", "google_roads", [leg], now, google.fetchFn, CAPS);
+    assertEquals(first.status, "ok");
+    assertEquals(first.legs[0].source, "matched");
+    assert(first.legs[0].points.length >= 2);
+    assertEquals(google.state.calls, 1, "one Roads call");
+    assertEquals(takes, ["roads"], "counted before it was made");
+    assertEquals(bumps, ["google_roads"]);
+    assertEquals(upserts, [], "nothing written to route_matched");
+    assertEquals(updates, []);
+    assertEquals(googleRoadsStore.size(), 1, "kept in memory");
+    // The page's 60-second refresh: the same leg from memory.
+    const again = await snapLegs(db, "e1", "2026-10-28", "google_roads", [leg], new Date(now.getTime() + 60000), google.fetchFn, CAPS);
+    assertEquals(again.legs[0].source, "matched");
+    assertEquals(again.legs[0].points, first.legs[0].points);
+    assertEquals(google.state.calls, 1, "no second Roads call");
+    assertEquals(takes.length, 1, "no second count");
+    assertEquals(upserts, []);
+    // A window inside the leg (a task's route): clipped from memory, never paid twice.
+    const inside = await snapLegs(
+      db,
+      "e1",
+      "2026-10-28",
+      "google_roads",
+      [{ from: SAMPLE[1].at, to: SAMPLE[4].at, points: SAMPLE.slice(1) }],
+      new Date(now.getTime() + 90000),
+      google.fetchFn,
+      CAPS,
+    );
+    assertEquals(inside.legs[0].source, "matched");
+    assertEquals(google.state.calls, 1);
+    // Another driver's day is its own entry.
+    await snapLegs(db, "e2", "2026-10-28", "google_roads", [leg], now, google.fetchFn, CAPS);
+    assertEquals(google.state.calls, 2);
+    assertEquals(googleRoadsStore.size(), 2);
+    // 31 minutes after the last match the leg is forgotten: the next view asks Google again (the cost of not storing).
+    const later = await snapLegs(
+      db,
+      "e1",
+      "2026-10-28",
+      "google_roads",
+      [leg],
+      new Date(now.getTime() + GOOGLE_MEMORY_TTL_MS + 60000),
+      google.fetchFn,
+      CAPS,
+    );
+    assertEquals(later.legs[0].source, "matched");
+    assertEquals(google.state.calls, 3);
+    assertEquals(takes.length, 3);
+    assertEquals(upserts, [], "still nothing in the database");
+    googleRoadsStore.clear();
+  });
+});
+
+Deno.test("Round 48: a failed Google match is remembered 2 minutes in memory (the debounce), not in the database", async () => {
+  await withEnv({ GOOGLE_SERVER_KEY: "K" }, async () => {
+    googleRoadsStore.clear();
+    const { db, upserts, takes } = fakeDb();
+    let calls = 0;
+    const broken = () => {
+      calls += 1;
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "quota" }), { status: 403, headers: { "Content-Type": "application/json" } }),
+      );
+    };
+    const now = new Date("2026-10-28T04:00:00Z");
+    const leg = { from: SAMPLE[0].at, to: SAMPLE[4].at, points: SAMPLE };
+    const first = await snapLegs(db, "e1", "2026-10-28", "google_roads", [leg], now, broken, CAPS);
+    assertEquals(first.status, "failed");
+    assertEquals(first.legs[0].source, "raw");
+    assertEquals(calls, 1);
+    const soon = await snapLegs(db, "e1", "2026-10-28", "google_roads", [leg], new Date(now.getTime() + 60000), broken, CAPS);
+    assertEquals(soon.legs[0].source, "raw");
+    assertEquals(calls, 1, "not tried again within 2 minutes");
+    await snapLegs(db, "e1", "2026-10-28", "google_roads", [leg], new Date(now.getTime() + 3 * 60000), broken, CAPS);
+    assertEquals(calls, 2, "tried again after 2 minutes");
+    assertEquals(takes.length, 2, "each try counted before it was made");
+    assertEquals(upserts, [], "the failure is not written either");
+    googleRoadsStore.clear();
+  });
+});
+
+Deno.test("Round 48: an OSRM leg is still written to route_matched (our own server's answer), and read back from it", async () => {
+  await withEnv({ OSRM_URL: "https://osrm.example.com" }, async () => {
+    const { db, upserts } = fakeDb();
+    const answer = {
+      code: "Ok",
+      tracepoints: SAMPLE.map((_, i) => ({ matchings_index: 0, waypoint_index: i })),
+      matchings: [{
+        geometry: { coordinates: SAMPLE.map((p) => [p.lng, p.lat]) },
+        legs: SAMPLE.slice(1).map(() => ({ annotation: { distance: [45] } })),
+      }],
+    };
+    let calls = 0;
+    const osrm = () => {
+      calls += 1;
+      return Promise.resolve(new Response(JSON.stringify(answer), { status: 200, headers: { "Content-Type": "application/json" } }));
+    };
+    const now = new Date("2026-10-28T04:00:00Z");
+    const leg = { from: SAMPLE[0].at, to: SAMPLE[4].at, points: SAMPLE };
+    const out = await snapLegs(db, "e1", "2026-10-28", "osrm", [leg], now, osrm, CAPS);
+    assertEquals(out.legs[0].source, "matched");
+    assertEquals(calls, 1);
+    assertEquals(upserts.length, 1, "written to route_matched");
+    assertEquals(upserts[0].provider, "osrm");
+    assertEquals(upserts[0].status, "ok");
+    assertEquals(googleRoadsStore.size(), 0, "never in Google's memory");
+    // Read back: the stored row answers the next view without a call.
+    const stored = fakeDb([{
+      leg_from: new Date(leg.from).toISOString(),
+      leg_to: new Date(leg.to).toISOString(),
+      geometry: upserts[0].geometry,
+      matched_at: now.toISOString(),
+      status: "ok",
+      error: null,
+    }]);
+    const again = await snapLegs(stored.db, "e1", "2026-10-28", "osrm", [leg], new Date(now.getTime() + 60000), osrm, CAPS);
+    assertEquals(again.legs[0].source, "matched");
+    assertEquals(calls, 1, "no second OSRM call");
+    assertEquals(stored.upserts, []);
+  });
+});
+
+Deno.test("the memory store: at most 200 legs, the least recently used dropped first; a leg older than 30 minutes is forgotten", async () => {
+  assertEquals([GOOGLE_MEMORY_MAX, GOOGLE_MEMORY_TTL_MS], [200, 30 * 60000]);
+  const legAt = (from: number, at = 0): StoredLeg => ({
+    legFrom: from,
+    legTo: from + 1000,
+    geometry: [],
+    matchedAt: at,
+    status: "ok",
+    error: null,
+  });
+  const small = new MemoryMatchStore(2, 1000);
+  await small.save("e", "d", legAt(1));
+  await small.save("e", "d", legAt(2));
+  // Reading leg 1 makes it the most recently used; leg 2 is then the one to go.
+  await small.save("e", "d", legAt(1));
+  await small.save("e", "d", legAt(3));
+  assertEquals(small.size(), 2);
+  assertEquals((await small.load("e", "d", 0)).map((l) => l.legFrom).sort(), [1, 3]);
+  const ttl = new MemoryMatchStore(10, 1000);
+  await ttl.save("e", "d", legAt(7, 5000));
+  assertEquals((await ttl.load("e", "d", 5999)).length, 1, "within the TTL");
+  assertEquals((await ttl.load("e", "d", 6000)).length, 0, "at the TTL it is gone");
+  assertEquals(ttl.size(), 0);
+  assertEquals((await ttl.load("other", "d", 0)).length, 0, "another driver's day sees nothing");
 });

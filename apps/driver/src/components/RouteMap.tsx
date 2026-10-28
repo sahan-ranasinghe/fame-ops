@@ -119,9 +119,11 @@ export function useRouteMapEngine(mapPackage: MapPackage | undefined): Engine {
 type Props = Omit<RouteEngineProps, 'onLoaded' | 'onFailed'> & {
   /** The office's map package (me.map.package); the phone's setting when absent. */
   mapPackage?: MapPackage;
+  /** The screen's controls over the map (Round 48: the snap-to-roads chip), down the right side under the compass, shown only while a map is mounted, never over "Map not available". */
+  controls?: ReactNode;
 };
 
-export function RouteMap({ mapPackage, ...parts }: Props) {
+export function RouteMap({ mapPackage, controls, ...parts }: Props) {
   const { t, settings, dataAvailable } = useApp();
   const engine = useRouteMapEngine(mapPackage);
   const focused = useIsFocused();
@@ -195,6 +197,7 @@ export function RouteMap({ mapPackage, ...parts }: Props) {
       <MapBoundary key={`${mount.engine}:${mount.attempt}`} onError={() => dispatchRef.current({ type: 'error' })}>
         {mount.engine === 'google' ? <GoogleRouteMap {...engineProps} /> : <OpenRouteMap {...engineProps} />}
       </MapBoundary>
+      {controls ? <View style={styles.cluster} pointerEvents="box-none" testID="route-map-controls">{controls}</View> : null}
       {credit ? (
         <View style={styles.bottom} pointerEvents="none">
           <Text style={mapStyles.credit} accessibilityLanguage="en" testID="route-map-credit">{credit}</Text>
@@ -233,6 +236,7 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   retry: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   bottom: { position: 'absolute', left: 12, bottom: 8, alignItems: 'flex-start' },
+  cluster: { position: 'absolute', top: 68, right: 12, alignItems: 'flex-end', gap: 8 },
 });
 
 const pinStyles = StyleSheet.create({

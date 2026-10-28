@@ -29,7 +29,7 @@ export const RULES: readonly Rule[] = [
   { key: "issue_events", what: "resolved issues' history", period: "issues_resolved_days" },
   { key: "issues_resolved", what: "resolved or dismissed issues", period: "issues_resolved_days" },
   { key: "location_points", what: "location points (each day kept as a summary)", period: "location_days" },
-  { key: "route_matched", what: "road-snapped route lines", period: "location_days" },
+  { key: "route_matched", what: "road-snapped route lines (OSRM; Google's are never stored)", period: "location_days" },
   { key: "heartbeats", what: "phone heartbeats", period: "heartbeats_days" },
   { key: "google_calls", what: "Google usage counters", period: "counters_days" },
   { key: "routing_calls", what: "routing usage counters", period: "counters_days" },

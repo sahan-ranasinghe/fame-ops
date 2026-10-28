@@ -4,18 +4,22 @@
 // 3,000 points, the estimated roads; today read again every minute, a past day once), the day's tasks with their km
 // (list_tasks, with assign_tasks; a row opens the task) and components/office/DayRoute.tsx: the day's summary card above the
 // map (§33.6 item 1: no timeline list), the map on both engines with the stops as pins, one playback bar. Back means back.
-// The rules: office/historyLogic.ts.
+// Round 48 item 5: the line snapped to roads where the map may draw it (Google's map, or the open package; office/snapLogic.ts),
+// asked of the server with `snap` and switched by the chip over the map; the last answer of the day stays drawn while the
+// next one (with or without snap) loads. The rules: office/historyLogic.ts.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { DayRoute } from '@/components/office/DayRoute';
+import { useSnap } from '@/components/office/SnapChip';
 import { DayStrip } from '@/components/patterns/Calendar';
 import { SkeletonRows } from '@/components/patterns/ListState';
 import { Mono, Txt } from '@/components/ui';
 import { colomboDate } from '@/lib/time';
 import { dayRouteArgs, dayTasks, dayTasksArgs, historyDay, historyMin, routeEvery } from '@/office/historyLogic';
+import { withSnap } from '@/office/snapLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriverProfile, DriverRoute, TaskHistory } from '@/office/types';
 import { BackHeader, ListFailed, Screen } from '@/office/ui';
@@ -33,12 +37,18 @@ export default function DriverDayRoute() {
   const profile = useTool<DriverProfile>('driver_profile', { driver: username });
   const name = profile.data?.driver?.name ?? username;
   const [day, setDay] = useState(() => historyDay(askedDate, today));
-  const route = useTool<DriverRoute>('driver_route', dayRouteArgs(username, day), { every: routeEvery(day, today) });
+  const snap = useSnap(me.map?.package);
+  const route = useTool<DriverRoute>('driver_route', withSnap(dayRouteArgs(username, day), snap.on), { every: routeEvery(day, today) });
   const mayTasks = me.tools.includes('list_tasks');
   const tasks = useTool<TaskHistory>('list_tasks', dayTasksArgs(username, day), { enabled: mayTasks });
   const theDay = tasks.data ? dayTasks(tasks.data.tasks) : null;
-  // An answer for another day is never drawn under the chosen day (the tool keeps the last answer while the next loads).
-  const routeData = route.data && route.data.date === day ? route.data : null;
+  // An answer for another day is never drawn under the chosen day; the day's last answer stays drawn while the chip's
+  // change loads the next one (useTool holds an answer with its own arguments only).
+  const [held, setHeld] = useState<DriverRoute | null>(null);
+  useEffect(() => {
+    if (route.data) setHeld(route.data);
+  }, [route.data]);
+  const routeData = route.data && route.data.date === day ? route.data : held && held.date === day ? held : null;
   const refresh = () => void Promise.all([route.reload(), mayTasks ? tasks.reload() : Promise.resolve()]);
 
   return (
@@ -54,6 +64,7 @@ export default function DriverDayRoute() {
             onSignIn={() => void signOut()}
             mapPackage={me.map?.package}
             emptyText={t('office.history.noDayPoints')}
+            snap={snap}
           >
             {mayTasks && (
               <View style={{ paddingVertical: 8, gap: 2 }} testID="history-tasks">

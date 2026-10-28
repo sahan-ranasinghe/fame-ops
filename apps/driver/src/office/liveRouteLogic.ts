@@ -107,7 +107,7 @@ const num = (v: unknown): number | null => {
 };
 
 /** The tool's columns (time, lat, lng, km/h, at, acc; older answers four or five) → the points in the tool's order. */
-function pointsOf(date: string, route: DriverRoute['route'] | undefined): RoutePoint[] {
+export function pointsOf(date: string, route: DriverRoute['route'] | undefined): RoutePoint[] {
   const cols = route?.columns ?? ['time', 'lat', 'lng', 'km/h'];
   const la = cols.indexOf('lat');
   const lo = cols.indexOf('lng');

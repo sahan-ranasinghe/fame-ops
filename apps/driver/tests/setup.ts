@@ -2,7 +2,7 @@
 // replaced by tests/fakeOffice.ts in each test that needs it.
 /* eslint-disable @typescript-eslint/no-require-imports */
 jest.mock('@/components/TaskMap', () => ({ TaskMap: () => null, GOOGLE_MAP_BUILD: false }));
-jest.mock('@/components/RouteMap', () => ({ RouteMap: () => null }));
+jest.mock('@/components/RouteMap', () => ({ RouteMap: () => null, useRouteMapEngine: () => 'google' }));
 jest.mock('@/components/DriversMap', () => ({ DriversMap: () => null }));
 jest.mock('@maplibre/maplibre-react-native', () => ({}));
 jest.mock('react-native-maps', () => ({}));

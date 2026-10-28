@@ -5,7 +5,7 @@
 // began (a tap says where and how long: §33.6 item 1), the playback marker, the frame around the day and the move to a
 // tapped stop. Neither map: "Map not available" with Try again; the day's numbers above the map keep working.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import type { Engine, MapPackage } from '@/lib/mapEngine';
@@ -57,9 +57,11 @@ interface Props {
   /** §33.6 item 1: a stop pin tapped (its key). */
   onStop?: (key: string) => void;
   mapPackage?: MapPackage;
+  /** The screen's controls over the map (Round 48: the snap-to-roads chip), under the compass, only while a map is mounted. */
+  controls?: ReactNode;
 }
 
-export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage }: Props) {
+export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage, controls }: Props) {
   const { t } = useApp();
   const mapMount = useMapMount(mapPackage);
   const { mount, dispatch } = mapMount;
@@ -120,6 +122,7 @@ export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage 
         ) : null}
       </BrowserMap>
       <MapCompass heading={turn.heading} pitch={turn.pitch} label={t('map.northUp')} onPress={() => map?.northUp()} style={{ top: 12, right: 12 }} />
+      {controls ? <View style={styles.cluster} pointerEvents="box-none" testID="route-map-controls">{controls}</View> : null}
       <CreditLine text={routeCredit(mount.engine === 'google', lines)} testID="route-map-credit" />
     </View>
   );
@@ -128,3 +131,7 @@ export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage 
 function spec(l: RouteLine) {
   return { points: l.points, color: BAND_COLORS[l.band], width: lineWidth(l), dash: l.dashed ? DASH.route : null };
 }
+
+const styles = StyleSheet.create({
+  cluster: { position: 'absolute', top: 68, right: 12, alignItems: 'flex-end', gap: 8 },
+});
