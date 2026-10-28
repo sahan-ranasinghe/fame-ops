@@ -109,3 +109,46 @@ Deno.test("free drivers first, on duty before off duty, then by name", () => {
   ];
   assertEquals(rankAvailability(rows).map((r) => r.name), ["Amal", "Bimal", "Zara", "Busy"]);
 });
+
+// Round 48 (item 4): the trip's chip words on every row (Google Calendar's room picker: for the trip's day, never now).
+Deno.test("Round 48: a free row says the trip's day, a busy one the other task's window that day, with the pieces", () => {
+  // The window asked is 2026-10-15 09:00–12:00; "today" is two days before: the chip names the day.
+  const free = driverAvailability({ ...base, on_duty_since: "2026-10-15T01:42:00.000Z" }, w, "2026-10-13");
+  assertEquals([free.free_text, free.free_day, free.busy_text], ["Free Thu 15 Oct", "2026-10-15", undefined]);
+  assertEquals(driverAvailability(base, w, "2026-10-14").free_text, "Free tomorrow");
+  assertEquals(driverAvailability(base, w, "2026-10-15").free_text, "Free today");
+  const busy = driverAvailability(
+    {
+      ...base,
+      tasks: [{ title: "Team drop", status: "assigned", start_at: "2026-10-15T04:30:00.000Z", end_by: "2026-10-15T08:00:00.000Z" }],
+    },
+    w,
+    "2026-10-13",
+  );
+  assertEquals(busy.free, false);
+  assertEquals([busy.busy_text, busy.busy_from, busy.busy_to, busy.busy_title, busy.free_text], [
+    "Busy 10:00–13:30 that day · Team drop",
+    "10:00",
+    "13:30",
+    "Team drop",
+    undefined,
+  ]);
+  // Off duty now and busy then: the state stays the status now; the chip is the trip's.
+  assertEquals(busy.state, "off_duty");
+  // A task with no end but a plan ending before the window: free then.
+  const planned = driverAvailability(
+    {
+      ...base,
+      tasks: [{
+        title: "Early run",
+        status: "assigned",
+        start_at: "2026-10-15T01:00:00.000Z",
+        end_by: null,
+        ends_planned: "2026-10-15T03:00:00.000Z",
+      }],
+    },
+    w,
+    "2026-10-13",
+  );
+  assertEquals([planned.free, planned.free_text], [true, "Free Thu 15 Oct"]);
+});

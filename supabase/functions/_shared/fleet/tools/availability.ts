@@ -38,7 +38,9 @@ export const availability = tool({
   readOnly: true,
   input: z.object({
     at: z.string().min(1).describe('When the vehicle is needed: "YYYY-MM-DD HH:MM" (Colombo) or an ISO time'),
-    until: z.string().optional().describe("Until when: HH:MM the same day, or an ISO time. Default: the plan's end (planned_end), else the rest of the day"),
+    until: z.string().optional().describe(
+      "Until when: HH:MM the same day, or an ISO time. Default: the plan's end (planned_end), else the rest of the day",
+    ),
     planned_end: z.string().optional().describe(
       "Round 48: the plan's end (HH:MM the same day, or an ISO time) when the trip has no end time: the window ends there",
     ),

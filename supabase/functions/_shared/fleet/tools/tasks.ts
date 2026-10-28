@@ -1647,7 +1647,12 @@ export async function needsDriverList(db: Db, refs: Refs, now: Date) {
     const day = colomboDate(leave);
     // Round 48: the task's window (its end, else its plan's end, else the rest of its day); the best match is who is free
     // THEN (on duty now only for a task starting within two hours: driverRows / rankMatches).
-    const tw = tripWindow({ start: leave, endBy: t.end_by, plannedEnd: (t.plan_json as { ends_at?: string } | null)?.ends_at, dayEnd: dayRange(day).to });
+    const tw = tripWindow({
+      start: leave,
+      endBy: t.end_by,
+      plannedEnd: (t.plan_json as { ends_at?: string } | null)?.ends_at,
+      dayEnd: dayRange(day).to,
+    });
     const { best, window_words } = await driverRows(
       db,
       refs,
@@ -2208,7 +2213,14 @@ export const taskDetail = tool({
         })),
         // Round 48: who is free for the task's window (its end, else its plan's end, else the rest of its day).
         suggestions: task.status === "declined"
-          ? await freeAt(db, task.start_at, task.end_by, task.id, (task.plan_json as { ends_at?: string } | null)?.ends_at, colomboDate(now))
+          ? await freeAt(
+            db,
+            task.start_at,
+            task.end_by,
+            task.id,
+            (task.plan_json as { ends_at?: string } | null)?.ends_at,
+            colomboDate(now),
+          )
           : undefined,
         from_request: requestRow
           ? {
@@ -2532,17 +2544,15 @@ export async function changeTask(
     }
   }
 
-  const warnings = running
-    ? []
-    : await assignWarnings(db, {
-      driver: drivenBy === "other" ? null : driver,
-      vehicle,
-      startAt,
-      endBy,
-      ignoreTaskId: task.id,
-      // Round 48: the plan's end bounds the trip when it has no end time (the one window rule).
-      plannedEnd: (saved.plan_json as { ends_at?: string } | null)?.ends_at ?? null,
-    });
+  const warnings = running ? [] : await assignWarnings(db, {
+    driver: drivenBy === "other" ? null : driver,
+    vehicle,
+    startAt,
+    endBy,
+    ignoreTaskId: task.id,
+    // Round 48: the plan's end bounds the trip when it has no end time (the one window rule).
+    plannedEnd: (saved.plan_json as { ends_at?: string } | null)?.ends_at ?? null,
+  });
   if (!running && new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
   return { task: saved, changes, warnings, plan_version: version, driverChanged };
 }

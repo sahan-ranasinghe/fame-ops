@@ -6,11 +6,23 @@ import { unwrap } from "./db.ts";
 import { docChip, loadRefs, openTasksOn, type Task, taskWindow } from "./fleet.ts";
 import { overlapping, type Unavailable, unavailableText } from "./presence.ts";
 import { colomboDate, colomboTime, dayRange } from "./time.ts";
-import { busyPieces, busyText, freeText, taskEndMs, tripWindow, windowWords, type WindowEndSource } from "./window.ts";
+import { busyPieces, busyText, freeText, taskEndMs, tripWindow, type WindowEndSource, windowWords } from "./window.ts";
 
 // Round 48 (item 4): the window rule and the chip words live in window.ts (fleet.ts reads them too); re-exported here
 // so every tool keeps importing them from availability.ts.
-export { busyPieces, busyText, freeText, SOON_MS, startsSoon, taskEndMs, tripDayWords, tripWindow, type TripWindow, type WindowEndSource, windowWords } from "./window.ts";
+export {
+  busyPieces,
+  busyText,
+  freeText,
+  SOON_MS,
+  startsSoon,
+  taskEndMs,
+  tripDayWords,
+  type TripWindow,
+  tripWindow,
+  type WindowEndSource,
+  windowWords,
+} from "./window.ts";
 
 export interface FreeDriver {
   name: string;
@@ -41,7 +53,9 @@ export async function freeAt(
   ignoreTaskId?: string,
   plannedEnd?: string | null,
   today?: string,
-): Promise<{ drivers: FreeDriver[]; vehicles: FreeVehicle[]; window: { from: string; to: string; end_source: WindowEndSource; words: string } }> {
+): Promise<
+  { drivers: FreeDriver[]; vehicles: FreeVehicle[]; window: { from: string; to: string; end_source: WindowEndSource; words: string } }
+> {
   const w = tripWindow({ start: startAt, endBy, plannedEnd });
   const day = w.day;
   const from = new Date(w.from).getTime();
@@ -58,7 +72,8 @@ export async function freeAt(
   const away = new Set(unwrap(offRes, "availability").map((u) => u.employee_id));
   const tasks = open.filter((t) => t.id !== ignoreTaskId);
   const busy = (t: Task) =>
-    new Date(t.start_at).getTime() < to && from < taskEndMs({ end_by: t.end_by, ends_planned: (t.plan_json as { ends_at?: string } | null)?.ends_at }, w.day_end);
+    new Date(t.start_at).getTime() < to &&
+    from < taskEndMs({ end_by: t.end_by, ends_planned: (t.plan_json as { ends_at?: string } | null)?.ends_at }, w.day_end);
   const availability = (mine: Task[]): string | null => {
     if (mine.some(busy)) return null;
     return mine.length === 0 ? "free all day" : `free at that time (other task ${taskWindow(mine[0])})`;
@@ -77,7 +92,9 @@ export async function freeAt(
     .filter((v) => v.active && !v.in_garage)
     .flatMap((v) => {
       const text = availability(tasks.filter((t) => t.vehicle_id === v.id));
-      return text ? [{ reg_no: v.reg_no, make_model: v.make_model, type: v.vehicle_type, seats: v.seats, availability: text, ...freeWords }] : [];
+      return text
+        ? [{ reg_no: v.reg_no, make_model: v.make_model, type: v.vehicle_type, seats: v.seats, availability: text, ...freeWords }]
+        : [];
     })
     .sort(rank);
   return { drivers, vehicles, window: { from: w.from, to: w.to, end_source: w.end_source, words: windowWords(w, todayIs) } };

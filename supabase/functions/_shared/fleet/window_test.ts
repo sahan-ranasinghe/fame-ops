@@ -1,7 +1,17 @@
 // Round 48 (item 4): free / busy by the trip's date. The one window rule (tripWindow), its words, and the best-match
 // ranking for a trip that does not start soon (rankMatches: free THEN, not on duty NOW). Pure.
 import { assertEquals } from "@std/assert";
-import { busyPieces, busyText, freeText, rankMatches, startsSoon, taskBusy, tripDayWords, tripWindow, windowWords } from "./availability.ts";
+import {
+  busyPieces,
+  busyText,
+  freeText,
+  rankMatches,
+  startsSoon,
+  taskBusy,
+  tripDayWords,
+  tripWindow,
+  windowWords,
+} from "./availability.ts";
 
 // Colombo Thu 29 Oct 2026: 09:00 = 03:30Z; the day ends 2026-10-29T18:30:00.000Z.
 const start = "2026-10-29T03:30:00.000Z";
@@ -70,7 +80,10 @@ Deno.test("rankMatches, a trip tomorrow: nobody on duty now still ranks; a drive
   assertEquals(out[0].why, "Free tomorrow 09:00–13:00 · 0 tasks that day");
   assertEquals(out[1].why, "Free tomorrow 09:00–13:00 · 1 task that day");
   assertEquals(out.map((m) => m.free_day), ["2026-10-29", "2026-10-29", "2026-10-29"]);
-  const nobodyOnDuty = rankMatches(rows.map((r) => ({ ...r, state: "off_duty" as const })), "09:00–13:00", "the first stop", { soon: false, dayWords: "Thu 29 Oct" });
+  const nobodyOnDuty = rankMatches(rows.map((r) => ({ ...r, state: "off_duty" as const })), "09:00–13:00", "the first stop", {
+    soon: false,
+    dayWords: "Thu 29 Oct",
+  });
   assertEquals(nobodyOnDuty.length, 3);
   assertEquals(nobodyOnDuty[0].why, "Free Thu 29 Oct 09:00–13:00 · 0 tasks that day");
 });

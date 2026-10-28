@@ -42,12 +42,21 @@ export const driversBoard = tool({
     const { rows } = await driverRows(db, refs, w, now, null, undefined, { presence: true });
     // Round 48 (Google Calendar's attendee picker): with a trip given, each row's free or busy for the trip's window.
     let trip: { date: string; from: string; to?: string; words: string } | undefined;
-    const forTrip = new Map<string, { trip_free: boolean; free_text?: string; busy_text?: string; busy_from?: string; busy_to?: string; busy_title?: string }>();
+    const forTrip = new Map<
+      string,
+      { trip_free: boolean; free_text?: string; busy_text?: string; busy_from?: string; busy_to?: string; busy_title?: string }
+    >();
     if (trip_date && trip_from) {
       realDate(trip_date, "trip_date");
       const tw = tripWindow({ start: utcIso(trip_date, trip_from), endBy: trip_to ? utcIso(trip_date, trip_to) : null });
       if (tw.end_source === "end_by" && tw.to <= tw.from) throw new ToolError("trip_to must be later than trip_from.");
-      const tripRows = await driverRows(db, refs, { from: tw.from, to: tw.end_source === "day_end" ? null : tw.to, day_end: tw.day_end }, now, null);
+      const tripRows = await driverRows(
+        db,
+        refs,
+        { from: tw.from, to: tw.end_source === "day_end" ? null : tw.to, day_end: tw.day_end },
+        now,
+        null,
+      );
       for (const r of tripRows.rows) {
         forTrip.set(r.username ?? r.name, {
           trip_free: r.free,

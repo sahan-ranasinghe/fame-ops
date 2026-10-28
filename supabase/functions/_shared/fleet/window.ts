@@ -80,7 +80,9 @@ export function busyText(t: { start_at: string; end_by: string | null; title: st
 }
 
 /** The pieces of a busy chip, for a client that says it in its own words. */
-export function busyPieces(t: { start_at: string; end_by: string | null; title: string }): { busy_from: string; busy_to?: string; busy_title: string } {
+export function busyPieces(
+  t: { start_at: string; end_by: string | null; title: string },
+): { busy_from: string; busy_to?: string; busy_title: string } {
   return { busy_from: colomboTime(t.start_at), ...(t.end_by ? { busy_to: colomboTime(t.end_by) } : {}), busy_title: t.title };
 }
 
