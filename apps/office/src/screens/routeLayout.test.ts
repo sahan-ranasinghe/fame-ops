@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PHONE_MAP_MIN_PX, PHONE_MAP_SHARE, routeLayout } from "./routeLayout";
+import { PHONE_MAP_MIN_PX, PHONE_MAP_SHARE, routeLayout, SPLIT_PANE_MIN_PX, splitPaneHeight } from "./routeLayout";
 
 describe("the route page's layout (Round 48: Airbnb's split view, a fixed-height map on a phone)", () => {
   it("a desktop gets the split view (the map pane sticky, the details scrolling beside it)", () => {
@@ -16,3 +16,14 @@ describe("the route page's layout (Round 48: Airbnb's split view, a fixed-height
     expect(routeLayout(false, 900, true)).toEqual({ kind: "stacked", mapHeight: 405 });
   });
 });
+
+describe("the split pane's height (the map and the playback on screen together, whatever the scroll)", () => {
+  it("follows the pane's current top: its own place on first load, 20 px once it sticks; never under the minimum", () => {
+    expect(splitPaneHeight(900, 260)).toBe(620);
+    expect(splitPaneHeight(900, 20)).toBe(860);
+    expect(splitPaneHeight(900, -300)).toBe(860);
+    expect(splitPaneHeight(500, 260)).toBe(SPLIT_PANE_MIN_PX);
+    expect(splitPaneHeight(Number.NaN, Number.NaN)).toBe(760);
+  });
+});
+

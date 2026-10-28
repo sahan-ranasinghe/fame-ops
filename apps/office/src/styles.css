@@ -1355,6 +1355,8 @@ a.pt-banner:hover { filter: brightness(.98) }
 /* align-items: stretch, said out loud: the pane's computed align-items was start, so its map wrap shrank to its
    content (2 px wide, the map unseen and its markers unreachable; CI run 40651751234). */
 .route-pane { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0 }
+/* The height is the CSS fallback; RouteMapPane sets it from the pane's current top, so the playback over the map's
+   bottom edge is on screen on first load too (routeLayout.ts splitPaneHeight). */
 .route-pane.split { position: sticky; top: 20px; height: calc(100vh - 40px); min-height: 380px }
 .route-mapwrap { position: relative; display: flex; flex-direction: column; min-height: 0 }
 .route-pane.split .route-mapwrap { flex: 1 1 auto }

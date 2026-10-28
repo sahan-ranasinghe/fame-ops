@@ -23,6 +23,21 @@ export function routeLayout(phone: boolean, viewportHeight: number, stackedOnly 
   return { kind: "stacked", mapHeight: Math.max(PHONE_MAP_MIN_PX, Math.round(h * PHONE_MAP_SHARE)) };
 }
 
+/** The sticky pane's margins (styles.css .route-pane.split: top 20px, and 20px kept under it). */
+export const SPLIT_PANE_MARGIN_PX = 20;
+export const SPLIT_PANE_MIN_PX = 380;
+
+/**
+ * The split pane's height in px so that the map AND the playback over its bottom edge are on screen whatever the
+ * scroll: the viewport minus the pane's current top (its own place on first load, 20 px once it sticks) minus the
+ * bottom margin, never under SPLIT_PANE_MIN_PX. CSS alone cannot do it: a sticky pane's top depends on the scroll.
+ */
+export function splitPaneHeight(viewportHeight: number, paneTop: number): number {
+  const top = Math.max(SPLIT_PANE_MARGIN_PX, Number.isFinite(paneTop) ? paneTop : SPLIT_PANE_MARGIN_PX);
+  const h = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 800;
+  return Math.max(SPLIT_PANE_MIN_PX, Math.round(h - top - SPLIT_PANE_MARGIN_PX));
+}
+
 const viewportHeight = () => (typeof window === "undefined" ? 800 : window.innerHeight);
 
 /** The page's layout now: follows the phone breakpoint and the window's height (a turned phone, a resized window). */
