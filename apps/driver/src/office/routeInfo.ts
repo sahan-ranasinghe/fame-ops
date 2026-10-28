@@ -48,8 +48,6 @@ export function mapInfo(input: MapInfoInput, t: Words): MapInfo {
     ...SPEED_BANDS.map((b: SpeedBand): LegendEntry => ({ key: b, mark: 'line', color: BAND_COLORS[b], text: t(`office.drivers.route.legend.${b}`) })),
     { key: 'gap', mark: 'dashed', color: BAND_COLORS.gap, text: t('office.drivers.route.legend.gap') },
     ...(input.estimated ? [{ key: 'estimated', mark: 'dashed' as const, color: BAND_COLORS.estimated, text: t('office.drivers.route.legend.estimated') }] : []),
-    { key: 'start', mark: 'pinStart', color: MARK_COLORS.pin, text: t('dayRoute.legendStart') },
-    { key: 'end', mark: 'pinEnd', color: MARK_COLORS.pin, text: t('dayRoute.legendEnd') },
     { key: 'stop', mark: 'dot', color: MARK_COLORS.dot, text: t('dayRoute.legendStop') },
     { key: 'event', mark: 'gap', color: MARK_COLORS.gap, text: t('dayRoute.legendGap') },
     { key: 'cluster', mark: 'cluster', color: MARK_COLORS.cluster, text: t('dayRoute.legendCluster') },

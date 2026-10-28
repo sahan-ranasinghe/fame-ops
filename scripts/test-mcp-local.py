@@ -3297,6 +3297,11 @@ if CHANNEL == "api":
         check(ok and "waiting_for_approval" not in body and driver_of() == f"intern.{u}",
               f"{tag}: with tasks_need_approval off the reassignment is direct", body[:200])
         tool("update_settings", {"key": "tasks_need_approval", "value": True})
+        # Sahan (Checkpoint 48): a cancel stays direct, and one by someone without approve tells the approvers.
+        ok, body = as_coordinator(ch, "cancel_task", {"task_id": t48_id, "reason": "the site visit is off"})
+        told = psql(f"select count(*) from office_inbox i join employees e on e.id = i.employee_id where i.title = 'Achini Coordinator cancelled Round 48 task {u} renamed' and 'approve' = any(e.permissions)")
+        check(ok and psql(f"select status from tasks where id = '{t48_id}'") == "cancelled" and int(told) >= 1,
+              f"{tag}: a Coordinator's cancel is direct and the approvers are told ('Achini Coordinator cancelled …')", f"{body[:120]} told={told}")
         for name, args, why in [
             ("decide_request", {"request_id": str(uuid.uuid4()), "decision": "approve"}, "cannot approve a request"),
             ("update_settings", {"key": "buffer_min", "value": 20}, "cannot change the settings"),

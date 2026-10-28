@@ -15,9 +15,9 @@ const withEstimated: DriverRoute = { ...answer, estimated: [{ from_at: iso("08:0
 
 describe("the route map's words (Round 48: a compact legend row and the ⓘ sheet)", () => {
   it("the compact row: the speed colours, poor fix, gap, the pins and the dot; estimated only when drawn", () => {
-    expect(legendItems(routeOf("n", answer)).map((i) => i.text)).toEqual(["Standing", "<20 km/h", "20–60", ">60", "Poor fix", "Gap", "Start / end", "Stop"]);
+    expect(legendItems(routeOf("n", answer)).map((i) => i.text)).toEqual(["Standing", "<20 km/h", "20–60", ">60", "Poor fix", "Gap", "Stop"]);
     expect(legendItems(routeOf("n", withEstimated)).map((i) => i.key)).toContain("estimated");
-    expect(legendItems(null)).toHaveLength(8);
+    expect(legendItems(null)).toHaveLength(7);
   });
   it("openrouteservice's credit stays visible with the row whenever one of its lines is drawn", () => {
     expect(visibleCredits(routeOf("n", answer))).toEqual([]);
@@ -33,7 +33,8 @@ describe("the route map's words (Round 48: a compact legend row and the ⓘ shee
     expect(all).toContain("one numbered circle until you zoom in");
     expect(all).toContain("Dashed slate: 1 gap in the GPS drawn along the likely road (estimated, not counted in km).");
     expect(all).toContain("Snapped to roads · km from odometer.");
-    expect(all).toContain("Line: 300 of 830 points.");
+    // Sahan (Checkpoint 48): no "Line: N of M points" sentence; the pins need no legend row.
+    expect(all).not.toContain("points.");
     expect(all).toContain(KM_SENTENCE);
     expect(all).toContain("© OpenStreetMap contributors · OpenFreeMap");
     expect(all).toContain(ORS_CREDIT);

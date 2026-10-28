@@ -136,7 +136,7 @@ describe("DriverPage", () => {
     expect(pane.contains(screen.getByLabelText("Legend"))).toBe(true);
     expect(screen.getByTestId("route-page").contains(summary)).toBe(true);
     // The legend is one compact row: the colours, poor fix, gap, the pins and the dot; no sentence under the map.
-    expect([...screen.getByLabelText("Legend").querySelectorAll("span")].map((x) => x.textContent).slice(0, 8)).toEqual(["Standing", "<20 km/h", "20–60", ">60", "Poor fix", "Gap", "Start / end", "Stop"]);
+    expect([...screen.getByLabelText("Legend").querySelectorAll("span")].map((x) => x.textContent).slice(0, 7)).toEqual(["Standing", "<20 km/h", "20–60", ">60", "Poor fix", "Gap", "Stop"]);
     expect(screen.queryByText(/Km from GPS, drift filtered/)).toBeNull();
     // The page's Filter button (§1) with the Layers section only; nothing in use by default.
     expect(screen.getByTestId("filter-button").textContent).toBe("Filter");
@@ -150,7 +150,6 @@ describe("DriverPage", () => {
     expect(sheet.textContent).toContain("Thin and lighter: a poor fix (worse than 30 m)");
     expect(sheet.textContent).toContain("Events (no GPS signal, the app not running, recorded offline and uploaded later) are off: Filter → Layers → Events");
     expect(sheet.textContent).toContain("Km from GPS, drift filtered: fixes worse than 50 m, jumps and drift while standing still are left out. The odometer is the true figure.");
-    expect(sheet.textContent).toContain("Line: 3 of 830 points.");
     expect(sheet.textContent).toContain("Raw GPS (snapping to roads failed).");
     fireEvent.click(within(sheet).getByRole("button", { name: "Done" }));
     expect(screen.queryByTestId("route-info")).toBeNull();

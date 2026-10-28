@@ -1032,6 +1032,8 @@ module: `apps/office/src/map/cluster.ts`, `apps/driver/src/lib/cluster.ts`). The
   layer before `route-line` on MapLibre, `mapPane` on Google, the SVG order on the drawn map); pins, event marks and
   clusters stay above it so they can be tapped. The mockup picture spec gains `7-driver-day` (1440 × 900 and 412 × 915 of the
   same page with a 49-point route).
+- A cancel or a reopen stays direct; one made by someone without approve while tasks need the fleet admin's OK tells the
+  approvers ("Sashen cancelled Team drop · Galle"; `tellApproversOfDispatch`, the `request.created` event's recipients).
 - **Office mode and /m/** (`components/office/DayRoute.tsx` owns the layout; the driver's day, a task's driven route, Live;
   the task pages' maps at the same height rule): the map at `mapHeight` (45 % of the window, min 300 px) outside any
   scroll, the control row [ⓘ · Filter(Layers)], the snap note, the playback bar, then the content in its own scroll (pull
@@ -1043,9 +1045,9 @@ module: `apps/office/src/map/cluster.ts`, `apps/driver/src/lib/cluster.ts`). The
 - **Not achievable, said plainly:** "the route line above the markers" on the native SDKs (Google Maps Android draws every
   marker above every polyline; MapLibre RN markers are native views) and for HTML markers on the web maps. The stop dots are
   12 px with a ring so the 5 px line reads through; the playback marker stays on top.
-- **For Sahan:** the Filter/ⓘ row sits between the map and the playback bar in the app (Live's order); the summary card's
-  "No GPS for …" line now repeats the gaps sheet (a proposed removal, kept); the site's "Line: N of M points" sentence and
-  the legend's "Start / end" item (proposed removals, kept).
+- **Decided at Checkpoint 48 (Sahan):** the Filter/ⓘ row stays between the map and the playback bar in the app; the
+  site's "Line: N of M points" sentence and the legend's "Start / end" row (site and app) are removed; the Gaps sheet stays
+  under Layers / ⓘ; the summary's "No GPS for …" line stays.
 
 ### 34.3 Item 4: free or busy by the trip's date (Google Calendar's room and attendee picker)
 
@@ -1079,8 +1081,10 @@ engine only" is a one-line change in `office/snapLogic.ts`), draw `route_snapped
 GPS line + the dashed estimates labelled "GPS line"; a chip in the map's control cluster; km from the odometer. The cost:
 about one Roads call per 100 thinned points per driving leg per cold view (a new isolate or a leg not asked in 30 minutes);
 every call counted before it is made, fail closed, caps 215 a day / 4,750 a month; a day of 8 legs and 80 km ≈ 16 calls
-cold; 10 drivers viewed cold once a day ≈ 160, near the day cap. **Sahan can keep this or go back to the 30-day cache
-Google's Service Specific Terms allow** (revert the store choice in `matching.ts` and the constraint).
+cold; 10 drivers viewed cold once a day ≈ 160, near the day cap. **Decided at Checkpoint 48: display only, for good** (the Roads policy
+as read: storage restricted, only place IDs exempt). Google-snapped lines never reach the free map, site included: the server
+picks `google_roads` only under the Google package (`snapProvider`), the site asks snap only on Google's map or under the
+open package (where the provider is OSRM or none), never on the free map standing in for a failed Google map.
 
 ### 34.5 Item 6: cost and security controls
 

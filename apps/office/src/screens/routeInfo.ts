@@ -6,7 +6,6 @@
 // estimated line); the map's own corner keeps Google's logo and terms, or "© OpenStreetMap contributors · OpenFreeMap".
 // Pure: RouteInfo.tsx draws these.
 import { ORS_CREDIT, type Route, snapControl } from "../data/route";
-import { num } from "../lib/format";
 
 export type Swatch = "stopped" | "slow" | "normal" | "fast" | "thin" | "dashed" | "estimated" | "dot" | "pin";
 
@@ -24,7 +23,6 @@ export function legendItems(route: Route | null): LegendItem[] {
     { key: "fast", text: ">60" },
     { key: "thin", text: "Poor fix" },
     { key: "dashed", text: "Gap" },
-    { key: "pin", text: "Start / end" },
     { key: "dot", text: "Stop" },
   ];
   if (route?.estimated?.length) out.push({ key: "estimated", text: "Estimated" });
@@ -80,7 +78,6 @@ export function infoSections(route: Route | null, snap: boolean, opts: { map?: M
   const line: string[] = [];
   const snapUi = snapControl(route, snap);
   if (snapUi.note) line.push(snapUi.note + ".");
-  if (route?.shown != null) line.push(`Line: ${num(route.shown)} of ${num(route.count)} points.`);
   if (route?.km != null) line.push(KM_SENTENCE);
   if (line.length) out.push({ title: "The line and the km", lines: line });
   const credits: string[] = [];

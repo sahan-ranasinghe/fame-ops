@@ -133,8 +133,8 @@ console.log('\n== Through the day\'s rules and Live\'s ==');
 console.log('\n== The ⓘ sheet (office/routeInfo.ts) ==');
 {
   const google = mapInfo({ googleMap: true, estimated: true, estimatedGaps: 2, kmNote: 'Km from GPS, drift filtered.', estimatedNote: 'Dashed lines are estimates.' }, t);
-  check(same(google.legend.map((e) => e.key), ['standing', 'slow', 'mid', 'fast', 'gap', 'estimated', 'start', 'end', 'stop', 'event', 'cluster']), 'the legend: the four bands, no data, the estimated road, the two pins, the dot, the gap marker, the cluster');
-  check(google.legend[0].mark === 'line' && google.legend[4].mark === 'dashed' && google.legend[6].mark === 'pinStart' && google.legend[8].mark === 'dot' && google.legend[9].mark === 'gap' && google.legend[10].mark === 'cluster', 'each entry drawn as it is on the map');
+  check(same(google.legend.map((e) => e.key), ['standing', 'slow', 'mid', 'fast', 'gap', 'estimated', 'stop', 'event', 'cluster']), 'the legend: the four bands, no data, the estimated road, the dot, the gap marker, the cluster (the pins need no row: Sahan, Checkpoint 48)');
+  check(google.legend[0].mark === 'line' && google.legend[4].mark === 'dashed' && google.legend[6].mark === 'dot' && google.legend[7].mark === 'gap' && google.legend[8].mark === 'cluster' && !google.legend.some((l) => l.mark === 'pinStart' || l.mark === 'pinEnd'), 'each entry drawn as it is on the map');
   check(same(google.notes, ['dayRoute.estimatedNote(2)', 'Dashed lines are estimates.', 'Km from GPS, drift filtered.']), 'the sentences that stood under the map: the estimated roads over N gaps, then the server\'s notes as given');
   check(same(google.credits, ['Google Maps', 'Route © openrouteservice.org by HeiGIT · map data © OpenStreetMap contributors']), "Google's map with an estimated road: its name and openrouteservice's full line");
   const open = mapInfo({ googleMap: false, estimated: false, estimatedGaps: 0 }, t);

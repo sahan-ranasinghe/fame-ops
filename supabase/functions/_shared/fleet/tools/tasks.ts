@@ -55,7 +55,7 @@ import { notifyEvent } from "../notifications.ts";
 import { shortName } from "../names.ts";
 import { driverPhotoLinks, vehiclePhotoLinks } from "../media.ts";
 import { logRequestEvent, requester } from "./requestCore.ts";
-import { needsApproval, pendingChangeCard, proposeChange, waitingChangeFor, waitingChangesFor } from "./changes.ts";
+import { needsApproval, pendingChangeCard, proposeChange, tellApproversOfDispatch, waitingChangeFor, waitingChangesFor } from "./changes.ts";
 import { requestStopsOf, saveRequestTrip } from "./requestTrip.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
 import type { Actor } from "../roles.ts";
@@ -2824,6 +2824,7 @@ export const reopenTask = tool({
     if (answer === "driver_busy") {
       throw new ToolError("The driver has another task in progress: it must be completed first, then reopen this one.");
     }
+    await tellApproversOfDispatch(db, await loadSettings(db), actor, task, "reopened", reason);
     return {
       result: { reopened: task.title, reason, note: "The driver's app shows it in progress again; they finish it with a new end reading." },
       summary: `reopened task ${task.id} (${task.title}): ${reason}`,
@@ -2895,6 +2896,7 @@ export const cancelTask = tool({
     );
 
     await tellAsker(db, task, actor, "request.cancelled", `Trip cancelled · ${task.title}`, reason);
+    await tellApproversOfDispatch(db, await loadSettings(db), actor, task, "cancelled", reason);
     const driver = unwrapMaybe(await db.from("employees").select("name, phone").eq("id", task.employee_id).maybeSingle(), "employee");
     return {
       result: {

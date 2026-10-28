@@ -131,6 +131,27 @@ export function taskMovedSince(task: Row<"tasks">, p: ProposedChange): string | 
   return null;
 }
 
+/**
+ * Sahan (Checkpoint 48): a cancel or a reopen stays direct, but one made by someone without approve while tasks need the
+ * fleet admin's OK tells the approvers ("Sashen cancelled Team drop · Galle"), in their notification centre and browser.
+ */
+export async function tellApproversOfDispatch(
+  db: Db,
+  settings: Pick<Settings, "tasks_need_approval">,
+  actor: Actor,
+  task: Pick<Task, "id" | "title" | "start_at">,
+  did: "cancelled" | "reopened",
+  reason: string,
+): Promise<void> {
+  if (!needsApproval(settings, actor)) return;
+  await notifyEvent(db, "request.created", {
+    title: `${actor.name} ${did} ${task.title}`,
+    body: [colomboDayTime(task.start_at), reason].filter(Boolean).join(" · "),
+    url: `/tasks?task=${task.id}`,
+    tag: `task:${task.id}`,
+  }, { actor: actor.employeeId });
+}
+
 /** "driver Kamal instead of Nuwan · time 09:00 → 10:00 · stops: Stop 2 added: Galle". */
 export function changeSummary(changes: Record<string, FieldChangeLike>): string {
   return Object.entries(changes).map(([field, c]) => {

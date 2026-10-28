@@ -3930,8 +3930,6 @@
     "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The day's numbers are above.",
     "about": "About this map",
     "legendTitle": "Legend",
-    "legendStart": "Start of the route",
-    "legendEnd": "End of the route",
     "legendStop": "A stop over 10 minutes · tap it for the time",
     "legendGap": "No GPS, or the app not running · shown by Filters → Layers",
     "legendCluster": "Several markers together · tap to zoom in",

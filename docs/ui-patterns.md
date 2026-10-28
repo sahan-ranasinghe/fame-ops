@@ -433,7 +433,7 @@ on the page; the playback bar right under it; the content scrolling below. Pinch
 does. A page that is itself the right pane of a split (the task page beside the Tasks list) stacks at every width.
 
 **The words.** The legend is **one compact row**: a swatch and a short word each (Standing · <20 km/h · 20–60 · >60 ·
-Poor fix · Gap · Start / end · Stop, Estimated when drawn), the "Recorded points" toggle with what the line is, and a
+Poor fix · Gap · Stop, Estimated when drawn; the pins need no legend row, Sahan at Checkpoint 48), the "Recorded points" toggle with what the line is, and a
 small **ⓘ** at the end that opens the site's sheet (§6: a popover under the button on a desktop, a bottom sheet on a
 phone) with every explanation that used to sit under the map: the colours, the marks and the layer, the gaps and the
 estimated lines' sentence, which line is drawn and how many points, how the km are counted, the credits. The credits a

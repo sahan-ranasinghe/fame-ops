@@ -160,7 +160,8 @@ describe("Office mode: a driver's day (§33.6 item 1)", () => {
     expect(screen.queryByTestId('route-about-sheet')).toBeNull();
     fireEvent.press(screen.getByTestId('route-about'));
     expect(screen.getByTestId('route-about-sheet')).toBeTruthy();
-    expect(screen.getByTestId('legend-start')).toBeTruthy();
+    // The pins need no legend row (Sahan, Checkpoint 48).
+    expect(screen.queryByTestId('legend-start')).toBeNull();
     expect(screen.getByText(mockT!('dayRoute.legendCluster'))).toBeTruthy();
     // The free map in the tests (no Android key): the map data names OpenStreetMap and OpenFreeMap, in English.
     expect(screen.getByText('© OpenStreetMap contributors · OpenFreeMap')).toBeTruthy();
