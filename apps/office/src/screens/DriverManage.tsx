@@ -15,6 +15,7 @@ import type { FleetError } from "../transport/types";
 import { Loading, Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, useAfterSave } from "../ui/Page";
+import { SecretField } from "../ui/SecretField";
 import { useToast } from "../ui/Toast";
 import { isPin, randomPin } from "./driverLogic";
 import { missingText, profileFields } from "./driverProfileLogic";
@@ -118,7 +119,7 @@ export function DriverManage() {
             <h2>New PIN</h2>
             <p className="muted small" style={{ margin: 0 }}>The old PIN stops working at once.</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <input maxLength={6} inputMode="numeric" autoComplete="off" className="mono" style={{ flex: "1 1 140px" }} aria-label="New 6-digit PIN" value={pin} onChange={(e) => setPin(e.target.value)} />
+              <SecretField kind="pin" maxLength={6} inputMode="numeric" autoComplete="off" className="mono" style={{ flex: "1 1 140px" }} aria-label="New 6-digit PIN" value={pin} onChange={(e) => setPin(e.target.value)} />
               <button type="button" className="btn" onClick={() => setPin(randomPin())}>New</button>
               <button className="btn dark" type="submit">Set PIN</button>
             </div>

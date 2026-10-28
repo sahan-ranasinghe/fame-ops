@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { Notice } from "../ui/basics";
+import { SecretField } from "../ui/SecretField";
 import { AuthPage } from "./AuthPage";
 import { useAuth } from "./AuthProvider";
 
@@ -32,7 +33,7 @@ export function SignIn() {
         </div>
         <div className="field">
           <label htmlFor="si-password">Password</label>
-          <input id="si-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <SecretField id="si-password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         {error && <Notice tone="bad">{error}</Notice>}
         <button className="btn primary wide" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
