@@ -115,6 +115,8 @@ export interface Settings {
   privacy_email: string | null;
   /** Round 48 (6a): the server's own Gemini odometer reads a day (check-odometer-photos), counted before each call; a driver's own 60 are fixed. */
   odometer_server_daily_cap: number;
+  /** Round 48 snap hotfix: Google Roads calls a driver's day may cost before their route shows the GPS line (0 = never snap). */
+  roads_trip_daily_cap: number;
 }
 
 export type MapPackage = "google" | "open";
@@ -221,6 +223,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   phone_map_wait_s: 30,
   privacy_email: null,
   odometer_server_daily_cap: 500,
+  roads_trip_daily_cap: 20,
 };
 
 export type SettingKey = keyof Settings;
@@ -290,6 +293,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "The contact e-mail on the public privacy page (/privacy), shown as a mailto: link; null removes it and the page shows the office phone instead. Use Fame's shared address before the store submission",
   odometer_server_daily_cap:
     "The server's own odometer photo checks a day (Gemini, for readings typed with no connection; the pg_cron job check-odometer-photos): counted before each call and refused at the cap until the next Colombo day; a driver's own reads stay at 60 a day each. 0 pauses the checks",
+  roads_trip_daily_cap:
+    "Snap to roads: how many Google Roads calls one driver's day may cost (each call snaps up to 100 points; a two-hour drive is about 14): past it that driver's route shows the GPS line until tomorrow and one info issue opens, so one trip never eats the fleet's day cap. 0 = never snap. routing_usage shows the calls by source (which screen asked)",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -448,6 +453,8 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
     }
     case "phone_map_wait_s":
       return number(value, key, 1, 120, true);
+    case "roads_trip_daily_cap":
+      return number(value, key, 0, 200, true);
     case "odometer_server_daily_cap":
       return number(value, key, 0, 5000, true);
     case "privacy_email": {

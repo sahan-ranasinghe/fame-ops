@@ -75,7 +75,7 @@ export function googleUse(settings: Pick<Settings, "map_package">, env: KeySourc
   };
 }
 
-export type RefuseReason = "day" | "month" | "counter";
+export type RefuseReason = "day" | "month" | "counter" | "trip";
 
 export interface Gate {
   allowed: boolean;
@@ -103,6 +103,7 @@ export function refusedNote(feature: GoogleFeature, reason: RefuseReason | undef
   const after = feature === "map_loads"
     ? ["back on the 1st", "back tomorrow"]
     : ["the open package until the 1st", "the open package until tomorrow"];
+  if (reason === "trip") return `${FEATURE_TEXT[feature]} paused for this driver today: the per-driver budget is used up (Settings → Fleet)`;
   if (reason === "month") return `${FEATURE_TEXT[feature]} limit reached for this month: ${after[0]}`;
   if (reason === "day") return `${FEATURE_TEXT[feature]} limit reached for today: ${after[1]}`;
   return `${FEATURE_TEXT[feature]} paused: the call counter could not be read`;
@@ -112,10 +113,16 @@ export function refusedNote(feature: GoogleFeature, reason: RefuseReason | undef
  * Records one call of the feature and says whether it may be made. Fail closed: any error,
  * an answer of the wrong shape or a throw refuses it.
  */
-export async function takeGoogleCall(db: Db, feature: GoogleFeature, caps: GoogleCaps): Promise<Gate> {
+export async function takeGoogleCall(db: Db, feature: GoogleFeature, caps: GoogleCaps, source?: string): Promise<Gate> {
   try {
     const cap = caps[feature];
-    const { data, error } = await db.rpc("google_take", { p_feature: feature, p_day_cap: cap.day, p_month_cap: cap.month });
+    // Round 48 snap hotfix: the source (which screen asked) is counted beside the feature when the caller names it.
+    const { data, error } = await db.rpc("google_take", {
+      p_feature: feature,
+      p_day_cap: cap.day,
+      p_month_cap: cap.month,
+      ...(source ? { p_source: source } : {}),
+    });
     const gate = data as unknown as Gate | null;
     if (error || !gate || typeof gate !== "object" || typeof gate.allowed !== "boolean") {
       if (error) console.error(`google_take ${feature}: ${error.message}`);
@@ -124,6 +131,25 @@ export async function takeGoogleCall(db: Db, feature: GoogleFeature, caps: Googl
     return gate;
   } catch (error) {
     console.error(`google_take ${feature}: ${error instanceof Error ? error.message : String(error)}`);
+    return { allowed: false, reason: "counter" };
+  }
+}
+
+/**
+ * Round 48 snap hotfix: the per-driver-day budget of Roads calls (the setting roads_trip_daily_cap), taken BEFORE the
+ * fleet-wide counter so one trip cannot eat the day cap. Fail closed like takeGoogleCall.
+ */
+export async function takeTripCall(db: Db, employeeId: string, cap: number): Promise<Gate & { used?: number; cap?: number }> {
+  try {
+    const { data, error } = await db.rpc("roads_trip_take", { p_employee: employeeId, p_cap: cap });
+    const gate = data as unknown as (Gate & { used?: number; cap?: number }) | null;
+    if (error || !gate || typeof gate !== "object" || typeof gate.allowed !== "boolean") {
+      if (error) console.error(`roads_trip_take: ${error.message}`);
+      return { allowed: false, reason: "counter" };
+    }
+    return gate;
+  } catch (error) {
+    console.error(`roads_trip_take: ${error instanceof Error ? error.message : String(error)}`);
     return { allowed: false, reason: "counter" };
   }
 }

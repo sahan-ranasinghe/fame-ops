@@ -31,7 +31,7 @@
 
 import type { Db } from "./db.ts";
 import { unwrap } from "./db.ts";
-import { refusedNote, takeGoogleCall } from "./google.ts";
+import { refusedNote, takeGoogleCall, takeTripCall } from "./google.ts";
 import type { GoogleCaps, MapMatchingProvider } from "./settings.ts";
 import { distanceM } from "./track.ts";
 
@@ -41,6 +41,15 @@ export const MATCH_SPACING_M = 50;
 export const MATCH_GAP_MS = 2 * 60000;
 /** A leg whose match failed is tried again at most this often (a cap refusal costs no call). */
 export const MATCH_DEBOUNCE_MS = 2 * 60000;
+/**
+ * Round 48 snap hotfix (Google's live-tracking guidance; Uber does the same): a leg still growing is snapped
+ * incrementally, at most every TAIL_MIN_MS and only once TAIL_MIN_POINTS thinned points are waiting (or a whole chunk),
+ * with MATCH_OVERLAP points sent again for a clean join; between refreshes its tail is drawn raw. A 2-hour drive with a
+ * point every 20 s costs about 14 Roads calls, whoever watches.
+ */
+export const TAIL_MIN_MS = 3 * 60000;
+export const TAIL_MIN_POINTS = 30;
+export const MATCH_OVERLAP = 5;
 export const MATCH_TIMEOUT_MS = 8000;
 export const GOOGLE_ROADS_URL = "https://roads.googleapis.com/v1/snapToRoads";
 
@@ -100,14 +109,25 @@ export function chunkForMatching(points: MatchInput[]): MatchInput[][] {
  * chunks (100 thinned points each, sharing one), up to the time of the last point of the last whole chunk, so watching
  * a driver costs no more than opening the day later. null = wait (the tail is drawn raw meanwhile). Pure.
  */
-export function tailToSend(tail: MatchInput[], legOpen: boolean): { points: MatchInput[]; upTo: number } | null {
+export function tailToSend(
+  tail: MatchInput[],
+  legOpen: boolean,
+  /** Round 48 snap hotfix: how long ago this leg was last snapped (undefined = never). */
+  sinceMs?: number,
+): { points: MatchInput[]; upTo: number } | null {
   if (tail.length < 2) return null;
   if (!legOpen) return { points: tail, upTo: tail[tail.length - 1].at };
   const thinned = thinBySpacing(tail);
   const whole = Math.floor((thinned.length - 1) / (MATCH_CHUNK - 1));
-  if (whole < 1) return null;
-  const upTo = thinned[whole * (MATCH_CHUNK - 1)].at;
-  return { points: tail.filter((p) => p.at <= upTo), upTo };
+  if (whole >= 1) {
+    const upTo = thinned[whole * (MATCH_CHUNK - 1)].at;
+    return { points: tail.filter((p) => p.at <= upTo), upTo };
+  }
+  // Less than a chunk waiting: it goes once TAIL_MIN_MS passed since the last snap and TAIL_MIN_POINTS are waiting
+  // (a leg never snapped waits for the points alone), so a watcher's minute poll costs nothing in between.
+  const due = sinceMs === undefined || sinceMs >= TAIL_MIN_MS;
+  if (due && thinned.length >= TAIL_MIN_POINTS) return { points: tail, upTo: tail[tail.length - 1].at };
+  return null;
 }
 
 /** Times for a run of road vertices between two timed anchors, by cumulative distance. */
@@ -409,12 +429,18 @@ export async function snapLegs(
   /** Google's caps: every snapToRoads call is recorded before it is made. */
   caps?: GoogleCaps,
   store: MatchStore = storeFor(db, provider),
+  /** Round 48 snap hotfix: the source counted with each Google call, and the per-driver-day budget taken before it. */
+  opts: { source?: string; budget?: { employeeId: string; cap: number } } = {},
 ): Promise<SnapResult> {
   const env = envFor();
   const gate = async (): Promise<string | null> => {
     if (provider !== "google_roads") return null;
     if (!caps) return refusedNote("roads", "counter");
-    const g = await takeGoogleCall(db, "roads", caps);
+    if (opts.budget) {
+      const b = await takeTripCall(db, opts.budget.employeeId, opts.budget.cap);
+      if (!b.allowed) return refusedNote("roads", b.reason === "trip" ? "trip" : "counter");
+    }
+    const g = await takeGoogleCall(db, "roads", caps, opts.source);
     return g.allowed ? null : refusedNote("roads", g.reason, g);
   };
   const rows = await store.load(employeeId, date, now.getTime());
@@ -449,8 +475,11 @@ export async function snapLegs(
     // A leg that grew since its last match: only the new part goes out, joined to the stored one, and while the leg
     // is still growing only in whole chunks (the tail is drawn raw meanwhile).
     const stored = have && have.status === "ok" && haveTo !== null && haveTo < leg.to ? have.geometry : [];
-    const tail = stored.length ? leg.points.filter((p) => p.at >= haveTo!) : leg.points;
-    const send = tailToSend(tail, leg.open === true);
+    // The tail since the last snap, with a few points before it sent again for a clean join (the answer's points up
+    // to the last stored one are dropped below).
+    const firstNew = stored.length ? leg.points.findIndex((p) => p.at >= haveTo!) : 0;
+    const tail = stored.length ? leg.points.slice(Math.max(0, firstNew - MATCH_OVERLAP)) : leg.points;
+    const send = tailToSend(tail, leg.open === true, have ? now.getTime() - have.matchedAt : undefined);
     if (!send) {
       if (stored.length) out.push({ from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: haveTo! });
       else out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });

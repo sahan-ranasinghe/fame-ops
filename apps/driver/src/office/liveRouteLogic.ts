@@ -29,8 +29,9 @@ import type { DriverRoute, GapKind, LiveDriver, SegmentKind } from './types';
  */
 export const ROUTE_ARGS = { line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true } as const;
 
-export function routeArgs(username: string): { driver: string; line_tolerance_m: 0; max_line_points: 3000; estimate_gaps: true } {
-  return { driver: username, ...ROUTE_ARGS };
+/** Round 48 snap hotfix: `source` names this screen on every snap-to-roads call (routing_usage counts by it). */
+export function routeArgs(username: string): { driver: string; line_tolerance_m: 0; max_line_points: 3000; estimate_gaps: true; source: 'app_live' } {
+  return { driver: username, ...ROUTE_ARGS, source: 'app_live' };
 }
 
 /** The trails and the shown route are fetched again this often while the tab is in front (merged, never replaced). */

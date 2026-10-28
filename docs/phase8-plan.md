@@ -997,6 +997,39 @@ flaky):**
    changes, map pages, trip-date availability, snap in app, cost guards": group **d08b4396-cff9-49e6-b688-d7a1b886870b**,
    Android 01a1820a-1cdd-7443-a7f9-62c76ae1fb7e, runtime 1.3.0-gmaps, commit 0e0540c.
 
+### 34.7 The snap hotfix (28 October 2026, branch `r48-snap-hotfix` from main `0e0540c`)
+
+**What happened.** One real two-hour test drive (Thilina Teshan, to Negombo), watched live by two office viewers (the
+activity log: "Watch drivers" every 30 s from 15:26 by Sahan and Test Fleet Admin, which is the driver page or Live with
+the route shown, on the site or in Office mode), consumed the whole Google snap-to-roads day cap (215 calls + 10 refused;
+351 by evening after the cap was raised). The cap held and the free line took over: a call-volume bug, not a billing one.
+**The source:** the office viewers' live watching through `driver_route snap` (the driver's own app never snaps); every
+60-second route poll that landed on a cold isolate snapped the whole day again (the Round 48 memory cache is per isolate),
+and a growing leg went out only in whole 100-point chunks.
+
+**The fix** (Google's live-tracking guidance for the Roads API; Uber's pattern):
+- **Incremental, throttled, shared:** a growing leg is snapped only from its last snapped point (`MATCH_OVERLAP` 5 points
+  sent again for a clean join), at most every `TAIL_MIN_MS` (3 min) and only once `TAIL_MIN_POINTS` (30 thinned points,
+  about 10 minutes at 20 s a point) are waiting, or a whole chunk; between refreshes the newest tail is drawn raw (the
+  small correction on refresh is the industry-normal look). Finished legs are never snapped again; every viewer of an
+  isolate reads the same memory (30 minutes). Screen open = one request: the clients already poll once a minute, never per
+  Realtime point. A two-hour drive with a point every 20 s costs about 14 Roads calls, whoever watches; a second viewer
+  on the same isolate adds none. Honest limit: Supabase runs several isolates; a viewer on another isolate pays its own
+  snaps once (then that isolate's memory serves it); the budget below bounds that.
+- **The per-driver budget:** the setting `roads_trip_daily_cap` (20 by default, 0 = never snap): `roads_trip_take` (the
+  table `roads_day_calls`) is taken BEFORE the fleet counter; past it that driver's route shows the GPS line until
+  tomorrow and one info issue opens ("Snap to roads for Thilina paused today: 20 of 20 calls"), instead of one trip eating
+  the fleet's day cap.
+- **Usage by source:** `google_take` gains `p_source` (the table `google_call_sources`): `driver_route` takes `source`
+  (site_route, site_live, site_task, app_route, app_live, app_task; the clients send it; claude / web when absent;
+  "_playback" for a past day), and `routing_usage` / `get_settings` answer `sources_today` per feature, so the next
+  anomaly reads at a glance. Migration `20261028150000_round48_snap_budget.sql`.
+- Tests: `matching_live_test.ts` (the two-hour drive with three screens polling every minute: under 15 calls, the second
+  viewer pays nothing, the line never more than a refresh behind; the budget refuses the fourth call and the fleet counter
+  saw three; yesterday's playback is one batch and the next viewers pay nothing; the tail rule), `matching_test.ts`,
+  `issues_test.ts`, pgTAP `round48_snap_budget.test.sql`, the clients' argument tests.
+- Also in this update: the show/hide eye on every password and PIN field (Material's visibility toggle), all four surfaces.
+
 ### 34.1 Item 1: the approval bypass (security, done first)
 
 The hole: with `tasks_need_approval` on, only `create_task` went to the fleet admin (§33). A dispatcher (assign_tasks, no

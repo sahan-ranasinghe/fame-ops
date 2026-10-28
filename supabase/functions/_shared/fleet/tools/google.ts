@@ -31,6 +31,11 @@ export async function googleUsage(db: Db, settings: Settings, now: Date): Promis
     await db.from("google_calls").select("feature, day, calls, refused").gte("day", monthStart).lte("day", today),
     "google calls",
   );
+  // Round 48 snap hotfix: today's calls by source (which screen asked), so an anomaly reads at a glance.
+  const bySource = unwrap(
+    await db.from("google_call_sources").select("feature, source, calls, refused").eq("day", today),
+    "google call sources",
+  );
   const use = googleUse(settings);
   const inUse: Record<GoogleFeature, boolean> = {
     map_loads: use.map,
@@ -52,6 +57,10 @@ export async function googleUsage(db: Db, settings: Settings, now: Date): Promis
       month_cap: cap.month,
       refused_today: todayRow?.refused ?? 0,
     };
+    const sources = Object.fromEntries(
+      bySource.filter((r) => r.feature === feature && (r.calls > 0 || r.refused > 0)).sort((a, b) => b.calls - a.calls)
+        .map((r) => [r.source, r.refused ? { calls: r.calls, refused: r.refused } : r.calls]),
+    );
     let note: string | undefined;
     if (!inUse[feature]) {
       note = settings.map_package === "open"
@@ -63,7 +72,7 @@ export async function googleUsage(db: Db, settings: Settings, now: Date): Promis
       note = refusedNote(feature, "day", { allowed: false, day_cap: cap.day, month_cap: cap.month });
     } else if (usage.month >= cap.month) note = refusedNote(feature, "month");
     else if (usage.today >= cap.day) note = refusedNote(feature, "day");
-    return { ...usage, on: inUse[feature] && !note, ...(note ? { note } : {}) };
+    return { ...usage, on: inUse[feature] && !note, ...(note ? { note } : {}), ...(Object.keys(sources).length ? { sources_today: sources } : {}) };
   });
 }
 

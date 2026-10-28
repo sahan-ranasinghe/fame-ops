@@ -21,7 +21,8 @@ export function historyDay(asked: string | undefined | null, today: string): str
 
 /** driver_route's input for a day: every stored point (tolerance 0, up to 3,000) and the estimated roads over gaps. */
 export function dayRouteArgs(driver: string, date: string): Record<string, unknown> {
-  return { driver, date, line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true };
+  // Round 48 snap hotfix: `source` names this screen on every snap-to-roads call (routing_usage counts by it).
+  return { driver, date, line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true, source: 'app_route' };
 }
 
 /** driver_route's input for the profile's "Today's route" card: today's numbers only (a short line; km, driving and the stops
@@ -32,7 +33,7 @@ export function todaySummaryArgs(driver: string, date: string): Record<string, u
 
 /** driver_route's input for a task's own window (Start task to Save & finish), the same line as a day. */
 export function taskRouteArgs(taskId: string): Record<string, unknown> {
-  return { task_id: taskId, line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true };
+  return { task_id: taskId, line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true, source: 'app_task' };
 }
 
 /** Today is read again every minute; a past day once (it does not change). */

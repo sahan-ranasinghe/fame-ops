@@ -299,8 +299,12 @@ export const driverRoute = tool({
     estimate_gaps: z.boolean().optional().describe(
       "Also answer `estimated`: for each gap of over 300 m and 60 s between two points, the likely road (openrouteservice, cached; for a map, never km)",
     ),
+    // Round 48 snap hotfix: which screen asks, counted with each Google Roads call (routing_usage sources).
+    source: z.enum(["site_route", "site_live", "site_task", "app_route", "app_live", "app_task"]).optional().describe(
+      "The screen asking (the web clients send it): counted with each snap-to-roads call so usage reads by source",
+    ),
   }),
-  async run({ driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap, estimate_gaps }, { db, now, actor }) {
+  async run({ driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap, estimate_gaps, source: sourceArg }, { db, now, actor }) {
     const refs = await loadRefs(db);
     let who: Employee;
     let fromIso: string;
@@ -477,7 +481,7 @@ export const driverRoute = tool({
     // when the setting names it (kept per leg in route_matched; a leg still growing goes in whole 5 km chunks, its
     // tail raw meanwhile; Phase 7, §26). The website asks it on its Google map; Office mode and /m/ since Round 48.
     const provider = snapProvider(settings, actor.channel);
-    let snapped: { provider: string; status: string; legs?: number; matched?: number } = { provider, status: "off" };
+    let snapped: { provider: string; status: string; legs?: number; matched?: number; source?: string } = { provider, status: "off" };
     let routeSnapped: { columns: string[]; points: (string | number | null)[][] } | undefined;
     if (snap && provider !== "none" && route.line.length > 1) {
       const legs: SnapLeg[] = [];
@@ -500,8 +504,13 @@ export const driverRoute = tool({
         }));
       }
       const usable = legs.filter((l) => l.points.length >= 2);
+      // Round 48 snap hotfix: the source counted with each call ("_playback" for a past day), and the driver's budget.
+      const source = `${sourceArg ?? (actor.channel === "claude" ? "claude" : "web")}${day < colomboDate(now) ? "_playback" : ""}`;
       const result = usable.length
-        ? await snapLegs(db, who.id, day, provider, usable, now, fetch, settings.google_caps)
+        ? await snapLegs(db, who.id, day, provider, usable, now, fetch, settings.google_caps, undefined, {
+          source,
+          budget: { employeeId: who.id, cap: settings.roads_trip_daily_cap },
+        })
         : { status: "ok" as const, legs: [] };
       // The drawn line with every matched leg replaced by its road geometry; the rest raw.
       const out: (LinePoint & { snapped: boolean })[] = [];
@@ -521,7 +530,13 @@ export const driverRoute = tool({
         columns: ["time", "lat", "lng", "km/h", "at", "acc", "snapped"],
         points: timed.map((p, k) => [...linePoint(p), out[k].snapped ? 1 : 0]),
       };
-      snapped = { provider, status: result.status, legs: usable.length, matched: result.legs.filter((l) => l.source === "matched").length };
+      snapped = {
+        provider,
+        status: result.status,
+        legs: usable.length,
+        matched: result.legs.filter((l) => l.source === "matched").length,
+        source,
+      };
     }
 
     // A gap of over 300 m and 60 s: the likely road, dashed on the map (openrouteservice, cached per gap; never km).

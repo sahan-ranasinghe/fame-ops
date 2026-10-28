@@ -877,6 +877,8 @@ export interface UsageCounter {
   /** What happens at the cap, for the detail ("the open package takes over"). */
   at_cap: string;
   employee_id?: string | null;
+  /** Round 48 snap hotfix: an info issue only once the cap is reached (a per-driver budget, not the fleet's cap). */
+  info?: boolean;
 }
 
 /** The ref_key of a counter's issue: a new one each day or month, so the old one resolves by itself when the period rolls over. */
@@ -889,13 +891,13 @@ export function usageCapIssues(counters: readonly UsageCounter[], today: string)
   for (const c of counters) {
     if (c.cap <= 0 || c.used <= 0) continue;
     const pct = Math.floor((c.used / c.cap) * 100);
-    if (pct < USAGE_WARN_PCT) continue;
+    if (pct < (c.info ? 100 : USAGE_WARN_PCT)) continue;
     const period = c.period === "day" ? "today's" : "the month's";
     out.push({
       kind: "usage_cap",
       ref_key: usageRefKey(c, today),
-      severity: pct >= 100 ? "critical" : "warning",
-      title: `${c.text} at ${pct}% of ${period} cap`,
+      severity: c.info ? "info" : pct >= 100 ? "critical" : "warning",
+      title: c.info ? `${c.text} paused today: ${c.used} of ${c.cap} calls` : `${c.text} at ${pct}% of ${period} cap`,
       detail: `${thousands(c.used)} of ${thousands(c.cap)} calls ${
         c.period === "day" ? "today" : "this month"
       } · at the cap ${c.at_cap} until ${c.period === "day" ? "tomorrow" : "the 1st"} (Settings → Fleet)`,
@@ -929,17 +931,34 @@ const GOOGLE_AT_CAP: Record<GoogleFeature, string> = {
  */
 export async function usageCounters(
   db: Db,
-  settings: Pick<Settings, "google_caps" | "ors_gap_daily_cap" | "ors_autocomplete_daily_cap" | "odometer_server_daily_cap">,
+  settings: Pick<Settings, "google_caps" | "ors_gap_daily_cap" | "ors_autocomplete_daily_cap" | "odometer_server_daily_cap" | "roads_trip_daily_cap">,
   today: string,
   nameOf: (employeeId: string) => string | null = () => null,
 ): Promise<UsageCounter[]> {
   const out: UsageCounter[] = [];
   const monthStart = `${today.slice(0, 7)}-01`;
-  const [google, routing, odometer] = await Promise.all([
+  const [google, routing, odometer, roads] = await Promise.all([
     db.from("google_calls").select("feature, day, calls").gte("day", monthStart).lte("day", today),
     db.from("routing_calls").select("provider, calls").eq("day", today),
     db.from("odometer_calls").select("mode, scope, calls").eq("day", today),
+    db.from("roads_day_calls").select("employee_id, calls").eq("day", today),
   ]);
+  // Round 48 snap hotfix: a driver's day at its Roads budget shows the GPS line; the office hears it once, as info.
+  if (roads.error) console.error(`issues: roads_day_calls skipped: ${roads.error.message}`);
+  else {
+    for (const r of roads.data ?? []) {
+      out.push({
+        feature: `roads_trip:${r.employee_id}`,
+        text: `Snap to roads for ${nameOf(r.employee_id) ?? "a driver"}`,
+        period: "day",
+        used: r.calls,
+        cap: settings.roads_trip_daily_cap,
+        at_cap: "that driver's route shows the GPS line",
+        employee_id: r.employee_id,
+        info: true,
+      });
+    }
+  }
   if (google.error) console.error(`issues: google_calls skipped: ${google.error.message}`);
   else {
     for (const f of GOOGLE_FEATURES) {

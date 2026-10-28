@@ -27,9 +27,9 @@ console.log('\n== Where snap is asked: the engine and the package (rule 10) ==')
   check(snapAllowed('open', 'google') === false, "the free map under the google package (Google's failed on this phone, or not in the build): never asked (its snapping would be Google's)");
   check(snapAllowed('open', 'open') === true, 'the free map under the open package: asked (the server snaps with OSRM when set, never Google)');
   check(snapAllowed('open', undefined) === false && snapAllowed('google', undefined) === true, 'no package known (an older /me): only on Google\'s map');
-  check(same(withSnap(routeArgs('sunil'), true), { driver: 'sunil', line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true, snap: true }), 'the shown route with snap: true');
+  check(same(withSnap(routeArgs('sunil'), true), { driver: 'sunil', line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true, source: 'app_live', snap: true }), 'the shown route with snap: true (its source named for the usage count)');
   check(withSnap(routeArgs('sunil'), false) === routeArgs('sunil') || same(withSnap(routeArgs('sunil'), false), routeArgs('sunil')), 'without: the call exactly as before (never snap: false)');
-  check(same(withSnap(dayRouteArgs('kamal', '2026-10-19'), true), { driver: 'kamal', date: '2026-10-19', line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true, snap: true }), "a driver's day with snap");
+  check(same(withSnap(dayRouteArgs('kamal', '2026-10-19'), true), { driver: 'kamal', date: '2026-10-19', line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true, source: 'app_route', snap: true }), "a driver's day with snap (its source named)");
   check(!('snap' in withSnap(taskRouteArgs('t1'), false)) && 'snap' in withSnap(taskRouteArgs('t1'), true), "a task's route with and without");
 }
 

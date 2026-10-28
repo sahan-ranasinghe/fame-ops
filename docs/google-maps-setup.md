@@ -103,6 +103,11 @@ Pro $10.00, Roads $10.00 per 1,000. Maps SDK for Android: unlimited and free (wi
 - Our month runs on Colombo time; Google's resets at midnight Pacific time on the 1st (about
   13:30 Colombo). The half day in between is covered by the 5 % margin: at most one day's cap
   (430 or 215) on top of 9,500 or 4,750 (9,930 or 4,965) is still under the free 10,000 or 5,000.
+- Round 48 snap hotfix (28 October 2026): a growing leg is snapped incrementally, at most every 3 minutes and once 30
+  thinned points are waiting (about 14 calls for a two-hour drive, whoever watches); a per-driver-day budget
+  (`roads_trip_daily_cap`, 20) is taken before the fleet counter, past it the driver's route shows the GPS line and one
+  info issue opens; every Roads call is counted by source (`routing_usage` `sources_today`: site_route, site_live,
+  site_task, app_route, app_live, app_task, claude, web, "_playback" for a past day). Google's lines are never stored.
 - `roads` (snap to roads) is on within the free usage since Round A of Phase 7: 215 a day and 4,750 a
   month (95 % of the 5,000 free), counted before each call and refused at either cap or on a counter
   error (fail closed).

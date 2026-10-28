@@ -154,18 +154,19 @@ Deno.test("matchPoints: every chunk is one counted call; a failed call counts, t
   await assertRejects(() => matchPoints("osrm", SAMPLE, {}, fake({}), () => undefined), Error, "OSRM_URL");
 });
 
-Deno.test("a growing leg goes in whole chunks only: 100 thinned points each, or all of it at the leg's end (Phase 7, §26)", () => {
-  // Fixes 55 m apart: every one is kept by the thinning.
+Deno.test("a growing leg goes in whole chunks, or (Round 48 snap hotfix) its tail once 3 minutes and 30 points are waiting; all of it at the leg's end", () => {
+  // Fixes 55 m apart: every one is kept by the thinning. Snapped a second ago: only whole chunks go.
   const run = (n: number) => Array.from({ length: n }, (_, i) => ({ at: sec(i * 5), lat: 6.9 + i * 0.0005, lng: 79.85, acc: 8 }));
-  assertEquals(tailToSend(run(99), true), null, "99 new points while driving: the tail stays raw");
-  assertEquals(tailToSend(run(100), true)?.points.length, 100, "100: one whole chunk goes");
-  const more = tailToSend(run(119), true);
+  assertEquals(tailToSend(run(99), true, 1000), null, "99 new points a second after the last snap: the tail stays raw");
+  assertEquals(tailToSend(run(99), true)?.points.length, 99, "99 points never snapped: they go (the first snap of a leg)");
+  assertEquals(tailToSend(run(100), true, 1000)?.points.length, 100, "100: one whole chunk goes whenever");
+  const more = tailToSend(run(119), true, 1000);
   assertEquals(
     [more?.points.length, more?.upTo],
     [100, sec(99 * 5)],
     "119: still one whole chunk, up to its last point (never a small extra call)",
   );
-  assertEquals(tailToSend(run(199), true)?.points.length, 199, "199: two whole chunks sharing a point");
+  assertEquals(tailToSend(run(199), true, 1000)?.points.length, 199, "199: two whole chunks sharing a point");
   assertEquals(tailToSend(run(20), false)?.points.length, 20, "the leg ended: the rest goes");
   assertEquals(tailToSend(run(1), false), null, "one point is nothing to send");
 });

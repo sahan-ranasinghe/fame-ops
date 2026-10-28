@@ -51,7 +51,8 @@ const ROUTE_EVERY_MS = 60000;
 const PAST_DAY_MS = 6 * 3600000;
 
 /** The line the map draws: every stored point up to 3,000 (tolerance 0); above that the tool picks the smallest tolerance that fits. */
-const LINE_ARGS = { line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true };
+// Round 48 snap hotfix: `source` names this screen on every snap-to-roads call (routing_usage counts by it).
+const LINE_ARGS = { line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true, source: "site_route" };
 
 export function DriverPage() {
   const { username = "" } = useParams();

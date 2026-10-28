@@ -79,7 +79,8 @@ const TRAIL_REFRESH_MS = 60000;
  */
 export const ROUTE_ARGS = { line_tolerance_m: 0, max_line_points: 3000 } as const;
 /** The shown route also asks for its gaps' estimated road lines (Part 5b) and, by default, snap to roads (§26); the light trails do not. */
-export const shownArgs = (snap: boolean) => ({ ...ROUTE_ARGS, estimate_gaps: true, snap });
+// Round 48 snap hotfix: `source` names this screen on every snap-to-roads call (routing_usage counts by it).
+export const shownArgs = (snap: boolean) => ({ ...ROUTE_ARGS, estimate_gaps: true, snap, source: "site_live" });
 
 const sharingNow = (x: LiveDriver) => (x.signal ? x.signal.sharing : x.state !== "not_sharing");
 

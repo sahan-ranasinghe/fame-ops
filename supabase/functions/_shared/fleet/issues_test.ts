@@ -248,6 +248,8 @@ Deno.test("Round 48: the counters are read from the three tables; a table that c
       error: null,
     },
     odometer_calls: { data: [{ mode: "server", scope: "server", calls: 410 }, { mode: "driver", scope: "e1", calls: 50 }], error: null },
+    // Round 48 snap hotfix: a driver's day at its Roads budget (20) is an info issue; one under it is nothing.
+    roads_day_calls: { data: [{ employee_id: "e1", calls: 20 }, { employee_id: "e2", calls: 3 }], error: null },
   };
   const chain = (table: string) => {
     const q = {
@@ -264,7 +266,7 @@ Deno.test("Round 48: the counters are read from the three tables; a table that c
     google_caps: SETTINGS_DEFAULTS.google_caps,
     ors_gap_daily_cap: 300,
     ors_autocomplete_daily_cap: 2500,
-    odometer_server_daily_cap: 500,
+    odometer_server_daily_cap: 500, roads_trip_daily_cap: 20,
   };
   const all = await usageCounters(db, settings, "2026-10-28", (id) => (id === "e1" ? "Kamal Perera" : null));
   const by = (f: string, p: string) => all.find((c) => c.feature === f && c.period === p)!;

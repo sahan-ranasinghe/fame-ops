@@ -502,6 +502,32 @@ isOneToOne: false
                   }
                   Relationships: [
                   ]
+                },"google_call_sources": {
+                  Row: {
+                    "calls": number,"day": string,"feature": string,"refused": number,"source": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "calls"?: number,"day": string,"feature": string,"refused"?: number,"source": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "calls"?: number,"day"?: string,"feature"?: string,"refused"?: number,"source"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                  ]
+                },"roads_day_calls": {
+                  Row: {
+                    "calls": number,"day": string,"employee_id": string,"refused": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "calls"?: number,"day": string,"employee_id": string,"refused"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "calls"?: number,"day"?: string,"employee_id"?: string,"refused"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                  ]
                 },"google_calls": {
                   Row: {
                     "calls": number,"day": string,"feature": string,"refused": number,"updated_at": string
@@ -1835,7 +1861,10 @@ isOneToOne: false
 { Args: { "p_feature": string }; Returns: number
                            },
 "google_take":
-{ Args: { "p_day_cap": number,"p_feature": string,"p_month_cap": number }; Returns: Json
+{ Args: { "p_day_cap": number,"p_feature": string,"p_month_cap": number,"p_source"?: string }; Returns: Json
+                           },
+"roads_trip_take":
+{ Args: { "p_cap": number,"p_employee": string }; Returns: Json
                            },
 "odometer_take":
 { Args: { "p_day_cap": number,"p_mode": string,"p_scope": string }; Returns: Json
