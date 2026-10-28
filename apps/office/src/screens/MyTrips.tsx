@@ -137,7 +137,8 @@ function RequestRow({ t, search }: { t: RequestCard; search: string }) {
       <td data-label="Trip">
         <div>
           {t.kind === "task" && <div className="name"><Pill tone="live">Task</Pill>{t.title || "Proposed task"}</div>}
-          <div className={t.kind === "task" ? "sub" : undefined}>
+          {t.kind === "change" && <div className="name"><Pill tone="warn">Change</Pill>{t.title || "Proposed change"}{t.change?.summary ? <span className="muted"> · {t.change.summary}</span> : null}</div>}
+          <div className={t.kind === "task" || t.kind === "change" ? "sub" : undefined}>
             <Link to={to} onClick={(e) => e.stopPropagation()}>{t.route || "Route not given"}</Link>
           </div>
           {t.stops_count && t.stops_count > 2 ? <div className="sub">{t.stops_count} stops</div> : null}

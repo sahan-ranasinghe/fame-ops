@@ -42,6 +42,8 @@ export function NeedsDriverList({ tasks, linked, headerLink = true, action }: {
                 <div className="name">{t.title}</div>
                 <div className="sub">{joinDots([t.line, t.note && `“${t.note}”`])}</div>
                 {bestLine(t.best) && <div className="sub" data-testid="best-match">{bestLine(t.best)}</div>}
+                {/* Round 48 (item 1): a reassignment proposed by someone without approve, waiting for the fleet admin. */}
+                {t.pending_change && <div className="sub" data-testid="pending-change">{t.pending_change.text}</div>}
               </div>
               <span className={`due ${whenTone(t.minutes_to_start)}`}>{t.when}</span>
             </>

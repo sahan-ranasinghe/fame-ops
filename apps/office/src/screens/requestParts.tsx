@@ -19,7 +19,7 @@ import { HolderStrip } from "../ui/Holder";
 import type { Wanted } from "../ui/holderLogic";
 import { askedOf, selfDriveLicenceLine } from "../ui/whoDrivesLogic";
 import { StatusBanner } from "../ui/patterns";
-import { LATE_TEXT, proposalLine } from "./approvalLogic";
+import { LATE_TEXT, proposalLine, changeLine } from "./approvalLogic";
 import { againFields, diffLines, timelineSteps } from "./requestLogic";
 
 export const GROUPS: [keyof NonNullable<Suggestions["groups"]>, string][] = [
@@ -115,7 +115,15 @@ export function VehicleGroups({ sug, name, vehicle, onPick, greyGarage, wanted }
 export function RequestHead({ q, proposal }: { q: RequestCard; proposal: boolean }) {
   return (
     <>
-      {q.kind === "task"
+      {q.kind === "change"
+        ? (
+          <>
+            {/* Round 48 (item 1): a change to an existing task, waiting for the fleet admin. */}
+            <div className="name" style={{ fontSize: 19 }}><Pill tone="warn">Change</Pill> {q.title || q.change?.task_title || "Proposed change"}</div>
+            <div className="sub" data-testid="proposal-line">{changeLine(q)}</div>
+          </>
+        )
+        : q.kind === "task"
         ? (
           <>
             <div className="name" style={{ fontSize: 19 }}><Pill tone="live">Task</Pill> {q.title || "Proposed task"}</div>

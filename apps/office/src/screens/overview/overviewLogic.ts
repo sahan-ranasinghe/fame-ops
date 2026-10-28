@@ -214,6 +214,6 @@ export function tripRow(t: RequestCard | CreatedTaskCard): TripRow {
   if (!isRequestTrip(t)) {
     return { key: `task:${t.id}`, to: `/tasks/${t.task_id || t.id}`, title: t.title, sub: joinDots([t.when, t.route]), live: t.live };
   }
-  const title = t.kind === "task" ? t.title || "Proposed task" : t.route || t.need || "Vehicle request";
-  return { key: t.id, to: `/my-trips/${t.id}`, title, sub: joinDots([t.when, t.kind === "task" ? t.route : t.need]), live: liveOf(t) };
+  const title = t.kind === "change" ? `Change · ${t.title || "a task"}` : t.kind === "task" ? t.title || "Proposed task" : t.route || t.need || "Vehicle request";
+  return { key: t.id, to: `/my-trips/${t.id}`, title, sub: joinDots([t.when, t.kind === "change" ? t.change?.summary : t.kind === "task" ? t.route : t.need]), live: liveOf(t) };
 }

@@ -54,6 +54,7 @@ import { TaskCheckLines } from "./VehicleChecks";
 import { PassengerList } from "./PassengerList";
 import { HolderLine } from "../ui/Holder";
 import { StatusBanner } from "../ui/patterns";
+import { pendingChangeTarget } from "./approvalLogic";
 import { countWithNames, ridersLine } from "./passengersLogic";
 import { featureOn } from "./switchLogic";
 import { liveForTask } from "./overviewLinks";
@@ -199,6 +200,13 @@ export function TaskDetail() {
           {findDriver ? <span><Link className="btn small" to={findDriverPath(id)} state={FROM_TASK}>Find a driver</Link></span> : null}
         </StatusBanner>
       ) : <TaskBanner t={t} />}
+      {/* Round 48 (item 1): a change proposed by someone without approve waits for the fleet admin; the task is as it was. */}
+      {t.pending_change && (
+        <Notice tone="info">
+          <span data-testid="pending-change">{t.pending_change.text}{t.pending_change.at ? ` · ${t.pending_change.at}` : ""}</span>{" "}
+          <Link to={pendingChangeTarget(t.pending_change.request_id, me)}>{me.tools.includes("decide_request") ? "Decide it →" : "Open the request →"}</Link>
+        </Notice>
+      )}
       <WarningsNote warnings={flash} />
       <ConflictCards conflicts={flashedConflicts} />
       <TaskAsksLine taskId={id} />

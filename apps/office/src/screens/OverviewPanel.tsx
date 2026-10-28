@@ -146,7 +146,7 @@ function RequestRows() {
         <Link key={q.id} className="row link-row" to={`/requests/${q.id}`} data-testid="panel-row">
           <span className="grow">
             <span className="name">
-              {q.kind === "task" ? <><Pill tone="live">Task</Pill> {q.title || "Proposed task"}</> : q.requested_by}
+              {q.kind === "change" ? <><Pill tone="warn">Change</Pill> {q.title || "Proposed change"}</> : q.kind === "task" ? <><Pill tone="live">Task</Pill> {q.title || "Proposed task"}</> : q.requested_by}
               {q.late && <Pill tone="bad">{LATE_BADGE}</Pill>}
             </span>
             <span className="sub" style={{ display: "block" }}>{joinDots([q.when, q.route, q.need])}</span>

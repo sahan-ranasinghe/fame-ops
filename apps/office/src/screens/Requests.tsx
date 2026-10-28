@@ -24,7 +24,7 @@ import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, SkeletonRows, useUrl
 import { ListWithDetail } from "../ui/Page";
 import { drivenByWord } from "../ui/driverRowLogic";
 import { askedOf, askedWords } from "../ui/whoDrivesLogic";
-import { LATE_BADGE, proposalLine, requestView } from "./approvalLogic";
+import { LATE_BADGE, proposalLine, requestView, changeLine } from "./approvalLogic";
 import { ReviewingLine } from "./approvers";
 import { RequestStatusPill } from "./requestParts";
 import { timelineSteps } from "./requestLogic";
@@ -90,7 +90,14 @@ export function Requests() {
                         {list.items.map((q) => (
                           <tr key={q.id} className="click" onClick={() => navigate(`/requests/${q.id}${query}`)} data-kind={q.kind} data-testid="request-row">
                             <td data-label="Requested by">
-                              {q.kind === "task"
+                              {q.kind === "change"
+                                ? (
+                                  <>
+                                    <Pill tone="warn">Change</Pill> <b>{q.title || q.change?.task_title || "Proposed change"}</b>
+                                    <div className="sub" data-testid="proposal-line">{changeLine(q)}</div>
+                                  </>
+                                )
+                                : q.kind === "task"
                                 ? (
                                   <>
                                     <Pill tone="live">Task</Pill> <b>{q.title || "Proposed task"}</b>
@@ -103,7 +110,7 @@ export function Requests() {
                             <td data-label="Project">{q.project || "—"}</td>
                             <td data-label="When">{q.when}{q.back_by && <div className="sub">back by {q.back_by}</div>}</td>
                             <td data-label="Route" className="muted">{q.route || "—"}{q.stops_count && q.stops_count > 2 ? <div className="sub">{q.stops_count} stops</div> : null}</td>
-                            <td data-label="Need">{q.kind === "task" ? (q.proposed?.passengers != null ? `${q.proposed.passengers} passengers` : "—") : q.need || "—"}{(() => {
+                            <td data-label="Need">{q.kind === "change" ? "—" : q.kind === "task" ? (q.proposed?.passengers != null ? `${q.proposed.passengers} passengers` : "—") : q.need || "—"}{(() => {
                               // Round 3: who drives when it is not a driver of ours: the task's once approved, else what was asked.
                               const who = q.assigned ? drivenByWord(q.assigned.driven_by) : askedOf(q) !== "driver" ? askedWords(q, phoneDisplay) : null;
                               return who ? <div className="sub" data-testid="row-asked">{who}</div> : null;
