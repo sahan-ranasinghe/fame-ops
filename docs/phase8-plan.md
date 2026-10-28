@@ -1108,7 +1108,22 @@ Google's Service Specific Terms allow** (revert the store choice in `matching.ts
   the client stops first) stops for 60 s with `{ code: "loop", message: "This screen asked the server too often · try again
   in a minute" }` and sends ONE app-error report per tool per 10 minutes (Sentry's throttling) through POST /errors; the
   artifact's connector transport stops the loop but has no /errors to report to. Tested with a forced effect loop.
-- **6d, the security pass:** a fresh reviewer's report and the fixes are in Checkpoint 48.
+- **6d, the security pass** (a fresh reviewer, read-only, about 40 minutes). No critical or high. Fixed: **M1** the names
+  sent with a gated `update_task` (passenger_list) went onto the live task at once while the change waited (now kept with
+  the proposal and written at approval); **M2** the per-address buckets took `x-real-ip` first, a header a caller may set
+  (now the gateway's last `x-forwarded-for` entry wins); **L1** a proposal was applied over a task the approver had moved
+  in between (now the task's state is recorded and the approval refuses when it moved); **L2** one waiting change per task
+  was a code check only (now a unique partial index); **L3** a Google pick's name, address and pin stayed in a stops
+  proposal for good (now the place id only, rule 10). Checked and clean: every route's auth and permission on the three
+  functions; the proposal's tool and args constrained (three tools, the task id and plan version overwritten, no other
+  writer of `proposal_json`, a proposer cannot edit or decide their own); `list_requests` without approve is one's own
+  whatever the kind; RLS and grants on every table of Round 4–7 and this round, the storage policies; no key in `dist/`,
+  the artifact or the /m/ export (the anon key and the URL only); `register_map_load` web-only and counted first; the
+  connector key constant-time, 404, never logged, the per-address bucket before the lookup; CORS; every search filter
+  escaped; the pasted-link resolver on Google hosts only; the /errors endpoints behind a session, capped and scrubbed.
+  Informational: `approveChange` runs the three tools as the approver without a second `canCall` (an approver already
+  creates and assigns tasks through `decide_request`); driver-api sends no CORS headers (the native app; /m/ has no
+  driver side).
 
 ### 34.6 Also this round
 - The Ask drivers sheet's initial state read the trip-window rows before they were declared (a crash on open under
