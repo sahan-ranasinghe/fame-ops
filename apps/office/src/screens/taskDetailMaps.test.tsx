@@ -1,6 +1,7 @@
 // The task page's maps (Phase 7, §20, §21, §26): the plan map from task_detail asked with its lines, and the task's
 // route snapped by default with its gaps as one line under the map and markers on it (Round 4–7: no Gaps list).
 import { act, render, screen } from "@testing-library/react";
+import { applyFilter } from "../test/controls";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -92,10 +93,19 @@ describe("the task page's maps", () => {
     expect(screen.queryByTestId("gaps-list")).toBeNull();
     expect(screen.queryByTestId("gap-row")).toBeNull();
     expect(screen.getByTestId("route-gaps").textContent).toBe("No GPS for 30 min");
-    const marker = last("route")?.gaps?.[0];
+    // Round 48 (item 3): the route's first and last point are pins; the event marks are a layer, off by default, turned on
+    // by the strip's Filter → Layers → Events (?layers=events).
+    expect(last("route")?.gaps?.map((g) => [g.kind, g.text])).toEqual([["start", "Start · 07:30"], ["end", "Latest · 08:30"]]);
+    applyFilter("Layers", /Events/);
+    const marker = last("route")?.gaps?.find((g) => g.kind === "no_data");
     expect(marker?.kind).toBe("no_data");
     act(() => last("route")!.onGap!(marker!.id));
     expect(screen.getByTestId("route-map-view").dataset.open).toBe(marker!.id);
     expect(screen.getByLabelText("Recorded points")).toBeTruthy();
+    // The stacked pane (the task page is itself a panel): the map at a fixed height, the compact legend with ⓘ on top.
+    expect(screen.getByTestId("route-pane").dataset.layout).toBe("stacked");
+    expect(last("route")?.height).toBeGreaterThanOrEqual(300);
+    expect(screen.getByRole("button", { name: "About this map" })).toBeTruthy();
+    expect(screen.getByTestId("snap-legend").textContent).toContain("Raw GPS (snapping to roads failed)"); // the fixture has no snapped line
   });
 });

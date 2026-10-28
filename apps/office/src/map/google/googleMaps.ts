@@ -215,6 +215,9 @@ export function detachMap() {
 // ---- HTML markers (the same elements and CSS as the MapLibre map's) -------------------------------
 
 export type Anchor = "bottom" | "left" | "center";
+/** Round 48: the pane an element goes in. overlayMouseTarget (default) is above the polylines and takes DOM events;
+ * mapPane is the lowest, UNDER the polylines (a stop's dot there sits under the route line) and takes no events. */
+export type Pane = "overlayMouseTarget" | "mapPane";
 
 export interface HtmlMarker extends google.maps.OverlayView {
   el: HTMLElement;
@@ -222,24 +225,26 @@ export interface HtmlMarker extends google.maps.OverlayView {
   getPosition(): google.maps.LatLngLiteral;
 }
 
-let MarkerClass: (new (el: HTMLElement, pos: google.maps.LatLngLiteral, anchor: Anchor) => HtmlMarker) | null = null;
+let MarkerClass: (new (el: HTMLElement, pos: google.maps.LatLngLiteral, anchor: Anchor, pane: Pane) => HtmlMarker) | null = null;
 
 /** An element at a point, drawn above the map (OverlayView: no map id needed, unlike advanced markers). */
-export function htmlMarker(maps: GoogleMapsApi, el: HTMLElement, pos: google.maps.LatLngLiteral, anchor: Anchor = "bottom"): HtmlMarker {
+export function htmlMarker(maps: GoogleMapsApi, el: HTMLElement, pos: google.maps.LatLngLiteral, anchor: Anchor = "bottom", pane: Pane = "overlayMouseTarget"): HtmlMarker {
   if (!MarkerClass) {
     MarkerClass = class extends maps.OverlayView implements HtmlMarker {
       el: HTMLElement;
       private pos: google.maps.LatLngLiteral;
       private anchor: Anchor;
-      constructor(element: HTMLElement, position: google.maps.LatLngLiteral, a: Anchor) {
+      private pane: Pane;
+      constructor(element: HTMLElement, position: google.maps.LatLngLiteral, a: Anchor, p: Pane) {
         super();
         this.el = element;
         this.pos = position;
         this.anchor = a;
+        this.pane = p;
         this.el.style.position = "absolute";
       }
       onAdd() {
-        this.getPanes()?.overlayMouseTarget.appendChild(this.el);
+        this.getPanes()?.[this.pane].appendChild(this.el);
       }
       draw() {
         const p = this.getProjection()?.fromLatLngToDivPixel(new maps.LatLng(this.pos));
@@ -261,7 +266,7 @@ export function htmlMarker(maps: GoogleMapsApi, el: HTMLElement, pos: google.map
       }
     };
   }
-  return new MarkerClass(el, pos, anchor);
+  return new MarkerClass(el, pos, anchor, pane);
 }
 
 /** Fit the map to points, at most this zoom (Google's fitBounds has no limit of its own). */

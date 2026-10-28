@@ -8,11 +8,17 @@
 // on hover or tap (§21: no permanent text for a gap), the plan's pins with
 // straight dashed connectors and never a Google pin or line (§20, rule 10),
 // and the one control cluster: zoom in, zoom out, trails, fit (§25; this map
-// never turns, so it has no compass).
+// never turns, so it has no compass). Round 48 (item 3; Google Maps Timeline,
+// MarkerClusterer): the route's first and last point are pins, a stop is a dot
+// drawn BEFORE the route line (z-order: the line over the clutter; the button
+// after it keeps the card), the events are a layer the page turns on, and marks
+// that overlap in the SVG are one numbered circle (cluster.ts) until zoomed in.
 import { speedClass } from "@fleet/route";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type Cluster, clusterItems, clusterLabel, clusterTitle } from "./cluster";
 import { fixedHeight } from "./controlsLogic";
 import { cardPlacement, gapCardLines, useGapOpen } from "./gapLogic";
+import { isPin } from "./layers";
 import { MapControls } from "./MapControls";
 import { GAP_ICONS } from "./mapIcons";
 import { pinChip, planFitKey, planFor } from "./planDraw";
@@ -27,6 +33,8 @@ const MONO = "IBM Plex Mono, monospace";
 /** A gap marker's grey (§21) and the plan's pin colours. */
 const GAP_GREY = "var(--map-gap)", PIN_RING = "var(--map-pin-ink)";
 const PIN_INK = "var(--map-pin)", PIN_LATE = "var(--map-pin-late)";
+/** Round 48: the grid cell for the clusters in this SVG's units (its 1000 px is a card's width on a screen). */
+const CLUSTER_CELL_SVG = 56;
 
 /** The projection the artifact used: a box around every point (or the island), stretched to the SVG's shape, divided by the zoom. */
 export function projection(points: [number, number][], zoom: number) {
@@ -176,12 +184,21 @@ export default function DrawnMap({
   for (let lo = Math.ceil(lngMin / step) * step; lo <= lngMax; lo += step) { const x = pr(lo, 0)[0]; grid.push({ x1: x, x2: x, y1: 0, y2: H }); }
   const island = "M" + LK.map(([lo, la]) => pr(lo, la).map((v) => v.toFixed(1)).join(",")).join("L") + "Z";
   const sea = pr(79.5, 7.3);
-  const start = route?.points[0] ? pr(route.points[0].lng, route.points[0].lat) : null;
   const color = (t: string) => (t === "live" ? "var(--live)" : t === "warn" ? "var(--accent)" : "var(--bad)");
   const line = (points: { lat: number; lng: number }[]) => points.map((p) => pr(p.lng, p.lat).map((v) => v.toFixed(1)).join(",")).join(" ");
   const cursor = route?.cursor ? pr(route.cursor.lng, route.cursor.lat) : null;
   const cards = gaps.filter((g) => g.id === open || g.id === hover);
   const toggleGap = (g: GapMarker) => setOpen(open === g.id ? null : g.id);
+  // Round 48: the marks grouped by their place in the SVG (cluster.ts); the open one is never grouped. A tap on a
+  // cluster's circle zooms to its marks (the view fitted to them).
+  const grouped = useMemo(() => clusterItems(gaps.map((g) => { const [x, y] = pr(g.lng, g.lat); return { id: g.id, x, y }; }), { cell: CLUSTER_CELL_SVG, keep: open ? [open] : [] }), [gaps, pr, open]);
+  const single = useMemo(() => new Set(grouped.singles), [grouped]);
+  const zoomTo = (c: Cluster) => {
+    const members = gaps.filter((g) => c.ids.includes(g.id));
+    setView(members.map((g): [number, number] => [g.lng, g.lat]));
+    setZoom(1);
+  };
+  const shownGaps = gaps.filter((g) => single.has(g.id));
 
   return (
     <div className="mapbox" style={fixedHeight(height)}>
@@ -210,6 +227,11 @@ export default function DrawnMap({
             ))}
           </g>
         )}
+        {/* Round 48 (z-order): the stops' dots drawn before the route line, so the line reads over them. */}
+        {shownGaps.filter((g) => g.kind === "stop").map((g) => {
+          const [x, y] = pr(g.lng, g.lat);
+          return <circle key={"u" + g.id} className="under-dot" data-testid="under-dot" cx={x.toFixed(1)} cy={y.toFixed(1)} r="7" fill="var(--surface)" stroke="var(--ink)" strokeWidth="2.5" pointerEvents="none" />;
+        })}
         {route && route.points.length > 0 && (
           <g data-testid="drawn-route">
             {route.bySpeed
@@ -224,7 +246,7 @@ export default function DrawnMap({
             {(route.holes ?? []).map((h, i) => (
               <polyline key={"h" + i} className="hole" points={line([h.from, h.to])} fill="none" stroke="var(--muted)" strokeWidth="4" strokeDasharray="10 10" strokeLinecap="round" />
             ))}
-            {start && <circle cx={start[0].toFixed(1)} cy={start[1].toFixed(1)} r="8" fill="var(--surface)" stroke="var(--live)" strokeWidth="4" />}
+            {/* Round 48: the start's own circle moved into the start pin (the page's marks). */}
             {(route.stops ?? []).map((s, i) => {
               const [x, y] = pr(s.lng, s.lat);
               return (
@@ -236,14 +258,22 @@ export default function DrawnMap({
             })}
           </g>
         )}
-        {gaps.map((g) => {
+        {shownGaps.map((g) => {
           const [x, y] = pr(g.lng, g.lat);
           const isOpen = g.id === open;
+          const pin = isPin(g.kind);
+          const stop = g.kind === "stop";
+          // A pin stands on its point (the round head above it); a stop's button is a transparent hit area over the dot
+          // drawn under the line, shown only while open or hovered; an event mark is the grey round mark as before.
+          const cy = pin ? y - 16 : y;
+          const fill = stop ? (isOpen || hover === g.id ? "var(--surface)" : "transparent") : pin ? (g.kind === "start" ? "var(--live)" : PIN_INK) : GAP_GREY;
+          const stroke = stop ? (isOpen || hover === g.id ? "var(--ink)" : "transparent") : pin ? PIN_RING : PIN_RING;
+          const r = stop ? 9 : 14;
           return (
             <g
               key={g.id}
-              className={`gap ${g.kind}${isOpen ? " open" : ""}`}
-              data-testid={g.kind === "stop" ? "stop-pin" : "gap-marker"}
+              className={`gap ${g.kind}${pin ? " pin" : ""}${isOpen ? " open" : ""}`}
+              data-testid={stop ? "stop-pin" : pin ? "route-pin" : "gap-marker"}
               role="button"
               tabIndex={0}
               aria-label={g.text}
@@ -260,15 +290,26 @@ export default function DrawnMap({
               onMouseEnter={() => setHover(g.id)}
               onMouseLeave={() => setHover((h) => (h === g.id ? null : h))}
             >
-              {isOpen && <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="21" fill="var(--accent)" opacity=".4" />}
-              {/* A stop (§33.6 item 1): the surface with an ink ring and pin; a gap: grey with the pin ring. */}
-              <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="14" fill={g.kind === "stop" ? "var(--surface)" : GAP_GREY} stroke={g.kind === "stop" ? "var(--ink)" : PIN_RING} strokeWidth="3" />
-              <g transform={`translate(${(x - 9).toFixed(1)} ${(y - 9).toFixed(1)}) scale(0.75)`} fill="none" stroke={g.kind === "stop" ? "var(--ink)" : PIN_RING} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-                {GAP_ICONS[g.kind].map((d) => <path key={d} d={d} />)}
-              </g>
+              {isOpen && <circle cx={x.toFixed(1)} cy={cy.toFixed(1)} r={pin ? "23" : "21"} fill="var(--accent)" opacity=".4" />}
+              {pin && <path d={`M${(x - 8).toFixed(1)},${(y - 10).toFixed(1)} L${x.toFixed(1)},${y.toFixed(1)} L${(x + 8).toFixed(1)},${(y - 10).toFixed(1)} Z`} fill={fill} stroke={stroke} strokeWidth="2" />}
+              <circle cx={x.toFixed(1)} cy={cy.toFixed(1)} r={r} fill={fill} stroke={stroke} strokeWidth="3" />
+              {!stop && (
+                <g transform={`translate(${(x - 9).toFixed(1)} ${(cy - 9).toFixed(1)}) scale(0.75)`} fill={pin && g.kind === "start" ? PIN_RING : "none"} stroke={PIN_RING} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                  {GAP_ICONS[g.kind].map((d) => <path key={d} d={d} />)}
+                </g>
+              )}
             </g>
           );
         })}
+        {/* Round 48: a numbered circle per group of overlapping marks; a tap zooms to them (MarkerClusterer). */}
+        {grouped.clusters.map((c) => (
+          <g key={c.id} className="mk-cluster-svg" data-testid="mark-cluster" role="button" tabIndex={0} aria-label={clusterTitle(c.ids.length)} style={{ cursor: "pointer" }}
+            onClick={(e) => { e.stopPropagation(); zoomTo(c); }} onKeyDown={activate(() => zoomTo(c))}>
+            <title>{clusterTitle(c.ids.length)}</title>
+            <circle cx={c.x.toFixed(1)} cy={c.y.toFixed(1)} r="16" fill={PIN_INK} stroke={PIN_RING} strokeWidth="3" />
+            <text x={c.x.toFixed(1)} y={(c.y + 5).toFixed(1)} textAnchor="middle" fontFamily={MONO} fontWeight="700" fontSize="14" fill={PIN_RING}>{clusterLabel(c.ids.length)}</text>
+          </g>
+        ))}
         {drawnPlan.pins.map((p) => {
           const [x, y] = pr(p.lng, p.lat);
           const sel = plan?.selected === p.id;

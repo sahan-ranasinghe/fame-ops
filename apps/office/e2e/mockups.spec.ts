@@ -8,8 +8,12 @@
 //     phone shows it, and the whole page (the window as tall as the page's content).
 //   - The website at a desktop's width (1440 × 900): the Overview, a task on the way (the driver accepts and starts it as
 //     the app does) and a request waiting (its decide page), with data made through the connector.
+//   - Round 48: the website's driver page with a day's route (7-driver-day), at the desktop's width (1440 × 900: the split
+//     view, the map pane with the playback over it) and at a phone's (412 × 915: the map at a fixed height, the playback
+//     under it), for the before / after pictures of the map pages (docs/ui-patterns.md §18). No phone design page.
 //   - Writes apps/office/mockups-report/index.html: each mockup's PNG beside the built pictures, with captions.
 // It fails only when a screen does not render (the marker or a key element missing), never on how it looks.
+import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +38,13 @@ const PAGES = [
   { mockup: "4-office-trip-on-the-way", title: "The trip on the way (Office mode, /m/)", route: "office-trip", must: "task-banner", site: "site-task.png", siteCaption: "The site's task page, the driver on the way, 1440 × 900" },
   { mockup: "5-driver-today", title: "The driver's Today (driver app)", route: "driver-today", must: null },
   { mockup: "6-driver-task-in-progress", title: "The driver's task in progress (driver app)", route: "driver-task", must: null },
+  {
+    mockup: "7-driver-day", title: "A driver's day on the website (Round 48: the map pages)", route: "driver-day", must: null, webOnly: true,
+    sites: [
+      { file: "site-driver-day.png", caption: "The site's driver page with a day's route, 1440 × 900 (the split view)" },
+      { file: "site-driver-day-phone.png", caption: "The same page at a phone's width, 412 × 915 (the map at a fixed height)" },
+    ],
+  },
 ] as const;
 
 const LANGS = ["en", "si"] as const;
@@ -62,6 +73,9 @@ async function driverRest(username: string, pin: string) {
   if (!session.access_token) throw new Error(`driver sign-in failed: ${res.status}`);
   const headers = { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${session.access_token}`, prefer: "return=representation" };
   return {
+    async get<T>(path: string): Promise<T> {
+      return (await (await fetch(`${API}/rest/v1/${path}`, { headers })).json()) as T;
+    },
     async post(path: string, body: unknown): Promise<number> {
       return (await fetch(`${API}/rest/v1/${path}`, { method: "POST", headers, body: JSON.stringify(body) })).status;
     },
@@ -120,8 +134,10 @@ function writeReport(): void {
       ...LANGS.map((l) => img(`${p.route}-${l}-full.png`, `Built, ${l === "en" ? "English" : "Sinhala"} · the whole page (390 px wide)`)),
       ...LANGS.map((l) => img(`${p.route}-${l}.png`, `Built, ${l === "en" ? "English" : "Sinhala"} · the first screen (390 × 844)`)),
       ...("site" in p && p.site ? [img(p.site, p.siteCaption)] : []),
+      ...("sites" in p ? p.sites.map((x) => img(x.file, x.caption)) : []),
     ];
-    return `<section><h2>${p.title}</h2><p class="route">/m/design/${p.route}?lang=en | si</p><div class="row">${figures.join("")}</div></section>`;
+    const where = "webOnly" in p ? "the website only" : `/m/design/${p.route}?lang=en | si`;
+    return `<section><h2>${p.title}</h2><p class="route">${where}</p><div class="row">${figures.join("")}</div></section>`;
   });
   writeFileSync(join(OUT, "index.html"), `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -135,6 +151,7 @@ function writeReport(): void {
   figure { margin: 0; flex: none; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px }
   figure img { display: block; width: 300px; height: auto; border-radius: 6px }
   figure:last-child img[src^="site-"] { width: 640px }
+  figure img[src="site-driver-day.png"] { width: 640px }
   figure.none div { width: 300px; height: 120px; display: grid; place-items: center; color: var(--muted); background: var(--page); border-radius: 6px }
   figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; max-width: 300px }
 </style></head><body>
@@ -160,6 +177,7 @@ test.beforeAll(() => {
 test.afterAll(() => writeReport());
 
 for (const p of PAGES) {
+  if ("webOnly" in p) continue; // the website only: its own test below
   test(`phone, English and Sinhala: ${p.title} beside ${p.mockup}`, async ({ browser }) => {
     test.setTimeout(120_000);
     for (const lang of LANGS) {
@@ -237,6 +255,55 @@ test("the website at a desktop's width: the Overview, a task on the way, a reque
   await expect(page.getByTestId("decide-banner")).toBeVisible();
   await settled(page);
   await wholePage(page, join(OUT, "site-request.png"));
+  await context.close();
+  writeReport();
+});
+
+test("the website's driver page with a day's route, at a desktop's and at a phone's width (Round 48: the map pages)", async ({ browser }) => {
+  test.skip(!KEY, "OFFICE_MCP_KEY (the local shared key) is not set");
+  test.setTimeout(180_000);
+  const email = `e2e.mockups.day.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Mockups Day", email, permissions: ["view", "assign_tasks"] });
+  const driver = { name: `E2E Day ${stamp}`, code: `E2DY-${stamp}`, username: `e2dy.${stamp}`, pin: "357913", phone: "0771234578" };
+  await tool("create_driver", driver);
+  // A day's route, as the phone would have sent it: on duty since an hour ago, a line out of Colombo with a stop of 12
+  // minutes near Kelaniya and a gap of 10 minutes with nothing recorded (an event mark, off by default).
+  const app = await driverRest(driver.username, driver.pin);
+  const [me] = await app.get<{ id: string }[]>("employees?select=id");
+  const session = randomUUID();
+  const ago = (min: number) => new Date(Date.now() - min * 60000).toISOString();
+  expect(await app.post("duty_sessions", { id: session, employee_id: me.id, started_at: ago(70), device_info: { model: "e2e" } })).toBe(201);
+  const point = (min: number, lat: number, lng: number, speed: number) => ({ employee_id: me.id, session_id: session, recorded_at: ago(min), lat, lng, accuracy_m: 8, speed_mps: speed, battery_pct: 80 });
+  const points = [
+    ...Array.from({ length: 25 }, (_, i) => point(68 - i, 6.90 + i * 0.0025, 79.86 + i * 0.0015, 9)), // driving north-east
+    ...Array.from({ length: 12 }, (_, i) => point(43 - i, 6.9625, 79.8975, 0)), // a stop of 12 minutes
+    ...Array.from({ length: 12 }, (_, i) => point(20 - i, 6.9625 + i * 0.0025, 79.8975 + i * 0.0025, 11)), // after a gap of 10 minutes
+  ];
+  expect(await app.post("location_points", points)).toBe(201);
+
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Mockups day for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  await page.goto(`/drivers/${driver.username}`);
+  await expect(page.getByTestId("day-span")).toHaveText(/^\d\d:\d\d–\d\d:\d\d$/, { timeout: 20_000 });
+  await expect(page.getByTestId("route-pane")).toHaveAttribute("data-layout", "split");
+  await expect(page.getByTestId("playback")).toBeVisible();
+  await settled(page);
+  await page.screenshot({ path: join(OUT, "site-driver-day.png") });
+
+  // The same page at a phone's width: the site's phone layout (phones still open the desktop site), not /m/.
+  await page.setViewportSize({ width: 412, height: 915 });
+  await expect(page.getByTestId("route-pane")).toHaveAttribute("data-layout", "stacked", { timeout: 5_000 });
+  await settled(page);
+  await page.screenshot({ path: join(OUT, "site-driver-day-phone.png") });
   await context.close();
   writeReport();
 });

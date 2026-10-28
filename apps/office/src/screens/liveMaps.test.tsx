@@ -1,6 +1,7 @@
 // Live's map (Phase 7, §21, §25, §26): today's trails are the map's own toggle (no big control on the page) and are never
 // snapped; the shown route is snapped by default with "Recorded points", and its gaps are markers with the list in the card.
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { applyFilter } from "../test/controls";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -15,7 +16,12 @@ const seen: { props: MapProps | null } = { props: null };
 vi.mock("../map/MapView", () => ({
   MapView: (p: MapProps) => {
     seen.props = p;
-    return <div data-testid="map" data-open={p.openGap ?? ""}>{p.trailsToggle ? <button type="button" aria-pressed={p.trailsToggle.on} onClick={p.trailsToggle.toggle}>Today’s trails</button> : null}</div>;
+    return (
+      <div data-testid="map" data-open={p.openGap ?? ""}>
+        {p.trailsToggle ? <button type="button" aria-pressed={p.trailsToggle.on} onClick={p.trailsToggle.toggle}>Today’s trails</button> : null}
+        <button type="button" data-testid="map-close" onClick={() => p.onGap?.(null)} />
+      </div>
+    );
   },
 }));
 
@@ -100,12 +106,22 @@ describe("Live's map", () => {
     expect(routeCalls(transport).at(-1)?.args).toMatchObject({ driver: "nuwan.p", snap: true, estimate_gaps: true });
     expect(seen.props?.route?.points).toHaveLength(5); // the snapped line
     expect(screen.getByTestId("snap-legend").textContent).toContain("Snapped to roads · km from odometer");
-    expect(seen.props?.gaps).toHaveLength(1);
+    // Round 48 (item 3): the route's first and last point are pins; the gap's event mark is a layer, off by default, but a
+    // Gaps list row still shows its own mark (the open one is always drawn).
+    expect(seen.props?.gaps?.map((g) => g.kind)).toEqual(["start", "end"]);
     const row = screen.getByTestId("gap-row");
     expect(row.textContent).toBe("14:00–14:56Stopped · no GPS signal56 min");
     fireEvent.click(row);
-    expect(screen.getByTestId("map").dataset.open).toBe(seen.props?.gaps?.[0].id);
+    const event = seen.props?.gaps?.find((g) => g.kind === "no_gps");
+    expect(event).toBeTruthy();
+    expect(screen.getByTestId("map").dataset.open).toBe(event!.id);
     expect(seen.props?.focus).toHaveLength(2);
+    // The page's Filter has the Layers section: Events on draws the marks without a row.
+    fireEvent.click(screen.getByTestId("map-close"));
+    expect(seen.props?.gaps?.map((g) => g.kind)).toEqual(["start", "end"]);
+    applyFilter("Layers", /Events/);
+    expect(seen.props?.gaps?.map((g) => g.kind)).toEqual(["start", "end", "no_gps"]);
+    expect(screen.getByTestId("filter-chips").textContent).toContain("Layers: Events");
     fireEvent.click(screen.getByLabelText("Recorded points"));
     await act(async () => { await Promise.resolve(); });
     expect(routeCalls(transport).at(-1)?.args).toMatchObject({ snap: false });

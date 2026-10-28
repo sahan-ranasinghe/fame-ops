@@ -1,4 +1,4 @@
-import { pickStripDay } from "../test/controls";
+import { applyFilter, pickStripDay } from "../test/controls";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -122,12 +122,39 @@ describe("DriverPage", () => {
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
     expect(screen.getByTestId("day-strip")).toBeTruthy();
     expect(screen.getByLabelText("Legend").textContent).toContain("Stop");
-    // A stop is a pin on the map: the legend draws the same pin (the fresh reviewer: it still showed a ring).
-    expect(screen.getByTestId("legend-stop").querySelector("i.pin svg")).toBeTruthy();
+    // Round 48: a stop is a small dot on the map, and the legend draws the same dot (it was a pin; never a ring).
+    expect(screen.getByTestId("legend-stop").querySelector("i.dot")).toBeTruthy();
     expect(screen.getByLabelText("Legend").querySelector("i.ring")).toBeNull();
     // A day with points has numbers, not the empty state.
     expect(screen.queryByTestId("day-empty")).toBeNull();
+    // Round 48 (item 2): the split view on a desktop (jsdom is no phone): the map pane with the legend strip on top and the
+    // playback bar inside it (laid over the map's bottom edge by CSS), the details in their own column.
+    const pane = screen.getByTestId("route-pane");
+    expect(pane.dataset.layout).toBe("split");
+    expect(pane.contains(screen.getByTestId("map"))).toBe(true);
+    expect(pane.contains(screen.getByTestId("playback"))).toBe(true);
+    expect(pane.contains(screen.getByLabelText("Legend"))).toBe(true);
+    expect(screen.getByTestId("route-page").contains(summary)).toBe(true);
+    // The legend is one compact row: the colours, poor fix, gap, the pins and the dot; no sentence under the map.
+    expect([...screen.getByLabelText("Legend").querySelectorAll("span")].map((x) => x.textContent).slice(0, 8)).toEqual(["Standing", "<20 km/h", "20–60", ">60", "Poor fix", "Gap", "Start / end", "Stop"]);
+    expect(screen.queryByText(/Km from GPS, drift filtered/)).toBeNull();
+    // The page's Filter button (§1) with the Layers section only; nothing in use by default.
+    expect(screen.getByTestId("filter-button").textContent).toBe("Filter");
   }, 20_000); // the file's first test pays for importing the page (over 5 s while every test file runs at once)
+  it("the ⓘ opens the sheet with every sentence that was under the map: the colours, the marks and the layer, the gaps, the line and the km", async () => {
+    route = { ...base, snapped: { provider: "google_roads", status: "ok" }, points_shown: 3 };
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "About this map" }));
+    const sheet = screen.getByTestId("route-info");
+    expect(sheet.textContent).toContain("Line colours");
+    expect(sheet.textContent).toContain("Thin and lighter: a poor fix (worse than 30 m)");
+    expect(sheet.textContent).toContain("Events (no GPS signal, the app not running, recorded offline and uploaded later) are off: Filter → Layers → Events");
+    expect(sheet.textContent).toContain("Km from GPS, drift filtered: fixes worse than 50 m, jumps and drift while standing still are left out. The odometer is the true figure.");
+    expect(sheet.textContent).toContain("Line: 3 of 830 points.");
+    expect(sheet.textContent).toContain("Raw GPS (snapping to roads failed).");
+    fireEvent.click(within(sheet).getByRole("button", { name: "Done" }));
+    expect(screen.queryByTestId("route-info")).toBeNull();
+  });
   it("Yesterday asks the tool for that day and says when nothing was shared", async () => {
     const transport = await mount();
     // The week strip (docs/ui-patterns.md §3): yesterday's cell (or the calendar when yesterday is last week).
@@ -157,21 +184,26 @@ describe("DriverPage", () => {
   });
 });
 
+const withGaps: DriverRoute = {
+  ...base,
+  route: { columns: ["time", "lat", "lng", "km/h", "at"], points: [["08:01", 6.88, 79.86, 0, iso("08:01")], ["09:55", 6.96, 79.89, 38, iso("09:55")], ["14:00", 6.96, 79.89, 0, iso("14:00")], ["14:56", 6.93, 79.86, 0, iso("14:56")]] },
+  holes: [{ from_at: iso("14:00"), to_at: iso("14:56"), minutes: 56, kind: "no_data", text: "App not running · 56 min" }],
+  uploaded_later: [{ from: "09:55", to: "09:55", uploaded: "10:20", from_at: iso("09:55"), to_at: iso("09:55") }],
+};
+
 describe("the gaps and stops on the driver page (§21; §33.6 item 1)", () => {
-  it("a marker per gap and a pin per stop on the map, no Gaps list; a tap opens its card and moves the map to it, the map closes it", async () => {
-    route = {
-      ...base,
-      route: { columns: ["time", "lat", "lng", "km/h", "at"], points: [["08:01", 6.88, 79.86, 0, iso("08:01")], ["09:55", 6.96, 79.89, 38, iso("09:55")], ["14:00", 6.96, 79.89, 0, iso("14:00")], ["14:56", 6.93, 79.86, 0, iso("14:56")]] },
-      holes: [{ from_at: iso("14:00"), to_at: iso("14:56"), minutes: 56, kind: "no_data", text: "App not running · 56 min" }],
-      uploaded_later: [{ from: "09:55", to: "09:55", uploaded: "10:20", from_at: iso("09:55"), to_at: iso("09:55") }],
-    };
-    await mount();
+  it("a marker per gap and a dot per stop on the map, no Gaps list; a tap opens its card and moves the map to it, the map closes it", async () => {
+    route = withGaps;
+    // Round 48: the event marks are a layer, off by default; this day looks at them on (?layers=events).
+    await mount("/drivers/nuwan.p?layers=events");
     const map = screen.getByTestId("map");
-    // Two gap markers (offline here, app not running) and the day's one stop.
-    expect(map.dataset.gaps).toBe("3");
+    // The two pins (the first and last point), two gap markers (offline here, app not running) and the day's one stop.
+    expect(map.dataset.gaps).toBe("5");
+    expect(screen.getByTestId("mark-start").textContent).toBe("Start · 08:01");
+    expect(screen.getByTestId("mark-end").textContent).toBe("Latest · 14:56"); // today's line still grows
     expect(screen.queryByTestId("gaps-list")).toBeNull();
     expect(screen.queryAllByTestId("gap-row")).toHaveLength(0);
-    // The stops are pins with a card, not the line's own labelled circles.
+    // The stops are dots with a card, not the line's own labelled circles.
     expect(seen.props?.route?.stops).toEqual([]);
     expect(screen.getByTestId("mark-stop").textContent).toBe("Stopped near Peliyagoda · 09:55–15:38 · 5 h 43 min");
     expect(screen.getByTestId("mark-no_data").textContent).toBe("App not running · 14:00–14:56 · 56 min");
@@ -190,6 +222,39 @@ describe("the gaps and stops on the driver page (§21; §33.6 item 1)", () => {
     await mount();
     expect(screen.queryByTestId("gaps-list")).toBeNull();
     expect(screen.queryByTestId("day-gaps")).toBeNull();
+  });
+  // Round 48 (item 3): the Events layer.
+  it("the event marks are off by default: the pins and the stop show; Filter → Layers → Events (or Show on map) turns them on, the badge says 1", async () => {
+    route = withGaps;
+    await mount();
+    expect(screen.getByTestId("map").dataset.gaps).toBe("3");
+    expect(screen.queryByTestId("mark-no_data")).toBeNull();
+    expect(screen.queryByTestId("mark-late")).toBeNull();
+    expect(screen.getByTestId("mark-stop")).toBeTruthy();
+    // "Show on map" beside the gaps line: one tap turns the layer on, in the URL.
+    fireEvent.click(screen.getByTestId("show-events"));
+    expect(screen.getByTestId("where").textContent).toBe("?layers=events");
+    expect(screen.getByTestId("map").dataset.gaps).toBe("5");
+    expect(screen.getByTestId("mark-no_data")).toBeTruthy();
+    expect(screen.queryByTestId("show-events")).toBeNull();
+    expect(screen.getByTestId("filter-button").querySelector(".badge")?.textContent).toBe("1");
+    expect(screen.getByTestId("filter-chips").textContent).toContain("Layers: Events");
+    // The Filter's own section turns it off again.
+    applyFilter("Layers", /Events/);
+    expect(screen.getByTestId("where").textContent).toBe("");
+    expect(screen.getByTestId("map").dataset.gaps).toBe("3");
+  });
+  it("with the layer off, a tapped event still shows its mark (the open one is always drawn)", async () => {
+    route = withGaps;
+    await mount("/drivers/nuwan.p?layers=events");
+    fireEvent.click(screen.getByTestId("mark-no_data"));
+    const id = screen.getByTestId("map").dataset.open;
+    expect(id).toMatch(/^no_data-/);
+    applyFilter("Layers", /Events/); // off
+    expect(screen.getByTestId("map").dataset.gaps).toBe("4");
+    expect(screen.getByTestId("map").dataset.open).toBe(id);
+    expect(screen.getByTestId("mark-no_data")).toBeTruthy();
+    expect(screen.queryByTestId("mark-late")).toBeNull();
   });
 });
 

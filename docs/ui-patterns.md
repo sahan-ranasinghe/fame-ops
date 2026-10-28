@@ -414,6 +414,51 @@ of `styles.css` (website: `.pt-banner`, `.pt-chip`, `.pt-mini`); the README's to
 `theme.ts` and the site's `:root`. The design pages `apps/driver/src/design/Office*.tsx` draw the real screens with sample
 answers (`sampleOffice.ts`) for the mockup comparison (`apps/office/e2e/mockups.spec.ts`, the e2e build only).
 
+## 18. Map pages (Round 48, 28 October 2026)
+
+The pages that show a driver's route with its playback: the website's driver page (`/drivers/:username`), the task
+page's route and Live's shown route. The patterns are Airbnb's split view and Google Maps Timeline for the layout,
+Google Maps' and Apple Maps' info sheet for the words, Google Maps' layers for the marks and its MarkerClusterer for
+the clutter.
+
+**The split view (desktop).** The map is a **pane that stays put** (sticky, the height of the viewport minus the
+margins) while the details (the summary card, the stops, the gaps) scroll in their own column beside it. The pane is
+out of the page's scroll path: the wheel over the map zooms the map and a page scroll never does (MapLibre's
+`cooperativeGestures` off, Google's `gestureHandling: "greedy"`), so no "use ctrl + scroll" hint. The **playback bar is
+laid over the map's bottom edge** (map and playback always seen together), above the map's own corner, where the
+credits stay: Google's logo and terms on Google's map, "© OpenStreetMap contributors · OpenFreeMap" on the free map.
+
+**The phone (the site under 768 px).** The map at a **fixed height**, 45 % of the viewport and at least 300 px, first
+on the page; the playback bar right under it; the content scrolling below. Pinch zooms the map; a page scroll never
+does. A page that is itself the right pane of a split (the task page beside the Tasks list) stacks at every width.
+
+**The words.** The legend is **one compact row**: a swatch and a short word each (Standing · <20 km/h · 20–60 · >60 ·
+Poor fix · Gap · Start / end · Stop, Estimated when drawn), the "Recorded points" toggle with what the line is, and a
+small **ⓘ** at the end that opens the site's sheet (§6: a popover under the button on a desktop, a bottom sheet on a
+phone) with every explanation that used to sit under the map: the colours, the marks and the layer, the gaps and the
+estimated lines' sentence, which line is drawn and how many points, how the km are counted, the credits. The credits a
+licence requires never move into the sheet: openrouteservice's "Route © openrouteservice.org by HeiGIT · map data ©
+OpenStreetMap contributors" stays in the row whenever one of its estimated lines is drawn; the map's own corner keeps
+Google's logo and terms, or OpenFreeMap's credit.
+
+**The marks.** The route's first and last point are **pins** ("Start · 08:01", "End · 16:31"; "Latest" while today's
+line still grows). A stop of 10 minutes or more is a **small dot** whose card says where and how long. The **event
+marks** (no GPS signal, the app not running, recorded offline and uploaded later) are a **layer, off by default**: the
+page's one Filter button (§1) has a **Layers** section of tick boxes and the value lives in the URL (`?layers=events`);
+"Show on map" beside the gaps line turns it on in one tap; a tapped gap row (Live's Gaps list) always shows its own
+mark. Marks that overlap at the map's zoom are **one numbered circle** ("12", "99+"; named "12 marks here · zoom in to
+see them") until the person zooms in; a tap on the circle zooms to its marks; the open mark is never folded in.
+**Z-order:** the route line draws over the dots (the clutter): on MapLibre the dots are a circle layer under the line's
+layer, on Google's map an element in the mapPane under the polylines, on the drawn map a circle before the line; the
+HTML button above keeps the hit area, the card and the name. Pins, event marks and clusters sit over the line. The
+speed colours, the thin poor-fix steps, the dashed holes, the estimated lines, the selected-row zoom, the gliding
+playback marker and the snap-to-roads toggle are unchanged.
+
+| Codebase | Component | Rules |
+|---|---|---|
+| Website | `screens/RouteMapPane.tsx` (the pane), `screens/RouteInfo.tsx` (`RouteLegend`, `RouteInfo`: the row and the ⓘ sheet on `ui/Sheet.tsx`), the Layers section on `ui/FilterBar.tsx`, the marks on the three maps (`map/domMarks.ts`, `map/MapLibreMap.tsx`, `map/google/GoogleMap.tsx`, `map/DrawnMap.tsx`) | `screens/routeLayout.ts` (the split or stacked choice, the phone's height), `screens/routeInfo.ts` (the row's items, the sheet's sections, the visible credits), `screens/routeMarks.ts` (the pins, the dots, the events, what a tap zooms to), `map/layers.ts` (the Layers filter, which marks the map draws), `map/cluster.ts` (the grid) |
+| App (Office mode, /m/) | not yet: the driver app and Office mode keep their maps until their own round | — |
+
 ## The reviewer's checklist (each checkpoint)
 
 For every screen changed or added: the filters are one Filter button + sheet + chips; a date range is one button + one
@@ -422,5 +467,7 @@ time sheet; a list has skeletons, pull to refresh, Load more, an empty state and
 spinners only on a pressed button; sheets, cards, tabs, the place search, confirmations and toasts are the shared ones;
 a picked thing has its mark, the tint and the border (§11); a save closes its form, opens the item and says so in the
 snackbar, never an OK dialog (§12); no screen can go white (§13); a long settings list is grouped (§14); a detail screen
-has one status banner, its stops on the route stepper and its actions in the bottom bar with ⋯ More (§17); nothing is
-invented twice.
+has one status banner, its stops on the route stepper and its actions in the bottom bar with ⋯ More (§17); a page with a
+route's map is the split view on a desktop and a fixed-height map on a phone, its legend one compact row with ⓘ, the
+required credits visible, pins at the ends, dots for stops, the events a layer behind Filter, overlapping marks a
+numbered circle, the line over the dots (§18); nothing is invented twice.

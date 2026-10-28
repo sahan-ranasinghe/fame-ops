@@ -8,14 +8,18 @@
 // drivers' trails drawn lighter; a focus (a timeline row) zooms to those points.
 // Phase 7 (Part 2b): gap markers with their card instead of labels (§21), the
 // plan's pins with straight connectors, never a Google pin or line (§20, rule
-// 10), and the one control cluster with the compass (§24, §25).
+// 10), and the one control cluster with the compass (§24, §25). Round 48 (item 3; Google Maps Timeline, MarkerClusterer):
+// the route's first and last point are pins, a stop is a dot drawn in a circle layer UNDER the route line (z-order: the
+// line reads over the clutter; the HTML button above keeps the card), the event marks are a layer the page turns on, and
+// marks that overlap at this zoom are one numbered circle (cluster.ts, re-grouped after every move) until zoomed in.
 import { speedClass } from "@fleet/route";
 import type { Feature, FeatureCollection } from "geojson";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { clusterItems, meanOf } from "./cluster";
 import { compassShown, fixedHeight } from "./controlsLogic";
-import { cursorEl, gapKey, gapMarkEl, placeCard, planPinEl, setCursor, setGapOpen, setPlanPin } from "./domMarks";
+import { clusterEl, cursorEl, gapKey, gapMarkEl, markAnchor, placeCard, planPinEl, setCluster, setClustered, setCursor, setGapOpen, setPlanPin, underLine } from "./domMarks";
 import { plainRuns } from "./DrawnMap";
 import { needsCentre, useGapOpen } from "./gapLogic";
 import { MapControls } from "./MapControls";
@@ -44,6 +48,21 @@ interface Placed {
   marker: maplibregl.Marker;
   el: HTMLButtonElement;
   key: string;
+  lat: number;
+  lng: number;
+  kind: string;
+}
+
+/** A plan's pin (§20). */
+interface PlacedPin {
+  marker: maplibregl.Marker;
+  el: HTMLButtonElement;
+  key: string;
+}
+
+interface PlacedCluster {
+  marker: maplibregl.Marker;
+  el: HTMLButtonElement;
 }
 
 function fitTo(map: maplibregl.Map, points: [number, number][], maxZoom = 14) {
@@ -100,7 +119,9 @@ export default function MapLibreMap({
   const stopEls = useRef<maplibregl.Marker[]>([]);
   const cursorMark = useRef<maplibregl.Marker | null>(null);
   const gapEls = useRef(new Map<string, Placed>());
-  const pinEls = useRef(new Map<string, Placed>());
+  const clusterEls = useRef(new Map<string, PlacedCluster>());
+  const pinEls = useRef(new Map<string, PlacedPin>());
+  const recluster = useRef<() => void>(() => undefined);
   const pick = useRef(onPick);
   const pinTap = useRef(onPin);
   const fitted = useRef(false);
@@ -122,7 +143,9 @@ export default function MapLibreMap({
     // C (§33.12): the style and the lines in the page's scheme (MapView makes this map again when the theme changes).
     const canvas = mapCanvas(scheme), speed = speedColors(scheme);
     try {
-      // §23: no cooperative gestures (one finger moves the map, the wheel zooms).
+      // §23: no cooperative gestures (one finger moves the map, the wheel zooms). Round 48: the map sits in a sticky pane
+      // out of the page's scroll path (RouteMapPane), so the wheel over it zooms and a page scroll never does; no
+      // "use ctrl + scroll" hint is needed.
       m = new maplibregl.Map({ container: box.current, style: FREE_MAP_STYLES[scheme], center: SRI_LANKA, zoom: 6.6, attributionControl: { compact: false }, cooperativeGestures: false });
     } catch {
       onFail();
@@ -136,6 +159,8 @@ export default function MapLibreMap({
     m.on("rotate", turned);
     m.on("pitch", turned);
     m.on("moveend", turned);
+    // Round 48: the marks are grouped again at every zoom or move (the clusters depend on the pixel distances).
+    m.on("moveend", () => recluster.current());
     // A tap on the map closes an open gap card.
     m.on("click", () => {
       if (openRef.current) setOpen(null);
@@ -166,6 +191,10 @@ export default function MapLibreMap({
       m.addLayer({ id: "holes-line", type: "line", source: "holes", paint: { "line-color": canvas.hole, "line-width": 3, "line-dasharray": [2, 2] }, layout: { "line-cap": "round" } });
       m.addSource("estimated", { type: "geojson", data: empty() });
       m.addLayer({ id: "estimated-line", type: "line", source: "estimated", paint: { "line-color": estimatedColor(scheme), "line-width": 3.5, "line-dasharray": [1, 2] }, layout: { "line-cap": "round", "line-join": "round" } });
+      // Round 48 (z-order): the stops' dots, a circle layer added BEFORE the route line so the line draws over them (the
+      // HTML button of each dot sits above, transparent, with the hit area and the card: domMarks.underLine).
+      m.addSource("marks", { type: "geojson", data: empty() });
+      m.addLayer({ id: "marks-dots", type: "circle", source: "marks", paint: { "circle-radius": 7, "circle-color": canvas.ring, "circle-stroke-color": canvas.ink, "circle-stroke-width": 2.5 } });
       m.addSource("route", { type: "geojson", data: empty() });
       m.addLayer({
         id: "route-line",
@@ -179,7 +208,7 @@ export default function MapLibreMap({
         },
         layout: { "line-join": "round", "line-cap": "round" },
       });
-      m.addLayer({ id: "route-start", type: "circle", source: "route", filter: ["==", "$type", "Point"], paint: { "circle-radius": 7, "circle-color": canvas.ring, "circle-stroke-color": canvas.line, "circle-stroke-width": 4 } });
+      // Round 48: the start's own circle moved into the start pin (the page's marks: routeMarks.endPins).
       setReady(true);
     });
     m.on("error", (e) => {
@@ -197,6 +226,8 @@ export default function MapLibreMap({
       cursorMark.current = null;
       gapEls.current.forEach((g) => g.marker.remove());
       gapEls.current.clear();
+      clusterEls.current.forEach((c) => c.marker.remove());
+      clusterEls.current.clear();
       pinEls.current.forEach((p) => p.marker.remove());
       pinEls.current.clear();
       m.remove();
@@ -285,10 +316,7 @@ export default function MapLibreMap({
       return;
     }
     const coords = route.points.map(lngLat);
-    src.setData({
-      type: "FeatureCollection",
-      features: [...stepFeatures(route.points, !!route.bySpeed), { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: coords[0] } }],
-    });
+    src.setData({ type: "FeatureCollection", features: stepFeatures(route.points, !!route.bySpeed) });
     holeSrc.setData({
       type: "FeatureCollection",
       features: (route.holes ?? []).map((h) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [lngLat(h.from), lngLat(h.to)] } })),
@@ -345,6 +373,54 @@ export default function MapLibreMap({
     fitTo(m, focus.map(lngLat), 16);
   }, [focus]);
 
+  // Round 48 (item 3): the marks grouped by their pixel distance at this zoom (cluster.ts: MarkerClusterer's grid). A
+  // grouped mark is hidden and its group drawn as one numbered circle (a tap zooms in two steps on it); the open mark is
+  // never grouped. The stops' dots under the line (the "marks" layer) are the single stops only.
+  recluster.current = () => {
+    const m = map.current;
+    // Once the style has loaded (the "marks" source is there); never on loaded(), which is false while tiles still load.
+    if (!m || !m.getSource("marks")) return;
+    const items = [...gapEls.current.entries()].map(([id, g]) => {
+      const p = m.project([g.lng, g.lat]);
+      return { id, x: p.x, y: p.y };
+    });
+    const { singles, clusters } = clusterItems(items, { keep: openRef.current ? [openRef.current] : [] });
+    const single = new Set(singles);
+    gapEls.current.forEach((g, id) => setClustered(g.el, !single.has(id)));
+    const seen = new Set<string>();
+    for (const c of clusters) {
+      seen.add(c.id);
+      const members = c.ids.map((id) => gapEls.current.get(id)).filter((g): g is Placed => !!g);
+      const at = meanOf(members);
+      let placed = clusterEls.current.get(c.id);
+      if (!placed) {
+        const el = clusterEl((ids) => {
+          const mm = map.current;
+          if (!mm) return;
+          const pts = ids.map((id) => gapEls.current.get(id)).filter((g): g is Placed => !!g);
+          if (!pts.length) return;
+          mm.easeTo({ center: [meanOf(pts).lng, meanOf(pts).lat], zoom: Math.min(mm.getZoom() + 2, 18), duration: 400 });
+        });
+        placed = { marker: new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([at.lng, at.lat]).addTo(m), el };
+        clusterEls.current.set(c.id, placed);
+      } else placed.marker.setLngLat([at.lng, at.lat]);
+      setCluster(placed.el, c);
+    }
+    for (const [id, c] of clusterEls.current) {
+      if (!seen.has(id)) {
+        c.marker.remove();
+        clusterEls.current.delete(id);
+      }
+    }
+    const dots = m.getSource("marks") as maplibregl.GeoJSONSource | undefined;
+    dots?.setData({
+      type: "FeatureCollection",
+      features: [...gapEls.current.entries()]
+        .filter(([id, g]) => single.has(id) && underLine(g.kind as "stop"))
+        .map(([, g]) => ({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [g.lng, g.lat] } })),
+    });
+  };
+
   // The gaps' markers (§21): made again only when a gap changes, so an open card stays open across refreshes.
   useEffect(() => {
     const m = map.current;
@@ -362,7 +438,7 @@ export default function MapLibreMap({
         container: () => map.current?.getContainer() ?? null,
       });
       setGapOpen(el, openRef.current === g.id);
-      gapEls.current.set(g.id, { marker: new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([g.lng, g.lat]).addTo(m), el, key });
+      gapEls.current.set(g.id, { marker: new maplibregl.Marker({ element: el, anchor: markAnchor(g.kind) }).setLngLat([g.lng, g.lat]).addTo(m), el, key, lat: g.lat, lng: g.lng, kind: g.kind });
     }
     for (const [id, g] of gapEls.current) {
       if (!seen.has(id)) {
@@ -370,11 +446,13 @@ export default function MapLibreMap({
         gapEls.current.delete(id);
       }
     }
-  }, [gaps, setOpen]);
+    recluster.current();
+  }, [gaps, setOpen, ready]);
 
   // The open card (a Gaps list row or a tap): shown, and centred gently when its marker sits near the edge.
   useEffect(() => {
     gapEls.current.forEach((g, id) => setGapOpen(g.el, id === open));
+    recluster.current();
     const m = map.current;
     const g = open ? gapEls.current.get(open) : undefined;
     if (!m || !g) return;

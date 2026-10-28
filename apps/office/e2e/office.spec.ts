@@ -1561,6 +1561,11 @@ test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps 
   await expect(page.getByTestId("timeline")).toHaveCount(0);
   await expect(page.getByTestId("gaps-list")).toHaveCount(0);
   await expect(page.getByTestId("day-gaps")).toContainText(/No GPS for \d+ min/, { timeout: 15000 });
+  // Round 48 (item 3): the route's first and last point are pins; the event marks are a layer, off by default, turned on
+  // through the page's Filter → Layers → Events (docs/ui-patterns.md §18).
+  await expect(page.locator(".gap-mk.start").first()).toHaveAttribute("aria-label", /^Start · \d\d:\d\d$/, { timeout: 15000 });
+  await expect(page.locator(".gap-mk.no_data")).toHaveCount(0);
+  await applyFilter(page, "Layers", /Events/);
   // The points went up together just now, so the stretches before the gap also have "uploaded later" markers.
   const noApp = page.locator(".gap-mk.no_data").first();
   await expect(noApp).toHaveAttribute("aria-label", /App not running/, { timeout: 15000 });
