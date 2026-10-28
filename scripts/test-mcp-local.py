@@ -3213,8 +3213,9 @@ if CHANNEL == "api":
         # Round 48 (item 1): a change to an existing task by someone without approve waits in the same queue; the driver
         # never gets it until a fleet admin approves it (the hole: a dispatcher reassigned a declined task straight to a new driver).
         def result_of(text):
+            # as_coordinator's api answer carries " [200]" after the JSON; the mcp answer is the JSON alone.
             try:
-                return json.loads(text)
+                return json.loads(re.sub(r"\s*\[\d{3}\]$", "", text))
             except (ValueError, TypeError):
                 return {}
         tool("create_driver", {"name": f"Intern Two {u}", "code": f"J{u}", "username": f"intern2.{u}", "pin": "482917", "phone": f"+94 71 78{int(u, 16) % 100000:05d}"})
