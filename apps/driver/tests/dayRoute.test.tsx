@@ -73,6 +73,7 @@ const ROUTE: DriverRoute = {
   timeline: [
     { kind: 'driving', from: '08:01', to: '09:55', from_at: iso('08:01'), to_at: iso('09:55'), minutes: 114, km: 31.1, text: '08:01–09:55 Driving · 31.1 km' },
     { kind: 'stopped', from: '09:55', to: '14:00', from_at: iso('09:55'), to_at: iso('14:00'), minutes: 245, near: 'Peliyagoda', lat: 6.96, lng: 79.89, text: '09:55–14:00 Stopped near Peliyagoda' },
+    { kind: 'no_gps', from: '14:00', to: '14:56', from_at: iso('14:00'), to_at: iso('14:56'), minutes: 56, text: '14:00–14:56 Stopped · no GPS signal' },
   ],
   route: { columns: ['time', 'lat', 'lng', 'km/h', 'at'], points: [['08:01', 6.88, 79.86, 0, iso('08:01')], ['09:55', 6.96, 79.89, 38, iso('09:55')], ['14:00', 6.96, 79.89, 0, iso('14:00')]] },
 } as DriverRoute;
@@ -95,7 +96,7 @@ beforeEach(() => {
 afterEach(() => errors.restore());
 
 describe("Office mode: a driver's day (§33.6 item 1)", () => {
-  it('the summary card above the map, the map, the day strip, the playback and the day\'s tasks; no timeline list', async () => {
+  it('the summary card, the map (fixed above it since Round 48), the day strip, the playback and the day\'s tasks; no timeline list', async () => {
     renderRouter(routes, { initialUrl: '/office/driver/nuwan.p/route' });
     const summary = await screen.findByTestId('day-summary', {}, { timeout: 5000 });
     expect(summary).toBeTruthy();
@@ -136,6 +137,32 @@ describe("Office mode: a driver's day (§33.6 item 1)", () => {
     fireEvent.press(screen.getByText(mockT!('office.history.wholeRoute')));
     expect(screen.queryByTestId('stop-card')).toBeNull();
     expect(screen.queryByText(mockT!('office.history.wholeRoute'))).toBeNull();
+    expect(errors.seen).toEqual([]);
+  });
+
+  // Round 48 (items 2 and 3): the legend and the map data behind ⓘ in the one sheet; the gaps line opens the gaps sheet, a
+  // row highlights its spot on the map (its card, the map moved there) with the Gaps layer still off.
+  it('ⓘ opens the legend and the map data; the gaps line opens the gaps sheet and a row highlights the gap', async () => {
+    renderRouter(routes, { initialUrl: '/office/driver/nuwan.p/route' });
+    await screen.findByTestId('day-summary', {}, { timeout: 5000 });
+    expect(screen.queryByTestId('route-about-sheet')).toBeNull();
+    fireEvent.press(screen.getByTestId('route-about'));
+    expect(screen.getByTestId('route-about-sheet')).toBeTruthy();
+    expect(screen.getByTestId('legend-start')).toBeTruthy();
+    expect(screen.getByText(mockT!('dayRoute.legendCluster'))).toBeTruthy();
+    // The free map in the tests (no Android key): the map data names OpenStreetMap and OpenFreeMap, in English.
+    expect(screen.getByText('© OpenStreetMap contributors · OpenFreeMap')).toBeTruthy();
+    fireEvent.press(screen.getAllByLabelText(mockT!('patterns.close'))[0]);
+    // The gaps: the summary's line, the sheet, the row, the card on the map.
+    fireEvent.press(screen.getByTestId('day-gaps-button'));
+    const row = await screen.findByTestId('route-gap-row');
+    expect(screen.getByText('No GPS signal · 14:00–14:56 · 56 min')).toBeTruthy();
+    fireEvent.press(row);
+    expect(screen.getByTestId('gap-card')).toBeTruthy();
+    expect(mockFocus.frames.at(-1)).toMatchObject({ frame: { kind: 'point', center: { lat: 6.96, lng: 79.89 } } });
+    // The Layers filter: one Filter button, nothing on by default.
+    expect(screen.getByTestId('route-filter')).toBeTruthy();
+    expect(screen.queryByTestId('filter-chip')).toBeNull();
     expect(errors.seen).toEqual([]);
   });
 
