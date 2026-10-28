@@ -44,8 +44,7 @@ jobs:
           (cd apps/driver && npm ci --no-audit --no-fund)
       - name: Typechecks
         run: |
-          (cd apps/office && npm run typecheck)
-          (cd apps/driver && npm run typecheck)
+          bash scripts/typecheck.sh
       - name: Hooks lint
         run: cd apps/driver && npm run lint:hooks
       - name: Site unit tests (4 workers)

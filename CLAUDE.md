@@ -1121,6 +1121,9 @@ iOS; Play Store.
   this month's builds (`eas build:list`) and say how many are left. One build per native change, never a build just to
   try something.
 - JS, server and web changes need no build: the app gets them through EAS Update, after Sahan's go.
+- **The typecheck is one script, `scripts/typecheck.sh`** (Sahan, 28 October 2026): the website, then the driver app's two
+  projects (the app and `-p scripts`); CI's fast job runs the same file, so the laptop and CI cannot disagree. Never
+  `npx tsc --noEmit` alone in apps/driver (it misses the scripts, which failed CI run 40645570848).
 - Tests in two tiers. After each fix, only the fast tests for what changed (typecheck, the related unit tests, the related
   pgTAP file). The full suite (all pgTAP, the connector suite, the e2e, Deno) runs once, right before the checkpoint.
 - Test rule (Sahan, 20 October 2026): while working, run only the fast checks (typecheck, hooks lint, unit and component
