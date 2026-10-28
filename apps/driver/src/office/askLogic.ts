@@ -5,6 +5,7 @@
 // while the caller can pick a driver), and when the sheet keeps asking for answers. Pure: no React, no native module.
 
 import { driverParts } from './approveLogic';
+import { sentenceText } from './statusWords';
 import type { AskAnswers, Ask, AskDriverRow, AskKind, AvailableDriver, BoardDriver } from './types';
 
 export type Words = (key: string, vars?: Record<string, string | number>) => string;
@@ -32,28 +33,49 @@ export interface AskTarget {
   line: string;
   free: boolean;
   call?: string;
+  /** Round 48: the trip's chip ("Free Thu 29 Oct" / "Busy 09:00–13:00 that day · …") when the rows were judged for a trip. */
+  chip?: string;
 }
 
 /** The rows from Who's available / Who can take it (availability). */
 export function askTargets(drivers: readonly AvailableDriver[], t?: (key: string, vars?: Record<string, string | number>) => string): AskTarget[] {
-  return drivers.map((d) => ({
-    name: d.name,
-    username: d.username ?? null,
-    line: driverParts(d, t).join(' · '),
-    free: d.free && !d.not_available,
-    ...(d.phone?.call ? { call: d.phone.call } : {}),
-  }));
+  return drivers.map((d) => {
+    const chip = d.free ? d.free_text : d.busy_text;
+    return {
+      name: d.name,
+      username: d.username ?? null,
+      line: driverParts(d, t).join(' · '),
+      free: d.free && !d.not_available,
+      ...(d.phone?.call ? { call: d.phone.call } : {}),
+      ...(chip ? { chip: t ? sentenceText(t, chip) : chip } : {}),
+    };
+  });
 }
 
-/** The rows from the Drivers board (drivers_board). */
-export function askTargetsFromBoard(drivers: readonly BoardDriver[]): AskTarget[] {
-  return drivers.map((d) => ({
-    name: d.name,
-    username: d.username ?? null,
-    line: d.status.text,
-    free: d.free_now,
-    ...(d.links?.call ? { call: d.links.call } : {}),
-  }));
+/**
+ * The rows from the Drivers board (drivers_board). Round 48: with a trip asked about (trip_date / trip_from), free means
+ * free for THAT window (trip_free), with its chip; without one, free now.
+ */
+export function askTargetsFromBoard(drivers: readonly BoardDriver[], t?: (key: string, vars?: Record<string, string | number>) => string): AskTarget[] {
+  return drivers.map((d) => {
+    const chip = d.trip_free == null ? undefined : d.trip_free ? d.free_text : d.busy_text;
+    return {
+      name: d.name,
+      username: d.username ?? null,
+      line: d.status.text,
+      free: d.trip_free ?? d.free_now,
+      ...(d.links?.call ? { call: d.links.call } : {}),
+      ...(chip ? { chip: t ? sentenceText(t, chip) : chip } : {}),
+    };
+  });
+}
+
+/** Round 48: drivers_board's arguments for a question about a trip (the rows are then judged for that window), else none. */
+export function tripBoardArgs(ctx: Pick<AskContext, 'date' | 'from' | 'to'>, kind: AskKind): Record<string, unknown> {
+  if (kind !== 'free_for_trip' || !ctx.date || !/^\d{4}-\d{2}-\d{2}$/.test(ctx.date) || !ctx.from || !/^\d{2}:\d{2}$/.test(ctx.from)) return {};
+  const args: Record<string, unknown> = { trip_date: ctx.date, trip_from: ctx.from };
+  if (ctx.to && /^\d{2}:\d{2}$/.test(ctx.to) && ctx.to > ctx.from) args.trip_to = ctx.to;
+  return args;
 }
 
 /** Who is ticked when the sheet opens: the caller's list when it gave one, else every free driver with an account. */

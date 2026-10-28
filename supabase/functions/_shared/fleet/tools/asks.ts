@@ -4,7 +4,7 @@
 // answer reaches the person who asked (driver_ask_answers_notify) and shows here.
 
 import { z } from "zod";
-import type { AvailabilityWindow } from "../availability.ts";
+import { type AvailabilityWindow, tripWindow } from "../availability.ts";
 import { ToolError, unwrap } from "../db.ts";
 import { type Employee, findDriver, loadRefs, nearestTown } from "../fleet.ts";
 import { mapsPoint, personLinks } from "../format.ts";
@@ -164,8 +164,11 @@ export const askDrivers = tool({
     const refs = await loadRefs(db);
     let chosen: Employee[];
     if (args.all_free) {
-      const w: AvailabilityWindow = tripFrom
-        ? { from: tripFrom, to: tripTo, day_end: dayRange(colomboDate(tripFrom)).to }
+      // Round 48: the trip's window is the one rule (tripWindow: `to`, else the rest of the trip's day); no trip = the
+      // next two hours from now.
+      const tw = tripFrom ? tripWindow({ start: tripFrom, endBy: tripTo }) : null;
+      const w: AvailabilityWindow = tw
+        ? { from: tw.from, to: tw.end_source === "day_end" ? null : tw.to, day_end: tw.day_end }
         : { from: now.toISOString(), to: new Date(now.getTime() + ASK_OPEN_MS).toISOString(), day_end: dayRange(colomboDate(now)).to };
       const { rows } = await driverRows(db, refs, w, now, null);
       const free = rows.filter((r) => tripFrom ? r.free : r.free && r.now_status.kind === "on_duty");

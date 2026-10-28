@@ -140,7 +140,8 @@
     "test:availability-words": "tsx scripts/test-availability-words.ts",
     "test:map-layout": "tsx scripts/test-map-layout.ts",
     "test:snap": "tsx scripts/test-snap.ts",
-    "test:breaker": "tsx scripts/test-breaker.ts"
+    "test:breaker": "tsx scripts/test-breaker.ts",
+    "test:trip-window": "tsx scripts/test-trip-window.ts"
   },
   "private": true,
   "expo": {

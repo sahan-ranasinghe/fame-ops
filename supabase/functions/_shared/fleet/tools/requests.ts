@@ -12,6 +12,7 @@ import { holdersOf } from "../holders.ts";
 import { passengerCards, passengerColumn } from "./passengers.ts";
 import { noAppAction } from "./checks.ts";
 import { z } from "zod";
+import { busyPieces, busyText, freeText, taskEndMs, tripDayWords, tripWindow, windowWords } from "../availability.ts";
 import type { Json } from "../database.types.ts";
 import type { Db, Row } from "../db.ts";
 import { ToolError, unwrap, unwrapMaybe } from "../db.ts";
@@ -1205,26 +1206,45 @@ export interface Window {
   backBy: string | null;
   need_type: string | null;
   pax: number | null;
+  /** Round 48: the plan's end when the trip has no back-by: the window ends there, else at the end of the day. */
+  plannedEnd?: string | null;
+  /** Round 48: today (Colombo), for the chips' day words; default now. */
+  today?: string;
 }
 
-/** Every active vehicle ranked for a window, in the four groups, and every active driver with whether he is free. */
+/**
+ * Every active vehicle ranked for a window, in the four groups, and every active driver with whether he is free. Round 48
+ * (Google Calendar's room picker): the window is the trip's (tripWindow: the back-by, else the plan's end, else the rest
+ * of the trip's day); every entry carries the trip's chip words (free_text "Free Thu 29 Oct", busy_text "Busy 09:00–13:00
+ * that day · Team drop" with its pieces). In the garage is NOW (the only thing known): for a trip on another day the
+ * entry says so (garage_now, garage_text).
+ */
 export async function availabilityFor(db: Db, refs: Refs, w: Window) {
-  const day = colomboDate(w.neededAt);
-  const dayEnd = new Date(dayRange(day).to).getTime();
-  const from = new Date(w.neededAt).getTime();
-  const to = w.backBy ? new Date(w.backBy).getTime() : dayEnd;
-  const busy = (t: Task) => new Date(t.start_at).getTime() < to && from < (t.end_by ? new Date(t.end_by).getTime() : dayEnd);
+  const tw = tripWindow({ start: w.neededAt, endBy: w.backBy, plannedEnd: w.plannedEnd });
+  const day = tw.day;
+  const from = new Date(tw.from).getTime();
+  const to = new Date(tw.to).getTime();
+  const busy = (t: Task) =>
+    new Date(t.start_at).getTime() < to &&
+    from < taskEndMs({ end_by: t.end_by, ends_planned: (t.plan_json as { ends_at?: string } | null)?.ends_at }, tw.day_end);
+  const today = w.today ?? colomboDate(new Date().toISOString());
+  const freeChip = { free_text: freeText(day, today), free_day: day };
+  const busyChip = (t: Task) => ({ busy_text: busyText(t), ...busyPieces(t) });
+  const later = day > today;
 
   const vehicles = refs.vehicles.filter((v) => v.active);
-  const [tasks, km, settings, offRes] = await Promise.all([
+  const [tasks, km, settings, offRes, openRes] = await Promise.all([
     openTasksOn(db, day),
     monthKm(db, vehicles.map((v) => v.id), day.slice(0, 7)),
     loadSettings(db),
     // Part 3b (H1): a driver who is not available then is not free.
     db.from("driver_unavailability").select("employee_id, starts_at, ends_at, part, reason").is("removed_at", null)
       .lt("starts_at", new Date(to).toISOString()).gt("ends_at", new Date(from).toISOString()),
+    // Round 48: who is on duty now (the vehicle a free driver brings is the one held only while on duty, for a trip today).
+    db.from("duty_sessions").select("employee_id").is("ended_at", null),
   ]);
   const away = new Map(unwrap(offRes, "availability").map((u) => [u.employee_id, u]));
+  const onDutyNow = new Set(unwrap(openRes, "duty sessions").map((s) => s.employee_id));
   // Round 4–7 (7): who holds each busy vehicle or driver (none while holder_contact is off).
   const holders = await holdersOf(db, tasks.filter(busy));
 
@@ -1257,6 +1277,12 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
       type: v.vehicle_type,
       seats: v.seats,
       availability,
+      // Round 48: the trip's chip, and "in the garage now" said as now (not known for another day).
+      ...(v.in_garage
+        ? { garage_now: true, garage_text: later ? `In the garage now · not known for ${tripDayWords(day, today)}` : "In the garage now" }
+        : clash
+        ? busyChip(clash)
+        : freeChip),
       pick: v.in_garage || clash ? "no" : over || fits.length > 0 ? "possible" : "good",
       but: fits.length > 0 ? fits.join(", ") : undefined,
       regular_driver: v.regular_driver_id ? refs.emp.get(v.regular_driver_id)?.name : undefined,
@@ -1294,6 +1320,8 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
         : `free at that time (other task ${taskWindow(mine[0])})`,
       free: !clash && !off,
       holder: clash ? holders.get(clash.id) : undefined,
+      // Round 48: the trip's chip words.
+      ...(clash ? busyChip(clash) : off ? { busy_text: unavailableText(off) } : freeChip),
     };
   }).sort((a, b) => Number(b.free) - Number(a.free));
   const groups = {
@@ -1313,7 +1341,8 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
       );
       const photos = await driverPhotoLinks(db, free);
       return free.map((e) => {
-        const held = e.current_vehicle_id ? refs.veh.get(e.current_vehicle_id) : undefined;
+        // Round 48: the vehicle held is the one on duty NOW, for a trip today; another day (or off duty) brings the regular one.
+        const held = !later && onDutyNow.has(e.id) && e.current_vehicle_id ? refs.veh.get(e.current_vehicle_id) : undefined;
         const regular = held ? undefined : refs.vehicles.find((v) => v.active && v.regular_driver_id === e.id);
         return {
           name: e.name,
@@ -1326,6 +1355,9 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
     self_drive_allowed: settings.self_drive_allowed,
     good: ranked.some((r) => r.card.pick === "good"),
     day,
+    // Round 48: the window in words and where its end came from.
+    window_words: windowWords({ from: tw.from, to: tw.to }, today),
+    end_source: tw.end_source,
   };
 }
 
@@ -1338,31 +1370,62 @@ export const suggestVehicles = tool({
     "when it is back; in the garage), and which drivers are free that day. Opening a request this way counts as seen.",
   readOnly: true,
   input: z.object({
-    request_id: zId.optional().describe("The request, or give date and time instead"),
+    request_id: zId.optional().describe(
+      "The request, or give date and time instead (Round 48: with a request, date, time and back_by are the approver's edited times: " +
+        "the groups follow them)",
+    ),
     date: zDate.optional(),
     time: zTime.optional(),
     back_by: zTime.optional(),
+    planned_end: zTime.optional().describe("Round 48: the plan's end (HH:MM) when the trip has no back-by: the window ends there"),
     need_type: zVehicleType.optional(),
     pax: z.number().int().min(0).max(80).optional(),
   }),
   async run(args, { db, now, actor }) {
     let request: VehicleRequest | null = null;
     let w: Window;
+    const today = colomboDate(now);
     if (args.request_id) {
       request = await markSeen(db, await getRequest(db, args.request_id), actor, now);
-      w = { neededAt: request.needed_at, backBy: request.back_by, need_type: request.need_type, pax: request.pax };
+      // Round 48: the approver's edited day and times (the decide page's fields) win over the request's own.
+      if (args.date) realDate(args.date);
+      const day = args.date ?? colomboDate(request.needed_at);
+      const neededAt = args.time ? utcIso(day, args.time) : args.date ? utcIso(day, colomboTime(request.needed_at)) : request.needed_at;
+      const backBy = args.back_by
+        ? utcIso(day, args.back_by)
+        : args.date || args.time
+        ? (request.back_by ? utcIso(day, colomboTime(request.back_by)) : null)
+        : request.back_by;
+      if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
+      const plan = request.plan_json as { ends_at?: string } | null;
+      w = {
+        neededAt,
+        backBy,
+        need_type: request.need_type,
+        pax: request.pax,
+        // The plan's end stands only while the times are the request's own (a moved trip is planned again when decided).
+        plannedEnd: args.planned_end ? utcIso(day, args.planned_end) : !args.date && !args.time ? plan?.ends_at ?? null : null,
+        today,
+      };
     } else {
       if (!args.date || !args.time) throw new ToolError("Give request_id, or date and time.");
       realDate(args.date);
       const neededAt = utcIso(args.date, args.time);
       const backBy = args.back_by ? utcIso(args.date, args.back_by) : null;
       if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
-      w = { neededAt, backBy, need_type: args.need_type ?? null, pax: args.pax ?? null };
+      w = {
+        neededAt,
+        backBy,
+        need_type: args.need_type ?? null,
+        pax: args.pax ?? null,
+        plannedEnd: args.planned_end ? utcIso(args.date, args.planned_end) : null,
+        today,
+      };
     }
     const refs = await loadRefs(db);
     const a = await availabilityFor(db, refs, w);
 
-    const { groups, good, day: _day, ...rest } = a;
+    const { groups, good, day: _day, window_words, end_source, ...rest } = a;
     return {
       result: {
         request: request ? await requestCardOf(db, request, now) : undefined,
@@ -1370,6 +1433,9 @@ export const suggestVehicles = tool({
           when: colomboDayTime(w.neededAt),
           back_by: w.backBy ? colomboTime(w.backBy) : undefined,
           need: needText({ need_type: w.need_type, pax: w.pax, tools: false }),
+          // Round 48: the window in words ("tomorrow 09:00–13:00") and where its end came from (end_by, plan, day_end).
+          words: window_words,
+          end_source,
         },
         ...rest,
         groups,
@@ -1518,6 +1584,8 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
     vehicle,
     startAt: request.needed_at,
     endBy: request.back_by,
+    // Round 48: the request's plan bounds the trip when it has no back-by (the one window rule).
+    plannedEnd: (request.plan_json as { ends_at?: string } | null)?.ends_at ?? null,
   });
   warnings.push(...fitWarnings(vehicle, request));
   // Round 3 (A5): driving it yourself with no licence on file is a warning, never a block.
@@ -1980,6 +2048,8 @@ export const bookVehicle = tool({
       vehicle,
       startAt: neededAt,
       endBy: backBy,
+      // Round 48: the plan's end bounds the trip when it has no back-by (the one window rule).
+      plannedEnd: prepared.plan.ends_at ?? null,
     });
     warnings.push(...fitWarnings(vehicle, args));
     // Round 3 (A5): driving it yourself with no licence on file is a warning, never a block.

@@ -36,7 +36,7 @@ import { askedOf, askedWords } from "../ui/whoDrivesLogic";
 import { PageTop, StickyActions } from "../ui/Page";
 import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
-import { decidesTrip } from "./approvalLogic";
+import { decidesTrip, suggestForDecision } from "./approvalLogic";
 import { linkedDriver } from "./asks/askLogic";
 import { availabilityArgs, driverVehicle } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
@@ -118,7 +118,8 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
   const again = q?.status === "approved" || q?.status === "changed";
 
   // The free vehicles, once and quietly every minute; the groups never collapse into "Finding…" again.
-  const sugQ = useQuery<Suggestions>("suggest", "suggest_vehicles", { request_id: id }, { enabled: suggests, every: 60_000 });
+  // Round 48: the approver's edited day and times reach the vehicle groups (the trip's window, Google Calendar's room picker).
+  const sugQ = useQuery<Suggestions>("suggest", "suggest_vehicles", suggestForDecision(id, { date: f.date, time: f.time, back: f.back }), { enabled: suggests, every: 60_000 });
   const sug = sugQ.data;
   const sugNote = sugQ.err && !sug ? "Suggestions are not available (" + errText(sugQ.err)[0] + "). Pick a vehicle and driver yourself." : null;
   // Opening the suggestions marks the request seen: show the card it answers (the same object while nothing changed).

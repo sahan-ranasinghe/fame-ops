@@ -27,7 +27,7 @@ import { cameFromTask, PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
 import { linkedDriver } from "./asks/askLogic";
-import { availabilityArgs, driverVehicle, floorTo5 } from "./availabilityLogic";
+import { availabilityArgs, driverVehicle, floorTo5, planEndOf, vehicleWindowWords } from "./availabilityLogic";
 import { driverOptions } from "../ui/driverPickerLogic";
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { checkDeparture, departurePlan } from "./departureLogic";
@@ -149,8 +149,9 @@ export function TaskEdit() {
   const t = p?.task;
   const running = t?.status === "in_progress";
   const first = p?.stops.find((s) => s.status !== "removed");
+  // Round 48: the task's plan bounds the window when it has no end time (its window, never the rest of the day).
   const availArgs = !t || running ? null : availabilityArgs(f.date || t.date || "", floorTo5(f.time || t.time || ""), f.end || t.end_by, undefined, undefined,
-    first?.lat != null && first.lng != null && !first.google ? { lat: first.lat, lng: first.lng } : first?.place ? { place: first.place } : null);
+    first?.lat != null && first.lng != null && !first.google ? { lat: first.lat, lng: first.lng } : first?.place ? { place: first.place } : null, planEndOf(p));
   const avail = useAvailability(availArgs);
   const settings = useFleetSettings();
   const riding = passengersOn(settings.data);
@@ -292,7 +293,7 @@ export function TaskEdit() {
               <DriverSelect id="ra-driver" value={f.driver} drivers={pickOptions} onChange={pickDriver} loading={!lists.drivers && !lists.error} onTheDay={onDay}
                 emptyLabel={`Choose a driver${t.driver ? ` (now ${t.driver})` : ""}`} />
               <VehicleSelect id="ra-vehicle" value={f.vehicle} def={def} vehicles={lists.vehicles ?? []} onChange={(reg) => set("vehicle", reg)}
-                emptyLabel={keepLabel} choices={onDay} dayDefault={dayDefault}
+                emptyLabel={keepLabel} choices={onDay} dayDefault={dayDefault} forTrip={vehicleWindowWords(avail.data?.vehicles.groups)}
                 hint={f.driver && !def && !onDay ? `Keeps ${currentPlate || "the vehicle"}: this driver holds none today and has no regular one.` : undefined} />
             </div>
             {msg && <Notice tone="bad">{msg}</Notice>}
@@ -325,7 +326,7 @@ export function TaskEdit() {
                     emptyLabel={needsDriver ? `Choose a driver${t.driver ? ` (now ${t.driver})` : ""}` : `Keep${t.driver ? ` (${t.driver})` : ""}`}
                     emptyChoice={needsDriver ? undefined : `Keep${t.driver ? ` (${t.driver})` : ""}`} />
                   <VehicleSelect id="ra-vehicle" value={f.vehicle} def={def} vehicles={lists.vehicles ?? []} onChange={(reg) => set("vehicle", reg)}
-                    emptyLabel={keepLabel} choices={onDay} dayDefault={dayDefault}
+                    emptyLabel={keepLabel} choices={onDay} dayDefault={dayDefault} forTrip={vehicleWindowWords(avail.data?.vehicles.groups)}
                     hint={f.driver && !def && !onDay ? `Keeps ${currentPlate || "the vehicle"}: this driver holds none today and has no regular one.` : undefined} />
                 </div>
                 <div className="grid2">

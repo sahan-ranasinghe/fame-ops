@@ -9,7 +9,10 @@ import {
   type DriverDay,
   rankAvailability,
   rankMatches,
+  startsSoon,
   type TaskLite,
+  tripDayWords,
+  windowWords,
 } from "../availability.ts";
 import type { Db } from "../db.ts";
 import { unwrap } from "../db.ts";
@@ -193,7 +196,13 @@ export async function driverRows(
     return { ...row, duty: row.state, vehicle, vehicle_note, now_status, employee_id: e.id };
   }));
   const windowText = `${colomboTime(w.from)}–${w.to ? colomboTime(w.to) : "end of day"}`;
-  const ranked: BestMatch[] = rankMatches(matches, windowText, firstStop ? "the pickup" : "the first stop");
+  // Round 48: a trip starting within two hours wants who is on duty now and near; a later one wants who is free THEN.
+  const soon = startsSoon(w.from, now);
+  const ranked: BestMatch[] = rankMatches(matches, windowText, firstStop ? "the pickup" : "the first stop", {
+    soon,
+    day,
+    dayWords: tripDayWords(day, today),
+  });
   const rankOf = new Map(ranked.map((m) => [m.username ?? m.name, m]));
   const kmOf = new Map(matches.map((m) => [m.username ?? m.name, m.km_to_first]));
   // A ranked row carries its km to the first stop (0.1 km) and its reasons, so the web can hold its order while two
@@ -213,6 +222,9 @@ export async function driverRows(
     opts.presence ? presenceOf(db, ids, now, latest) : Promise.resolve(null),
   ]);
   return {
+    // Round 48: the window in words ("tomorrow 09:00–13:00"), the same on every surface.
+    window_words: windowWords({ from: w.from, to: w.to ?? w.day_end }, today),
+    soon,
     rows: rankAvailability(withRank.map(({ employee_id, ...r }) => {
       const photo = photos.get(employee_id);
       return { ...r, ...presence?.get(employee_id), ...(photo ? { photo_url: photo } : {}) };
@@ -223,6 +235,9 @@ export async function driverRows(
         username: top.username,
         vehicle: bestRow?.vehicle,
         why: top.why,
+        // Round 48: the trip's day when the match is "free then" rather than "on duty now".
+        free_day: top.free_day,
+        soon,
         // Round 3: the driver-first card needs the photo too.
         photo_url: bestRow ? photos.get(bestRow.employee_id) : undefined,
       }

@@ -35,10 +35,10 @@ import { passengersOn } from "./passengersLogic";
 import { emptyWho, plateReason } from "../ui/whoDrivesLogic";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
-import { availabilityArgs, floorTo5 } from "./availabilityLogic";
+import { availabilityArgs, floorTo5, planEndOf } from "./availabilityLogic";
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { basePlace, useFleetSettings, VehicleChoiceRadios, vehicleOnTheDay } from "./dispatchParts";
-import { bookInput, emptyRequest, type RequestFields, suggestInput, validateNewRequest, whoOf } from "./requestLogic";
+import { bookInput, emptyRequest, suggestInput, type RequestFields, validateNewRequest, whoOf, withPlannedEnd } from "./requestLogic";
 import { type AgainState, VehicleGroups } from "./requestParts";
 import { firstStopOf } from "./stopsLogic";
 import { TripEditor, useTrip } from "./TripEditor";
@@ -90,13 +90,14 @@ export function NewRequest() {
   const leave = f.leaveBy || hhmm(trip.preview?.leave_by);
 
   // The free vehicles for that day and time, a moment after the fields settle; the groups stay while new ones come.
-  const sugArgs = books ? suggestInput(f, leave) : null;
+  const sugArgs = books ? withPlannedEnd(suggestInput(f, leave), planEndOf(trip.preview)) : null;
   const sugQ = useQuery<Suggestions>("suggest", "suggest_vehicles", sugArgs, { debounce: 400, keep: true, every: 60_000 });
   const sug = sugQ.data;
   const sugErr = sugQ.err ? errText(sugQ.err)[0] : null;
   // Who's available from the leave-by rounded down to 5 minutes, near the first stop (the start when passengers get in there).
   const first = firstStopOf(f.stops, f.startPax ? { name: f.start || base?.name || "", lat: f.startLat, lng: f.startLng } : null);
-  const availArgs = books ? availabilityArgs(f.date, leave ? floorTo5(leave) : "", f.end, f.need, f.pax, first) : null;
+  // Round 48: the plan's end bounds the window when no back-by is typed (the trip's window, never the rest of the day).
+  const availArgs = books ? availabilityArgs(f.date, leave ? floorTo5(leave) : "", f.end, f.need, f.pax, first, planEndOf(trip.preview)) : null;
   const avail = useAvailability(availArgs);
 
   const def = f.pickedDriver ? vehicleFor(avail.data, f.pickedDriver) : null;

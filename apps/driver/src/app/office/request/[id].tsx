@@ -58,7 +58,7 @@ import { colomboDate } from '@/lib/time';
 import { selfDriveLine } from '@/office/licenceLogic';
 import { requestAgainDraft, setDraft } from '@/office/trip/draft';
 import { telLink } from '@/lib/format';
-import { alreadyDecided, approveProblem, availabilityArgs, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, presenceLine, rankedDrivers, tripView } from '@/office/approveLogic';
+import { alreadyDecided, approveProblem, availabilityArgs, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, presenceLine, rankedDrivers, tripChipText, tripView } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
 import { askedOf, availabilityAt, decideTimes, hasChange, redecideTimes, shownOf } from '@/office/decideLogic';
 import { CANCEL_TEXT, canCancelBooking, cancelReason, canRequestAgain, canWithdrawOwn, decides, eventLine, expiredText, isExpired } from '@/office/requestsLogic';
@@ -454,7 +454,11 @@ export default function ApproveRequest() {
                         lines={driverParts(d, t)}
                         best={pillKey === 'best'}
                         bestWhy={avail.data?.best?.why ? sentenceText(t, avail.data.best.why) : undefined}
-                        pill={pillKey && pillKey !== 'best' ? { text: t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : 'muted' } : null}
+                        // Round 48 (Google Calendar's room picker): the pill is for the TRIP's time: "Busy 09:00–13:00 that day · Title" on a busy
+                      // row, "Free Thu 29 Oct" on a free one (the status now stays on the line under the name).
+                      pill={pillKey && pillKey !== 'best'
+                        ? { text: pillKey === 'busy' ? tripChipText(d, t) : t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : 'muted' }
+                        : !pillKey && d.free && d.free_text ? { text: tripChipText(d, t), tone: 'green' } : null}
                         disabled={!d.username}
                         disabledReason={d.username ? undefined : t('office.ask.noAccount')}
                         presence={presenceLine(d, t)}

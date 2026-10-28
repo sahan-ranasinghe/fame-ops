@@ -29,7 +29,7 @@ import { Notice, Pill } from "../ui/basics";
 import { DriverRow } from "../ui/DriverRow";
 import { firstName, toPhoneLinks, vehicleChipWords } from "../ui/driverRowLogic";
 import { useFleetSettings, vehicleOnTheDay } from "./dispatchParts";
-import { askWindow, bestRow, type DefaultVehicle, defaultVehicle, driverTone, licenceTone, rankedRows, steadyAvailability, windowLine } from "./availabilityLogic";
+import { askWindow, bestRow, type DefaultVehicle, defaultVehicle, driverTone, licenceTone, rankedRows, steadyAvailability, tripChip, windowLine } from "./availabilityLogic";
 import { countsLine } from "./asks/askLogic";
 import { AnswerLine, AskSheet, useAskAnswers, usePageAsk } from "./asks/AskSheet";
 import { SkeletonRows } from "../ui/ListKit";
@@ -102,7 +102,8 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
       <div className="avail-h">
         <div className="section-t" style={{ marginBottom: 2 }}>
           {title}
-          {data ? <span className="muted small" style={{ fontWeight: 400 }}> · {data.window.from}{data.window.until !== "end of the day" ? ` – ${data.window.until}` : ""} · {data.counts.free} of {data.counts.all} free</span> : null}
+          {/* Round 48: the window in words (the trip's day, never "now"): "tomorrow 09:00–13:00 · 3 of 5 free". */}
+          {data ? <span className="muted small" style={{ fontWeight: 400 }} data-testid="avail-window"> · {data.window.words ?? `${data.window.from}${data.window.until !== "end of the day" ? ` – ${data.window.until}` : ""}`} · {data.counts.free} of {data.counts.all} free</span> : null}
           {updating ? <span className="updated" data-testid="avail-updating" style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}> · Updating…</span> : null}
         </div>
         {canAsk && data && (
@@ -175,7 +176,9 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
                 nameExtra={d.licence.chip === "red" || d.licence.chip === "orange"
                   ? <Pill tone={licenceTone(d.licence.chip)}>licence {d.licence.chip === "red" ? "expired or due" : "expiring"}</Pill>
                   : null}
-                badge={<Pill tone={driverTone(d)}>{d.free ? (d.state === "off_duty" ? "Free · off duty" : "Free") : "Busy"}</Pill>}
+                // Round 48 (Google Calendar's room picker): the badge is for the TRIP's time ("Free Thu 29 Oct", "Busy
+                // 09:00–13:00 that day · Team drop"); the status chip on the row stays the status NOW.
+                badge={<Pill tone={driverTone(d)}>{tripChip(d).text}</Pill>}
                 right={answer?.answer === "yes" && answer.assignable && onPick && user
                   ? <button type="button" className="btn small primary" onClick={() => onPick(d, veh)} data-testid="avail-use">Use this driver</button>
                   : undefined}

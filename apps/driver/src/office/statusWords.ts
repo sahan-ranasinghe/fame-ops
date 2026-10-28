@@ -66,7 +66,27 @@ export function sentenceWords(line: string | undefined | null): Words | null {
   if ((m = s.match(/^Missed · not started \(leave by (\d{2}:\d{2})\)$/))) return { key: 'office.line.missed', vars: { time: m[1] } };
   // Round 3 (A6): a request nobody decided before its day was over (requests.ts liveOf).
   if (s === 'Expired · nobody decided it in time') return { key: 'office.line.expired' };
-  return presenceWords(s) ?? warningWords(s) ?? matchWhyWords(s);
+  return presenceWords(s) ?? warningWords(s) ?? matchWhyWords(s) ?? tripChipWords(s);
+}
+
+/**
+ * Round 48 (availability.ts / window.ts: the trip's chip): "Free today", "Free tomorrow", "Free Thu 29 Oct",
+ * "Busy 09:00–13:00 that day · Team drop", "Busy from 09:00 that day · Team drop", "In the garage now",
+ * "In the garage now · not known for Thu 29 Oct". The title stays as the office wrote it.
+ */
+function tripChipWords(s: string): Words | null {
+  let m: RegExpMatchArray | null;
+  if (s === 'Free today') return { key: 'office.avail.freeToday' };
+  if (s === 'Free tomorrow') return { key: 'office.avail.freeTomorrow' };
+  if ((m = s.match(/^Free (.+)$/)) && dayWords(m[1])) return { key: 'office.avail.freeDay', vars: { day: dayWords(m[1]) as Words } };
+  if ((m = s.match(new RegExp(`^Busy (${TIME})–(${TIME}) that day · (.+)$`)))) return { key: 'office.avail.busyThatDay', vars: { from: m[1], to: m[2], title: m[3] } };
+  if ((m = s.match(new RegExp(`^Busy from (${TIME}) that day · (.+)$`)))) return { key: 'office.avail.busyFromThatDay', vars: { from: m[1], title: m[2] } };
+  if (s === 'In the garage now') return { key: 'office.avail.garageNow' };
+  if ((m = s.match(/^In the garage now · not known for (.+)$/))) {
+    const day = m[1] === 'today' ? { key: 'office.avail.dayToday' } : m[1] === 'tomorrow' ? { key: 'office.avail.dayTomorrow' } : dayWords(m[1]);
+    return day ? { key: 'office.avail.garageNowDay', vars: { day } } : null;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -196,9 +216,23 @@ function warningWords(s: string): Words | null {
 /** availability.ts rankMatches: "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today". */
 function matchWhyWords(s: string): Words | null {
   const parts = s.split(' · ');
+  let m: RegExpMatchArray | null;
+  // Round 48: a later trip's reasons: "Free tomorrow 09:00–13:00 · 1 task that day" (free THEN, not on duty now).
+  if ((m = parts[0].match(new RegExp(`^Free (.+) (${TIME})–(${TIME}|end of day)$`)))) {
+    const day = m[1] === 'today' ? { key: 'office.avail.dayToday' } : m[1] === 'tomorrow' ? { key: 'office.avail.dayTomorrow' } : dayWords(m[1]);
+    if (!day) return null;
+    const first: Words = m[3] === 'end of day'
+      ? { key: 'office.why.freeDayToEnd', vars: { day, from: m[2] } }
+      : { key: 'office.why.freeDay', vars: { day, from: m[2], to: m[3] } };
+    const out: Words[] = [first];
+    for (const p of parts.slice(1)) {
+      if ((m = p.match(/^(\d+) tasks? that day$/))) out.push(m[1] === '1' ? { key: 'office.why.oneTaskThatDay' } : { key: 'office.why.tasksThatDay', vars: { n: m[1] } });
+      else return null;
+    }
+    return { key: 'office.why', parts: out };
+  }
   if (parts.length < 3 || parts[0] !== 'On duty') return null;
   const out: Words[] = [{ key: 'office.why.onDuty' }];
-  let m: RegExpMatchArray | null;
   for (const p of parts.slice(1)) {
     if ((m = p.match(new RegExp(`^free (${TIME})–(${TIME})$`)))) out.push({ key: 'office.why.free', vars: { from: m[1], to: m[2] } });
     else if ((m = p.match(new RegExp(`^free (${TIME})–end of day$`)))) out.push({ key: 'office.why.freeToEnd', vars: { from: m[1] } });

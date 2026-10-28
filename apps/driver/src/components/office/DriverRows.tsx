@@ -20,7 +20,7 @@ import { RowPlate } from '@/components/patterns/ListRow';
 import { ChoiceRow } from '@/components/patterns/Select';
 import { RoundButton } from '@/components/patterns/TopBar';
 import { Plate, Txt } from '@/components/ui';
-import { driverParts, driverPill, presenceLine, rankedDrivers, type VehicleChip, vehicleChip, vehicleChipText } from '@/office/approveLogic';
+import { driverParts, driverPill, presenceLine, rankedDrivers, tripChipText, type VehicleChip, vehicleChip, vehicleChipText } from '@/office/approveLogic';
 import { holderOf, wantedOfWindow } from '@/office/holderLogic';
 import { sentenceText } from '@/office/statusWords';
 import { drivenByKey } from '@/office/trip/whoWords';
@@ -143,7 +143,11 @@ export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSi
               lines={driverParts(x, t)}
               best={pillKey === 'best'}
               bestWhy={data?.best?.why ? sentenceText(t, data.best.why) : undefined}
-              pill={pillKey && pillKey !== 'best' ? { text: t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted' } : null}
+              // Round 48 (Google Calendar's room picker): the pill is for the TRIP's time: "Busy 09:00–13:00 that day · Title" on a busy
+                      // row, "Free Thu 29 Oct" on a free one (the status now stays on the line under the name).
+                      pill={pillKey && pillKey !== 'best'
+                        ? { text: pillKey === 'busy' ? tripChipText(x, t) : t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted' }
+                        : !pillKey && x.free && x.free_text ? { text: tripChipText(x, t), tone: 'green' } : null}
               disabled={!x.username}
               disabledReason={x.username ? undefined : t('office.ask.noAccount')}
               presence={presenceLine(x, t)}

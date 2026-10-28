@@ -216,3 +216,16 @@ export function withdrawInput(id: string, reason: string): { error: string } | {
   if (!r) return { error: "Write why you withdraw it. It stays on the request." };
   return { input: { request_id: id, reason: r } };
 }
+
+/**
+ * Round 48: suggest_vehicles for a request as the approver's form has it: the request's own window until a day or a time
+ * is typed, then the edited day / time / back-by go with the request id (the server judges the groups for that window).
+ */
+export function suggestForDecision(id: string, f: { date?: string; time?: string; back?: string }): Record<string, unknown> {
+  const date = (f.date ?? "").trim(), time = (f.time ?? "").trim(), back = (f.back ?? "").trim();
+  const args: Record<string, unknown> = { request_id: id };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) args.date = date;
+  if (/^\d{2}:\d{2}$/.test(time)) args.time = time;
+  if (/^\d{2}:\d{2}$/.test(back) && (!args.time || back > time)) args.back_by = back;
+  return args;
+}

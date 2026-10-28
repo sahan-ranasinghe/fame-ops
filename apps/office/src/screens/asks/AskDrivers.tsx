@@ -20,7 +20,7 @@ import { PageTop, StickyActions } from "../../ui/Page";
 import { TimeField } from "../../ui/TimeField";
 import { useToast } from "../../ui/Toast";
 import { readAskLink } from "./askLink";
-import { ASK_KINDS, type AskForm, askFormFrom, askInput, type AskWho, MAX_ASK_NOTE } from "./askLogic";
+import { ASK_KINDS, MAX_ASK_NOTE, askFormFrom, askInput, tripBoardArgs, type AskForm, type AskWho } from "./askLogic";
 import { TripDayPicker } from "../../ui/DayPicker";
 
 /** A driver as ask_drivers names them: the username, else the name. */
@@ -45,7 +45,9 @@ function AskDriversForm() {
   const [msg, setMsg] = useState<string | null>(null);
 
   // The drivers' names and status for the chips and the picker (the Drivers board: every active driver now).
-  const boardQ = useQuery<DriversBoard>("askBoard", "drivers_board", {}, { enabled: me.tools.includes("drivers_board"), keep: true });
+  // Round 48 (Google Calendar's attendee picker): with the trip's day and time filled in, every row also says free or busy
+  // for THAT window (drivers_board trip_date / trip_from / trip_to); "Free now" stays beside it.
+  const boardQ = useQuery<DriversBoard>("askBoard", "drivers_board", tripBoardArgs(f), { enabled: me.tools.includes("drivers_board"), keep: true, debounce: 400 });
   const board = boardQ.data;
   const nameOf = (id: string) => board?.drivers.find((d) => idOf(d) === id)?.name ?? id;
   const toggle = (id: string) => setF((x) => ({ ...x, drivers: x.drivers.includes(id) ? x.drivers.filter((d) => d !== id) : [...x.drivers, id] }));
@@ -169,8 +171,9 @@ function DriverPicker({ board, loading, error, picked, onToggle, onDone }: {
   const rows = useMemo(() => {
     const key = text.trim().toLowerCase();
     const all = board?.drivers ?? [];
-    // The free ones first, then by name (the board's own order inside each).
-    const sorted = [...all.filter((d) => d.free_now), ...all.filter((d) => !d.free_now)];
+    // The free ones first (Round 48: free for the trip when a trip is asked about, else free now), then the rest.
+    const freeFor = (d: DriversBoard["drivers"][number]) => d.trip_free ?? d.free_now;
+    const sorted = [...all.filter(freeFor), ...all.filter((d) => !freeFor(d))];
     return key ? sorted.filter((d) => `${d.name} ${d.username ?? ""}`.toLowerCase().includes(key)) : sorted;
   }, [board, text]);
   return (
@@ -185,7 +188,12 @@ function DriverPicker({ board, loading, error, picked, onToggle, onDone }: {
             const on = picked.includes(id);
             return (
               <SelectableRow key={id} selected={on} onToggle={() => onToggle(id)} label={d.name} testId="picker-row" className="ask-pick-row">
-                <span className="name">{d.name}{d.free_now && <Pill tone="ok">Free now</Pill>}</span>
+                <span className="name">
+                  {d.name}
+                  {/* Round 48: the trip's chip first ("Free Thu 29 Oct" / "Busy 09:00–13:00 that day · …"); "Free now" kept. */}
+                  {d.trip_free != null && <Pill tone={d.trip_free ? "ok" : "bad"}>{d.trip_free ? d.free_text ?? "Free for the trip" : d.busy_text ?? "Busy then"}</Pill>}
+                  {d.free_now && <Pill tone="ok">Free now</Pill>}
+                </span>
                 <span className="sub" style={{ display: "block" }}>{d.status.text}</span>
               </SelectableRow>
             );

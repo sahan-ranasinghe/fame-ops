@@ -131,13 +131,19 @@ export interface NeedsDriverTask {
   best?: BestMatch;
   /** Round 48: a reassignment proposed by someone without approve, waiting for the fleet admin. */
   pending_change?: PendingChange;
+  /** Round 48: the window the best match is for ("tomorrow 09:00–13:00"). */
+  window_words?: string;
 }
 
 /** The best match (Phase 7, §3): on duty and free, nearest to the first stop, then the fewest tasks today. */
 export interface BestMatch {
   name: string;
   username?: string | null;
-  vehicle?: { reg_no: string; source: "on_duty" | "regular" };
+  vehicle?: { reg_no: string; source: "on_duty" | "regular"   /** Round 48: the trip's day (YYYY-MM-DD) when the match is "free then" (a later trip), not "on duty now". */
+  free_day?: string;
+  /** Round 48: true = the trip starts within two hours: the ranking is who is on duty now and near. */
+  soon?: boolean;
+};
   /** "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today" */
   why: string;
   /** Round 3: the driver-first card's photo. */
@@ -293,8 +299,10 @@ export interface WaitingChange {
 }
 /** Who is free at a task's time (task_detail.suggestions for a declined task). */
 export interface FreeAt {
-  drivers: { name: string; username?: string | null; availability: string }[];
-  vehicles: { reg_no: string; make_model?: string | null; type: string; seats?: number | null; availability: string }[];
+  drivers: { name: string; username?: string | null; availability: string; free_text?: string; free_day?: string }[];
+  vehicles: { reg_no: string; make_model?: string | null; type: string; seats?: number | null; availability: string; free_text?: string; free_day?: string }[];
+  /** Round 48: the task's window (its end, else its plan's end, else the rest of its day) in words. */
+  window?: { from: string; to: string; end_source: "end_by" | "plan" | "day_end"; words: string };
 }
 
 export interface Stop {
@@ -1245,14 +1253,24 @@ export interface SuggestedVehicle {
   back?: string;
   /** Round 4–7 (7): the busy group's holder (absent while holder_contact is off). */
   holder?: Holder;
+  /** Round 48: the trip's chip ("Free Thu 29 Oct" / "Busy 09:00–13:00 that day · Team drop") with its pieces. */
+  free_text?: string;
+  free_day?: string;
+  busy_text?: string;
+  busy_from?: string;
+  busy_to?: string;
+  busy_title?: string;
+  /** Round 48: in the garage is known NOW only: "In the garage now · not known for Thu 29 Oct" for another day. */
+  garage_now?: boolean;
+  garage_text?: string;
 }
 
 export interface Suggestions {
   /** Absent when asked for a day and time rather than a request. */
   request?: RequestCard;
-  window?: { when: string; back_by?: string; need?: string };
+  window?: { when: string; back_by?: string; need?: string; words?: string; end_source?: "end_by" | "plan" | "day_end" };
   vehicles: SuggestedVehicle[];
-  drivers: { name: string; username: string; availability: string; holder?: Holder }[];
+  drivers: { name: string; username: string; availability: string; holder?: Holder; free_text?: string; free_day?: string; busy_text?: string; busy_from?: string; busy_to?: string; busy_title?: string }[];
   groups?: { free_pool: SuggestedVehicle[]; free_assigned: SuggestedVehicle[]; busy: SuggestedVehicle[]; in_garage: SuggestedVehicle[] };
   /** Round 3: the driver-first card (the photo, the vehicle held today or the regular one). */
   drivers_free?: { name: string; username: string; photo_url?: string; vehicle?: DriverVehicleRef }[];
@@ -1959,11 +1977,20 @@ export interface AvailableDriver {
   last_seen?: string;
   usual_start?: string;
   next_task?: { title: string; when: string };
+  /** Round 48 (Google Calendar's room picker): the chip for the trip's day: "Free Thu 29 Oct" with the day. */
+  free_text?: string;
+  free_day?: string;
+  /** Round 48: "Busy 09:00–13:00 that day · Team drop" (or the not-available words) with its pieces. */
+  busy_text?: string;
+  busy_from?: string;
+  busy_to?: string;
+  busy_title?: string;
 }
 
 export interface Availability {
   as_of: string;
-  window: { from: string; until: string; day: string };
+  /** Round 48: `words` "tomorrow 09:00–13:00", `end_source` where the window's end came from, `soon` = starts within 2 h. */
+  window: { from: string; until: string; day: string; words?: string; end_source?: "end_by" | "plan" | "day_end"; soon?: boolean };
   drivers: AvailableDriver[];
   /** Phase 7 (§3): the best match for the window (and the first stop, when given). */
   best?: BestMatch;
@@ -2143,6 +2170,13 @@ export interface BoardDriver {
   links?: PersonLinks;
   /** Round 2b: today's attendance (the duty sessions): on duty, finished, on leave or not started yet, with the times. */
   attendance?: { state: "on_duty" | "finished" | "on_leave" | "not_started"; started?: string; finished?: string };
+  /** Round 48: with a trip asked (drivers_board trip_date / trip_from): free or busy for THAT window, with the chip words. */
+  trip_free?: boolean;
+  free_text?: string;
+  busy_text?: string;
+  busy_from?: string;
+  busy_to?: string;
+  busy_title?: string;
 }
 
 export type BoardFilter = "all" | "free_now" | "on_task" | "off_duty" | "not_available";
@@ -2154,6 +2188,8 @@ export interface DriversBoard {
   counts: Record<BoardFilter, number>;
   count: number;
   drivers: BoardDriver[];
+  /** Round 48: the trip the rows were also judged for. */
+  trip?: { date: string; from: string; to?: string; words: string };
   week?: {
     from: string;
     to: string;

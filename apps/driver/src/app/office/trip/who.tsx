@@ -40,10 +40,10 @@ import { useOffice, useTool } from '@/office/state';
 import type { ProjectRow } from '@/office/trip/assignLogic';
 import { requestFieldsOf, type TripDraft, updateDraft, useTripDraft } from '@/office/trip/draft';
 import { addProjectRow, driverOptions, groupRows, projectMatch, removeProjectRow, setProjectRow, splitRows, splitState, vehicleLine } from '@/office/trip/formsLogic';
-import { suggestInput } from '@/office/trip/requestLogic';
+import { suggestInput, withPlannedEnd } from '@/office/trip/requestLogic';
 import { useTrip } from '@/office/trip/useTrip';
 import { ANY_TYPES, anyValue, knownDef, ON_THE_DAY, shownVehicle, vehicleDefault } from '@/office/trip/vehicleChoiceLogic';
-import { whoArgs } from '@/office/trip/whoLogic';
+import { planEndOf, whoArgs } from '@/office/trip/whoLogic';
 import { emptyWho, needsPlate, type WhoDrivesValue } from '@/office/trip/whoDrivesLogic';
 import { isPlate, whoOfDraft, whoReason } from '@/office/trip/whoWords';
 import { reasonText } from '@/office/trip/words';
@@ -78,9 +78,10 @@ function WhoStep({ d }: { d: TripDraft }) {
   // The plan's leave-by stands in for an empty typed one (Who's available and the free vehicles need a time).
   const trip = useTrip(d ?? { mode: 'request', fields: { date: '', leaveBy: '', stops: [], returnToBase: false, avoidExpressway: false, end: '', start: '', startPax: false, title: '', buffer: '', driver: '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false }, req: { behalf: '', project: '', need: '', tools: false, note: '', requesterPhone: '' }, rows: [], step: 'who', at: 0 }, settings.data ?? null);
   const leave = d?.fields.leaveBy || trip.preview?.leave_by?.slice(-5) || '';
-  const args = d && (isTask || books) ? whoArgs({ ...d.fields, leaveBy: leave }, { base: trip.base?.name, need: isTask ? undefined : d.req.need, pax: isTask ? undefined : d.fields.pax }) : null;
+  // Round 48: the plan's end bounds the window when no end time is typed (the trip's window, never the rest of the day).
+  const args = d && (isTask || books) ? whoArgs({ ...d.fields, leaveBy: leave }, { base: trip.base?.name, need: isTask ? undefined : d.req.need, pax: isTask ? undefined : d.fields.pax, plannedEnd: planEndOf(trip.preview) }) : null;
   const avail = useTool<Availability>('availability', args ?? {}, { enabled: !!args && me.tools.includes('availability'), every: 60_000 });
-  const sugArgs = d && books ? suggestInput(requestFieldsOf(d), leave) : null;
+  const sugArgs = d && books ? withPlannedEnd(suggestInput(requestFieldsOf(d), leave), planEndOf(trip.preview)) : null;
   const sug = useTool<Suggestions>('suggest_vehicles', sugArgs ?? {}, { enabled: !!sugArgs && me.tools.includes('suggest_vehicles'), every: 60_000 });
   const [choosing, setChoosing] = useState(false);
   const [asking, setAsking] = useState(false);

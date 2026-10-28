@@ -94,7 +94,12 @@ export function availabilityAt(base: Record<string, unknown> | null, s: Asked): 
   if (!base || !isDate(s.date) || !isTime(s.leaveBy)) return base;
   const out: Record<string, unknown> = { ...base, at: `${s.date} ${s.leaveBy}` };
   delete out.until;
-  if (isTime(s.back) && s.back > s.leaveBy) out.until = s.back;
+  // Round 48: the plan's end stands only for the times as asked (a new day or time plans the trip again when decided).
+  if (`${s.date} ${s.leaveBy}` !== base.at) delete out.planned_end;
+  if (isTime(s.back) && s.back > s.leaveBy) {
+    out.until = s.back;
+    delete out.planned_end;
+  }
   return out;
 }
 

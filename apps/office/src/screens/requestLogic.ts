@@ -81,6 +81,15 @@ export function suggestInput(f: RequestFields, time: string): Record<string, unk
 }
 
 /**
+ * Round 48: suggest_vehicles' window ends at the plan's end (planned_end, HH:MM) when no back-by was typed, so the vehicle
+ * groups are for the trip's time and not the rest of the day (Google Calendar's room picker).
+ */
+export function withPlannedEnd(input: Record<string, unknown> | null, plannedEnd: string): Record<string, unknown> | null {
+  if (!input || input.back_by || !/^\d{2}:\d{2}$/.test(plannedEnd) || typeof input.time !== "string" || plannedEnd <= input.time) return input;
+  return { ...input, planned_end: plannedEnd };
+}
+
+/**
  * book_vehicle: the request with its trip, plus the pick. The driver first: their vehicle fills itself
  * (`defaultVehicle`; the call then names none and the server takes the same one) unless one is picked. Round 3: the
  * asker or someone else drives (no driver) only with a plate picked: nobody confirms a vehicle on the day. The task's

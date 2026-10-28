@@ -3139,7 +3139,11 @@
       "kmPickup": "නංවාගන්නා තැනට km {km}",
       "kmFirst": "පළමු නැවතුමට km {km}",
       "oneTask": "අද කාර්ය 1",
-      "tasks": "අද කාර්ය {n}"
+      "tasks": "අද කාර්ය {n}",
+      "freeDay": "{day} {from}–{to} නිදහස්",
+      "freeDayToEnd": "{day} {from} සිට නිදහස්",
+      "oneTaskThatDay": "එදින කාර්ය 1",
+      "tasksThatDay": "එදින කාර්ය {n}"
     },
     "myTrip": {
       "title": "මගේ ගමන",
@@ -3612,7 +3616,16 @@
       "then_overKm": "කි.මී. දීමනාව ඉක්මවා",
       "fromTime": "{time} සිට",
       "back": "~{time} ට ආපසු",
-      "endNotSet": "අවසන් වේලාව නැත"
+      "endNotSet": "අවසන් වේලාව නැත",
+      "freeToday": "අද නිදහස්",
+      "freeTomorrow": "හෙට නිදහස්",
+      "freeDay": "{day} නිදහස්",
+      "busyThatDay": "එදින {from}–{to} කාර්යබහුලයි · {title}",
+      "busyFromThatDay": "එදින {from} සිට කාර්යබහුලයි · {title}",
+      "garageNow": "දැන් ගරාජයේ",
+      "garageNowDay": "දැන් ගරාජයේ · {day} ගැන නොදනී",
+      "dayToday": "අද",
+      "dayTomorrow": "හෙට"
     }
   },
   "patterns": {

@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { Json } from "../database.types.ts";
 import type { Db, Row } from "../db.ts";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
-import { freeAt } from "../availability.ts";
+import { freeAt, tripWindow } from "../availability.ts";
 import { driverRows } from "./driverRows.ts";
 import { DECLINE_TEXT } from "../decline.ts";
 export { DECLINE_TEXT };
@@ -1680,10 +1680,18 @@ export async function needsDriverList(db: Db, refs: Refs, now: Date) {
     const reason = declined ? DECLINE_TEXT[t.declined_reason ?? ""] ?? t.declined_reason ?? "no reason given" : "not accepted in time";
     const first = firstStops.find((st) => st.task_id === t.id && st.lat != null && st.lng != null);
     const day = colomboDate(leave);
-    const { best } = await driverRows(
+    // Round 48: the task's window (its end, else its plan's end, else the rest of its day); the best match is who is free
+    // THEN (on duty now only for a task starting within two hours: driverRows / rankMatches).
+    const tw = tripWindow({
+      start: leave,
+      endBy: t.end_by,
+      plannedEnd: (t.plan_json as { ends_at?: string } | null)?.ends_at,
+      dayEnd: dayRange(day).to,
+    });
+    const { best, window_words } = await driverRows(
       db,
       refs,
-      { from: leave, to: t.end_by, day_end: dayRange(day).to },
+      { from: leave, to: tw.end_source === "day_end" ? null : tw.to, day_end: dayRange(day).to },
       now,
       first ? { lat: first.lat!, lng: first.lng! } : null,
       t.employee_id,
@@ -1702,6 +1710,8 @@ export async function needsDriverList(db: Db, refs: Refs, now: Date) {
       minutes_to_start: minutes,
       when: minutes >= 0 ? whenText(leave, now) : `${duration(-minutes)} late`,
       best,
+      // Round 48: the window the best match is for, in words.
+      window_words,
     };
   }));
 }
@@ -2245,7 +2255,17 @@ export const taskDetail = tool({
           note: e.note ?? undefined,
           changes: e.changes ?? undefined,
         })),
-        suggestions: task.status === "declined" ? await freeAt(db, task.start_at, task.end_by, task.id) : undefined,
+        // Round 48: who is free for the task's window (its end, else its plan's end, else the rest of its day).
+        suggestions: task.status === "declined"
+          ? await freeAt(
+            db,
+            task.start_at,
+            task.end_by,
+            task.id,
+            (task.plan_json as { ends_at?: string } | null)?.ends_at,
+            colomboDate(now),
+          )
+          : undefined,
         from_request: requestRow
           ? {
             id: requestRow.id,
@@ -2619,9 +2639,15 @@ export async function changeTask(
     }
   }
 
-  const warnings = running
-    ? []
-    : await assignWarnings(db, { driver: drivenBy === "other" ? null : driver, vehicle, startAt, endBy, ignoreTaskId: task.id });
+  const warnings = running ? [] : await assignWarnings(db, {
+    driver: drivenBy === "other" ? null : driver,
+    vehicle,
+    startAt,
+    endBy,
+    ignoreTaskId: task.id,
+    // Round 48: the plan's end bounds the trip when it has no end time (the one window rule).
+    plannedEnd: (saved.plan_json as { ends_at?: string } | null)?.ends_at ?? null,
+  });
   if (!running && new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
   return { task: saved, changes, warnings, plan_version: version, driverChanged };
 }
@@ -3002,7 +3028,15 @@ export const reassignTask = tool({
         `${task.title} · ${colomboDayTime(startAt)}`,
       );
     }
-    const warnings = await assignWarnings(db, { driver: newDriver, vehicle: newVehicle, startAt, endBy, ignoreTaskId: task.id });
+    const warnings = await assignWarnings(db, {
+      driver: newDriver,
+      vehicle: newVehicle,
+      startAt,
+      endBy,
+      ignoreTaskId: task.id,
+      // Round 48: the plan's end bounds the trip when it has no end time (the one window rule).
+      plannedEnd: (task.plan_json as { ends_at?: string } | null)?.ends_at ?? null,
+    });
     if (new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
     const previousDriver = refs.emp.get(task.employee_id);
     return {

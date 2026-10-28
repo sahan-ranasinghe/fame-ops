@@ -148,3 +148,14 @@ export function linkedTime(q: Pick<URLSearchParams, "get">): string {
   const t = (q.get("time") ?? "").trim();
   return isTime(t) ? t : "";
 }
+
+/**
+ * Round 48: drivers_board's arguments for the Ask drivers page: the trip's day and times once a free_for_trip question
+ * has them (every row then says free or busy for that window), else none (the board as it is now).
+ */
+export function tripBoardArgs(f: Pick<AskForm, "kind" | "date" | "from" | "to">): Record<string, unknown> {
+  if (f.kind !== "free_for_trip" || !isDay(f.date) || !isTime(f.from)) return {};
+  const args: Record<string, unknown> = { trip_date: f.date, trip_from: f.from };
+  if (isTime(f.to) && f.to > f.from) args.trip_to = f.to;
+  return args;
+}
