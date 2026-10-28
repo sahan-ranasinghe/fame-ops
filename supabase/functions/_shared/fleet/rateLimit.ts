@@ -142,5 +142,6 @@ export const PAID_TOOLS: ReadonlySet<string> = new Set([
   "redecide_request",
   "book_vehicle",
   "driver_route",
-  "task_detail",
+  // task_detail is NOT here: its one Google call (a running task's ETA) is cached 15 minutes, and the task page is opened
+  // many times a minute in ordinary dispatching (and by the e2e); the general 120 a minute covers it.
 ]);

@@ -133,7 +133,8 @@ describe("Ask drivers (/drivers/ask)", () => {
   it("opens from the link: the trip and the drivers as chips with their names; Add drivers ticks one in; Send asks and opens the answers", async () => {
     const t = transport();
     mount(t, `/drivers/ask?kind=free_for_trip&drivers=kamal&date=${tripDay}&from=09:00&to=12:00&task=t1`);
-    await settle();
+    // Round 48: the board is asked for the trip's window, 400 ms after the last edit.
+    await settle(400);
     expect(screen.getByTestId("ask-kind-free_for_trip").getAttribute("aria-checked")).toBe("true");
     expect(screen.getByRole("group", { name: "Day" }).getAttribute("data-value")).toBe(tripDay);
     expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("09:00");
@@ -165,7 +166,8 @@ describe("Ask drivers (/drivers/ask)", () => {
     const t = transport();
     t.answers.ask_drivers = () => { throw { code: "tool_error", message: "No driver is on duty and free now." }; };
     mount(t, "/drivers/ask?drivers=kamal&request=r4");
-    await settle();
+    // Round 48: the board is asked for the trip's window, 400 ms after the last edit.
+    await settle(400);
     fireEvent.click(screen.getByTestId("ask-kind-where_now"));
     expect(screen.queryByLabelText("Day")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "All free ones" }));
@@ -180,7 +182,8 @@ describe("Ask drivers (/drivers/ask)", () => {
   it("nothing is sent while the form is not complete: no From for a trip, no drivers", async () => {
     const t = transport();
     mount(t, `/drivers/ask?date=${tripDay}`);
-    await settle();
+    // Round 48: the board is asked for the trip's window, 400 ms after the last edit.
+    await settle(400);
     fireEvent.click(screen.getByTestId("ask-send"));
     expect(screen.getByText("Add the time the trip starts (From).")).toBeTruthy();
     fireEvent.click(screen.getByTestId("ask-kind-office_time"));

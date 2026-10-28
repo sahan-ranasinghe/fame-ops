@@ -55,10 +55,11 @@ Deno.test("the 429 answer carries the one sentence and Retry-After; the paid too
   assertEquals(res.headers.get("access-control-allow-origin"), "https://x");
   assertEquals(await res.json(), { error: "rate_limited", code: "rate_limited", message: "Too many requests · try again in a minute" });
   assertEquals(RATE_LIMITED.message, "Too many requests · try again in a minute");
-  for (const t of ["search_places", "google_place", "plan_task", "create_task", "driver_route", "register_map_load", "task_detail"]) {
+  for (const t of ["search_places", "google_place", "plan_task", "create_task", "driver_route", "register_map_load"]) {
     assert(PAID_TOOLS.has(t), t);
   }
-  assert(!PAID_TOOLS.has("live_drivers") && !PAID_TOOLS.has("list_vehicles"));
+  // task_detail's one Google call (a running task's ETA) is cached 15 minutes: the general limit covers it.
+  assert(!PAID_TOOLS.has("live_drivers") && !PAID_TOOLS.has("list_vehicles") && !PAID_TOOLS.has("task_detail"));
 });
 
 Deno.test("the caller's address: x-real-ip, else the last x-forwarded-for entry, else unknown", () => {
