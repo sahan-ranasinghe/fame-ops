@@ -60,3 +60,38 @@ Deno.test("changeCardOf: only a request of kind change has one", () => {
   assertEquals(c.task_was, "declined");
   assertEquals(changeCardOf({ ...row, kind: "task" } as never), undefined);
 });
+
+import { taskMovedSince, withoutGoogleContent } from "./changes.ts";
+
+Deno.test("withoutGoogleContent: a Google pick keeps only its place id (rule 10, review L3)", () => {
+  const args = {
+    task_id: "t1",
+    stops: [
+      { type: "pickup", place: "Head office", lat: 6.9, lng: 79.8, address: "Colombo 05" },
+      { type: "drop", place: "Galle Fort Hotel", google_place_id: "ChIJabc", lat: 6.03, lng: 80.2, address: "Church St, Galle" },
+    ],
+    start: { place: "Nice Cafe", google_place_id: "ChIJxyz", lat: 6.9, lng: 79.9, address: "Galle Rd" },
+  };
+  assertEquals(withoutGoogleContent(args), {
+    task_id: "t1",
+    stops: [
+      { type: "pickup", place: "Head office", lat: 6.9, lng: 79.8, address: "Colombo 05" },
+      { type: "drop", place: "Google place", google_place_id: "ChIJabc" },
+    ],
+    start: { place: "Google place", google_place_id: "ChIJxyz" },
+  });
+  assertEquals(withoutGoogleContent({ task_id: "t1", driver: "kamal" }), { task_id: "t1", driver: "kamal" });
+});
+
+Deno.test("taskMovedSince: the time, end, driver or vehicle moved since the proposal (review L1)", () => {
+  const state = { start_at: "2026-10-29T03:30:00.000Z", end_by: null, employee_id: "e1", vehicle_id: "v1" };
+  const p = { tool: "update_task", args: {}, changes: {}, summary: "", plan_version: 1, task_status: "assigned", task_state: state } as never;
+  const task = { start_at: state.start_at, end_by: null, employee_id: "e1", vehicle_id: "v1" } as never;
+  assertEquals(taskMovedSince(task, p), null);
+  assertEquals(taskMovedSince({ ...(task as object), start_at: "2026-10-29T04:30:00.000Z" } as never, p), "its time");
+  assertEquals(taskMovedSince({ ...(task as object), end_by: "2026-10-29T08:00:00.000Z" } as never, p), "its end time");
+  assertEquals(taskMovedSince({ ...(task as object), employee_id: "e2" } as never, p), "its driver");
+  assertEquals(taskMovedSince({ ...(task as object), vehicle_id: null } as never, p), "its vehicle");
+  // An older proposal without the state (none exist before this round) is applied as before.
+  assertEquals(taskMovedSince(task, { ...(p as object), task_state: undefined } as never), null);
+});

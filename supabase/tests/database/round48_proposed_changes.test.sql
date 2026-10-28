@@ -19,6 +19,7 @@ insert into public.tasks (id, title, employee_id, vehicle_id, start_at, status, 
 select has_column('public', 'vehicle_requests', 'change_task_id', 'a request may name the task it changes');
 select col_is_fk('public', 'vehicle_requests', 'change_task_id', 'change_task_id points at tasks');
 select has_index('public', 'vehicle_requests', 'vehicle_requests_change_waiting', 'the waiting changes are indexed by task');
+select index_is_unique('public', 'vehicle_requests', 'vehicle_requests_change_waiting', 'and one waiting change per task is the database''s rule');
 
 -- The proposed driver is always set on a change (the one proposed, else the task's): vehicle_requests_proposed_check holds.
 select lives_ok($$ insert into public.vehicle_requests (requested_by_name, needed_at, kind, change_task_id, title, proposed_employee_id, proposal_json)
@@ -37,6 +38,9 @@ select is(
   (select count(*)::int from public.vehicle_requests where kind = 'change' and status = 'waiting'
      and change_task_id = '30000000-0000-0000-0000-000000000c48'),
   1, 'the waiting change is found by its task');
+select throws_ok($$ insert into public.vehicle_requests (requested_by_name, needed_at, kind, change_task_id, proposed_employee_id)
+  values ('Someone else', now() + interval '1 day', 'change', '30000000-0000-0000-0000-000000000c48', '10000000-0000-0000-0000-000000000c48') $$,
+  '23505', null, 'a second waiting change on the same task is refused by the index');
 -- The task itself is untouched by the proposal (the tool applies it only when an approver decides).
 select is((select employee_id from public.tasks where id = '30000000-0000-0000-0000-000000000c48'),
   '10000000-0000-0000-0000-000000000c48'::uuid, 'the task keeps its driver while the change waits');

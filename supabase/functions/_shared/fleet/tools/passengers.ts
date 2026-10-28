@@ -78,7 +78,7 @@ export function passengerColumn(keep: PassengersToKeep | undefined): { passenger
 }
 
 /** The names alone (or a tool that did not carry them): one statement on the trip, applied by the database. */
-async function writePassengerColumn(db: Db, target: Target, list: PassengersToKeep["list"]): Promise<void> {
+export async function writePassengerColumn(db: Db, target: Target, list: PassengersToKeep["list"]): Promise<void> {
   // deno-lint-ignore no-explicit-any
   unwrap(await (db.from(target.table) as any).update({ passenger_list: list }).eq("id", target.id), "passengers");
 }

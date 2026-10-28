@@ -43,6 +43,10 @@ export interface ProposedChange {
   plan_version: number;
   /** The task's status when proposed (a declined task needs a driver). */
   task_status: string;
+  /** The task as it was when proposed (review L1): the approval refuses when any of these moved since. */
+  task_state?: { start_at: string; end_by: string | null; employee_id: string; vehicle_id: string | null };
+  /** Review M1: the names sent with the call (passenger_list), kept here and written only when approved. */
+  passengers?: { by: string; rows: { employee_id: string | null; name: string; phone: string | null }[] };
 }
 
 /** The gate: the setting on and the person without approve. */
@@ -100,6 +104,33 @@ export function changeCardOf(r: VehicleRequest) {
   };
 }
 
+/**
+ * Rule 10 (review L3): the stops of a proposed update_task_stops keep only Google's place id (the name as "Google place",
+ * no address or coordinates), as a task's stop does after 30 days; the pin comes from google_pins when applied.
+ */
+export function withoutGoogleContent(args: Record<string, unknown>): Record<string, unknown> {
+  const strip = (s: unknown) => {
+    if (!s || typeof s !== "object" || !(s as { google_place_id?: unknown }).google_place_id) return s;
+    const { address: _a, lat: _lat, lng: _lng, ...rest } = s as Record<string, unknown>;
+    return { ...rest, place: "Google place" };
+  };
+  const out: Record<string, unknown> = { ...args };
+  if (Array.isArray(out.stops)) out.stops = out.stops.map(strip);
+  if (out.start && typeof out.start === "object") out.start = strip(out.start);
+  return out;
+}
+
+/** The task moved since the change was proposed (review L1): the time, end, driver or vehicle is not what the card says. */
+export function taskMovedSince(task: Row<"tasks">, p: ProposedChange): string | null {
+  const s = p.task_state;
+  if (!s) return null;
+  if (s.start_at !== task.start_at) return "its time";
+  if ((s.end_by ?? null) !== (task.end_by ?? null)) return "its end time";
+  if (s.employee_id !== task.employee_id) return "its driver";
+  if ((s.vehicle_id ?? null) !== (task.vehicle_id ?? null)) return "its vehicle";
+  return null;
+}
+
 /** "driver Kamal instead of Nuwan · time 09:00 → 10:00 · stops: Stop 2 added: Galle". */
 export function changeSummary(changes: Record<string, FieldChangeLike>): string {
   return Object.entries(changes).map(([field, c]) => {
@@ -128,6 +159,8 @@ export async function proposeChange(
     /** The task's start and end as proposed (the queue is ordered by them). */
     startAt: string;
     endBy: string | null;
+    /** Review M1: the names sent with the call, kept with the proposal (never written to the task now). */
+    passengers?: ProposedChange["passengers"];
   },
 ) {
   const waiting = await waitingChangeFor(db, task.id);
@@ -150,14 +183,17 @@ export async function proposeChange(
   const routeTo = stops.length > 1 ? stops[stops.length - 1].place_name : null;
   const proposal: ProposedChange = {
     tool: p.tool,
-    args: p.args,
+    // Rule 10 (review L3): a Google pick's name, address and pin are never stored with the proposal; only the place id
+    // (the pin is read again from google_pins when the change is applied).
+    args: withoutGoogleContent(p.args),
     changes: p.changes,
     summary,
     plan_version: task.plan_version,
     task_status: task.status,
+    task_state: { start_at: task.start_at, end_by: task.end_by, employee_id: task.employee_id, vehicle_id: task.vehicle_id },
+    ...(p.passengers && { passengers: p.passengers }),
   };
-  const row = unwrap(
-    await db.from("vehicle_requests").insert({
+  const inserted = await db.from("vehicle_requests").insert({
       kind: "change",
       change_task_id: task.id,
       requested_by_name: who.name,
@@ -175,9 +211,12 @@ export async function proposeChange(
       title: task.title,
       label: task.label,
       proposal_json: proposal as unknown as Json,
-    }).select("*").single(),
-    "vehicle request",
-  );
+    }).select("*").single();
+  // Review L2: two proposals sent at once: the unique index (one waiting change per task) refuses the second.
+  if (inserted.error?.code === "23505") {
+    throw new ToolError("A change to this task is already waiting for approval. Wait for the fleet admin's decision or cancel it first.");
+  }
+  const row = unwrap(inserted, "vehicle request");
   await logRequestEvent(db, row.id, "created", actor.name, { at: row.created_at, note: `Proposed change: ${summary}` });
   await notifyEvent(db, "request.created", {
     title: `Change to approve · ${actor.name} proposes ${summary}`,

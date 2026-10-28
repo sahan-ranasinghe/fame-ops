@@ -110,9 +110,14 @@ export function rateLimitedResponse(headers: Record<string, string> = {}): Respo
   });
 }
 
-/** The caller's address as the platform saw it: x-real-ip, else the LAST x-forwarded-for entry (a caller can only add entries before it). */
+/**
+ * The caller's address as the platform saw it: the LAST x-forwarded-for entry (the gateway appends it; a caller can only
+ * add entries before it), and x-real-ip only when there is no x-forwarded-for at all (review M2: a header the caller
+ * may set must never win over the one the gateway appends, or the per-address limit is a no-op against key guessing).
+ */
 export function clientIp(headers: Headers): string {
-  return headers.get("x-real-ip")?.trim() || (headers.get("x-forwarded-for") ?? "").split(",").pop()?.trim() || "unknown";
+  const forwarded = (headers.get("x-forwarded-for") ?? "").split(",").pop()?.trim();
+  return forwarded || headers.get("x-real-ip")?.trim() || "unknown";
 }
 
 /**

@@ -44,7 +44,8 @@ import { DECLINE_TEXT } from "../decline.ts";
 import { matchProjects } from "./projects.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
 import { actorUserId, logRequestEvent, requester } from "./requestCore.ts";
-import { changeCardOf, type ProposedChange } from "./changes.ts";
+import { changeCardOf, type ProposedChange, taskMovedSince } from "./changes.ts";
+import { taskTarget, writePassengerColumn } from "./passengers.ts";
 import {
   type RequestStop,
   requestStopsOf,
@@ -1710,7 +1711,16 @@ async function approveChange(
         "decline it, or change the stops yourself on the task.",
     );
   }
-  const ctx = { db, now, actor };
+  // Review L1: the card's "from" values are the task as it was proposed; a task moved since is not changed under the approver.
+  const moved = taskMovedSince(task, p);
+  if (moved) {
+    throw new ToolError(
+      `The task changed since ${request.requested_by_name} proposed this (${moved} is not what the card says): decline it, or make the change yourself on the task.`,
+    );
+  }
+  // Review M1: the names proposed with the call go to the task with it (and only now).
+  const keep = p.passengers ? { list: p.passengers, written: false } : undefined;
+  const ctx = { db, now, actor, passengers: keep };
   const args = { ...p.args, task_id: task.id };
   let applied: { result: unknown; summary: string };
   switch (p.tool) {
@@ -1729,6 +1739,7 @@ async function approveChange(
     default:
       throw new ToolError(`This change (${p.tool}) cannot be applied; decline it.`);
   }
+  if (keep && !keep.written) await writePassengerColumn(db, taskTarget(task.id), keep.list);
   const rows = unwrap(
     await db.from("vehicle_requests").update({
       status: "approved",

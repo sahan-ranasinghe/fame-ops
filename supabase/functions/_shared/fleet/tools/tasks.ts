@@ -1557,7 +1557,9 @@ export const updateTaskStops = tool({
 
     // Round 48 (item 1): without approve, the new stops wait in the queue (the plan is made when the approver applies them).
     if (needsApproval(settings, actor)) {
-      const moved = stopChanges(existing.filter((s) => s.status !== "removed").map(stopForChange), [...kept, ...stops].map(stopForChange), 3);
+      // Rule 10 (review L3): a Google pick's name is not kept with the proposal: the card says "Google place".
+      const anon = (s: ResolvedStop) => (s.pin_from === "google" ? { ...s, place_name: "Google place" } : s);
+      const moved = stopChanges(existing.filter((s) => s.status !== "removed").map(stopForChange), [...kept, ...stops.map(anon)].map(stopForChange), 3);
       const changes: Record<string, FieldChange> = {};
       if (moved.list.length > 0) {
         changes.stops = {
@@ -2698,6 +2700,12 @@ export const updateTask = tool({
     if (needsApproval(await loadSettings(db), actor)) {
       const proposed = proposedTaskChanges(task, args, refs, { startAt, endBy, word });
       if (proposed) {
+        // Review M1: the names sent with the call wait with the proposal too (the wrapper would write them to the task
+        // at once otherwise): `written` says so, and the approval hands them to the tool.
+        if (passengers) {
+          passengers.written = true;
+          proposed.changes.riders = { from: null, to: passengers.list.rows.map((r) => r.name).join(", ") || "none" };
+        }
         return await proposeChange(db, now, actor, task, {
           tool: "update_task",
           args: { ...args },
@@ -2706,6 +2714,7 @@ export const updateTask = tool({
           proposedVehicleId: proposed.vehicleId,
           startAt: startAt ?? task.start_at,
           endBy: endBy === undefined ? task.end_by : endBy,
+          passengers: passengers?.list,
         });
       }
     }

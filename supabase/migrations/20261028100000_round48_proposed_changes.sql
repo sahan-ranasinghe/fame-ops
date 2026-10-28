@@ -9,7 +9,8 @@
 alter table public.vehicle_requests drop constraint vehicle_requests_kind_check;
 alter table public.vehicle_requests add constraint vehicle_requests_kind_check check (kind in ('request', 'task', 'change'));
 alter table public.vehicle_requests add column change_task_id uuid references public.tasks (id);
-create index vehicle_requests_change_waiting on public.vehicle_requests (change_task_id) where status = 'waiting';
+-- One waiting change per task, kept by the database (two proposals sent at once: the second is refused).
+create unique index vehicle_requests_change_waiting on public.vehicle_requests (change_task_id) where kind = 'change' and status = 'waiting';
 comment on column public.vehicle_requests.change_task_id is
   'kind change: the task this proposed change applies to (the task is untouched until an approver approves the change)';
 

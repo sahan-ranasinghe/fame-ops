@@ -962,13 +962,15 @@ code, _ = app.post("location_points?on_conflict=employee_id,recorded_at", points
 check(code == 201, f"driver uploads {len(points)} location points", f"{code}")
 code, _ = app.post("location_points?on_conflict=employee_id,recorded_at", points[:10], prefer="resolution=ignore-duplicates,return=minimal")
 check(code in (200, 201) and psql(f"select count(*) from location_points where employee_id='{ME}'") == str(len(points)), "re-uploading the same points adds nothing")
-# Hotfix (17 October): a ranked row carries its km to the first stop and its reasons (the web holds its order within 0.5 km).
+# Hotfix (17 October): a ranked row carries its reasons (the web holds its order within 0.5 km). Round 48 (item 4): a trip in
+# two days is ranked by the trip's day, not by where the drivers are now: the reasons start with "Free <day>" and carry no km.
 avk = tool("availability", {"at": f"{day(2)} 10:30", "until": "12:00", "lat": 6.9271, "lng": 79.8612})
 nk = next(d for d in avk["drivers"] if d["username"] == "nuwan.p")
-check(nk.get("rank") == 1 and isinstance(nk.get("km_to_first"), (int, float)) and nk.get("match_why") == avk["best"]["why"]
-      and "km from the pickup" in nk["match_why"] and avk["best"]["username"] == "nuwan.p"
+check(nk.get("rank") == 1 and "km_to_first" not in nk and nk.get("match_why") == avk["best"]["why"]
+      and nk["match_why"].startswith("Free ") and "km from the pickup" not in nk["match_why"] and avk["best"]["username"] == "nuwan.p"
+      and avk["window"]["soon"] is False
       and all("match_why" not in d and "km_to_first" not in d for d in avk["drivers"] if "rank" not in d),
-      "availability: the ranked row carries km_to_first and match_why (the best match's reasons); unranked rows neither", json.dumps(nk)[:400])
+      "availability: the ranked row carries match_why (the best match's reasons, by the trip's day: no km for a trip in two days); unranked rows neither", json.dumps(nk)[:400])
 # Round 48: a trip in three days; Nuwan is on duty NOW but gets a task then: busy for that trip (never "off duty" or
 # "free now"); Kasun, off duty now, is free then and the best match. The task is cancelled again at once.
 r48 = tool("create_task", {"title": "R48 busy check", "date": day(3), "start_time": "10:00", "end_time": "11:00", "driver": "nuwan.p", "vehicle": "cab4521",
@@ -1326,7 +1328,7 @@ check("completed" in r, "a completed task cannot be reassigned", r)
 ra = tool("reassign_task", {"task_id": T2, "driver": "kasun.s", "vehicle": "WP PH-2087"})
 check(ra["driver"] == "Kasun Silva" and ra["vehicle"] == "WP PH-2087" and psql(f"select seen_at is null from tasks where id='{T2}'") == "t", "reassign_task moves the task to Kasun and resets 'seen'")
 code, mine = app.get("tasks?select=id")
-check(sorted(t["id"] for t in mine) == sorted([T1, T6, T7]), "the previous driver no longer sees the reassigned task (nor the site round given to Kasun); the cancelled booking stays listed", str(mine)[:200])
+check(sorted(t["id"] for t in mine) == sorted([T1, T6, T7, r48["task_id"]]), "the previous driver no longer sees the reassigned task (nor the site round given to Kasun); the cancelled bookings stay listed (the R48 check's too)", str(mine)[:200])
 r = tool("cancel_task", {"task_id": T1, "reason": "x"}, expect_error=True)
 check("already completed" in r, "a completed task cannot be cancelled", r)
 ca = tool("cancel_task", {"task_id": T3, "reason": "Bank closed today"})
@@ -3250,6 +3252,27 @@ if CHANNEL == "api":
         ok, body = as_coordinator(ch, "cancel_request", {"request_id": r48b.get("request_id", ""), "reason": "typed the wrong time"})
         check(ok and '"was": "waiting"' in body.replace('":"', '": "') and time_of() == "09:00",
               f"{tag}: the proposer withdraws it (cancel_request); the task is untouched", body[:200])
+        # Review M1: the names sent with a gated change wait with it (never on the task before the approval).
+        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        riders = lambda: psql(f"select count(*) from task_passengers where task_id = '{t48_id}' and removed_at is null")
+        ok, body = as_coordinator(ch, "update_task", {"task_id": t48_id, "plan_version": pv, "time": "10:30",
+                                                      "passenger_list": [{"name": f"Guest {u}", "phone": "+94 77 1234567"}]})
+        r48m = result_of(body)
+        check(ok and r48m.get("waiting_for_approval") is True and time_of() == "09:00" and riders() == "0" and "riders" in r48m.get("changes", {}),
+              f"{tag}: a time change with passenger names waits whole: no name on the task yet", f"{body[:160]} riders={riders()}")
+        d = tool("decide_request", {"request_id": r48m.get("request_id", ""), "decision": "approve"})
+        check(d.get("decision") == "approved" and time_of() == "10:30" and riders() == "1",
+              f"{tag}: approved: the time and the names go to the task together", f"{time_of()} riders={riders()}")
+        # Review L1: the task moved since the proposal (the approver changed its time): the proposal is refused, not applied over it.
+        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        ok, body = as_coordinator(ch, "update_task", {"task_id": t48_id, "plan_version": pv, "time": "11:00"})
+        r48l = result_of(body)
+        check(ok and r48l.get("waiting_for_approval") is True, f"{tag}: another time change waits", body[:160])
+        tool("update_task", {"task_id": t48_id, "plan_version": pv, "time": "11:30"})
+        r = tool("decide_request", {"request_id": r48l.get("request_id", ""), "decision": "approve"}, expect_error=True)
+        check("changed since" in r and "its time" in r and time_of() == "11:30",
+              f"{tag}: a proposal whose task moved since is refused at approval (the card's 'from' is stale)", r[:200])
+        tool("decide_request", {"request_id": r48l.get("request_id", ""), "decision": "decline", "reason": "moved it myself"})
         # New stops wait too; the admin declines: nothing changes.
         pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
         ok, body = as_coordinator(ch, "update_task_stops", {"task_id": t48_id, "plan_version": pv,

@@ -63,7 +63,9 @@ Deno.test("the 429 answer carries the one sentence and Retry-After; the paid too
 });
 
 Deno.test("the caller's address: x-real-ip, else the last x-forwarded-for entry, else unknown", () => {
-  assertEquals(clientIp(new Headers({ "x-real-ip": " 203.0.113.9 ", "x-forwarded-for": "1.1.1.1, 2.2.2.2" })), "203.0.113.9");
+  // The gateway's appended entry wins over a header the caller may set (review M2).
+  assertEquals(clientIp(new Headers({ "x-real-ip": " 203.0.113.9 ", "x-forwarded-for": "1.1.1.1, 2.2.2.2" })), "2.2.2.2");
+  assertEquals(clientIp(new Headers({ "x-real-ip": " 203.0.113.9 " })), "203.0.113.9");
   assertEquals(clientIp(new Headers({ "x-forwarded-for": "1.1.1.1, 2.2.2.2" })), "2.2.2.2");
   assertEquals(clientIp(new Headers()), "unknown");
 });
