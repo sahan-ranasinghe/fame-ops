@@ -15,9 +15,13 @@ export interface DriverOption {
   fit?: { text: string; free: boolean };
 }
 
-/** "Free", "Free · off duty" or "Busy", as Who's available's badge. */
-export function fitOf(d: Pick<AvailableDriver, "free" | "state">): { text: string; free: boolean } {
-  return { text: d.free ? (d.state === "off_duty" ? "Free · off duty" : "Free") : "Busy", free: d.free };
+/**
+ * As Who's available's badge: Round 48, the trip's words when the server gives them ("Free Thu 29 Oct", "Busy 09:00–13:00
+ * that day · Team drop"), else "Free", "Free · off duty" or "Busy".
+ */
+export function fitOf(d: Pick<AvailableDriver, "free" | "state" | "free_text" | "busy_text">): { text: string; free: boolean } {
+  if (d.free) return { text: d.free_text ?? (d.state === "off_duty" ? "Free · off duty" : "Free"), free: true };
+  return { text: d.busy_text ?? "Busy", free: false };
 }
 
 /**
@@ -28,9 +32,9 @@ export function fitOf(d: Pick<AvailableDriver, "free" | "state">): { text: strin
 export function driverOptions(o: {
   avail?: AvailableDriver[];
   list?: Pick<Driver, "username" | "name" | "photo_url" | "current_vehicle" | "active">[];
-  free?: { name: string; username: string; photo_url?: string; vehicle?: DriverVehicleRef }[];
-  /** Words beside a driver of `other` ("free", "on a task until 10:40"): suggest_vehicles' drivers. */
-  other?: { name: string; username: string; availability?: string }[];
+  free?: { name: string; username: string; photo_url?: string; vehicle?: DriverVehicleRef; free_text?: string }[];
+  /** Words beside a driver of `other` ("free", "on a task until 10:40"): suggest_vehicles' drivers (Round 48: free_text / busy_text first). */
+  other?: { name: string; username: string; availability?: string; free_text?: string; busy_text?: string }[];
   picked?: string;
   pickedName?: string;
 }): DriverOption[] {
@@ -51,10 +55,12 @@ export function driverOptions(o: {
     if (d.active === false) continue;
     add({ username: d.username, name: d.name, photo_url: d.photo_url, vehicle: d.current_vehicle ? { reg_no: plateOf(d.current_vehicle), source: "on_duty" } : undefined });
   }
-  for (const d of o.free ?? []) add({ username: d.username, name: d.name, photo_url: d.photo_url, vehicle: d.vehicle, fit: { text: "Free", free: true } });
+  for (const d of o.free ?? []) add({ username: d.username, name: d.name, photo_url: d.photo_url, vehicle: d.vehicle, fit: { text: d.free_text ?? "Free", free: true } });
   for (const d of o.other ?? []) {
     const free = !d.availability || /free/i.test(d.availability);
-    add({ username: d.username, name: d.name, fit: d.availability ? { text: d.availability, free } : undefined });
+    // Round 48: the trip's words when given, else suggest_vehicles' availability sentence.
+    const text = free ? d.free_text : d.busy_text;
+    add({ username: d.username, name: d.name, fit: text ? { text, free } : d.availability ? { text: d.availability, free } : undefined });
   }
   if (o.picked && !seen.has(o.picked)) add({ username: o.picked, name: o.pickedName ?? o.picked });
   return out;

@@ -84,7 +84,7 @@ export function DriverSelect({ id, value, drivers, onChange, emptyLabel, emptyCh
  * The vehicle select after the driver: empty = the driver's vehicle ("WP CAB-4521 · Kamal's vehicle today"),
  * or "Pick a vehicle" when the driver brings none. Picking one is a choice no refresh overwrites.
  */
-export function VehicleSelect({ id, value, def, vehicles, onChange, emptyLabel = "Pick a vehicle", hint, choices, dayDefault }: {
+export function VehicleSelect({ id, value, def, vehicles, onChange, emptyLabel = "Pick a vehicle", hint, choices, dayDefault, forTrip }: {
   id: string;
   /** The vehicle chosen; "" = the default. */
   value: string;
@@ -97,8 +97,14 @@ export function VehicleSelect({ id, value, def, vehicles, onChange, emptyLabel =
   choices?: boolean;
   /** The default is the driver's vehicle on the day (a later day, or a driver who brings none today). */
   dayDefault?: boolean;
+  /**
+   * Round 48 (Google Calendar's room picker): each plate's availability for the TRIP's window ("Free Thu 29 Oct", "Busy
+   * 09:00–13:00 that day · Team drop", "In the garage now · …"), shown instead of the vehicle's status now when known.
+   */
+  forTrip?: Map<string, string>;
 }) {
   const first = dayDefault ? ON_THE_DAY_LABEL : def ? `${def.reg_no} · ${def.why}` : emptyLabel;
+  const words = (v: Pick<Vehicle, "reg_no" | "status">) => forTrip?.get(v.reg_no) ?? v.status;
   return (
     <div className="field">
       <label htmlFor={id}>Vehicle</label>
@@ -106,7 +112,7 @@ export function VehicleSelect({ id, value, def, vehicles, onChange, emptyLabel =
         <option value="">{first}</option>
         {choices && !dayDefault && <option value={ON_THE_DAY}>{ON_THE_DAY_LABEL}</option>}
         {choices && ANY_TYPES.map(([type, label]) => <option key={type} value={anyValue(type)}>{label}</option>)}
-        {vehicles.map((v) => <option key={v.reg_no} value={v.reg_no}>{v.reg_no}{v.make_model ? ` · ${v.make_model}` : ""}{v.status ? ` · ${v.status}` : ""}</option>)}
+        {vehicles.map((v) => <option key={v.reg_no} value={v.reg_no}>{v.reg_no}{v.make_model ? ` · ${v.make_model}` : ""}{words(v) ? ` · ${words(v)}` : ""}</option>)}
       </select>
       {value && dayDefault && value !== ON_THE_DAY
         ? <span className="hint" data-testid="vehicle-changed">Instead of the driver's vehicle on the day. <button type="button" className="linkish" onClick={() => onChange("")}>Leave it to the day</button></span>

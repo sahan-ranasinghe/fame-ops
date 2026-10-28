@@ -30,7 +30,7 @@ import { phoneDisplay } from "../ui/ContactButtons";
 import { PageTop, StickyActions } from "../ui/Page";
 import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
-import { askedTimes, decideLabel, emptyTripDecision, isProposal, requestView, shownTimes, type TripDecision, tripDecideInput, tripPick } from "./approvalLogic";
+import { askedTimes, decideLabel, emptyTripDecision, isProposal, requestView, shownTimes, suggestForDecision, tripDecideInput, tripPick, type TripDecision } from "./approvalLogic";
 import { linkedDriver } from "./asks/askLogic";
 import { availabilityArgs, type DefaultVehicle, driverVehicle, floorTo5 } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
@@ -64,7 +64,8 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   const proposed = proposal ? q.proposed : undefined;
 
   // The free vehicles and drivers, quietly every minute; opening them marks the request seen.
-  const sugQ = useQuery<Suggestions>("suggest", "suggest_vehicles", { request_id: id }, { enabled: me.tools.includes("suggest_vehicles"), every: 60_000 });
+  // Round 48: the approver's edited day and times reach the vehicle groups (the trip's window, Google Calendar's room picker).
+  const sugQ = useQuery<Suggestions>("suggest", "suggest_vehicles", suggestForDecision(id, { date: f.date, time: f.leaveBy, back: f.back }), { enabled: me.tools.includes("suggest_vehicles"), every: 60_000 });
   const sug = sugQ.data;
   useEffect(() => {
     if (sug?.request) setQ(sug.request);
@@ -75,8 +76,10 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   const was = askedTimes(q);
   const shown = shownTimes(f, was);
   const first = trip?.stops[0];
+  // Round 48: the plan's end (the timeline's "ends") bounds the window while the times are as asked; a new time plans again.
   const availArgs = availabilityArgs(shown.date, floorTo5(shown.leaveBy), shown.back, q.fields?.need_type, q.fields?.pax == null ? "" : String(q.fields.pax),
-    first?.lat != null && first.lng != null && !first.google ? { lat: first.lat, lng: first.lng } : first?.place ? { place: first.place } : null);
+    first?.lat != null && first.lng != null && !first.google ? { lat: first.lat, lng: first.lng } : first?.place ? { place: first.place } : null,
+    f.date || f.leaveBy ? "" : trip?.timeline?.totals.ends ?? "");
   const avail = useAvailability(availArgs);
   const settings = useFleetSettings();
   // Hotfix 2 (K): this page is open (every 20 s), and who else has it open.

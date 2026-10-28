@@ -37,7 +37,7 @@ import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { type AssignFields, assignOutcome, assignWho, driverWhatsApp, emptyAssign, planInput, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
 import { linkedDriver, linkedTime } from "./asks/askLogic";
-import { availabilityArgs, driverVehicle, floorTo5 } from "./availabilityLogic";
+import { availabilityArgs, driverVehicle, floorTo5, planEndOf, vehicleWindowWords } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
 import { basePlace, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
@@ -100,7 +100,8 @@ export function NewTask() {
   // Who's available from the leave-by rounded down to 5 minutes (a plan moving by a minute does not ask again), near the first stop.
   const leave = f.leaveBy || hhmm(preview?.leave_by);
   const first = firstStopOf(f.stops, f.startPax ? { name: f.start || base?.name || "", lat: f.startLat, lng: f.startLng } : null);
-  const availArgs = availabilityArgs(f.date, leave ? floorTo5(leave) : "", f.end, undefined, undefined, first);
+  // Round 48: the plan's end bounds the window when no end time is typed (the trip's window, never the rest of the day).
+  const availArgs = availabilityArgs(f.date, leave ? floorTo5(leave) : "", f.end, undefined, undefined, first, planEndOf(preview));
   const avail = useAvailability(availArgs);
   const pickedDriver = drivers.find((d) => d.username === f.driver);
   const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), pickedDriver, drivers.map((d) => d.name)) : null;
@@ -232,7 +233,7 @@ export function NewTask() {
             )}
             <VehicleSelect id="af-vehicle" value={noApp && isChoice(f.vehicle) ? "" : f.vehicle} def={noApp ? null : def} vehicles={vehicles} onChange={(reg) => set("vehicle", reg)}
               emptyLabel={!lists.vehicles && lists.error ? "Couldn’t load" : noApp ? "Pick the vehicle" : f.driver ? "Pick a vehicle" : "Choose the driver first"}
-              choices={onDay && !noApp} dayDefault={dayDefault}
+              choices={onDay && !noApp} dayDefault={dayDefault} forTrip={vehicleWindowWords(avail.data?.vehicles.groups)}
               hint={noApp ? "Nobody confirms a vehicle on the day: pick its plate." : f.driver && !def && !onDay ? "This driver holds no vehicle today and has no regular one." : undefined} />
           </div>
           {lists.error && (!lists.drivers || !lists.vehicles) && <Notice>Couldn’t load the {!lists.drivers && !lists.vehicles ? "drivers and vehicles" : !lists.drivers ? "drivers" : "vehicles"}: {lists.error} <button type="button" className="btn small" onClick={lists.reload}>Try again</button></Notice>}

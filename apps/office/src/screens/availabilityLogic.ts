@@ -1,7 +1,7 @@
 // "Who's available" in words and tones, from an availability row; the vehicle a
 // driver brings (Phase 7, §3) and the best-match order. Pure.
 import { shortName } from "@fleet/names";
-import type { Availability, AvailableDriver, BestMatch } from "../data/types";
+import type { Availability, AvailableDriver, BestMatch, PlanPreview, Suggestions } from "../data/types";
 import { plateOf, type Tone } from "../lib/format";
 
 /** The chip's tone: on duty = blue, on a task = amber, off duty = grey; busy with a task = red. */
@@ -30,12 +30,17 @@ export interface FirstStop {
   lng?: number;
 }
 
-/** The availability call's arguments from a day, a time and an optional back-by; null until the day and time are known. */
-export function availabilityArgs(date: string, time: string, until?: string, needType?: string, pax?: string, first?: FirstStop | null): Record<string, unknown> | null {
+/**
+ * The availability call's arguments from a day, a time and an optional back-by; null until the day and time are known.
+ * Round 48 (Google Calendar's room picker: availability for the meeting's time): `plannedEnd`, the plan's end (HH:MM),
+ * goes as planned_end when there is no back-by, so the window is the trip's and not the rest of the day.
+ */
+export function availabilityArgs(date: string, time: string, until?: string, needType?: string, pax?: string, first?: FirstStop | null, plannedEnd?: string | null): Record<string, unknown> | null {
   const d = date.trim(), t = time.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^\d{2}:\d{2}$/.test(t)) return null;
   const args: Record<string, unknown> = { at: `${d} ${t}` };
   if (until && /^\d{2}:\d{2}$/.test(until.trim()) && until.trim() > t) args.until = until.trim();
+  else if (plannedEnd && /^\d{2}:\d{2}$/.test(plannedEnd.trim()) && plannedEnd.trim() > t) args.planned_end = plannedEnd.trim();
   if (needType?.trim()) args.need_type = needType.trim();
   if (pax?.trim() !== undefined && pax?.trim() !== "") args.pax = Math.max(0, Math.min(80, parseInt(pax!.trim(), 10) || 0));
   if (first && first.lat !== undefined && first.lng !== undefined && Number.isFinite(first.lat) && Number.isFinite(first.lng)) {
@@ -150,4 +155,39 @@ export function askWindow(args: Record<string, unknown> | null, day?: string): {
   const until = typeof args?.until === "string" && /^\d{2}:\d{2}$/.test(args.until) ? args.until : undefined;
   if (!m) return day ? { date: day } : {};
   return { date: m[1], from: m[2], to: until };
+}
+
+/**
+ * Round 48: the plan's end as HH:MM from a plan preview (the timeline's "ends", else the plan's ends_at "YYYY-MM-DD HH:MM"),
+ * for availabilityArgs' plannedEnd; "" when there is no plan yet.
+ */
+export function planEndOf(preview: Pick<PlanPreview, "timeline" | "plan"> | null | undefined): string {
+  const ends = preview?.timeline?.totals?.ends ?? preview?.plan?.ends_at ?? "";
+  const m = /(\d{2}:\d{2})$/.exec(String(ends).trim());
+  return m ? m[1] : "";
+}
+
+/**
+ * Round 48 (Google Calendar's room picker): the chip beside a driver for the TRIP's time, never now: "Free Thu 29 Oct" /
+ * "Free today" (the server's free_text), "Busy 09:00–13:00 that day · Team drop" (busy_text). A row without the words (an
+ * older answer) keeps the old chip: "Free", "Free · off duty", "Busy".
+ */
+export function tripChip(d: Pick<AvailableDriver, "free" | "state" | "free_text" | "busy_text">): { text: string; free: boolean } {
+  if (d.free) return { text: d.free_text ?? (d.state === "off_duty" ? "Free · off duty" : "Free"), free: true };
+  return { text: d.busy_text ?? "Busy", free: false };
+}
+
+/**
+ * Round 48: every vehicle's availability for the trip's window, by plate, from the groups suggest_vehicles / availability
+ * answer: "Free Thu 29 Oct", "Busy 09:00–13:00 that day · Team drop", "In the garage now · not known for Thu 29 Oct". The
+ * vehicle select shows these instead of the vehicle's status NOW for a trip on another day.
+ */
+export function vehicleWindowWords(groups: Suggestions["groups"] | null | undefined): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!groups) return out;
+  for (const v of [...groups.free_pool, ...groups.free_assigned, ...groups.busy, ...groups.in_garage]) {
+    const words = v.garage_text ?? v.busy_text ?? v.free_text;
+    if (words) out.set(v.reg_no, words);
+  }
+  return out;
 }
