@@ -166,8 +166,13 @@ export function bookOutcome(p: { task_id?: string; request_id?: string; leave_by
   };
 }
 
-/** The outcome of create_request / update_request / update_task_stops: sent, or saved. */
-export function requestOutcome(kind: 'request_sent' | 'saved', p: { next?: string; warnings?: string[]; request_id?: string; task_id?: string; needs_reapproval?: boolean }): Outcome {
+/**
+ * The outcome of create_request / update_request / update_task_stops: sent, or saved. Round 48 (item 1): update_task_stops
+ * without approve answers waiting_for_approval (the change waits for the fleet admin, the task is as it was): waiting, with
+ * nothing to flash (the site's changeOutcome).
+ */
+export function requestOutcome(kind: 'request_sent' | 'saved', p: { next?: string; warnings?: string[]; request_id?: string; task_id?: string; needs_reapproval?: boolean; waiting_for_approval?: boolean }): Outcome {
+  if (p.waiting_for_approval) return { kind: 'waiting', requestId: p.request_id, taskId: p.task_id, warnings: [], conflicts: [], next: p.next };
   return { kind, requestId: p.request_id, taskId: p.task_id, warnings: p.warnings ?? [], conflicts: [], next: p.next, needsReapproval: p.needs_reapproval };
 }
 

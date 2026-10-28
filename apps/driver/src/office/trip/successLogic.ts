@@ -14,7 +14,7 @@ export type SuccessTarget =
 export interface Success {
   target: SuccessTarget;
   /** The snackbar's i18n key (office.saved.*). */
-  snack: 'taskAssigned' | 'taskWaiting' | 'requestSent' | 'booked' | 'changesSaved' | 'stopsSaved';
+  snack: 'taskAssigned' | 'taskWaiting' | 'changeWaiting' | 'requestSent' | 'booked' | 'changesSaved' | 'stopsSaved';
   /** The key the warnings wait under (the landed screen's SavedNotice). */
   noticeKey: string;
   /** The lines for SavedNotice: the warnings, then the conflicts' sentences. */
@@ -37,6 +37,13 @@ export function successOf(
       snack = o.mode === 'stops' ? 'stopsSaved' : 'taskAssigned';
       break;
     case 'waiting':
+      // Round 48 (item 1): a stop change that waits for the fleet admin goes back to the task it was opened from (the task
+      // is as it was) and says so; a proposed task opens its request.
+      if (o.mode === 'stops') {
+        target = task(o.taskId) ?? list;
+        snack = 'changeWaiting';
+        break;
+      }
       target = request(o.requestId) ?? list;
       snack = 'taskWaiting';
       break;

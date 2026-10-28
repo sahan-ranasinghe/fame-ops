@@ -29,6 +29,7 @@ import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { askTargets } from '@/office/askLogic';
 import { availabilityText } from '@/office/availabilityWords';
 import { holderOf, wantedOfWindow } from '@/office/holderLogic';
+import { changeOutcome } from '@/office/changeLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { type ChangeFields, changeFieldsOf, changeTaskInput, timeLocked } from '@/office/taskExtrasLogic';
@@ -105,6 +106,14 @@ export default function ChangeTaskScreen() {
     try {
       const out = await api.call<UpdateTaskResult & { warnings?: string[] }>('update_task', r.input);
       allowLeave();
+      // Round 48 (item 1): without approve the change waits for the fleet admin and the task is as it was (the changed
+      // booking's decide-again pattern): back, the snackbar says so, nothing is flashed on the task.
+      if (changeOutcome(out).waiting) {
+        if (back === '1' && router.canGoBack()) router.back();
+        else router.dismissTo({ pathname: '/office/task/[id]', params: { id } });
+        showSnackbar({ text: t('office.saved.changeWaiting') });
+        return;
+      }
       const warnings = out.warnings ?? [];
       const conflicts = (out as { conflicts?: Conflict[] }).conflicts;
       // Hotfix O2-H2, Part 1b: back to the task, a snackbar ("The driver is told."), the warnings wait on the task. Round 4–7

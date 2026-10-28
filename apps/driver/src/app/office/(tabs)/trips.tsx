@@ -31,6 +31,7 @@ import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
 import { dateWords, whenWords } from '@/lib/dateWords';
 import { isCreatedTask, tripLive, tripTitle } from '@/office/homeLogic';
+import { changeLine, changeTitle, isChange } from '@/office/changeLogic';
 import { TRIP_ACTION_KEY, tripTaskId } from '@/office/myTripLogic';
 import { canRequestAgain, expiredText } from '@/office/requestsLogic';
 import { requestAgainDraft, setDraft } from '@/office/trip/draft';
@@ -119,11 +120,12 @@ export default function TripsTab() {
       <View style={styles.card}>
         {isPassengerTrip(trip) && <View style={{ flexDirection: 'row' }}><Pill text={t('office.passengers.tag')} tone="blue" size={13} /></View>}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-          <Txt variant="strong" size={17} style={{ flex: 1 }}>{tripTitle(trip)}</Txt>
+          <Txt variant="strong" size={17} style={{ flex: 1 }}>{!isCreatedTask(trip) && isChange(trip) ? changeTitle(trip, t) : tripTitle(trip)}</Txt>
           {/* Round 4–7 (item 8): the chip only when the section and the "Approved by" line do not say it. */}
           {(() => { const k = tripChip(live.state); return tripChipShown(k.key, group, !!approved) ? <StatusChip text={t(`office.chip.${k.key}`)} tone={k.tone} icon={live.state === 'expired' ? CalendarX : undefined} testID={live.state === 'expired' ? 'trip-expired' : undefined} /> : null; })()}
         </View>
-        <Txt variant="muted" size={15}>{tripLine(trip, t('office.trips.backBy'), { self: t('office.who.drivesThemselves'), other: t('office.who.someoneElse') }, (s) => whenWords(t, s))}</Txt>
+        {/* Round 48 (item 1): a proposed change of one's own says what changes and that it waits ("Change · <task>" above). */}
+        <Txt variant="muted" size={15}>{!isCreatedTask(trip) && isChange(trip) ? changeLine(trip, t) : tripLine(trip, t('office.trips.backBy'), { self: t('office.who.drivesThemselves'), other: t('office.who.someoneElse') }, (s) => whenWords(t, s))}</Txt>
         {changed ? <Txt variant="strong" size={14} color={colors.amberText}>{changed}</Txt> : null}
         {approved && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

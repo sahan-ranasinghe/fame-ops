@@ -56,6 +56,7 @@ import { StopArrival, SwapSegments, TaskMoreDetails, TaskWarnings, TripPurposeCa
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { SavedNotice } from '@/components/office/SavedNotice';
+import { PendingChangeLine } from '@/components/office/ChangeParts';
 import { Button, Txt } from '@/components/ui';
 import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
@@ -290,6 +291,8 @@ export default function TaskDetailScreen() {
               {task.status === 'in_progress' && <Txt variant="strong" size={14} color={colors.blue}>{t('office.home.liveMap')}</Txt>}
             </StatusBanner>
           )}
+          {/* Round 48 (item 1): a change proposed by someone without approve waits for the fleet admin; the task is as it was. */}
+          {task?.pending_change && <PendingChangeLine change={task.pending_change} />}
           {task && (task.label || task.kind === 'self' || task.finish_flag) && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {task.label && <Pill text={task.label} tone="muted" size={14} />}
