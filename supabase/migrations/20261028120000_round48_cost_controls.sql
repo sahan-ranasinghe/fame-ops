@@ -29,7 +29,8 @@ comment on table public.odometer_calls is
   'Gemini odometer reads per Asia/Colombo day, mode and scope (a driver''s id, or server), recorded before each call by odometer_take(); refused = turned away at the cap.';
 alter table public.odometer_calls enable row level security;
 revoke all on public.odometer_calls from public, anon, authenticated;
-grant all on public.odometer_calls to service_role;
+-- Nothing deletes from it (the office connector and the jobs never delete: access_rules.test.sql); the counter function owns its rows.
+grant select, insert, update on public.odometer_calls to service_role;
 
 create function public.odometer_take(p_mode text, p_scope text, p_day_cap integer)
 returns jsonb

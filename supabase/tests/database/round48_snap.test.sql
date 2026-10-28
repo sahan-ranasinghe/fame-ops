@@ -9,6 +9,7 @@ create extension if not exists pgtap with schema extensions;
 
 select * from no_plan();
 
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-000000000048', 'd.r48@drivers.fame.invalid');
 insert into public.employees (id, code, name, username, role, permissions, auth_user_id) values
   ('10000000-0000-0000-0000-000000000048', 'D-R48', 'Round 48 Driver', 'd.r48', 'driver', '{}', '00000000-0000-0000-0000-000000000048');
 

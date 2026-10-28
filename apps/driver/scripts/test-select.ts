@@ -72,7 +72,7 @@ const uses: [string, RegExp, string][] = [
   ['components/office/PlaybackBar.tsx', /<ChoiceChip key=\{s\} small mono/, 'The shared playback bar (Live, a driver\'s day): the speed as ChoiceChips'],
   ['app/office/(tabs)/live.tsx', /selected && pickedStyle/, 'Live: the row shown on the map gets the tint and the border'],
   // §33.6 item 1 (Round 4–7, Sahan's decision): the day's timeline rows are gone; what a row showed on the map is a stop pin's card.
-  ['components/office/DayRoute.tsx', /testID="stop-card"[\s\S]*?\{picked\.label\}/, 'The shared day route (a driver\'s page): no timeline rows to select (§33.6 item 1); a tapped stop pin shows its card'],
+  ['components/office/DayRoute.tsx', /testID=\{pickedStop \? 'stop-card' : 'gap-card'\}[\s\S]*?\{cardText\}/, 'The shared day route (a driver\'s page): no timeline rows to select (§33.6 item 1); a tapped stop pin (or gap marker, Round 48) shows its card'],
   ['app/office/vehicles/form.tsx', /<ChoiceChips</, 'Vehicle form: the type, the rental company, the regular driver as ChoiceChips'],
   ['app/office/people/settings.tsx', /<ChoiceRow[\s\S]*?testID=\{`personal-trips-\$\{v\}`\}/, 'Quick settings: personal trips as ChoiceRows'],
   ['components/office/PeopleParts.tsx', /<ChoiceChip key=\{key\}/, 'Office users / drivers: the permission presets as ChoiceChips'],
