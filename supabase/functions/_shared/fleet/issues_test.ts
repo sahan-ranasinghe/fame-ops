@@ -285,10 +285,15 @@ Deno.test("Round 48: the counters are read from the three tables; a table that c
     "Google routes at 83% of today's cap",
     "Odometer checks (server) at 82% of today's cap",
     "Odometer reads by Kamal Perera at 83% of today's cap",
+    "Snap to roads for Kamal Perera paused today: 20 of 20 calls",
     "openrouteservice directions at 92% of today's cap",
     "openrouteservice estimated lines at 83% of today's cap",
   ]);
   assertEquals(issues.find((w) => w.ref_key.startsWith("usage:odometer_driver:e1"))?.employee_id, "e1");
+  // Round 48 snap hotfix: a driver's Roads budget is an info issue at the cap only (e2 at 3 of 20: nothing).
+  const budget = issues.find((w) => w.ref_key.startsWith("usage:roads_trip:e1"));
+  assertEquals([budget?.severity, budget?.employee_id], ["info", "e1"]);
+  assertEquals(issues.some((w) => w.ref_key.startsWith("usage:roads_trip:e2")), false);
   // odometer_calls missing (a deploy ahead of its migration): the other counters still come.
   tables.odometer_calls = { data: null, error: { message: "relation does not exist" } };
   const some = await usageCounters(db, settings, "2026-10-28");
