@@ -115,10 +115,19 @@ export function clientIp(headers: Headers): string {
   return headers.get("x-real-ip")?.trim() || (headers.get("x-forwarded-for") ?? "").split(",").pop()?.trim() || "unknown";
 }
 
-export const GENERAL_PER_MINUTE = 120;
-export const DRIVER_PER_MINUTE = 60;
-export const PAID_PER_MINUTE = 30;
-export const UNAUTH_PER_IP_PER_MINUTE = 20;
+/**
+ * Local and CI only (the functions' env file, like FLEET_NOW; never a secret of the real project): the connector suite
+ * and the e2e make hundreds of calls a minute with one key or one person, which no office does. A multiplier on every
+ * bucket; absent or 1 = the limits as written.
+ */
+const SCALE = (() => {
+  const v = Number((globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get("FLEET_RATE_SCALE") ?? "1");
+  return Number.isFinite(v) && v >= 1 && v <= 1000 ? v : 1;
+})();
+export const GENERAL_PER_MINUTE = 120 * SCALE;
+export const DRIVER_PER_MINUTE = 60 * SCALE;
+export const PAID_PER_MINUTE = 30 * SCALE;
+export const UNAUTH_PER_IP_PER_MINUTE = 20 * SCALE;
 
 /**
  * The tools that can make a paid or capped call (docs/google-maps-setup.md section 7; the audit of Round 48):

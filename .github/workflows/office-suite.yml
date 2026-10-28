@@ -119,7 +119,7 @@ jobs:
           echo "$(date -u +%T) stack" >> "$TIMES"
       - name: Serve the functions (throwaway keys made here)
         run: |
-          printf 'OFFICE_MCP_KEY=%s\nSERVER_KEY=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > "$RUNNER_TEMP/office-mcp.env"
+          printf 'OFFICE_MCP_KEY=%s\nSERVER_KEY=%s\nFLEET_RATE_SCALE=50\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > "$RUNNER_TEMP/office-mcp.env"
           chmod 600 "$RUNNER_TEMP/office-mcp.env"
           nohup npx supabase functions serve --env-file "$RUNNER_TEMP/office-mcp.env" > "$OUT/functions-serve.log" 2>&1 &
           api=$(npx supabase status -o env | sed -n 's/^API_URL="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p')

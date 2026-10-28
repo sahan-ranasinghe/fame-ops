@@ -10,7 +10,8 @@
 #
 # Before running it, in another terminal:
 #   npx supabase start
-#   printf 'OFFICE_MCP_KEY=%s\n' "$(openssl rand -hex 32)" > /tmp/office-mcp.env   # a throwaway local key
+#   printf 'OFFICE_MCP_KEY=%s\nSERVER_KEY=%s\nFLEET_RATE_SCALE=50\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > /tmp/office-mcp.env
+#   (throwaway local keys; FLEET_RATE_SCALE lifts the per-minute limits of Round 48 for the suite's hundreds of calls a minute)
 #   npx supabase functions serve --env-file /tmp/office-mcp.env                   # all functions; leave it running
 #
 # Then:
