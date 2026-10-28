@@ -121,8 +121,11 @@ export function leaveIn(date: string | undefined, leaveBy: string | undefined, n
   return { key: 'passed', minutes: -min };
 }
 
-/** Who can take it: availability at the task's leave-by until its end, for its type and passengers, nearest its first stop. */
-export function availabilityArgsForTask(p: Pick<TaskDetail, 'task' | 'stops'>): Record<string, unknown> | null {
+/**
+ * Who can take it: availability at the task's leave-by until its end, for its type and passengers, nearest its first stop.
+ * Round 48: with no end time the plan's end (the timeline's "ends", else the plan's ends_at) goes as planned_end.
+ */
+export function availabilityArgsForTask(p: Pick<TaskDetail, 'task' | 'stops'> & { timeline?: { totals?: { ends?: string } }; plan?: { ends_at?: string } }): Record<string, unknown> | null {
   const t = p.task;
   const date = t.date?.trim() ?? '';
   const time = (t.leave_by ?? t.time ?? '').match(/\d{2}:\d{2}/)?.[0] ?? '';
@@ -130,6 +133,10 @@ export function availabilityArgsForTask(p: Pick<TaskDetail, 'task' | 'stops'>): 
   const args: Record<string, unknown> = { at: `${date} ${time}` };
   const until = t.end_by?.match(/\d{2}:\d{2}/)?.[0];
   if (until && until > time) args.until = until;
+  else {
+    const ends = (p.timeline?.totals?.ends ?? p.plan?.ends_at ?? '').match(/(\d{2}:\d{2})$/)?.[1];
+    if (ends && ends > time) args.planned_end = ends;
+  }
   if (t.vehicle_type_wanted) args.need_type = t.vehicle_type_wanted;
   if (typeof t.passengers === 'number') args.pax = Math.max(0, Math.min(80, t.passengers));
   const first = p.stops.find((s) => s.status !== 'removed' && !s.is_start) ?? p.stops.find((s) => s.status !== 'removed');

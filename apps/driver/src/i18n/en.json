@@ -3128,7 +3128,11 @@
       "kmPickup": "{km} km from the pickup",
       "kmFirst": "{km} km from the first stop",
       "oneTask": "1 task today",
-      "tasks": "{n} tasks today"
+      "tasks": "{n} tasks today",
+      "freeDay": "Free {day} {from}–{to}",
+      "freeDayToEnd": "Free {day} {from}–end of day",
+      "oneTaskThatDay": "1 task that day",
+      "tasksThatDay": "{n} tasks that day"
     },
     "myTrip": {
       "title": "My trip",
@@ -3601,7 +3605,16 @@
       "then_overKm": "over km allowance",
       "fromTime": "from {time}",
       "back": "back ~{time}",
-      "endNotSet": "end time not set"
+      "endNotSet": "end time not set",
+      "freeToday": "Free today",
+      "freeTomorrow": "Free tomorrow",
+      "freeDay": "Free {day}",
+      "busyThatDay": "Busy {from}–{to} that day · {title}",
+      "busyFromThatDay": "Busy from {from} that day · {title}",
+      "garageNow": "In the garage now",
+      "garageNowDay": "In the garage now · not known for {day}",
+      "dayToday": "today",
+      "dayTomorrow": "tomorrow"
     }
   },
   "patterns": {

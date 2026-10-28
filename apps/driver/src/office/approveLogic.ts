@@ -94,6 +94,9 @@ export function availabilityArgs(q: Pick<RequestCard, 'fields' | 'trip'>): Recor
   const args: Record<string, unknown> = { at: `${date} ${time}` };
   const until = f?.back_by?.trim();
   if (until && /^\d{2}:\d{2}$/.test(until) && until > time) args.until = until;
+  // Round 48: with no back-by the plan's end (the timeline's "ends") bounds the window: the trip's time, never the rest of the day.
+  const ends = q.trip?.timeline?.totals?.ends?.trim();
+  if (!args.until && ends && /^\d{2}:\d{2}$/.test(ends) && ends > time) args.planned_end = ends;
   if (f?.need_type?.trim()) args.need_type = f.need_type.trim();
   if (typeof f?.pax === 'number') args.pax = Math.max(0, Math.min(80, f.pax));
   const first = q.trip?.stops.find((s) => !s.is_start) ?? q.trip?.stops[0];
@@ -172,12 +175,26 @@ export function presenceLine(d: Pick<AvailableDriver, 'last_seen' | 'usual_start
   return [d.last_seen ? sentenceText(t, d.last_seen) : '', d.usual_start ? t('office.trip.usuallyStarts', { time: d.usual_start }) : ''].filter(Boolean).join(' · ');
 }
 
-/** The pill on a row: best match, busy, off duty, not available, or nothing for a free driver. */
+/**
+ * The pill on a row: best match, busy, not available, or nothing for a free driver. Round 48 (Google Calendar's room
+ * picker): a driver busy for the trip's window is BUSY whatever they do now; "off duty" was said for a busy driver off
+ * duty now, which is the status now, not the trip's. The status now stays on the row's line (driverParts).
+ */
 export function driverPill(d: AvailableDriver, bestUsername: string): 'best' | 'busy' | 'off_duty' | 'not_available' | null {
   if (d.not_available) return 'not_available';
   if (d.username && d.username === bestUsername && d.free) return 'best';
   if (d.free) return null;
-  return d.state === 'off_duty' ? 'off_duty' : 'busy';
+  return 'busy';
+}
+
+/**
+ * Round 48: the trip's chip in the person's words: "Free Thu 29 Oct" / "Busy 09:00–13:00 that day · Team drop" (the
+ * server's free_text / busy_text through statusWords), else the old pill word (busy / off duty) for an answer without them.
+ */
+export function tripChipText(d: Pick<AvailableDriver, 'free' | 'free_text' | 'busy_text' | 'not_available'>, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  if (d.free) return d.free_text ? sentenceText(t, d.free_text) : '';
+  if (d.not_available) return sentenceText(t, d.not_available);
+  return d.busy_text ? sentenceText(t, d.busy_text) : t('office.request.busy');
 }
 
 export type Decision = 'approve' | 'decline';

@@ -140,7 +140,8 @@ console.log('\nThe keys');
 {
   const keys = Object.keys(get(dicts.en, 'office.avail') as Tree);
   const missing = keys.filter((k) => typeof get(dicts.si, `office.avail.${k}`) !== 'string');
-  check(keys.length === 15 && missing.length === 0, `office.avail in both languages (${keys.length})`, missing);
+  // 15 vehicle lines, plus Round 48's nine trip-chip keys (freeToday … dayTomorrow, read by statusWords, not here).
+  check(keys.length === 24 && missing.length === 0, `office.avail in both languages (${keys.length})`, missing);
   const used = new Set([...read('office/availabilityWords.ts').matchAll(/'office\.avail\.([A-Za-z_]+)'|`office\.avail\.([A-Za-z]+)_\$\{/g)].map((m) => m[1] ?? `${m[2]}_`));
   const unknown = [...used].filter((k) => (k.endsWith('_') ? !keys.some((x) => x.startsWith(k)) : !keys.includes(k)));
   check(unknown.length === 0 && used.size >= 14, `every key the rules ask for exists (${used.size})`, unknown);

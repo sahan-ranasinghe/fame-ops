@@ -19,10 +19,11 @@ import { ChoiceCard, pickedStyle, SelectableRow, SelectMark } from '@/components
 import { Button, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
 import {
-  allFree, answerLabel, answerOf, ANSWERS_EVERY_MS, ASK_KINDS, type AskContext, askInput, type AskTarget, canSend, keepPolling, mergeRows, preticked, sendLabel, toggled, windowText,
+  allFree, answerLabel, answerOf, ANSWERS_EVERY_MS, ASK_KINDS, type AskContext, askInput, type AskTarget, askTargetsFromBoard, canSend, keepPolling, mergeRows, preticked, sendLabel, toggled,
+  tripBoardArgs, windowText,
 } from '@/office/askLogic';
 import { useOffice } from '@/office/state';
-import type { Ask, AskAnswers, AskDriversResult, AskKind, FleetError } from '@/office/types';
+import type { Ask, AskAnswers, AskDriversResult, AskKind, DriversBoard, FleetError } from '@/office/types';
 import { Avatar, ErrorNotice, Pill, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -45,7 +46,7 @@ const KIND_ICON = { free_for_trip: Van, office_time: Clock, where_now: MapPin } 
 
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
-export function AskDriversSheet({ visible, onClose, drivers, preticked: given, context, onUse, kind: firstKind = 'free_for_trip' }: Props) {
+export function AskDriversSheet({ visible, onClose, drivers: givenDrivers, preticked: given, context, onUse, kind: firstKind = 'free_for_trip' }: Props) {
   const { t, tList } = useApp();
   const { api } = useOffice();
   const names = { days: tList('days'), months: tList('months') };
@@ -60,6 +61,31 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
   const [problem, setProblem] = useState<FleetError | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
 
+
+  // The end only when it is after the start (the server refuses `to` at or before `from`; a task's end may be unset or odd).
+  const fromText = from.trim();
+  const toText = to.trim();
+  const ctx: AskContext = { ...context, from: fromText || undefined, to: toText && (!fromText || toText > fromText) ? toText : undefined };
+  const window = windowText(ctx, dayLabel);
+  const windowGiven = !!context.from;
+
+  // Round 48 (Google Calendar's attendee picker): a trip window typed HERE (the Drivers tab gave none) asks the board
+  // again for that window, so the rows and the ticks say free for the trip, not free now; the caller's rows stand
+  // until it answers, and when the caller gave the window (its rows were judged for it already).
+  const [tripRows, setTripRows] = useState<{ key: string; rows: AskTarget[] } | null>(null);
+  const tripArgs = windowGiven ? {} : tripBoardArgs(ctx, kind);
+  const tripKey = JSON.stringify(tripArgs);
+  useEffect(() => {
+    if (!visible || tripKey === '{}') return;
+    let live = true;
+    api.call<DriversBoard>('drivers_board', tripArgs).then((r) => {
+      if (live) setTripRows({ key: tripKey, rows: askTargetsFromBoard(r.drivers, t) });
+    }, () => undefined);
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, tripKey]);
+  const drivers = tripKey !== '{}' && tripRows?.key === tripKey ? tripRows.rows : givenDrivers;
+
   // The drivers' list changed while the sheet was closed (a refresh): the ticks follow when nothing was sent yet.
   const listKey = drivers.map((d) => `${d.username ?? ''}:${d.free ? 1 : 0}`).join(',');
   const givenKey = (given ?? []).join(',');
@@ -68,13 +94,6 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
     setPicked(preticked(drivers, given));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listKey, givenKey, visible]);
-
-  // The end only when it is after the start (the server refuses `to` at or before `from`; a task's end may be unset or odd).
-  const fromText = from.trim();
-  const toText = to.trim();
-  const ctx: AskContext = { ...context, from: fromText || undefined, to: toText && (!fromText || toText > fromText) ? toText : undefined };
-  const window = windowText(ctx, dayLabel);
-  const windowGiven = !!context.from;
 
   async function send() {
     if (busy || !canSend(kind, picked, ctx)) return;
@@ -195,6 +214,8 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
                     testID={`ask-row-${target.username ?? target.name}`}
                   >
                     <Txt variant="strong" size={16} numberOfLines={1}>{target.name}</Txt>
+                    {/* Round 48: the trip's chip ("Free Thu 29 Oct" / "Busy 09:00–13:00 that day · …") over the status now. */}
+                    {target.chip ? <Pill text={target.chip} tone={target.free ? 'green' : 'blue'} size={13} /> : null}
                     {target.line ? <Txt variant="small" numberOfLines={2}>{target.line}</Txt> : null}
                   </SelectableRow>
                 );

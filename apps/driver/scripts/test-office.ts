@@ -165,7 +165,8 @@ async function main() {
   check(firstPick(card, avail) === 'kamal', 'the best match is picked first');
   check(firstPick({ proposed: { driver: 'Ruwan', username: 'ruwan' } }, avail) === 'ruwan' && firstPick({ proposed: { driver: 'Ruwan' } }, avail) === 'ruwan', 'a proposal\'s driver is picked first');
   check(firstPick({}, null) === '', 'nobody yet without Who\'s available');
-  check(driverPill(drivers[1], 'kamal') === 'best' && driverPill(drivers[2], 'kamal') === 'busy' && driverPill(drivers[0], 'kamal') === 'off_duty' && driverPill({ ...drivers[1], not_available: 'Not available · leave' }, 'kamal') === 'not_available', 'the row pills');
+  // Round 48: a driver busy for the trip's window is 'busy' whatever they do now (off duty now was the status now, not the trip's).
+  check(driverPill(drivers[1], 'kamal') === 'best' && driverPill(drivers[2], 'kamal') === 'busy' && driverPill(drivers[0], 'kamal') === 'busy' && driverPill({ ...drivers[1], not_available: 'Not available · leave' }, 'kamal') === 'not_available', 'the row pills (Round 48: busy for the trip, never "off duty" for a busy one)');
   check(same(decideCall(card, 'approve', { driver: 'kamal', vehicle: 'WP CAB-4521' }), { tool: 'decide_request', input: { request_id: 'r1', decision: 'approve', version: 3, driver: 'kamal', vehicle: 'WP CAB-4521' } }), 'approve a waiting request: decide_request with the driver and vehicle');
   check(same(decideCall(card, 'decline', { reason: 'No vehicle free then' }), { tool: 'decide_request', input: { request_id: 'r1', decision: 'decline', version: 3, reason: 'No vehicle free then' } }), 'decline: decide_request with the reason');
   const changed = { ...card, status: 'changed' as const };
