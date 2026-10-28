@@ -3,6 +3,8 @@
 
 import { McpServer } from "@modelcontextprotocol/server";
 import { type Actor, canCall, type Db, INSTRUCTIONS, runTool, TOOLS, WEB_ONLY_TOOLS } from "../_shared/fleet/index.ts";
+import type { TokenBuckets } from "../_shared/fleet/rateLimit.ts";
+import { paidGate } from "./gate.ts";
 
 interface ToolReply {
   content: { type: "text"; text: string }[];
@@ -14,7 +16,13 @@ function reply(text: string, isError = false): ToolReply {
   return { content: [{ type: "text", text }], ...(isError && { isError: true }) };
 }
 
-export function buildServer(db: Db, actor: Actor): McpServer {
+/** The paid tools' bucket and this caller's key in it (Round 48: 30 a minute per key on the tools that can cost). */
+export interface PaidLimit {
+  paid: TokenBuckets;
+  key: string;
+}
+
+export function buildServer(db: Db, actor: Actor, limit?: PaidLimit): McpServer {
   const server = new McpServer({ name: "fame-fleet-office", version: "1.1.0" }, { instructions: INSTRUCTIONS });
   for (const def of TOOLS) {
     // The upload tools are the web app's: no file goes through chat (Phase 7, §28).
@@ -33,6 +41,9 @@ export function buildServer(db: Db, actor: Actor): McpServer {
         },
       },
       async (args: unknown) => {
+        // A tool that can cost, over its minute's budget: the one sentence, as a tool error (nothing is run or audited).
+        const gate = paidGate(def.name, limit ? { paid: limit.paid } : undefined, limit?.key ?? "");
+        if (!gate.ok) return reply(gate.text, true);
         const out = await runTool(db, def, args, actor);
         return reply(out.text, out.kind !== "ok");
       },

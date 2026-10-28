@@ -250,9 +250,9 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   retention:
     "How long data is kept, in days (Settings → Data retention): notifications read / unread, delivery records, the activity log's routine entries and changes, resolved issues, location points (each driver's day stays as a summary), heartbeats, usage counters, unsent trip drafts, app errors. Business records are never removed. Minimums: location points 30, activity-log changes 183",
   vehicle_check:
-    "The vehicle check before work: whenever a driver takes a vehicle, and before a self-drive or someone-else trip sets off, \"Any damage or problem with <plate>?\" (all good in one tap; a problem with photos becomes a pre-trip issue). Off = not asked",
+    'The vehicle check before work: whenever a driver takes a vehicle, and before a self-drive or someone-else trip sets off, "Any damage or problem with <plate>?" (all good in one tap; a problem with photos becomes a pre-trip issue). Off = not asked',
   trip_close_prompt:
-    "\"Trip finished? Enter the odometer\" for a trip nobody drives with the app (self-drive, someone else): asked at the back-by time or the duty cut-off, closed as Completed · not confirmed at 09:00 the next day when unanswered. Off = neither (the person can still finish it by hand)",
+    '"Trip finished? Enter the odometer" for a trip nobody drives with the app (self-drive, someone else): asked at the back-by time or the duty cut-off, closed as Completed · not confirmed at 09:00 the next day when unanswered. Off = neither (the person can still finish it by hand)',
   fuel_card:
     "The fuel card at Start task: the trip's km and roughly how many litres it takes, and \"Enough fuel?\" (Yes / I'll fill up on the way). Advisory, never blocks. Off = not shown",
   passengers:
@@ -392,7 +392,9 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       if (!value || typeof value !== "object" || Array.isArray(value)) throw new ToolError("retention: an object of days by kind.");
       const out: Retention = { ...RETENTION_DEFAULTS };
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        if (!(k in RETENTION_DEFAULTS)) throw new ToolError(`retention: "${k}" is not one of ${Object.keys(RETENTION_DEFAULTS).join(", ")}.`);
+        if (!(k in RETENTION_DEFAULTS)) {
+          throw new ToolError(`retention: "${k}" is not one of ${Object.keys(RETENTION_DEFAULTS).join(", ")}.`);
+        }
         const min = RETENTION_MINIMUMS[k as keyof Retention] ?? 1;
         out[k as keyof Retention] = number(v, `retention.${k}`, min, 3650, true);
       }

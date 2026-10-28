@@ -1,6 +1,17 @@
 // The reconcile step of the issues centre (docs/dispatch-plan.md, section 8), pure.
 import { assertEquals } from "@std/assert";
-import { type ActiveRow, dueText, mapAlarms, reconcile, scopeOf, syncIsFresh, type UsageCounter, usageCapIssues, usageCounters, type Wanted } from "./issues.ts";
+import {
+  type ActiveRow,
+  dueText,
+  mapAlarms,
+  reconcile,
+  scopeOf,
+  syncIsFresh,
+  usageCapIssues,
+  type UsageCounter,
+  usageCounters,
+  type Wanted,
+} from "./issues.ts";
 import type { Db } from "./db.ts";
 import { SETTINGS_DEFAULTS } from "./settings.ts";
 
@@ -181,9 +192,18 @@ Deno.test("Round 48: at 100 % it is critical; the month's cap has its own key an
   const [day] = usageCapIssues([counter({ used: 215 })], "2026-10-28");
   assertEquals([day.severity, day.title, day.sort_key], ["critical", "Google routes at 100% of today's cap", -1]);
   const [month] = usageCapIssues([counter({ period: "month", used: 4040, cap: 4750 })], "2026-10-28");
-  assertEquals([month.ref_key, month.title, month.due], ["usage:google_routes:month:2026-10", "Google routes at 85% of the month's cap", "this month"]);
-  assertEquals(month.detail, "4,040 of 4,750 calls this month · at the cap the open package's road times are used until the 1st (Settings → Fleet)");
-  const ors = usageCapIssues([counter({ feature: "ors_directions", text: "openrouteservice directions", used: 1615, cap: 1900, at_cap: "the legs are estimated" })], "2026-10-28");
+  assertEquals([month.ref_key, month.title, month.due], [
+    "usage:google_routes:month:2026-10",
+    "Google routes at 85% of the month's cap",
+    "this month",
+  ]);
+  assertEquals(
+    month.detail,
+    "4,040 of 4,750 calls this month · at the cap the open package's road times are used until the 1st (Settings → Fleet)",
+  );
+  const ors = usageCapIssues([
+    counter({ feature: "ors_directions", text: "openrouteservice directions", used: 1615, cap: 1900, at_cap: "the legs are estimated" }),
+  ], "2026-10-28");
   assertEquals(ors[0].title, "openrouteservice directions at 85% of today's cap");
 });
 
@@ -191,7 +211,17 @@ Deno.test("Round 48: a second sync updates the same issue in place as the number
   const first = usageCapIssues([counter({ used: 177 })], "2026-10-28");
   const opened = reconcile([], first);
   assertEquals(opened.open.length, 1);
-  const active = [row({ ref_key: first[0].ref_key, kind: "usage_cap", severity: "warning", title: first[0].title, detail: first[0].detail, due: "today", sort_key: 0 })];
+  const active = [
+    row({
+      ref_key: first[0].ref_key,
+      kind: "usage_cap",
+      severity: "warning",
+      title: first[0].title,
+      detail: first[0].detail,
+      due: "today",
+      sort_key: 0,
+    }),
+  ];
   const grown = reconcile(active, usageCapIssues([counter({ used: 215 })], "2026-10-28"));
   assertEquals([grown.open.length, grown.update.length, grown.resolve.length], [0, 1, 0]);
   assertEquals(grown.update[0].patch.severity, "critical");
@@ -213,15 +243,29 @@ Deno.test("Round 48: the counters are read from the three tables; a table that c
       ],
       error: null,
     },
-    routing_calls: { data: [{ provider: "ors", calls: 1500 }, { provider: "ors_gap", calls: 250 }, { provider: "ors_autocomplete", calls: 10 }], error: null },
+    routing_calls: {
+      data: [{ provider: "ors", calls: 1500 }, { provider: "ors_gap", calls: 250 }, { provider: "ors_autocomplete", calls: 10 }],
+      error: null,
+    },
     odometer_calls: { data: [{ mode: "server", scope: "server", calls: 410 }, { mode: "driver", scope: "e1", calls: 50 }], error: null },
   };
   const chain = (table: string) => {
-    const q = { select: () => q, gte: () => q, lte: () => q, eq: () => q, then: (r: (v: unknown) => unknown) => Promise.resolve(tables[table]).then(r) };
+    const q = {
+      select: () => q,
+      gte: () => q,
+      lte: () => q,
+      eq: () => q,
+      then: (r: (v: unknown) => unknown) => Promise.resolve(tables[table]).then(r),
+    };
     return q;
   };
   const db = { from: chain } as unknown as Db;
-  const settings = { google_caps: SETTINGS_DEFAULTS.google_caps, ors_gap_daily_cap: 300, ors_autocomplete_daily_cap: 2500, odometer_server_daily_cap: 500 };
+  const settings = {
+    google_caps: SETTINGS_DEFAULTS.google_caps,
+    ors_gap_daily_cap: 300,
+    ors_autocomplete_daily_cap: 2500,
+    odometer_server_daily_cap: 500,
+  };
   const all = await usageCounters(db, settings, "2026-10-28", (id) => (id === "e1" ? "Kamal Perera" : null));
   const by = (f: string, p: string) => all.find((c) => c.feature === f && c.period === p)!;
   assertEquals([by("google_routes", "day").used, by("google_routes", "day").cap], [180, 215]);
@@ -229,7 +273,11 @@ Deno.test("Round 48: the counters are read from the three tables; a table that c
   assertEquals([by("ors_directions", "day").used, by("ors_directions", "day").cap], [1750, 1900]);
   assertEquals([by("ors_gap", "day").used, by("ors_autocomplete", "day").used], [250, 10]);
   assertEquals([by("odometer_server", "day").used, by("odometer_server", "day").cap], [410, 500]);
-  assertEquals([by("odometer_driver:e1", "day").text, by("odometer_driver:e1", "day").cap, by("odometer_driver:e1", "day").employee_id], ["Odometer reads by Kamal Perera", 60, "e1"]);
+  assertEquals([by("odometer_driver:e1", "day").text, by("odometer_driver:e1", "day").cap, by("odometer_driver:e1", "day").employee_id], [
+    "Odometer reads by Kamal Perera",
+    60,
+    "e1",
+  ]);
   const issues = usageCapIssues(all, "2026-10-28");
   assertEquals(issues.map((w) => w.title).sort(), [
     "Google routes at 83% of today's cap",

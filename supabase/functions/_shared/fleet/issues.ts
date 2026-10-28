@@ -892,9 +892,9 @@ export function usageCapIssues(counters: readonly UsageCounter[], today: string)
       ref_key: usageRefKey(c, today),
       severity: pct >= 100 ? "critical" : "warning",
       title: `${c.text} at ${pct}% of ${period} cap`,
-      detail: `${thousands(c.used)} of ${thousands(c.cap)} calls ${c.period === "day" ? "today" : "this month"} · at the cap ${c.at_cap} until ${
-        c.period === "day" ? "tomorrow" : "the 1st"
-      } (Settings → Fleet)`,
+      detail: `${thousands(c.used)} of ${thousands(c.cap)} calls ${
+        c.period === "day" ? "today" : "this month"
+      } · at the cap ${c.at_cap} until ${c.period === "day" ? "tomorrow" : "the 1st"} (Settings → Fleet)`,
       due: c.period === "day" ? "today" : "this month",
       sort_key: pct >= 100 ? -1 : 0,
       ...(c.employee_id ? { employee_id: c.employee_id } : {}),
@@ -1239,7 +1239,13 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
         "issues",
       );
       if (!done.length) continue;
-      await writeEvent(db, row.id, "auto_resolved", { actor: "system", from_status: "open", to_status: "resolved", note: AUTO_CLOSED_NOTE, at: now });
+      await writeEvent(db, row.id, "auto_resolved", {
+        actor: "system",
+        from_status: "open",
+        to_status: "resolved",
+        note: AUTO_CLOSED_NOTE,
+        at: now,
+      });
       resolved += 1;
     }
   }

@@ -164,7 +164,12 @@ Deno.test("Round 48: a counter that cannot be read makes no call (fail closed): 
       from: (table: string) => {
         const q = (db as unknown as { from: (t: string) => Record<string, unknown> }).from(table);
         if (table !== "routing_calls") return q;
-        return { ...q, select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: { message: "connection reset" } }) }) }) }) };
+        return {
+          ...q,
+          select: () => ({
+            eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: { message: "connection reset" } }) }) }),
+          }),
+        };
       },
     } as unknown as Db;
     const { fetchFn, n } = counted();

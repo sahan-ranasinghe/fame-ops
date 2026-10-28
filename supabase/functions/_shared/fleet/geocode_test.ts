@@ -138,11 +138,24 @@ Deno.test("Round 48: a day counter that cannot be read makes no call (fail close
     from: (table: string) => {
       const q = (db as unknown as { from: (t: string) => Record<string, unknown> }).from(table);
       if (table !== "routing_calls") return q;
-      return { ...q, select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: { message: "timeout" } }) }) }) }) };
+      return {
+        ...q,
+        select: () => ({
+          eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: { message: "timeout" } }) }) }),
+        }),
+      };
     },
   } as unknown as Db;
   const never = (() => Promise.reject(new Error("must not be called"))) as unknown as typeof fetch;
-  const r = await orsAutocomplete("Galle Face", { db: broken, key: "KEY", cap: 2500, perMinute: 90, focus: null, now: new Date(), fetch: never });
+  const r = await orsAutocomplete("Galle Face", {
+    db: broken,
+    key: "KEY",
+    cap: 2500,
+    perMinute: 90,
+    focus: null,
+    now: new Date(),
+    fetch: never,
+  });
   assertEquals([r.places.length, r.note, state.bumped], [0, COUNTER_NOTE, 0]);
 });
 
@@ -152,9 +165,18 @@ Deno.test("Round 48: a minute counter that errors or answers no number makes no 
     const { db, state } = fakeDb();
     const broken = {
       ...db,
-      rpc: (name: string) => name === "bump_minute_calls" ? Promise.resolve(answer) : (db as unknown as { rpc: (n: string) => unknown }).rpc(name),
+      rpc: (name: string) =>
+        name === "bump_minute_calls" ? Promise.resolve(answer) : (db as unknown as { rpc: (n: string) => unknown }).rpc(name),
     } as unknown as Db;
-    const r = await orsAutocomplete("Galle Face", { db: broken, key: "KEY", cap: 2500, perMinute: 90, focus: null, now: new Date(), fetch: never });
+    const r = await orsAutocomplete("Galle Face", {
+      db: broken,
+      key: "KEY",
+      cap: 2500,
+      perMinute: 90,
+      focus: null,
+      now: new Date(),
+      fetch: never,
+    });
     assertEquals([r.places.length, r.note, state.bumped], [0, COUNTER_NOTE, 0]);
   }
 });

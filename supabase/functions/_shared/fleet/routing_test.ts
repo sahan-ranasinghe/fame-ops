@@ -95,7 +95,9 @@ function orsDb(counter: "ok" | "error" = "ok", calls = 0) {
     select: () => rc,
     eq: () => rc,
     maybeSingle: () =>
-      counter === "error" ? Promise.resolve({ data: null, error: { message: "connection reset" } }) : Promise.resolve({ data: { calls }, error: null }),
+      counter === "error"
+        ? Promise.resolve({ data: null, error: { message: "connection reset" } })
+        : Promise.resolve({ data: { calls }, error: null }),
   };
   const db = {
     from: (table: string) => (table === "routing_calls" ? rc : q),
@@ -123,10 +125,18 @@ Deno.test("Round 48: a day counter that cannot be read makes no openrouteservice
   await withOrs(async () => {
     const { db, bumps } = orsDb("error");
     let fetched = 0;
-    const leg = await legMinutes(db, COLOMBO, GALLE, at("2026-10-19", "11:00"), { avoid_expressway: false }, SETTINGS_DEFAULTS, (() => {
-      fetched += 1;
-      return Promise.resolve(Response.json(ORS_ANSWER));
-    }) as unknown as typeof fetch);
+    const leg = await legMinutes(
+      db,
+      COLOMBO,
+      GALLE,
+      at("2026-10-19", "11:00"),
+      { avoid_expressway: false },
+      SETTINGS_DEFAULTS,
+      (() => {
+        fetched += 1;
+        return Promise.resolve(Response.json(ORS_ANSWER));
+      }) as unknown as typeof fetch,
+    );
     assertEquals([leg.source, fetched, bumps.length], ["estimate", 0, 0]);
   });
 });
@@ -135,10 +145,18 @@ Deno.test("Round 48: at the budget no call; under it one call counted ok; the ne
   await withOrs(async () => {
     const full = orsDb("ok", 1900);
     let fetched = 0;
-    const leg = await legMinutes(full.db, COLOMBO, GALLE, at("2026-10-19", "11:00"), { avoid_expressway: false }, SETTINGS_DEFAULTS, (() => {
-      fetched += 1;
-      return Promise.resolve(Response.json(ORS_ANSWER));
-    }) as unknown as typeof fetch);
+    const leg = await legMinutes(
+      full.db,
+      COLOMBO,
+      GALLE,
+      at("2026-10-19", "11:00"),
+      { avoid_expressway: false },
+      SETTINGS_DEFAULTS,
+      (() => {
+        fetched += 1;
+        return Promise.resolve(Response.json(ORS_ANSWER));
+      }) as unknown as typeof fetch,
+    );
     assertEquals([leg.source, fetched], ["estimate", 0]);
     const { db, bumps } = orsDb("ok", 10);
     const urls: string[] = [];
