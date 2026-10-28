@@ -53,7 +53,8 @@ export function AskDriversSheet({ visible, onClose, drivers: givenDrivers, preti
   const dayLabel = (date: string) => shortDate(names, `${date}T06:00:00Z`);
 
   const [kind, setKind] = useState<AskKind>(firstKind);
-  const [picked, setPicked] = useState<string[]>(() => preticked(drivers, given));
+  // The caller's rows at first (the board's rows for the trip's window replace them below once they answer).
+  const [picked, setPicked] = useState<string[]>(() => preticked(givenDrivers, given));
   // The window typed here when the caller gave none (the Drivers board: today, no trip).
   const [from, setFrom] = useState(context.from ?? '');
   const [to, setTo] = useState(context.to ?? '');
