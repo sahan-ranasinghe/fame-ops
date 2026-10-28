@@ -22,11 +22,13 @@ import { durationText } from '@/lib/durations';
 import type { MapPackage } from '@/lib/mapEngine';
 import { BAND_COLORS, dayNumbers, daySummary, noGpsLine, routeFrame, routeLines, routePoints, SPEED_BANDS, stopLine, stopMarks } from '@/office/driversLogic';
 import { canPlay, cursorAt, gapWindowsOf, playbackPath, routeOf } from '@/office/liveRouteLogic';
+import { snapControl, snapNoteKey, snapView } from '@/office/snapLogic';
 import type { DriverRoute, FleetError } from '@/office/types';
 import { ListFailed } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, shadow } from '@/theme';
 import { PlaybackBar, usePlayback } from './PlaybackBar';
+import { SnapChip, type SnapState } from './SnapChip';
 
 interface Props {
   data: DriverRoute | null;
@@ -38,12 +40,19 @@ interface Props {
   emptyText: string;
   /** Shown under the map and the playback (the day's tasks). */
   children?: ReactNode;
+  /** Round 48: snap to roads (the screen asked driver_route with snap when `on`); the chip over the map, the note under it. */
+  snap?: SnapState;
 }
 
-export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText, children }: Props) {
+export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText, children, snap }: Props) {
   const { t } = useApp();
-  const points = useMemo(() => (data ? routePoints(data) : []), [data]);
-  const lines = useMemo(() => (data ? routeLines(data) : []), [data]);
+  // The line drawn: the snapped one in the route's place when on and the server gave it (office/snapLogic.ts); the
+  // numbers above the map stay the server's (`data`: km from the odometer and the raw points, never the snapped line).
+  const snapOn = snap?.on === true;
+  const shown = useMemo(() => (data ? snapView(data, snapOn) : null), [data, snapOn]);
+  const snapUi = snapControl(data?.snapped, snap?.allowed === true, snap?.wanted === true);
+  const points = useMemo(() => (shown ? routePoints(shown) : []), [shown]);
+  const lines = useMemo(() => (shown ? routeLines(shown) : []), [shown]);
   // Each stop with its words (the pin's card, and its name for a screen reader).
   const stops = useMemo(() => (data ? stopMarks(data).map((s) => ({ ...s, label: stopLine(s, t) })) : []), [data, t]);
   const fitNow = routeFrame(lines, stops);
@@ -63,8 +72,9 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
   const summary = data ? daySummary(data) : null;
   const gapsLine = summary ? noGpsLine(summary, t) : null;
 
-  // The playback (Live's rules, office/liveRouteLogic.ts): the path in time order, the gaps, the marker at the clock.
-  const played = useMemo(() => (data ? routeOf(data.driver, data) : null), [data]);
+  // The playback (Live's rules, office/liveRouteLogic.ts): the path in time order along the line drawn (the roads when
+  // snapped, as on the site), the gaps, the marker at the clock.
+  const played = useMemo(() => (shown ? routeOf(shown.driver, shown) : null), [shown]);
   const path = useMemo(() => (played ? playbackPath(played.points, played.estimated) : []), [played]);
   const windows = useMemo(() => gapWindowsOf(played), [played]);
   const playback = usePlayback(path, useIsFocused());
@@ -96,7 +106,8 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
         </View>
       )}
       <View style={styles.map} testID="driver-route-map">
-        <RouteMap lines={lines} stops={stops} fit={fit} focus={focus} marker={marker} onStop={pickStop} mapPackage={mapPackage} />
+        <RouteMap lines={lines} stops={stops} fit={fit} focus={focus} marker={marker} onStop={pickStop} mapPackage={mapPackage}
+          controls={snap && snapUi.toggle && points.length > 0 ? <SnapChip on={snapUi.on} onChange={snap.setWanted} /> : null} />
         {picked && (
           <View style={styles.stopCard} testID="stop-card">
             <MapPin size={18} color={colors.ink} strokeWidth={2.4} />
@@ -108,6 +119,7 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
         )}
       </View>
       <View style={styles.legend}>
+        {snapUi.note && points.length > 0 && <Txt variant="small" size={12} testID="snap-note">{t(snapNoteKey(snapUi.note))}</Txt>}
         {SPEED_BANDS.map((b) => <LegendItem key={b} color={BAND_COLORS[b]} text={t(`office.drivers.route.legend.${b}`)} />)}
         <LegendItem color={BAND_COLORS.gap} text={t('office.drivers.route.legend.gap')} dashed />
         {lines.some((l) => l.band === 'estimated') && <LegendItem color={BAND_COLORS.estimated} text={t('office.drivers.route.legend.estimated')} dashed />}

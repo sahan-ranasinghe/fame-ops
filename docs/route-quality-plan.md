@@ -91,12 +91,15 @@ Setting `map_matching` = `{ provider: none | google_roads | osrm }` (`update_set
 Secrets: `GOOGLE_ROADS_KEY` (Roads API snapToRoads, 100 points a call, interpolate=true) or
 `OSRM_URL` (self-hosted `/match`, timestamps and radiuses from the accuracy, per-leg distance
 annotations time the road vertices). A driving leg is cut at gaps of 2 minutes or more (never
-bridged), thinned to 5 m, sent in chunks of 100 sharing a point; the answer is stored per leg
-in `route_matched`; a leg that is still growing today is matched again at most every 2 minutes;
+bridged), thinned to 5 m, sent in chunks of 100 sharing a point; the answer is kept per leg
+(OSRM's in `route_matched`; Google's, since Round 48 item 5 on 28 October 2026, never stored: 30
+minutes in the server's memory, `googleRoadsStore`, then asked again); a leg that is still growing today is matched again at most every 2 minutes;
 a failed leg is drawn raw and the legend says so. Calls are counted in `routing_calls` under
 the provider's name (`routing_usage` shows them). Claude never triggers a call (`snap` is off
 by default); the web passes `snap: true` behind the "Snap to roads" toggle (shown only when a
-provider is set) with the legend "Snapped to roads · km from odometer".
+provider is set) with the legend "Snapped to roads · km from odometer". Office mode and /m/ (Round
+48) do the same on a driver's day, a task's route and Live's shown route: the chip over the map,
+"Snapped to roads" / "GPS line", asked only where the map may draw the line (`office/snapLogic.ts`).
 
 ## 6. Office web (`apps/office`)
 
