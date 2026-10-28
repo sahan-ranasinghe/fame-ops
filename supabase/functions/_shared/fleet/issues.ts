@@ -770,7 +770,11 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         kind: "request_waiting",
         ref_key: `request:${r.id}`,
         severity: "warning",
-        title: r.status === "changed" ? "Changed booking needs re-approval" : "Vehicle request waiting",
+        title: r.status === "changed"
+          ? "Changed booking needs re-approval"
+          : r.kind === "change"
+          ? "Proposed task change waiting for approval"
+          : "Vehicle request waiting",
         detail: [r.requested_by_name, [r.route_from, r.route_to].filter(Boolean).join(" → ") || null, colomboDayTime(r.needed_at)].filter(
           Boolean,
         )

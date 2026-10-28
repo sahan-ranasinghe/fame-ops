@@ -55,6 +55,7 @@ import { notifyEvent } from "../notifications.ts";
 import { shortName } from "../names.ts";
 import { driverPhotoLinks, vehiclePhotoLinks } from "../media.ts";
 import { logRequestEvent, requester } from "./requestCore.ts";
+import { needsApproval, pendingChangeCard, proposeChange, waitingChangeFor, waitingChangesFor } from "./changes.ts";
 import { requestStopsOf, saveRequestTrip } from "./requestTrip.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
 import type { Actor } from "../roles.ts";
@@ -1347,7 +1348,7 @@ export const createTask = tool({
     const who = { drivenBy, driverName: drives.driver_name, driverPhone: drives.driver_phone };
 
     // Phase 7 (§33): someone without the approve permission proposes the task; it waits for the fleet admin's OK.
-    if (settings.tasks_need_approval && !actor.permissions.includes("approve")) {
+    if (needsApproval(settings, actor)) {
       return await proposeTask(db, now, actor, {
         keep: passengers,
         args,
@@ -1517,7 +1518,7 @@ export const updateTaskStops = tool({
     leave_by: zTime.optional().describe("A new leave time by hand, HH:MM (a task not started yet)"),
     buffer_min: z.number().int().min(0).max(600).optional(),
   }),
-  async run(args, { db, now }) {
+  async run(args, { db, now, actor }) {
     const task = await getTask(db, args.task_id);
     if (task.status !== "assigned" && task.status !== "in_progress") {
       throw new ToolError(`This task is ${task.status.replace("_", " ")}; its stops cannot be changed.`);
@@ -1552,6 +1553,38 @@ export const updateTaskStops = tool({
       notes.push(
         `Same as the start: Stop 1 (${stops[0].place_name}) is a pickup where the trip starts. Tick "Passengers get in here" instead.`,
       );
+    }
+
+    // Round 48 (item 1): without approve, the new stops wait in the queue (the plan is made when the approver applies them).
+    if (needsApproval(settings, actor)) {
+      const moved = stopChanges(existing.filter((s) => s.status !== "removed").map(stopForChange), [...kept, ...stops].map(stopForChange), 3);
+      const changes: Record<string, FieldChange> = {};
+      if (moved.list.length > 0) {
+        changes.stops = {
+          from: null,
+          to: moved.list.map((c) => `Stop ${c.n} ${c.change}: ${c.place}`).join("; ") + (moved.more ? ` (+${moved.more} more)` : ""),
+        };
+      }
+      if (args.leave_by && !running && utcIso(day, args.leave_by) !== (task.leave_by ?? task.start_at)) {
+        changes["leave by"] = { from: colomboTime(task.leave_by ?? task.start_at), to: args.leave_by };
+      }
+      if (args.start) changes.start = { from: task.start_name, to: args.start.place ?? args.start.address ?? "as given" };
+      if (args.return_to_base !== undefined && args.return_to_base !== task.return_to_base) {
+        changes["return to base"] = { from: task.return_to_base ? "yes" : "no", to: args.return_to_base ? "yes" : "no" };
+      }
+      if (args.avoid_expressway !== undefined && args.avoid_expressway !== task.avoid_expressway) {
+        changes["avoid expressway"] = { from: task.avoid_expressway ? "yes" : "no", to: args.avoid_expressway ? "yes" : "no" };
+      }
+      if (Object.keys(changes).length === 0) changes.stops = { from: null, to: "the same stops, planned again" };
+      return await proposeChange(db, now, actor, task, {
+        tool: "update_task_stops",
+        args: { ...args },
+        changes,
+        proposedDriverId: task.employee_id,
+        proposedVehicleId: task.vehicle_id,
+        startAt: args.leave_by && !running ? utcIso(day, args.leave_by) : task.start_at,
+        endBy: task.end_by,
+      });
     }
 
     let origin: PlanPoint | null = null;
@@ -1637,6 +1670,8 @@ export async function needsDriverList(db: Db, refs: Refs, now: Date) {
       "stops",
     )
     : [];
+  // Round 48 (item 1): a reassignment proposed by someone without approve, waiting for the fleet admin.
+  const pending = await waitingChangesFor(db, rows.map((t) => t.id));
   return await Promise.all(rows.map(async (t) => {
     const leave = t.leave_by ?? t.start_at;
     const minutes = Math.round((new Date(leave).getTime() - now.getTime()) / 60000);
@@ -1663,6 +1698,7 @@ export async function needsDriverList(db: Db, refs: Refs, now: Date) {
       note: t.declined_note ?? undefined,
       line: `${who.split(" ")[0]} ${declined ? "declined" : "hasn't accepted"} · ${declined ? reason : "needs a driver"}`,
       since: t.needs_driver_since ? colomboTime(t.needs_driver_since) : undefined,
+      pending_change: pending.has(t.id) ? pendingChangeCard(pending.get(t.id)!, now) : undefined,
       minutes_to_start: minutes,
       when: minutes >= 0 ? whenText(leave, now) : `${duration(-minutes)} late`,
       best,
@@ -1715,11 +1751,14 @@ export const taskBoard = tool({
         now,
       ),
     ]);
+    // Round 48 (item 1): changes proposed by someone without approve, waiting for the fleet admin, on their task's card.
+    const pending = await waitingChangesFor(db, tasks.map((t) => t.id));
     const card = async (t: Task) => {
       const mine = live(stops.filter((s) => s.task_id === t.id));
       const eta = t.status === "in_progress" ? await taskEta(db, t, mine, latest.get(t.employee_id), settings, now) : null;
       return {
         id: t.id,
+        pending_change: pending.has(t.id) ? pendingChangeCard(pending.get(t.id)!, now) : undefined,
         time: colomboTime(t.start_at),
         started_on: colomboDate(t.start_at) === day ? undefined : colomboDate(t.start_at),
         label: t.label,
@@ -2070,6 +2109,11 @@ export const taskDetail = tool({
                 : "Not accepted in time",
             }
             : undefined,
+          // Round 48 (item 1): a change proposed by someone without approve, waiting for the fleet admin (the task is as it was).
+          pending_change: await (async () => {
+            const w = await waitingChangeFor(db, task.id);
+            return w ? pendingChangeCard(w, now) : undefined;
+          })(),
           // Reopen (reopen_task): a task completed today, Colombo time.
           can_reopen: task.status === "completed" && !!task.completed_at && colomboDate(task.completed_at) === colomboDate(now)
             ? true
@@ -2301,6 +2345,57 @@ export interface ChangedTask {
 }
 
 /** "time Thu 15 Oct 09:00 → Thu 15 Oct 09:30, vehicle WP CAB-4521 → WP KL-1234" */
+/**
+ * Round 48 (item 1): what an update_task call without approve would change about the trip (the day, time, end, driver or
+ * vehicle), as the proposal's lines, with the words it carries too; null when it changes none of the trip fields.
+ */
+function proposedTaskChanges(
+  task: Task,
+  args: {
+    driver?: string;
+    vehicle?: string;
+    title?: string;
+    passengers?: number | null;
+    contact_name?: string | null;
+    contact_phone?: string | null;
+    notes?: string | null;
+  },
+  refs: Refs | null,
+  p: { startAt?: string; endBy?: string | null; word: ReturnType<typeof parseVehicleWord> },
+): { changes: Record<string, FieldChange>; driverId: string; vehicleId: string | null } | null {
+  const changes: Record<string, FieldChange> = {};
+  if (p.startAt && p.startAt !== task.start_at) changes.time = { from: colomboDayTime(task.start_at), to: colomboDayTime(p.startAt) };
+  if (p.endBy !== undefined && p.endBy !== task.end_by) {
+    changes["end by"] = { from: task.end_by ? colomboTime(task.end_by) : null, to: p.endBy ? colomboTime(p.endBy) : null };
+  }
+  const newDriver = args.driver && refs ? activeDriver(refs, args.driver) : null;
+  if (newDriver && newDriver.id !== task.employee_id) {
+    changes.driver = { from: shownDriver(task, refs?.emp.get(task.employee_id)) ?? null, to: newDriver.name };
+  }
+  const newVehicle = args.vehicle && !p.word && refs ? activeVehicle(refs, args.vehicle) : null;
+  const vehicleFrom = (task.vehicle_id ? refs?.veh.get(task.vehicle_id)?.reg_no : null) ??
+    vehicleText(task.vehicle_mode, task.vehicle_type_wanted) ?? null;
+  if (newVehicle && newVehicle.id !== task.vehicle_id) changes.vehicle = { from: vehicleFrom, to: newVehicle.reg_no };
+  if (p.word && (task.vehicle_id || task.vehicle_mode !== p.word.mode)) {
+    changes.vehicle = { from: vehicleFrom, to: vehicleText(p.word.mode, p.word.mode === "any_type" ? p.word.type : null) ?? null };
+  }
+  if (Object.keys(changes).length === 0) return null;
+  // The words in the same call go with the proposal, so the approval applies the whole call.
+  if (args.title !== undefined && args.title !== task.title) changes.title = { from: task.title, to: args.title };
+  if (args.passengers !== undefined && args.passengers !== task.passengers) {
+    changes.passengers = { from: task.passengers == null ? null : String(task.passengers), to: args.passengers == null ? null : String(args.passengers) };
+  }
+  if (args.contact_name !== undefined && args.contact_name !== task.contact_name) {
+    changes.contact = { from: task.contact_name, to: args.contact_name };
+  }
+  if (args.notes !== undefined && args.notes !== task.notes) changes.notes = { from: task.notes, to: args.notes };
+  return {
+    changes,
+    driverId: newDriver?.id ?? task.employee_id,
+    vehicleId: p.word ? null : newVehicle?.id ?? task.vehicle_id,
+  };
+}
+
 export const changesText = (changes: Record<string, FieldChange>): string =>
   Object.entries(changes).map(([label, c]) => `${label} ${c.from ?? "—"} → ${c.to ?? "—"}`).join(", ");
 
@@ -2571,6 +2666,23 @@ export const updateTask = tool({
     const day = args.date ?? colomboDate(task.start_at);
     const startAt = args.date || args.time ? utcIso(day, args.time ?? colomboTime(task.start_at)) : undefined;
     const endBy = args.end_time === undefined ? undefined : args.end_time === null ? null : utcIso(day, args.end_time);
+
+    // Round 48 (item 1): without approve, a change to the day, time, end, driver or vehicle waits in the queue (the words
+    // alone, title / passengers / contact / notes, go straight to the task as before).
+    if (needsApproval(await loadSettings(db), actor)) {
+      const proposed = proposedTaskChanges(task, args, refs, { startAt, endBy, word });
+      if (proposed) {
+        return await proposeChange(db, now, actor, task, {
+          tool: "update_task",
+          args: { ...args },
+          changes: proposed.changes,
+          proposedDriverId: proposed.driverId,
+          proposedVehicleId: proposed.vehicleId,
+          startAt: startAt ?? task.start_at,
+          endBy: endBy === undefined ? task.end_by : endBy,
+        });
+      }
+    }
     const out = await changeTask(db, now, actor, task, {
       startAt,
       endBy,
@@ -2819,6 +2931,33 @@ export const reassignTask = tool({
     // A new driver (or a driver who declined, or never accepted it, and gets it back) starts afresh: not seen, not accepted,
     // no reminder yet, a new accept window (Phase 7, §19: a reassignment clears "needs a driver").
     const fresh = driverChanged || wasDeclined || task.needs_driver_reason === "not_accepted";
+    const reassignChanges: Record<string, FieldChange> = {
+      ...(driverChanged && { driver: { from: shownDriver(task, refs.emp.get(task.employee_id)) ?? null, to: newDriver.name } }),
+      ...(((newVehicle?.id ?? null) !== task.vehicle_id || newMode !== task.vehicle_mode) && {
+        vehicle: {
+          from: vehicleWords(task.vehicle_id ? refs.veh.get(task.vehicle_id) : null, task.vehicle_mode, task.vehicle_type_wanted),
+          to: vehicleWords(newVehicle, newMode, newType),
+        },
+      }),
+      ...(delta !== 0 && { time: { from: colomboDayTime(task.start_at), to: colomboDayTime(startAt) } }),
+    };
+
+    // Round 48 (item 1): without approve, the reassignment waits in the queue; the task (and its driver) stay as they are.
+    if (needsApproval(await loadSettings(db), actor)) {
+      const proposed = Object.keys(reassignChanges).length
+        ? reassignChanges
+        // A declined task given back to the same driver: the change is the task itself (declined → assigned).
+        : { driver: { from: `${newDriver.name} (declined)`, to: newDriver.name } };
+      return await proposeChange(db, now, actor, task, {
+        tool: "reassign_task",
+        args: { task_id, driver, vehicle, start_time, date },
+        changes: proposed,
+        proposedDriverId: newDriver.id,
+        proposedVehicleId: newVehicle?.id ?? null,
+        startAt,
+        endBy,
+      });
+    }
 
     const changed = unwrap(
       await db.from("tasks").update({
@@ -2839,16 +2978,6 @@ export const reassignTask = tool({
       "task",
     );
     if (changed.length === 0) throw new ToolError("The driver started this task just now, so it was not changed. Check task_detail.");
-    const reassignChanges: Record<string, FieldChange> = {
-      ...(driverChanged && { driver: { from: shownDriver(task, refs.emp.get(task.employee_id)) ?? null, to: newDriver.name } }),
-      ...(((newVehicle?.id ?? null) !== task.vehicle_id || newMode !== task.vehicle_mode) && {
-        vehicle: {
-          from: vehicleWords(task.vehicle_id ? refs.veh.get(task.vehicle_id) : null, task.vehicle_mode, task.vehicle_type_wanted),
-          to: vehicleWords(newVehicle, newMode, newType),
-        },
-      }),
-      ...(delta !== 0 && { time: { from: colomboDayTime(task.start_at), to: colomboDayTime(startAt) } }),
-    };
     unwrap(
       await db.from("task_assignment_events").insert({
         task_id: task.id,

@@ -295,7 +295,11 @@ export const INSTRUCTIONS = [
   "permission answers waiting_for_approval and the task waits in the requests queue (list_requests kind task, task_board " +
   "waiting_approval) until decide_request sends it as proposed or changed. A request can carry its whole trip (create_request with " +
   "stops, as create_task takes them); approving copies its stops into the task. A waiting one is pushed to the approvers 30 minutes " +
-  "before it leaves and when its leave-by passes; it is never sent by itself.",
+  "before it leaves and when its leave-by passes; it is never sent by itself. Round 48: the same gate covers every change to a " +
+  "task's driver, vehicle, day, time or stops by someone without approve (reassign_task, update_task, update_task_stops): the call " +
+  "answers waiting_for_approval and waits as a request of kind change (list_requests kind change; the task's card and " +
+  "task_detail carry pending_change); the task stays as it is until decide_request approves (applies it as the approver) or " +
+  "declines it; the proposer withdraws it with cancel_request. The words alone (title, passengers, contact, notes) go straight.",
   "Photos and documents: drivers and vehicles may have photos (photo_url, thumb_url), and vehicles their documents " +
   "(vehicle_documents: revenue licence, insurance, emission test, CR, the rent or lease agreement, others; missing ones are listed). " +
   "Files are added in the web app only.",

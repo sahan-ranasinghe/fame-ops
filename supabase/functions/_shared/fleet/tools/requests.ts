@@ -43,6 +43,7 @@ import { DECLINE_TEXT } from "../decline.ts";
 import { matchProjects } from "./projects.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
 import { actorUserId, logRequestEvent, requester } from "./requestCore.ts";
+import { changeCardOf, type ProposedChange } from "./changes.ts";
 import {
   type RequestStop,
   requestStopsOf,
@@ -80,11 +81,13 @@ import {
   pickVehicle,
   planTimeline,
   prepareTask,
+  reassignTask,
   type ResolvedStop,
   saveTask,
   type Split,
   stopCard,
   type StoredPlan,
+  updateTask,
   updateTaskStops,
   type VehicleChoice,
   type VehicleMode,
@@ -509,7 +512,9 @@ function requestCard(
     version: r.version,
     // Waiting past its leave-by: it stays in the queue, never sent by itself (§35 18).
     late: r.status === "waiting" && new Date(r.needed_at) <= now ? true : undefined,
-    proposed: r.kind === "task"
+    // Round 48: a proposed change names the task it changes and what changes.
+    change: changeCardOf(r),
+    proposed: r.kind === "task" || r.kind === "change"
       ? {
         driver: r.proposed_employee_id ? refs?.people.get(r.proposed_employee_id)?.name : undefined,
         username: r.proposed_employee_id ? refs?.people.get(r.proposed_employee_id)?.username ?? undefined : undefined,
@@ -653,11 +658,15 @@ async function requestCardOf(db: Db, row: VehicleRequest, now: Date, withLine = 
  * Round 4–7 (6): update_request's own first checks, for a call that changes only who rides (withPassengerList never runs
  * the tool then): the request is the caller's (or they approve), the version they loaded, a state an edit may change.
  */
+/** Round 48: a proposed change is applied or declined as proposed; to change it, withdraw it and propose again. */
+const CHANGE_NOT_EDITABLE = "A proposed change cannot be edited: cancel it (cancel_request) and propose the change again.";
+
 export async function requestEditGuard(args: Record<string, unknown>, { db, actor }: { db: Db; actor: Actor }): Promise<void> {
   const request = await getRequest(db, args.request_id as string);
   if (!actor.permissions.includes("approve") && request.requested_by_employee_id !== actor.employeeId) {
     throw new ToolError("This request is not yours to change.");
   }
+  if (request.kind === "change") throw new ToolError(CHANGE_NOT_EDITABLE);
   checkVersion(request.version, args.version as number);
   statusAfterEdit(request.status);
 }
@@ -884,13 +893,16 @@ export const listRequests = tool({
     "first. Everyone's with the approve permission; otherwise the person's own. Each carries its version, its timeline (sent, seen, " +
     "decided, changed, cancelled), its events and, for a changed one, what changed since it was approved. Phase 7: kind task = a " +
     "task proposed by someone without approve (proposed driver, vehicle, warnings); trip = the stops with their planned times; " +
-    "late = waiting past its leave-by.",
+    "late = waiting past its leave-by. Round 48: kind change = a change to an existing task (change.task_id) proposed by someone " +
+    "without approve: the driver, vehicle, time or stops it would get (change.changes); the task stays as it is until decided.",
   readOnly: true,
   input: z.object({
     status: z.enum(["waiting", "changed", "approved", "declined", "cancelled", "expired", "all"]).optional().describe(
       "Default: waiting (which includes changed = approved and edited since, needing re-approval)",
     ),
-    kind: z.enum(["request", "task"]).optional().describe("task = only tasks proposed by someone without approve (Phase 7)"),
+    kind: z.enum(["request", "task", "change"]).optional().describe(
+      "task = only tasks proposed by someone without approve (Phase 7); change = only changes to a task proposed by someone without approve (Round 48)",
+    ),
     id: zId.optional().describe("Only this request"),
     with_line: z.boolean().optional().describe("The web's plan map: each leg's Google road line in the trip's timeline"),
     // Hotfix 3 (L3): a page at a time, and the search box.
@@ -1468,6 +1480,8 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
     await notifyEvent(db, "request.decided", {
       title: request.kind === "task"
         ? `Task declined by ${decidedBy} · ${request.title ?? "your task"}`
+        : request.kind === "change"
+        ? `Change declined by ${decidedBy} · ${request.title ?? "the task"}`
         : `Request declined by ${decidedBy}`,
       who: decidedBy,
       body: args.reason,
@@ -1476,6 +1490,9 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
     }, told);
     return { result: { request: await requestCardOf(db, changed[0], now) }, summary: `declined request ${request.id}: ${args.reason}` };
   }
+
+  // Round 48 (item 1): a proposed change to an existing task: the approver applies it (the same tool, run as them).
+  if (request.kind === "change") return await approveChange(db, now, actor, request, decidedBy, told);
 
   // Phase 7 (§33, §34): a proposed task, or a request planned with its stops: the task takes the stops as asked.
   const tripRows = (await requestStopsOf(db, [request.id])).get(request.id) ?? [];
@@ -1598,6 +1615,82 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
  * retyped. The plan is kept as planned unless the approver changes the day or the leave time; then it is planned again
  * (the stops' arrive_by times move with the day).
  */
+/**
+ * Round 48 (item 1): the approver applies a proposed change (reassign_task, update_task or update_task_stops as proposed,
+ * run as the approver: the task's history, approved_by and the audit are theirs), then the request is approved and the
+ * proposer told. A change whose task has gone (completed, cancelled) or, for stops, whose plan moved on since, is refused:
+ * decline it, or make the change yourself on the task.
+ */
+async function approveChange(
+  db: Db,
+  now: Date,
+  actor: Actor,
+  request: VehicleRequest,
+  decidedBy: string,
+  told: { actor: string | null; requester: string | null },
+) {
+  const p = request.proposal_json as unknown as ProposedChange | null;
+  if (!request.change_task_id || !p?.tool) throw new ToolError("This change names no task; decline it.");
+  const task = unwrapMaybe(await db.from("tasks").select("*").eq("id", request.change_task_id).maybeSingle(), "task");
+  if (!task) throw new ToolError("The task this change is for no longer exists; decline it.");
+  if (task.status === "completed" || task.status === "cancelled") {
+    throw new ToolError(`The task is ${task.status} now; decline this change.`);
+  }
+  if (p.tool === "update_task_stops" && task.plan_version !== p.plan_version) {
+    throw new ToolError(
+      `The task's stops changed since ${request.requested_by_name} proposed this (plan version ${task.plan_version}, proposed on ${p.plan_version}): ` +
+        "decline it, or change the stops yourself on the task.",
+    );
+  }
+  const ctx = { db, now, actor };
+  const args = { ...p.args, task_id: task.id };
+  let applied: { result: unknown; summary: string };
+  switch (p.tool) {
+    case "reassign_task":
+      // deno-lint-ignore no-explicit-any
+      applied = await reassignTask.run(args as any, ctx);
+      break;
+    case "update_task":
+      // deno-lint-ignore no-explicit-any
+      applied = await updateTask.run({ ...args, plan_version: task.plan_version } as any, ctx);
+      break;
+    case "update_task_stops":
+      // deno-lint-ignore no-explicit-any
+      applied = await updateTaskStops.run({ ...args, plan_version: task.plan_version } as any, ctx);
+      break;
+    default:
+      throw new ToolError(`This change (${p.tool}) cannot be applied; decline it.`);
+  }
+  const rows = unwrap(
+    await db.from("vehicle_requests").update({
+      status: "approved",
+      decided_at: now.toISOString(),
+      decided_by: decidedBy,
+      decided_by_employee_id: actor.employeeId,
+      version: request.version + 1,
+    }).eq("id", request.id).eq("status", "waiting").select("*"),
+    "vehicle request",
+  );
+  if (rows.length === 0) throw new ToolError("Someone else decided this change just now. Check list_requests.");
+  await logRequestEvent(db, request.id, "approved", decidedBy, { note: `applied: ${p.summary}` });
+  await notifyEvent(db, "request.decided", {
+    title: `Change approved by ${decidedBy} · ${task.title}`,
+    who: decidedBy,
+    body: p.summary,
+    url: `/requests/${request.id}`,
+    tag: `request:${request.id}`,
+  }, told);
+  return {
+    result: {
+      request: await requestCardOf(db, rows[0], now),
+      decision: "approved",
+      task_id: task.id,
+      applied: applied.result,
+    },
+    summary: `approved change ${request.id} (${p.summary}) -> ${applied.summary}`,
+  };
+}
+
 async function approveTrip(
   db: Db,
   now: Date,
@@ -2001,6 +2094,10 @@ export const cancelRequest = tool({
     const request = await getRequest(db, request_id);
     if (request.status === "declined" || request.status === "cancelled") throw new ToolError(`This request is already ${request.status}.`);
     if (request.status === "expired") throw new ToolError("This request expired already: nothing to cancel.");
+    // Round 48: a change already applied is part of the task now; change the task itself.
+    if (request.kind === "change" && request.status !== "waiting") {
+      throw new ToolError("This change was approved already: change the task itself (update_task or reassign_task).");
+    }
     // Phase 7 (§35 17): the person who asked or proposed may withdraw it while it waits; the approvers decide the rest.
     if (!actor.permissions.includes("approve")) {
       const userId = await actorUserId(db, actor);
@@ -2304,6 +2401,7 @@ export const updateRequest = tool({
     if (!actor.permissions.includes("approve") && request.requested_by_employee_id !== actor.employeeId) {
       throw new ToolError("This request is not yours to change.");
     }
+    if (request.kind === "change") throw new ToolError(CHANGE_NOT_EDITABLE);
     checkVersion(request.version, args.version);
     // The asker's phone alone (Phase 7, §4) changes nothing about the trip: the status stays, no re-approval, no push.
     const phoneOnly = Object.keys(args).every((k) => k === "request_id" || k === "version" || k === "requester_phone");
