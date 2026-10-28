@@ -32,7 +32,7 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Briefcase, CalendarX, Check, ChevronLeft, Clock, Flag, Fuel, type LucideIcon, MessageCircle, Navigation, Phone, Send, UserCog, Users, UserX, X } from '@/components/icons';
@@ -44,6 +44,7 @@ import { Sheet } from '@/components/patterns/Sheet';
 import { StatusBanner } from '@/components/patterns/StatusBanner';
 import { RoundButton } from '@/components/patterns/TopBar';
 import { TaskMap } from '@/components/TaskMap';
+import { mapHeight } from '@/lib/mapLayout';
 import { type BannerIcon, lateMinutes, type TaskAction, taskActions, taskBanner } from '@/office/detailBanner';
 import { holderTitle, reachOf, windowWords } from '@/office/holderLogic';
 import { TaskDriverCard } from '@/components/office/DriverRows';
@@ -200,6 +201,7 @@ export default function TaskDetailScreen() {
   const here = live.data?.drivers?.find((d) => d.driver === task?.driver && typeof d.lat === 'number' && typeof d.lng === 'number');
   const mapTask = useMemo(() => (p && showMap ? detailTask(p) : null), [p, showMap]);
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const [moreOpen, setMoreOpen] = useState(false);
   const plan = taskActions({
     reassign: actions.reassign,
@@ -256,13 +258,16 @@ export default function TaskDetailScreen() {
           subtitle={task ? [t('office.task.task'), task.start, p?.from_request ? t('office.task.askedBy', { name: p.from_request.requested_by }) : task.created_by ? t('office.task.madeBy', { name: task.created_by }) : ''].filter(Boolean).join(' · ') : undefined}
         />
       )}
+      {/* Round 48 (item 2, Google Maps Timeline / Airbnb's split view): the map at a fixed height, outside the scroll (a pinch
+          zooms it, the page's scroll never does); the sheet's rounded top overlaps its foot. */}
+      {showMap && mapTask && (
+        <View style={[styles.map, { height: mapHeight(height) }]} testID="task-map">
+          <TaskMap report={false} mapPackage={me.map?.package} task={mapTask} me={here ? { lat: here.lat as number, lng: here.lng as number } : null} googleNoteFor="current" />
+        </View>
+      )}
+      <View style={[{ flex: 1 }, showMap && styles.sheetOverMap]}>
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} bottom={16} style={{ padding: 0, gap: 0 }}>
-        {showMap && mapTask && (
-          <View style={styles.map} testID="task-map">
-            <TaskMap report={false} mapPackage={me.map?.package} task={mapTask} me={here ? { lat: here.lat as number, lng: here.lng as number } : null} googleNoteFor="current" />
-          </View>
-        )}
-        <View style={[styles.sheet, showMap && styles.sheetOverMap]}>
+        <View style={[styles.sheet, showMap && { paddingTop: 10 }]}>
           {showMap && <View style={styles.grab} />}
           {!p && !q.error && <SkeletonRows rows={4} lines={2} />}
           {q.error && <ListFailed stale={!!p} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
@@ -427,6 +432,7 @@ export default function TaskDetailScreen() {
           {problem && <ErrorNotice error={problem} onRetry={() => void q.reload()} />}
         </View>
       </Screen>
+      </View>
       {showMap && (
         <View style={[styles.floatBack, { top: insets.top + 12 }]}>
           <RoundButton icon={<ChevronLeft size={22} color={colors.ink} strokeWidth={2.4} />} label={t('common.back')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/office'))} testID="task-back" />
@@ -508,9 +514,9 @@ const styles = StyleSheet.create({
   list: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, overflow: 'hidden' },
   inner: { paddingHorizontal: 14, paddingBottom: 8 },
   innerText: { paddingHorizontal: 14, paddingBottom: 12 },
-  map: { height: 300, backgroundColor: colors.mapLand },
+  map: { backgroundColor: colors.mapLand },
   sheet: { padding: 16, gap: 12, backgroundColor: colors.page },
-  sheetOverMap: { marginTop: -24, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10 },
+  sheetOverMap: { marginTop: -24, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', backgroundColor: colors.page },
   grab: { width: 40, height: 4, borderRadius: 2, backgroundColor: look.rail, alignSelf: 'center' },
   floatBack: { position: 'absolute', left: 16 },
   sheetBtn: { minHeight: 56 },

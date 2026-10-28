@@ -15,8 +15,10 @@
 
 import { boundsOf, type Frame, frameOf, kmText, type LatLng, ORS_CREDIT } from '../components/taskMapLogic';
 import { durationText } from '../lib/durations';
+import { NO_ROUTE_LAYERS, type RouteLayers } from '../lib/mapLayout';
 import { distanceM } from '../lib/track';
 import type { Words } from './liveLogic';
+import { type EndMarks, endsOf, type GapMark, gapMarksOf } from './routeMarks';
 import type { DriverRoute, GapKind, LiveDriver, SegmentKind } from './types';
 
 // ---- The tool ---------------------------------------------------------------------------------------------------------
@@ -325,6 +327,9 @@ export interface RouteDrawing {
   holes: HoleLine[];
   estimated: { key: string; points: LatLng[] }[];
   stops: StopMark[];
+  /** Round 48 (item 3): the start and end pins, and the gap markers (drawn by the Layers filter: office/routeMarks.ts). */
+  ends: EndMarks | null;
+  gaps: GapMark[];
   /** The frame around the line and the estimated roads. */
   frame: Frame;
 }
@@ -347,8 +352,17 @@ export function drawingOf(route: Route | null, t: Words): RouteDrawing | null {
     holes,
     estimated: est.map((e, i) => ({ key: `est:${i}:${e.fromAt}`, points: e.points })),
     stops: route.stops.map((s, i) => ({ key: `stop:${i}:${s.from}`, lat: s.lat, lng: s.lng, from: s.from, to: s.to, minutes: s.minutes, near: s.near, label: stopLabel(s, t) })),
+    ends: endsOf(route.points, clockS),
+    gaps: gapMarksOf(gapSources(route), route.points, clockS),
     frame: frameOf([...route.points, ...est.flatMap((e) => e.points)]),
   };
+}
+
+/** The gaps that get a marker: the timeline's no-GPS and no-app rows (the same gaps the card counts), else the line's holes. */
+function gapSources(route: Pick<Route, 'timeline' | 'holes'>): { kind: GapKind; fromAt: number; toAt: number; minutes?: number }[] {
+  const rows = route.timeline.filter((r) => r.kind === 'no_gps' || r.kind === 'no_data');
+  if (rows.length) return rows.map((r) => ({ kind: r.kind as GapKind, fromAt: r.fromAt, toAt: r.toAt }));
+  return route.holes.map((h) => ({ kind: h.kind, fromAt: h.fromAt, toAt: h.toAt, minutes: h.minutes }));
 }
 
 /** The stop circle's sizes, so Google's anchor (a fraction of the view) lands on the circle's centre under the label. */
@@ -691,9 +705,11 @@ export interface LiveLayers {
   trails: TrailLine[];
   route: RouteDrawing | null;
   cursor: Cursor | null;
+  /** Round 48 (item 3): the Layers choices of the Filter sheet (the gap markers, every stop's time). */
+  show: RouteLayers;
 }
 
-export const NO_LAYERS: LiveLayers = { trails: [], route: null, cursor: null };
+export const NO_LAYERS: LiveLayers = { trails: [], route: null, cursor: null, show: NO_ROUTE_LAYERS };
 
 /** The box around a route's line, for a test or a frame by hand. */
 export const routeBounds = (route: Pick<Route, 'points'>) => boundsOf(route.points);

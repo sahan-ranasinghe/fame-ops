@@ -8,6 +8,7 @@
 // words), the card's speed and battery, and the map's fit-all frame and zoom steps.
 
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
+import { routeLayerOptions, type RouteLayers, routeLayersOf } from '../lib/mapLayout';
 import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
 import { sentenceText } from './statusWords';
 import { initials } from './text';
@@ -57,9 +58,14 @@ export function liveFilterDefs(counts: Record<LiveFilter, number> | undefined, t
   }];
   // Today's trails live in the sheet, not over the map (Sahan's decision 3, 20 October 2026: at most three map controls);
   // on, they show as a chip like any other filter.
-  if (opts.trails) defs.push({ key: 'show', label: t('office.live.mapSection'), kind: 'multi', options: [{ value: 'trails', label: t('office.live.trails') }] });
+  // Round 48 (item 3): the route's layers (the gap markers, every stop's time: lib/mapLayout.ts) in the same Map section,
+  // after the trails (Google Maps' Layers button, inside the one Filter sheet); they need the shown route, so driver_route.
+  if (opts.trails) defs.push({ key: 'show', label: t('office.live.mapSection'), kind: 'multi', options: [{ value: 'trails', label: t('office.live.trails') }, ...routeLayerOptions(t)] });
   return defs;
 }
+
+/** The route's layers ticked in the Map section (Round 48). */
+export const liveLayersOf = (values: FilterValues): RouteLayers => routeLayersOf(values, 'show');
 
 /** Today's trails are ticked in the sheet. */
 export const trailsOn = (values: FilterValues): boolean => Array.isArray(values.show) && values.show.includes('trails');

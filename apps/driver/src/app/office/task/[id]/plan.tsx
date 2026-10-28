@@ -10,11 +10,12 @@
 // each leg in full under the row before it; the words as before.
 
 import { useLocalSearchParams } from 'expo-router';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import { PlanStepper } from '@/components/office/PlanStepper';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { TaskMap } from '@/components/TaskMap';
+import { mapHeight } from '@/lib/mapLayout';
 import { Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
 import { useOffice, useTool } from '@/office/state';
@@ -38,12 +39,14 @@ export default function TaskPlanScreen() {
   const items = p?.timeline?.items ?? [];
   const totals = p?.timeline?.totals;
   const plan = p?.plan;
+  const { height } = useWindowDimensions();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={t('office.task.planTitle')} subtitle={task?.title} />
+      {/* Round 48 (item 2): the map at a fixed height outside the scroll (a pinch zooms it, the page's scroll never does). */}
+      {p && planDrawable(p) && <View style={{ height: mapHeight(height) }} testID="plan-map"><TaskMap report={false} mapPackage={me.map?.package} task={detailTask(p)} me={null} googleNoteFor="any" /></View>}
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} style={{ padding: 0, gap: 0 }}>
-        {p && planDrawable(p) && <View style={{ height: 320 }} testID="plan-map"><TaskMap report={false} mapPackage={me.map?.package} task={detailTask(p)} me={null} googleNoteFor="any" /></View>}
         <View style={{ padding: 16, gap: 14 }}>
           {!p && !q.error && <SkeletonRows rows={4} lines={2} />}
           {q.error && <ListFailed stale={!!p} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}

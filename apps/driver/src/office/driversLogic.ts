@@ -9,10 +9,11 @@
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
 import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
 import { durationText } from '../lib/durations';
-import { addDays } from '../lib/time';
+import { addDays, colomboTime } from '../lib/time';
+import { type EndMark, type EndMarks, endsOf, type GapMark, gapMarksOf, type GapSource } from './routeMarks';
 import { whenWords } from '../lib/dateWords';
 import { sentenceText } from './statusWords';
-import type { BoardDriver, BoardFilter, DriverRoute, RouteSegment, UnavailableEntry, UnavailablePart, UnavailableReason } from './types';
+import type { BoardDriver, BoardFilter, DriverRoute, GapKind, RouteSegment, UnavailableEntry, UnavailablePart, UnavailableReason } from './types';
 
 export type Words = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -432,4 +433,38 @@ export function segmentLine(seg: Pick<RouteSegment, 'from' | 'to' | 'minutes' | 
   if (seg.kind === 'driving' && typeof seg.km === 'number') parts.push(`${Math.round(seg.km * 10) / 10} ${t('common.km')}`);
   if (seg.uploaded) parts.push(t('office.drivers.uploadedLater', { time: seg.uploaded }));
   return parts.join(' · ');
+}
+
+// ---- Round 48 (item 3): the route's markers --------------------------------------------------------------------------
+// Google Maps Timeline: the start and the end of the route are pins, the stops are dots, the "no GPS" / "app not running"
+// events are markers the Layers filter shows (office/routeMarks.ts; the cluster helper lib/cluster.ts).
+
+export type { EndMarks, GapMark } from './routeMarks';
+
+/** The route's two ends from the line's points (the first and the last, with their clock). */
+export function routeEnds(points: readonly RoutePoint[]): EndMarks | null {
+  return endsOf(points, colomboTime);
+}
+
+/**
+ * One marker per gap of the day: the timeline's no-GPS and no-app rows (the same gaps the summary counts), else the
+ * line's holes when an older answer has no timeline; each at the last point before the signal went.
+ */
+export function gapMarks(route: Pick<DriverRoute, 'timeline' | 'holes'>, points: readonly RoutePoint[]): GapMark[] {
+  const rows = (route.timeline ?? []).filter((s) => s.kind === 'no_gps' || s.kind === 'no_data');
+  const source: GapSource[] = rows.length
+    ? rows.map((s) => ({ kind: s.kind as GapKind, fromAt: Date.parse(s.from_at), toAt: Date.parse(s.to_at), minutes: s.minutes }))
+    : (route.holes ?? []).map((h) => ({ kind: h.kind, fromAt: Date.parse(h.from_at), toAt: Date.parse(h.to_at), minutes: h.minutes }));
+  return gapMarksOf(source, points, colomboTime);
+}
+
+/** A gap marker's card: "No GPS signal · 14:00–14:56 · 56 min" or "App not running · …" (dur.* in the person's language). */
+export function gapLine(g: Pick<GapMark, 'kind' | 'from' | 'to' | 'minutes'>, t: Words): string {
+  const span = g.to && g.to !== g.from ? `${g.from}–${g.to}` : g.from;
+  return t(g.kind === 'no_data' ? 'dayRoute.gapNoData' : 'dayRoute.gapNoGps', { span, duration: durationText(t, g.minutes) });
+}
+
+/** An end pin's words: "Start · 08:01", "End · 16:31". */
+export function endLine(e: Pick<EndMark, 'kind' | 'time'>, t: Words): string {
+  return t(e.kind === 'start' ? 'dayRoute.start' : 'dayRoute.end', { time: e.time });
 }

@@ -1,15 +1,22 @@
 // A driver's day on the map in the mobile website (Phase 8, O4): the phones' RouteMap.tsx drawn by the browser's engines
 // (components/web: Google's map under the google package, its load counted; else the free map, MapLibre with OpenFreeMap).
 // The same content on both (the positions are ours, rule 10): the day's line coloured by speed band, the holes dashed grey,
-// the estimated roads dashed slate (openrouteservice's: its credit shows), the stops over 10 minutes with the time they
-// began (a tap says where and how long: §33.6 item 1), the playback marker, the frame around the day and the move to a
-// tapped stop. Neither map: "Map not available" with Try again; the day's numbers above the map keep working.
+// the estimated roads dashed slate (openrouteservice's: its credit shows), the stops over 10 minutes as dots (a tap says
+// where and how long: §33.6 item 1), the playback marker, the frame around the day and the move to a tapped stop. Neither
+// map: "Map not available" with Try again; the day's numbers keep working.
+// Round 48 (item 3, Google Maps Timeline; Google Maps' marker clustering): the start and end pins, the gap markers the
+// Layers filter shows, the stop's time when tapped or asked for, and overlapping markers as one numbered circle
+// (lib/cluster.ts, from the zoom the engine reports after each move; a tap zooms in two steps). The wheel over the map
+// zooms the map (MapLibre's scrollZoom, Google's greedy gestures), never the page: the map is outside the page's scroll.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { clusterMarkers, clusterZoom } from '@/lib/cluster';
 import type { Engine, MapPackage } from '@/lib/mapEngine';
-import { BAND_COLORS, type RouteFit, type RouteLine, type StopMark } from '@/office/driversLogic';
+import { NO_ROUTE_LAYERS, type RouteLayers } from '@/lib/mapLayout';
+import { BAND_COLORS, endLine, gapLine, type RouteFit, type RouteLine, type StopMark } from '@/office/driversLogic';
+import { type EndMarks, type GapMark, routeMarkerPoints } from '@/office/routeMarks';
 import { useApp } from '@/state/app';
 import { MapCompass } from './MapCompass';
 import { nextTurn, ONE_PLACE_ZOOM, type Turn } from './mapPins';
@@ -17,7 +24,7 @@ import { type Frame, ORS_CREDIT, OSM_CREDIT } from './taskMapLogic';
 import type { MapAdapter } from './web/adapters';
 import { BrowserMap, CreditLine, MapLines, MapMarker, UnavailableCard, useBrowserEngine, useMapMount } from './web/BrowserMap';
 import { cameraFor, DASH } from './web/browserMapLogic';
-import { type PlaybackMarker, PlaybackPin, ROUTE_PIN, RouteStopPin } from './web/pins';
+import { ClusterPin, GapPin, type PlaybackMarker, PlaybackPin, ROUTE_DOT, RouteEndPin, RouteStopDot } from './web/pins';
 
 export type { PlaybackMarker };
 
@@ -57,14 +64,22 @@ interface Props {
   /** §33.6 item 1: a stop pin tapped (its key). */
   onStop?: (key: string) => void;
   mapPackage?: MapPackage;
+  /** Round 48: the start and end pins, the gap markers to draw, the Layers choices, the marker whose card is open, a gap tapped. */
+  ends?: EndMarks | null;
+  gaps?: GapMark[];
+  layers?: RouteLayers;
+  selected?: string | null;
+  onGap?: (key: string) => void;
 }
 
-export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage }: Props) {
+export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage, ends = null, gaps = [], layers = NO_ROUTE_LAYERS, selected = null, onGap }: Props) {
   const { t } = useApp();
   const mapMount = useMapMount(mapPackage);
   const { mount, dispatch } = mapMount;
   const [map, setMap] = useState<MapAdapter | null>(null);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
+  // The zoom the engine last reported (null until it does): the cluster helper's input.
+  const [zoom, setZoom] = useState<number | null>(null);
 
   // The whole day: when the map is made and when the points shown change (fit.key), never while a row is focused; a
   // focus cleared frames the day again.
@@ -86,8 +101,16 @@ export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage 
   }, [map, focus?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const estimated = useMemo(() => lines.filter((l) => l.band === 'estimated').map(spec), [lines]);
-  const gaps = useMemo(() => lines.filter((l) => l.band === 'gap').map(spec), [lines]);
+  const gapLines = useMemo(() => lines.filter((l) => l.band === 'gap').map(spec), [lines]);
   const day = useMemo(() => lines.filter((l) => l.band !== 'estimated' && l.band !== 'gap').map(spec), [lines]);
+
+  // The markers at this zoom: the clusters, and the singles by what they are (the selected one is never clustered).
+  const points = useMemo(() => routeMarkerPoints(ends, stops, gaps, layers, selected), [ends, stops, gaps, layers, selected]);
+  const grouped = useMemo(() => clusterMarkers(points, zoom), [points, zoom]);
+  const single = new Set(grouped.singles.map((m) => m.key));
+  const shownStops = stops.filter((s) => single.has(s.key) || s.key === selected);
+  const shownGaps = gaps.filter((g) => single.has(g.key) || g.key === selected);
+  const zoomInto = (c: { lat: number; lng: number }) => map?.show({ kind: 'center', center: c, zoom: clusterZoom(zoom) }, ROUTE_PADDING);
 
   if (mount.status === 'unavailable') {
     return <UnavailableCard body={t('dayRoute.mapUnavailableBody')} onRetry={() => dispatch({ type: 'retry' })} testID="route-map-unavailable" />;
@@ -100,16 +123,41 @@ export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage 
         start={cameraFor(fit.frame, ONE_PLACE_ZOOM)}
         padding={ROUTE_PADDING}
         onAdapter={setMap}
-        events={{ turned: (h, p) => setTurn((prev) => nextTurn(prev, h, p)) }}
+        events={{ moved: (_c, z) => setZoom(Number.isFinite(z) ? z : null), turned: (h, p) => setTurn((prev) => nextTurn(prev, h, p)) }}
       >
         <MapLines group="route-estimated" z={1} lines={estimated} />
-        <MapLines group="route-gaps" z={2} lines={gaps} />
+        <MapLines group="route-gaps" z={2} lines={gapLines} />
         <MapLines group="route-day" z={3} lines={day} />
-        {stops.map((s) => (
-          // The circle's centre on the position whatever the label: anchored at the top, moved up by half a circle.
+        {ends && single.has('start') && (
+          <MapMarker at={ends.start} anchor="center" z={5}>
+            <View accessibilityLabel={endLine(ends.start, t)}><RouteEndPin end={ends.start} /></View>
+          </MapMarker>
+        )}
+        {ends?.end && single.has('end') && (
+          <MapMarker at={ends.end} anchor="center" z={5}>
+            <View accessibilityLabel={endLine(ends.end, t)}><RouteEndPin end={ends.end} /></View>
+          </MapMarker>
+        )}
+        {shownStops.map((s) => {
+          const open = s.key === selected;
+          const labelled = open || layers.stopTimes;
+          // The dot's centre on the position whatever the label: anchored at the bottom, moved down by half a dot.
           // §33.6 item 1: a tap says where and how long (the screen's card) and moves the map to it.
-          <MapMarker key={`${s.key}:${s.time}`} at={s} anchor="top" offsetY={-ROUTE_PIN.circle / 2} z={5} onPress={onStop ? () => onStop(s.key) : undefined}>
-            <RouteStopPin stop={s} />
+          return (
+            <MapMarker key={`${s.key}:${s.time}`} at={s} anchor="bottom" offsetY={ROUTE_DOT.size / 2} z={open ? 6 : 4} onPress={onStop ? () => onStop(s.key) : undefined}>
+              <View accessibilityLabel={s.label}><RouteStopDot time={s.time} labelled={labelled} open={open} /></View>
+            </MapMarker>
+          );
+        })}
+        {shownGaps.map((g) => (
+          <MapMarker key={g.key} at={g} anchor="center" z={g.key === selected ? 6 : 4} onPress={onGap ? () => onGap(g.key) : undefined}>
+            <View accessibilityLabel={gapLine(g, t)}><GapPin gap={g} open={g.key === selected} /></View>
+          </MapMarker>
+        ))}
+        {grouped.clusters.map((c) => (
+          // Google Maps' marker clustering: one numbered circle; a tap zooms in two steps so its markers come apart.
+          <MapMarker key={c.key} at={c} anchor="center" z={6} onPress={() => zoomInto(c)}>
+            <View accessibilityLabel={t('dayRoute.cluster', { n: c.count })} testID="route-cluster"><ClusterPin count={c.count} /></View>
           </MapMarker>
         ))}
         {marker ? (

@@ -275,7 +275,8 @@ console.log('\n== The screen and the two engines ==');
   const open = read('src/components/OpenDriversMap.tsx');
   for (const [name, src] of [['Google', google], ['free', open]] as const) {
     check(/: DriversEngineProps & LiveLayerProps\)/.test(src) && /import type \{ LiveLayerProps \} from '\.\/DriversMap'/.test(src), `the ${name} map takes the layers (a type-only import: no runtime cycle)`);
-    check(/<pins\.Stop stop=\{s\} open=\{open\} \/>/.test(src) && /<pins\.Cursor cursor=\{cursor\} \/>/.test(src) && /setOpenStop\(\(o\) => \(o === s\.key \? null : s\.key\)\)/.test(src),
+    // Round 48: the stop's label also with the Stop times layer (labelled), the same pin.
+    check(/<pins\.Stop stop=\{s\} open=\{open\} labelled=\{labelled\} \/>/.test(src) && /<pins\.Cursor cursor=\{cursor\} \/>/.test(src) && /setOpenStop\(\(o\) => \(o === s\.key \? null : s\.key\)\)/.test(src),
       `the ${name} map: the stops' circles open their times on a tap, the playback marker`);
     check(/const routeKey = route\?\.key \?\? null;/.test(src) && /\}, \[(ready, )?routeKey\]\);/.test(src), `the ${name} map frames the shown route once per driver and day`);
   }
@@ -283,8 +284,9 @@ console.log('\n== The screen and the two engines ==');
     && /tr\.holeCoords\.map\([\s\S]*?lineDashPattern=\{\[6, 8\]\}/.test(google), "Google's map: a trail per driver in its colour, its holes dashed");
   check(/holes\.map\(\(h\) => \([\s\S]*?strokeColor=\{HOLE_COLOR\}[\s\S]*?lineDashPattern=\{\[8, 8\]\}/.test(google) && /estimated\.map\(\(e\) => \([\s\S]*?strokeColor=\{ESTIMATED_COLOR\}[\s\S]*?lineDashPattern=\{\[4, 8\]\}/.test(google)
     && /runs\.map\(\(r\) => \([\s\S]*?strokeColor=\{r\.color\} strokeWidth=\{5\}/.test(google), "Google's map: the holes dashed grey, the estimated roads dashed slate, the runs by band");
-  check(/anchor=\{\{ x: 0\.5, y: stopPinAnchorY\(open\) \}\}/.test(google) && /key=\{`\$\{s\.key\}:\$\{open\}`\}/.test(google) && /<GoogleMarker coordinate=\{at\(cursor\)\} anchor=\{\{ x: 0\.5, y: stopPinAnchorY\(true\) \}\} tracksViewChanges zIndex=\{10\}>/.test(google),
-    "Google's map: a stop's picture taken again when it opens; the playback marker keeps tracking its view");
+  // Round 48: the label also comes with the Stop times layer (labelled): the anchor and the key follow it.
+  check(/anchor=\{\{ x: 0\.5, y: stopPinAnchorY\(labelled\) \}\}/.test(google) && /key=\{`\$\{s\.key\}:\$\{open\}:\$\{labelled\}`\}/.test(google) && /<GoogleMarker coordinate=\{at\(cursor\)\} anchor=\{\{ x: 0\.5, y: stopPinAnchorY\(true\) \}\} tracksViewChanges zIndex=\{10\}>/.test(google),
+    "Google's map: a stop's picture taken again when it opens or gets its label; the playback marker keeps tracking its view");
   check(/id="live-trails"/.test(open) && /id="live-trail-holes"/.test(open) && /id="live-route-holes"/.test(open) && /id="live-route-estimated"/.test(open) && /id="live-route"/.test(open),
     'the free map: a source for the trails, their holes, the route\'s holes, the estimated roads and the runs');
   check(/'line-color': \['get', 'color'\], 'line-width': 3/.test(open) && /'line-color': \['get', 'color'\], 'line-width': 5/.test(open), 'the free map: the colour from each feature (a trail\'s, a run\'s band)');
@@ -292,7 +294,8 @@ console.log('\n== The screen and the two engines ==');
     && /id="live-route-estimated-line"[\s\S]*?'line-color': ESTIMATED_COLOR[\s\S]*?'line-dasharray': \[1, 2\]/.test(open), 'the free map: the dashed lines on layers of their own');
   check(/anchor="bottom"\s+offset=\{\[0, STOP_PIN\.size \/ 2\]\}/.test(open) && /<Marker id="live-cursor" lngLat=\{\[cursor\.lng, cursor\.lat\]\} anchor="bottom" offset=\{\[0, STOP_PIN\.size \/ 2\]\}>/.test(open),
     'the free map: the circle\'s centre on the position whatever the label\'s height');
-  const openOrder = ['id="live-trails"', 'id="live-route-holes"', 'id="live-route"', 'route?.stops', 'markers.map', 'id="live-cursor"'].map((s) => open.indexOf(s));
+  // Round 48: the stops are named in the hooks too (the cluster set), so the JSX's own stop marker is the needle.
+  const openOrder = ['id="live-trails"', 'id="live-route-holes"', 'id="live-route"', 'id={`live-stop-${s.key}`}', 'markers.map', 'id="live-cursor"'].map((s) => open.indexOf(s));
   check(openOrder.every((i, k) => i >= 0 && (k === 0 || i > openOrder[k - 1])), 'the free map: the trails under the route, the pins above the lines, the playback marker on top');
   check(!/snap|route_snapped|google_place|PROVIDER_GOOGLE|google_pins/.test(read('src/office/liveRouteLogic.ts').replace(/^\/\/.*$/gm, '').replace(/\/\*\*[\s\S]*?\*\//g, '')),
     'nothing Google-specific in the rules (no snapped line, no Google place): the points are ours, so both engines draw the same');

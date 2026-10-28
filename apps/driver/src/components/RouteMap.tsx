@@ -7,10 +7,16 @@
 //   - neither: "Map not available" with Try again; the day's numbers above the map keep working.
 // Both engines draw the same content (the positions are ours, rule 10): the day's line coloured by speed band (standing
 // grey, under 20 amber, 20–60 blue, over 60 dark blue), the holes dashed grey, the estimated road over a gap dashed slate
-// (openrouteservice's: its credit shows with the map), the stops over 10 minutes as circles with the time they began (a tap
-// says where and how long: §33.6 item 1), the frame around the day, and the move to a tapped stop. A Google map that has not said it loaded
+// (openrouteservice's: its credit shows with the map), the stops over 10 minutes as small dots (a tap says where and how
+// long: §33.6 item 1), the frame around the day, and the move to a tapped stop. A Google map that has not said it loaded
 // within phone_map_wait_s while online is judged failed (the phone moves to the free map; a render error or MapLibre's
 // onDidFailLoadingMap at once); the wait runs only while this screen is in front and the app on screen.
+// Round 48 (item 3, Google Maps Timeline; the pins in routePins.tsx, the rules in office/routeMarks.ts and lib/cluster.ts):
+// the start and the end of the route are pins, a stop is a dot that shows its time when tapped or when the Layers filter
+// says so, the "no GPS" / "app not running" markers show only with the Layers filter (or the one whose card is open),
+// and markers that would overlap are one numbered circle until the map is zoomed in (a tap zooms in). Both native SDKs
+// draw their markers above their lines (no z-index crosses the two), so the dots are small enough for the line to read
+// through; the playback marker stays on top of everything.
 
 import MapPinOff from 'lucide-react-native/icons/map-pin-off';
 import * as Network from 'expo-network';
@@ -18,9 +24,11 @@ import { useIsFocused } from 'expo-router';
 import { Component, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Mono, Txt } from '@/components/ui';
+import { Txt } from '@/components/ui';
 import { type Engine, engineFor, type MapPackage, mapSession, mapStep, type MountEvent, type MountState, startMount, waitFor } from '@/lib/mapEngine';
-import { BAND_COLORS, type RouteFit, type RouteLine, type StopMark } from '@/office/driversLogic';
+import { NO_ROUTE_LAYERS, type RouteLayers } from '@/lib/mapLayout';
+import type { RouteFit, RouteLine, StopMark } from '@/office/driversLogic';
+import type { EndMarks, GapMark } from '@/office/routeMarks';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { GoogleRouteMap } from './GoogleRouteMap';
@@ -50,6 +58,16 @@ export interface RouteEngineProps {
   marker?: PlaybackMarker | null;
   /** §33.6 item 1: a stop pin tapped (its key): the screen says where and how long, and moves the map to it. */
   onStop?: (key: string) => void;
+  /** Round 48: the start and end pins (none without a point). */
+  ends?: EndMarks | null;
+  /** Round 48: the gap markers to draw (the screen filters them by the Layers choice: office/routeMarks.ts visibleGaps). */
+  gaps?: GapMark[];
+  /** Round 48: the Layers choices (every stop's time label). */
+  layers?: RouteLayers;
+  /** Round 48: the marker whose card is open (a stop's or a gap's key): drawn apart from any cluster, a stop with its time. */
+  selected?: string | null;
+  /** Round 48: a gap marker tapped (its key): the screen says what it was and moves the map to it. */
+  onGap?: (key: string) => void;
   /** The map finished loading (Google: onMapLoaded; MapLibre: onDidFinishLoadingMap). */
   onLoaded: () => void;
   /** The map said it failed (MapLibre: onDidFailLoadingMap). */
@@ -83,25 +101,8 @@ export function lineWidth(l: Pick<RouteLine, 'band'>): number {
   return l.band === 'standing' || l.band === 'gap' || l.band === 'estimated' ? 3 : 5;
 }
 
-/** The stop pin's sizes: the circle over its time label, so each engine can anchor the circle's centre on the position. */
-export const ROUTE_PIN = { circle: 18, gap: 2, label: 18 } as const;
-
-/** Google's anchor y for the stop pin: the circle's centre (a fraction of the view's height). */
-export function routePinAnchorY(): number {
-  return ROUTE_PIN.circle / 2 / (ROUTE_PIN.circle + ROUTE_PIN.gap + ROUTE_PIN.label);
-}
-
-/** A stop over 10 minutes: a dark circle with the time it began under it (both engines). */
-export function RouteStopPin({ stop }: { stop: StopMark }) {
-  return (
-    <View style={pinStyles.wrap}>
-      <View style={pinStyles.circle} />
-      <View style={pinStyles.label}>
-        <Mono size={11} bold>{stop.time}</Mono>
-      </View>
-    </View>
-  );
-}
+/** The engines' defaults for the Round 48 parts, so an older caller (no ends, no layers) draws as before. */
+export const ROUTE_DEFAULTS = { ends: null, gaps: [] as GapMark[], layers: NO_ROUTE_LAYERS, selected: null } as const;
 
 /** The credits a map owes under it (never translated): the free map's tiles, and openrouteservice's when an estimated road is drawn. */
 export function routeCredit(googleMap: boolean, lines: readonly Pick<RouteLine, 'band'>[]): string | null {
@@ -236,9 +237,6 @@ const styles = StyleSheet.create({
 });
 
 const pinStyles = StyleSheet.create({
-  wrap: { alignItems: 'center', gap: ROUTE_PIN.gap },
-  circle: { width: ROUTE_PIN.circle, height: ROUTE_PIN.circle, borderRadius: ROUTE_PIN.circle / 2, backgroundColor: BAND_COLORS.standing, borderWidth: 3, borderColor: '#ffffff', elevation: 3 },
-  label: { height: ROUTE_PIN.label, justifyContent: 'center', backgroundColor: colors.card, borderRadius: 6, paddingHorizontal: 5, elevation: 2 },
   play: { width: PLAYBACK_PIN, height: PLAYBACK_PIN, borderRadius: PLAYBACK_PIN / 2, backgroundColor: colors.blue, borderWidth: 3, borderColor: '#ffffff', alignItems: 'center', justifyContent: 'flex-start', paddingTop: 2, elevation: 4 },
   playHollow: { backgroundColor: '#ffffff', borderColor: colors.blue },
   arrow: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderBottomWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: '#ffffff' },

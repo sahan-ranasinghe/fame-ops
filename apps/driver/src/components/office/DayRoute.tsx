@@ -1,27 +1,41 @@
 // Office mode (Stage 1, O3 item 1): a route on the map with everything around it, one component for a driver's day (the
 // driver page, today or a day of the last 90) and a finished task's driven route (task/[id]/route). §33.6 item 1 (Round
-// 4–7, Sahan's decision; Samsara's driver day, Google Maps Timeline): ONE summary card above the map (GPS km, driving,
-// stopped, stops, the first and last point, and one line "No GPS for 2 h 10 min" when the day has gaps), then the map on
-// both engines (RouteMap: the line by speed band, holes dashed, the estimated roads, the stops over 10 minutes as pins: a
-// tap says "Stopped near Kurunegala · 06:56–07:15 · 19 min" and moves the map to it), the legend and the one playback bar
-// (PlaybackBar.tsx, as on Live: Play / Pause, 1× 5× 20× 60×, the time and speed, a slider; the marker on the map). The
+// 4–7, Sahan's decision; Samsara's driver day, Google Maps Timeline): ONE summary card (GPS km, driving, stopped, stops,
+// the first and last point, and one line "No GPS for 2 h 10 min" when the day has gaps), the map on both engines
+// (RouteMap: the line by speed band, holes dashed, the estimated roads, the stops over 10 minutes: a tap says "Stopped near
+// Kurunegala · 06:56–07:15 · 19 min" and moves the map to it), the one playback bar (PlaybackBar.tsx, as on Live). The
 // day's timeline list is gone (its driving rows are the card's km and driving time, its stops the pins, its gaps the
-// card's line and the dashed legs). The rules: office/driversLogic.ts (the line, the pins' words, the summary) and
-// office/liveRouteLogic.ts (the playback).
+// card's line and the dashed legs).
+// Round 48 (items 2 and 3; Google Maps Timeline, Airbnb's split view): the map sits at a FIXED height (lib/mapLayout.ts:
+// 45 % of the window, at least 300 px), never inside the scroll, so a pinch zooms the map and the page's scroll never does;
+// the playback bar directly under it; the summary card and the rest scroll below. The legend, the explanatory sentences
+// (the estimated roads over N gaps, the server's km note) and the map data's full credits live behind the ⓘ button in the
+// one bottom sheet (Apple Maps' info sheet; office/routeInfo.ts); the credits the licences require stay on the map. The
+// markers (office/routeMarks.ts): the start and end pins, the stops as dots, the gap markers off until Filters → Layers
+// shows them, the summary's gaps line opening the gaps sheet (a tap on a gap highlights its spot even with the layer off),
+// overlapping markers as one numbered circle (lib/cluster.ts). The rules: office/driversLogic.ts and office/liveRouteLogic.ts.
 
 import { useIsFocused } from 'expo-router';
-import { type ReactNode, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { type ReactNode, useMemo, useState, useSyncExternalStore } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { MapPin, TriangleAlert, X } from '@/components/icons';
+import { ChevronRight, Info, MapPin, TriangleAlert, X } from '@/components/icons';
+import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Sheet } from '@/components/patterns/Sheet';
 import { RouteMap } from '@/components/RouteMap';
+import { GOOGLE_MAP_BUILD } from '@/components/TaskMap';
+import { ClusterPin, GapPin, RouteEndPin, RouteStopDot } from '@/components/routePins';
 import type { Frame } from '@/components/taskMapLogic';
 import { Mono, Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
-import type { MapPackage } from '@/lib/mapEngine';
-import { BAND_COLORS, dayNumbers, daySummary, noGpsLine, routeFrame, routeLines, routePoints, SPEED_BANDS, stopLine, stopMarks } from '@/office/driversLogic';
+import { engineFor, type MapPackage, mapSession } from '@/lib/mapEngine';
+import { mapHeight, routeLayerDefs, routeLayersOf } from '@/lib/mapLayout';
+import type { FilterValues } from '@/lib/patterns/filterLogic';
+import { dayNumbers, daySummary, gapLine, gapMarks, noGpsLine, routeEnds, routeFrame, routeLines, routePoints, stopLine, stopMarks } from '@/office/driversLogic';
 import { canPlay, cursorAt, gapWindowsOf, playbackPath, routeOf } from '@/office/liveRouteLogic';
+import { type LegendEntry, mapInfo } from '@/office/routeInfo';
+import { visibleGaps } from '@/office/routeMarks';
 import type { DriverRoute, FleetError } from '@/office/types';
 import { ListFailed } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -36,32 +50,67 @@ interface Props {
   mapPackage?: MapPackage;
   /** The sentence when the route has no points (a day with no driving, a task with no GPS). */
   emptyText: string;
-  /** Shown under the map and the playback (the day's tasks). */
+  /** Fixed above the map (the day strip, a task's line). */
+  above?: ReactNode;
+  /** Pull to refresh on the scrolling part. */
+  refreshing?: boolean;
+  onRefresh?: () => void;
+  /** Scrolls under the summary card (the day's tasks, a task's km). */
   children?: ReactNode;
 }
 
-export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText, children }: Props) {
-  const { t } = useApp();
+export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText, above, refreshing, onRefresh, children }: Props) {
+  const { t, settings } = useApp();
+  const { height } = useWindowDimensions();
   const points = useMemo(() => (data ? routePoints(data) : []), [data]);
   const lines = useMemo(() => (data ? routeLines(data) : []), [data]);
   // Each stop with its words (the pin's card, and its name for a screen reader).
   const stops = useMemo(() => (data ? stopMarks(data).map((s) => ({ ...s, label: stopLine(s, t) })) : []), [data, t]);
+  // Round 48: the route's ends and its gap markers (the timeline's no-GPS and no-app rows).
+  const ends = useMemo(() => routeEnds(points), [points]);
+  const gaps = useMemo(() => (data ? gapMarks(data, points) : []), [data, points]);
   const fitNow = routeFrame(lines, stops);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fit = useMemo(() => fitNow, [fitNow.key]);
-  // A stop pin tapped: its card on the map, and the map moved to it (what a timeline row did before §33.6).
+  // A stop or a gap tapped: its card on the map, and the map moved to it (what a timeline row did before §33.6).
   const [focus, setFocus] = useState<{ frame: Frame; nonce: number } | null>(null);
-  const [stopKey, setStopKey] = useState<string | null>(null);
-  const picked = stopKey ? stops.find((s) => s.key === stopKey) ?? null : null;
+  const [selected, setSelected] = useState<string | null>(null);
+  const pickedStop = selected ? stops.find((s) => s.key === selected) ?? null : null;
+  const pickedGap = selected ? gaps.find((g) => g.key === selected) ?? null : null;
+  const moveTo = (p: { lat: number; lng: number }) => setFocus((f) => ({ frame: { kind: 'point', center: { lat: p.lat, lng: p.lng } }, nonce: (f?.nonce ?? 0) + 1 }));
   const pickStop = (key: string) => {
     const s = stops.find((x) => x.key === key);
     if (!s) return;
-    setStopKey(key);
-    setFocus((f) => ({ frame: { kind: 'point', center: { lat: s.lat, lng: s.lng } }, nonce: (f?.nonce ?? 0) + 1 }));
+    setSelected(key);
+    moveTo(s);
+  };
+  const pickGap = (key: string) => {
+    const g = gaps.find((x) => x.key === key);
+    if (!g) return;
+    setSelected(key);
+    moveTo(g);
+  };
+  const clear = () => {
+    setFocus(null);
+    setSelected(null);
   };
   const numbers = data ? dayNumbers(data) : null;
   const summary = data ? daySummary(data) : null;
   const gapsLine = summary ? noGpsLine(summary, t) : null;
+
+  // The Layers filter (docs/ui-patterns.md §1: the one Filter button; Google Maps' Layers): the gap markers, every stop's time.
+  const [values, setValues] = useState<FilterValues>({});
+  const layers = routeLayersOf(values);
+  const shownGaps = useMemo(() => visibleGaps(gaps, layers, selected), [gaps, layers, selected]);
+
+  // The ⓘ sheet (Apple Maps' info sheet): the legend, the sentences that stood under the map, the map data in full.
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [gapsOpen, setGapsOpen] = useState(false);
+  // The engine the map asks for (the sheet names the map data; the licences' line on the map itself follows the mounted one).
+  const googleFailed = useSyncExternalStore(mapSession.subscribe, mapSession.googleFailed, mapSession.googleFailed);
+  const engine = engineFor(GOOGLE_MAP_BUILD, mapPackage ?? settings.map_package, googleFailed);
+  const estimated = lines.filter((l) => l.band === 'estimated').length;
+  const info = useMemo(() => mapInfo({ googleMap: engine === 'google', estimated: estimated > 0, estimatedGaps: estimated, kmNote: data?.km_note, estimatedNote: data?.estimated_note }, t), [engine, estimated, data?.km_note, data?.estimated_note, t]);
 
   // The playback (Live's rules, office/liveRouteLogic.ts): the path in time order, the gaps, the marker at the clock.
   const played = useMemo(() => (data ? routeOf(data.driver, data) : null), [data]);
@@ -70,68 +119,137 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
   const playback = usePlayback(path, useIsFocused());
   const marker = useMemo(() => (playback.active ? cursorAt(played, path, windows, playback.t) : null), [playback.active, playback.t, played, path, windows]);
 
+  const cardText = pickedStop ? pickedStop.label : pickedGap ? gapLine(pickedGap, t) : null;
+
   return (
-    <View>
-      {/* §33.6 item 1: the day in one card above the map. */}
-      {numbers && (
-        <View style={styles.summary} testID="day-summary">
-          <View style={styles.numbers}>
-            <Number label={t('office.drivers.route.km')} value={numbers.km === null ? '—' : String(numbers.km)} />
-            <Number label={t('office.drivers.route.driving')} value={durationText(t, numbers.drivingMin)} />
-            <Number label={t('office.drivers.route.stopped')} value={durationText(t, numbers.stoppedMin)} />
-            <Number label={t('office.drivers.route.stops')} value={String(numbers.stops)} />
-          </View>
-          {summary?.span && (
-            <View style={styles.line}>
-              <Txt variant="small" size={13}>{t('dayRoute.firstLast')}</Txt>
-              <Mono size={14} bold testID="day-span">{summary.span}</Mono>
-            </View>
-          )}
-          {gapsLine && (
-            <View style={styles.line} testID="day-gaps">
-              <TriangleAlert size={16} color={colors.amberText} strokeWidth={2.4} />
-              <Txt variant="strong" size={14} color={colors.amberText} style={{ flex: 1 }}>{gapsLine}</Txt>
-            </View>
-          )}
-        </View>
-      )}
-      <View style={styles.map} testID="driver-route-map">
-        <RouteMap lines={lines} stops={stops} fit={fit} focus={focus} marker={marker} onStop={pickStop} mapPackage={mapPackage} />
-        {picked && (
-          <View style={styles.stopCard} testID="stop-card">
-            <MapPin size={18} color={colors.ink} strokeWidth={2.4} />
-            <Txt variant="strong" size={14} style={{ flex: 1 }}>{picked.label}</Txt>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={() => setStopKey(null)} hitSlop={8} style={styles.close}>
+    <View style={{ flex: 1 }}>
+      {above ? <View style={styles.above}>{above}</View> : null}
+      {/* Round 48 (item 2): the map at a fixed height, never inside the scroll (a pinch zooms it, the page never scrolls it). */}
+      <View style={[styles.map, { height: mapHeight(height) }]} testID="driver-route-map">
+        <RouteMap lines={lines} stops={stops} fit={fit} focus={focus} marker={marker} onStop={pickStop} mapPackage={mapPackage}
+          ends={ends} gaps={shownGaps} layers={layers} selected={selected} onGap={pickGap} />
+        {cardText && (
+          <View style={styles.stopCard} testID={pickedStop ? 'stop-card' : 'gap-card'}>
+            {pickedGap ? <GapPin gap={pickedGap} /> : <MapPin size={18} color={colors.ink} strokeWidth={2.4} />}
+            <Txt variant="strong" size={14} style={{ flex: 1 }}>{cardText}</Txt>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={() => setSelected(null)} hitSlop={8} style={styles.close}>
               <X size={18} color={colors.ink} strokeWidth={2.4} />
             </Pressable>
           </View>
         )}
       </View>
-      <View style={styles.legend}>
-        {SPEED_BANDS.map((b) => <LegendItem key={b} color={BAND_COLORS[b]} text={t(`office.drivers.route.legend.${b}`)} />)}
-        <LegendItem color={BAND_COLORS.gap} text={t('office.drivers.route.legend.gap')} dashed />
-        {lines.some((l) => l.band === 'estimated') && <LegendItem color={BAND_COLORS.estimated} text={t('office.drivers.route.legend.estimated')} dashed />}
-      </View>
-      {!data && !error && <SkeletonRows rows={2} lines={1} />}
-      {error && <ListFailed stale={!!data} error={error} onRetry={onRetry} onSignIn={onSignIn} />}
-      {canPlay(path) && <View style={styles.bar}><PlaybackBar playback={playback} cursor={marker} /></View>}
-      {data && points.length === 0 && <ListEmpty text={emptyText} />}
-      {data?.km_note && <Txt variant="small">{data.km_note}</Txt>}
-      {children}
-      {focus && (
-        <Pressable accessibilityRole="button" onPress={() => { setFocus(null); setStopKey(null); }} style={{ minHeight: 44, justifyContent: 'center' }}>
-          <Txt variant="strong" size={15} color={colors.blue}>{t('office.history.wholeRoute')}</Txt>
+      {/* ⓘ (the legend and the notes) and the one Filter button with its Layers section, under the map as on Live. */}
+      <View style={styles.controls}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('dayRoute.about')} onPress={() => setAboutOpen(true)} style={({ pressed }) => [styles.info, pressed && { opacity: 0.7 }]} testID="route-about">
+          <Info size={22} color={colors.ink} strokeWidth={2.2} />
         </Pressable>
-      )}
+        <View style={{ flex: 1 }}>
+          <FilterBar defs={routeLayerDefs(t)} values={values} onApply={setValues} testID="route-filter" />
+        </View>
+      </View>
+      {canPlay(path) && <View style={styles.bar}><PlaybackBar playback={playback} cursor={marker} /></View>}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+        refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} colors={[colors.amber]} /> : undefined}
+        testID="route-content"
+      >
+        {focus && (
+          <Pressable accessibilityRole="button" onPress={clear} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Txt variant="strong" size={15} color={colors.blue}>{t('office.history.wholeRoute')}</Txt>
+          </Pressable>
+        )}
+        {/* §33.6 item 1: the day in one card (under the map since Round 48: the map is fixed above, the rest scrolls). */}
+        {numbers && (
+          <View style={styles.summary} testID="day-summary">
+            <View style={styles.numbers}>
+              <Number label={t('office.drivers.route.km')} value={numbers.km === null ? '—' : String(numbers.km)} />
+              <Number label={t('office.drivers.route.driving')} value={durationText(t, numbers.drivingMin)} />
+              <Number label={t('office.drivers.route.stopped')} value={durationText(t, numbers.stoppedMin)} />
+              <Number label={t('office.drivers.route.stops')} value={String(numbers.stops)} />
+            </View>
+            {summary?.span && (
+              <View style={styles.line}>
+                <Txt variant="small" size={13}>{t('dayRoute.firstLast')}</Txt>
+                <Mono size={14} bold testID="day-span">{summary.span}</Mono>
+              </View>
+            )}
+            {gapsLine && (
+              // Round 48: the gaps line opens the gaps sheet (a count opens its list; a row highlights the spot on the map).
+              <Pressable accessibilityRole="button" accessibilityLabel={`${gapsLine} · ${t('dayRoute.showGaps')}`} onPress={() => setGapsOpen(true)} disabled={gaps.length === 0}
+                style={({ pressed }) => [styles.line, pressed && { opacity: 0.7 }]} testID="day-gaps-button">
+                <TriangleAlert size={16} color={colors.amberText} strokeWidth={2.4} />
+                <Txt variant="strong" size={14} color={colors.amberText} style={{ flex: 1 }} testID="day-gaps">{gapsLine}</Txt>
+                {gaps.length > 0 && <ChevronRight size={18} color={colors.muted} />}
+              </Pressable>
+            )}
+          </View>
+        )}
+        {!data && !error && <SkeletonRows rows={2} lines={1} />}
+        {error && <ListFailed stale={!!data} error={error} onRetry={onRetry} onSignIn={onSignIn} />}
+        {data && points.length === 0 && <ListEmpty text={emptyText} />}
+        {children}
+      </ScrollView>
+
+      <Sheet visible={aboutOpen} title={t('dayRoute.about')} onClose={() => setAboutOpen(false)} testID="route-about-sheet">
+        <Txt variant="label" color={colors.muted}>{t('dayRoute.legendTitle').toUpperCase()}</Txt>
+        {info.legend.map((e) => <LegendRow key={e.key} entry={e} />)}
+        {info.notes.length > 0 && (
+          <View style={{ gap: 6 }}>
+            <Txt variant="label" color={colors.muted}>{t('dayRoute.kmNoteTitle').toUpperCase()}</Txt>
+            {info.notes.map((n) => <Txt key={n} variant="muted" size={15}>{n}</Txt>)}
+          </View>
+        )}
+        <View style={{ gap: 4 }}>
+          <Txt variant="label" color={colors.muted}>{t('dayRoute.mapData').toUpperCase()}</Txt>
+          {/* The providers' credits, in their own words (never translated; the licences' line stays on the map). */}
+          {info.credits.map((c) => <Txt key={c} variant="small" accessibilityLanguage="en" testID="route-about-credit">{c}</Txt>)}
+        </View>
+      </Sheet>
+
+      <Sheet visible={gapsOpen} title={t('dayRoute.gapsTitle')} onClose={() => setGapsOpen(false)} testID="route-gaps-sheet">
+        <Txt variant="muted" size={15}>{t('dayRoute.gapsHint')}</Txt>
+        {gaps.map((g) => (
+          <Pressable key={g.key} accessibilityRole="button" onPress={() => { setGapsOpen(false); pickGap(g.key); }} style={({ pressed }) => [styles.gapRow, pressed && { opacity: 0.7 }]} testID="route-gap-row">
+            <GapPin gap={g} />
+            <Txt variant="strong" size={15} style={{ flex: 1 }}>{gapLine(g, t)}</Txt>
+            <ChevronRight size={20} color={colors.muted} />
+          </Pressable>
+        ))}
+      </Sheet>
     </View>
   );
 }
 
-function LegendItem({ color, text, dashed = false }: { color: string; text: string; dashed?: boolean }) {
+/** One line of the legend: the mark as it is drawn on the map, then its words. */
+function LegendRow({ entry }: { entry: LegendEntry }) {
+  let mark: ReactNode;
+  switch (entry.mark) {
+    case 'line':
+      mark = <View style={{ width: 22, height: 4, borderRadius: 2, backgroundColor: entry.color }} />;
+      break;
+    case 'dashed':
+      mark = <View style={{ width: 22, height: 0, borderTopWidth: 3, borderStyle: 'dashed', borderColor: entry.color }} />;
+      break;
+    case 'pinStart':
+      mark = <RouteEndPin end={{ kind: 'start' }} />;
+      break;
+    case 'pinEnd':
+      mark = <RouteEndPin end={{ kind: 'end' }} />;
+      break;
+    case 'dot':
+      mark = <RouteStopDot time="" labelled={false} />;
+      break;
+    case 'gap':
+      mark = <GapPin gap={{ kind: 'no_gps' }} />;
+      break;
+    default:
+      mark = <ClusterPin count={3} />;
+  }
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-      <View style={[{ width: 18, height: 4, borderRadius: 2, backgroundColor: color }, dashed && { height: 0, borderTopWidth: 3, borderStyle: 'dashed', borderColor: color, backgroundColor: 'transparent' }]} />
-      <Txt variant="small" size={12}>{text}</Txt>
+    <View style={styles.legendRow} testID={`legend-${entry.key}`}>
+      <View style={styles.legendMark}>{mark}</View>
+      <Txt variant="body" size={15} style={{ flex: 1 }}>{entry.text}</Txt>
     </View>
   );
 }
@@ -146,16 +264,22 @@ function Number({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  summary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, gap: 8, marginTop: 6 },
+  above: { paddingHorizontal: 16, paddingTop: 8 },
+  summary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
   numbers: { flexDirection: 'row', gap: 6 },
-  line: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
-  map: { height: 300, borderRadius: 14, overflow: 'hidden', backgroundColor: colors.mapLand, marginTop: 8 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8, minHeight: 36 },
+  map: { backgroundColor: colors.mapLand, marginTop: 8 },
   // The tapped stop's words over the map's foot (Google Maps' place card), above the credit line.
   stopCard: {
     position: 'absolute', left: 10, right: 10, bottom: 28, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.card,
     borderRadius: 12, paddingLeft: 12, paddingRight: 4, paddingVertical: 6, minHeight: 48, borderWidth: 1, borderColor: colors.line, ...shadow(4),
   },
   close: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 8 },
-  bar: { marginBottom: 4 },
+  controls: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 16, paddingTop: 8 },
+  info: { width: 50, height: 50, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  bar: { paddingHorizontal: 16, paddingBottom: 4 },
+  content: { padding: 16, gap: 12, paddingBottom: 24 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 36 },
+  legendMark: { width: 40, alignItems: 'center', justifyContent: 'center' },
+  gapRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 6 },
 });
