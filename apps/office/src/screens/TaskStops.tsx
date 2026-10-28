@@ -12,6 +12,7 @@ import { flashWarnings } from "../data/flash";
 import type { UpdateStopsResult } from "../data/types";
 import { hhmm, today } from "../lib/format";
 import { errText } from "../transport/errors";
+import { changeOutcome } from "./approvalLogic";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
@@ -131,8 +132,14 @@ export function TaskStops() {
       if (!running && form.leaveBy) input.leave_by = form.leaveBy;
       const out = await transport.call<UpdateStopsResult>("update_task_stops", input);
       draft.clear();
-      toast(`Stops saved · leave by ${out.leave_by?.slice(-5) ?? "—"}`);
+      // Round 48 (item 1): without approve the new stops wait for the fleet admin; the task is as it was.
+      const outcome = changeOutcome(out, `Stops saved · leave by ${out.leave_by?.slice(-5) ?? "—"}`);
+      toast(outcome.toast);
       void store.invalidate();
+      if (outcome.waiting) {
+        afterSave(back);
+        return;
+      }
       // As a change on the task's change page: back to where the person came from, the warnings read on the task page.
       const warnings = out.warnings ?? [];
       flashWarnings(taskId, warnings);

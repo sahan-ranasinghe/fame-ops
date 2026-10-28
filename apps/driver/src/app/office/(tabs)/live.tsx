@@ -22,6 +22,10 @@
 //     refuses) and Move to vehicle (move/[username]; on a task it is Task detail's Swap vehicle), each with its tool;
 //   - the Problems choice in the Filter sheet (No signal or Location off while on duty, the site's rule);
 //   - the map's cluster: zoom in, zoom out, fit everyone (components/DriversMap.tsx), the compass above it: at most three.
+// Round 48 item 5 (office/snapLogic.ts; Google Maps Timeline's road-aligned line, Strava's snap-to-roads toggle): the shown
+// route is asked with `snap` where this map may draw the snapped line (Google's map, or the open package; never the free
+// map standing in for Google's: rule 10) and drawn along the roads, the chip in the cluster switches to the GPS line, the
+// card's note says which line it is; the trails never snap (the site's rule: only a route a person opens).
 
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -31,6 +35,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DriversMap } from '@/components/DriversMap';
 import { type LucideIcon, MessageCircle, Navigation, Phone, X } from '@/components/icons';
 import { type Playback, PlaybackBar, usePlayback } from '@/components/office/PlaybackBar';
+import { SnapChip, useSnap } from '@/components/office/SnapChip';
 import { pickedStyle } from '@/components/patterns/Select';
 import { DriverDot } from '@/components/mapPins';
 import { VehicleChipView } from '@/components/office/DriverRows';
@@ -45,8 +50,9 @@ import {
 } from '@/office/liveLogic';
 import {
   canPlay, type Cursor, cursorAt, drawingOf, gapWindowsOf, type LiveLayers, mergeRoute,
-  playbackPath, type Route, ROUTE_REFRESH_MS, routeArgs, routeOf, routeSummary, trailsLoading, trailsOf, trailsPlan,
+  playbackPath, type Route, ROUTE_REFRESH_MS, routeArgs, routeOf, type RoutePoint, routeSummary, trailsLoading, trailsOf, trailsPlan,
 } from '@/office/liveRouteLogic';
+import { drawnLine, snapControl, type SnapInfo, snapNoteKey, snappedPointsOf, withSnap } from '@/office/snapLogic';
 import { useOffice, useTool } from '@/office/state';
 import { initials } from '@/office/text';
 import type { DriverRoute, FleetError, LiveDriver, LiveDrivers, SettingsResult } from '@/office/types';
@@ -110,32 +116,40 @@ export default function LiveTab() {
   };
 
   // ---- The shown route: the selected driver's day, loaded when they are selected, merged every 60 s ------------------
+  // Round 48: asked with snap where this map may draw the snapped line; the snapped line and the server's word on it
+  // come whole with each answer (never merged: the server's line is complete), kept apart from the merged raw line.
+  const snap = useSnap(me.map?.package);
   const [route, setRoute] = useState<Route | null>(null);
+  const [snapped, setSnapped] = useState<{ username: string; points: RoutePoint[] | null; info: SnapInfo | null } | null>(null);
   const [routeBusy, setRouteBusy] = useState(false);
   const [routeErr, setRouteErr] = useState<FleetError | null>(null);
   const [routeTry, setRouteTry] = useState(0);
+  const snapOn = snap.on;
   useEffect(() => {
     if (!routes || selected === null) {
       setRoute(null);
+      setSnapped(null);
       setRouteErr(null);
       setRouteBusy(false);
       return;
     }
     const who = selected;
     setRoute((r) => (r && r.username === who ? r : null));
+    setSnapped((x) => (x && x.username === who ? x : null));
     setRouteErr(null);
     setRouteBusy(true);
     let live = true;
-    api.call<DriverRoute>('driver_route', routeArgs(who))
+    api.call<DriverRoute>('driver_route', withSnap(routeArgs(who), snapOn))
       .then((p) => {
         if (!live) return;
         const fresh = routeOf(who, p);
         setRoute((r) => (r && r.username === who ? mergeRoute(r, fresh) : fresh));
+        setSnapped({ username: who, points: snappedPointsOf(p), info: p.snapped ?? null });
       })
       .catch((e: FleetError) => { if (live) setRouteErr(e); })
       .finally(() => { if (live) setRouteBusy(false); });
     return () => { live = false; };
-  }, [routes, selected, routeTry, api]);
+  }, [routes, selected, routeTry, api, snapOn]);
   const shownRoute = route && route.username === selected ? route : null;
   const shownUser = shownRoute?.username ?? null;
 
@@ -203,21 +217,32 @@ export default function LiveTab() {
       if (AppState.currentState !== 'active') return;
       if (trails) for (const u of planRef.current.draw) loadTrail(u);
       if (shownUser !== null) {
-        api.call<DriverRoute>('driver_route', routeArgs(shownUser))
-          .then((p) => setRoute((r) => (r && r.username === shownUser ? mergeRoute(r, routeOf(shownUser, p)) : r)))
+        api.call<DriverRoute>('driver_route', withSnap(routeArgs(shownUser), snapOn))
+          .then((p) => {
+            setRoute((r) => (r && r.username === shownUser ? mergeRoute(r, routeOf(shownUser, p)) : r));
+            setSnapped((x) => (x && x.username === shownUser ? { username: shownUser, points: snappedPointsOf(p), info: p.snapped ?? null } : x));
+          })
           .catch(() => undefined);
       }
     }, ROUTE_REFRESH_MS);
     return () => clearInterval(timer);
-  }, [focused, routes, trails, shownUser, loadTrail, api]);
+  }, [focused, routes, trails, shownUser, loadTrail, api, snapOn]);
 
   // ---- What the map draws, and the playback ----------------------------------------------------------------------------
-  const drawing = useMemo(() => drawingOf(shownRoute, t), [shownRoute, t]);
+  // The line drawn: the snapped one (with the raw points after its end) when the chip is on and this map may draw it,
+  // else the recorded points; the summary's km stay the server's. The playback follows the line drawn (as on the site).
+  const snapHere = shownRoute && snapped && snapped.username === shownRoute.username ? snapped : null;
+  const snapUi = snapControl(snapHere?.info, snap.allowed, snap.wanted);
+  const drawnRoute = useMemo(
+    () => (shownRoute && snapUi.on && snapHere?.points ? { ...shownRoute, points: drawnLine(shownRoute.points, snapHere.points, true) } : shownRoute),
+    [shownRoute, snapUi.on, snapHere?.points],
+  );
+  const drawing = useMemo(() => drawingOf(drawnRoute, t), [drawnRoute, t]);
   const trailLines = useMemo(() => (trails ? trailsOf(trailMap, plan.draw, drawing?.username ?? null) : []), [trails, trailMap, plan.draw, drawing?.username]);
-  const path = useMemo(() => (shownRoute ? playbackPath(shownRoute.points, shownRoute.estimated) : []), [shownRoute]);
-  const windows = useMemo(() => gapWindowsOf(shownRoute), [shownRoute]);
+  const path = useMemo(() => (drawnRoute ? playbackPath(drawnRoute.points, drawnRoute.estimated) : []), [drawnRoute]);
+  const windows = useMemo(() => gapWindowsOf(drawnRoute), [drawnRoute]);
   const playback = usePlayback(path, focused);
-  const cursor = useMemo(() => (playback.active ? cursorAt(shownRoute, path, windows, playback.t) : null), [playback.active, playback.t, shownRoute, path, windows]);
+  const cursor = useMemo(() => (playback.active ? cursorAt(drawnRoute, path, windows, playback.t) : null), [playback.active, playback.t, drawnRoute, path, windows]);
   // Round 48 (item 3): the Map section's Layers choices (the gap markers, every stop's time) travel with the route layers.
   const show = useMemo(() => liveLayersOf(values), [values]);
   const layers = useMemo<LiveLayers>(() => ({ trails: trailLines, route: drawing, cursor, show }), [trailLines, drawing, cursor, show]);
@@ -228,18 +253,22 @@ export default function LiveTab() {
   const [cardH, setCardH] = useState(0);
   const subtitle = all.length === 1 ? t('office.live.countOne') : t('office.live.count', { n: all.length });
 
-  // What the trails are doing, under the map's cluster (the toggle itself is in the Filter sheet: at most three map
-  // controls). DriversMap shows it only while a map is mounted (never over "Map not available").
-  const controls = trails && (loadingTrails || plan.notDrawn > 0) ? (
+  // What the trails are doing, and the snap-to-roads chip while a route is shown, under the map's cluster (the trails'
+  // toggle itself is in the Filter sheet: with fit everyone, at most three map controls). DriversMap shows them only while
+  // a map is mounted (never over "Map not available").
+  const trailsPill = trails && (loadingTrails || plan.notDrawn > 0) ? (
+    <View style={styles.mapPill}>
+      {loadingTrails && <ActivityIndicator size="small" color={colors.muted} />}
+      <Txt variant="small" color={colors.ink} numberOfLines={1}>
+        {loadingTrails ? t('office.live.trailsLoading') : t('office.live.trailsNotDrawn', { n: plan.notDrawn })}
+      </Txt>
+    </View>
+  ) : null;
+  const snapChip = shownRoute && snapUi.toggle ? <SnapChip on={snapUi.on} onChange={snap.setWanted} testID="live-snap-chip" /> : null;
+  const controls = trailsPill || snapChip ? (
     <View style={styles.trailsControl} pointerEvents="box-none">
-      {(
-        <View style={styles.mapPill}>
-          {loadingTrails && <ActivityIndicator size="small" color={colors.muted} />}
-          <Txt variant="small" color={colors.ink} numberOfLines={1}>
-            {loadingTrails ? t('office.live.trailsLoading') : t('office.live.trailsNotDrawn', { n: plan.notDrawn })}
-          </Txt>
-        </View>
-      )}
+      {trailsPill}
+      {snapChip}
     </View>
   ) : null;
 
@@ -285,7 +314,7 @@ export default function LiveTab() {
           d={chosen}
           onClose={() => setSelected(null)}
           onLayout={(e) => setCardH(e.nativeEvent.layout.height)}
-          route={routes ? { route: shownRoute, busy: routeBusy, error: routeErr, retry: () => setRouteTry((n) => n + 1) } : null}
+          route={routes ? { route: shownRoute, busy: routeBusy, error: routeErr, retry: () => setRouteTry((n) => n + 1), snapNote: shownRoute && snapUi.note ? t(snapNoteKey(snapUi.note)) : null } : null}
           playback={canPlay(path) ? playback : null}
           cursor={cursor}
           onHistory={routes ? () => router.push({ pathname: '/office/driver/[username]/route', params: { username: chosen.username, date: plusDays(colomboDate(), -1) } }) : undefined}
@@ -336,6 +365,8 @@ interface RouteState {
   busy: boolean;
   error: FleetError | null;
   retry: () => void;
+  /** Round 48: which line the map draws ("Snapped to roads · km from the odometer", "GPS line"…); null when snapping is not a thing here. */
+  snapNote: string | null;
 }
 
 /**
@@ -421,6 +452,7 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, 
             </View>
           )}
           {route.route && (summary ? <Txt variant="strong" size={15}>{summary}</Txt> : <Txt variant="small">{t('office.live.routeNone')}</Txt>)}
+          {route.route && summary && route.snapNote ? <Txt variant="small" testID="live-snap-note">{route.snapNote}</Txt> : null}
         </View>
       )}
       {(links.call || links.whatsapp || links.maps) && (

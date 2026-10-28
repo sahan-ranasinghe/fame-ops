@@ -20,6 +20,8 @@ class Fake implements Transport {
   calls: { tool: string; args: Args }[] = [];
   /** update_task's warnings. */
   warnings: string[] = [];
+  /** Round 48: update_task answers waiting_for_approval (no approve permission while tasks need the fleet admin's OK). */
+  waiting = false;
   me(): Promise<Me> {
     return Promise.resolve(dispatcher);
   }
@@ -27,7 +29,11 @@ class Fake implements Transport {
     this.calls.push({ tool, args });
     if (tool === "task_detail") return Promise.resolve(structuredClone(detail) as T);
     if (tool === "availability") return Promise.resolve(structuredClone(available) as T);
-    if (tool === "update_task") return Promise.resolve({ task_id: "t1", driver: "Kamal Perera", warnings: this.warnings } as T);
+    if (tool === "update_task") {
+      // Round 48 (item 1): without approve the change waits for the fleet admin; the task is as it was.
+      if (this.waiting) return Promise.resolve({ waiting_for_approval: true, request_id: "r9", task_id: "t1", task_unchanged: true, next: "Waiting for the fleet admin's OK · you'll be notified. The task stays as it is until then." } as T);
+      return Promise.resolve({ task_id: "t1", driver: "Kamal Perera", warnings: this.warnings } as T);
+    }
     return Promise.reject({ code: "not_found", message: `No answer for ${tool}` });
   }
   watch<T>(tool: string, args: Args, cb: (ev: WatchEvent<T>) => void): () => void {
@@ -178,3 +184,21 @@ describe("Give it a driver (Hotfix 4 b)", () => {
     expect(screen.getByTestId("where").textContent).toBe("/");
   });
 });
+
+describe("Give it a driver without approve (Round 48, item 1)", () => {
+  it("the change waits for the fleet admin: the toast says so, the page goes back, nothing else is sent", async () => {
+    const t = await mount(["/", "/tasks/t1/edit?driver=1"]);
+    t.waiting = true;
+    fireEvent.click(screen.getByTestId("avail-row"));
+    await settle();
+    fireEvent.click(screen.getByTestId("give-to"));
+    await settle();
+    await settle(50);
+    const give = t.calls.find((c) => c.tool === "update_task");
+    expect(give?.args).toEqual({ task_id: "t1", plan_version: 3, driver: "kamal.p", vehicle: "WP CAB-4521" });
+    expect(screen.getByText("Waiting for the fleet admin's OK · the task is unchanged")).toBeTruthy();
+    expect(screen.getByTestId("where").textContent).toBe("/");
+    expect(readFlashWarnings("t1")).toEqual([]);
+  });
+});
+

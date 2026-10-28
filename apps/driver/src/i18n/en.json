@@ -1416,7 +1416,14 @@
       "moveNoMatch": "No vehicle matches.",
       "notFound": "This driver is not on the list any more.",
       "fitAll": "Fit everyone on the map",
-      "mapSection": "Map"
+      "mapSection": "Map",
+      "snapToggle": "Snap to roads",
+      "snapOn": "Snapped to roads",
+      "snapOff": "GPS line",
+      "snap_snapped": "Snapped to roads · km from the odometer",
+      "snap_partly": "Snapped to roads · some legs GPS line · km from the odometer",
+      "snap_failed": "GPS line · snapping to roads failed",
+      "snap_gps": "GPS line"
     },
     "trip": {
       "step_where": "Where",
@@ -3459,7 +3466,7 @@
         "issue_events": "resolved issues' history",
         "issues_resolved": "resolved or dismissed issues",
         "location_points": "location points (each day kept as a summary)",
-        "route_matched": "road-snapped route lines",
+        "route_matched": "road-snapped route lines (OSRM; Google's are never stored)",
         "heartbeats": "phone heartbeats",
         "google_calls": "Google usage counters",
         "routing_calls": "routing usage counters",

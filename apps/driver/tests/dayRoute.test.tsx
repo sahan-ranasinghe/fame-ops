@@ -4,7 +4,7 @@
 // day's tasks keep their places; the day's timeline list is gone; a stop pin's tap says "Stopped near Peliyagoda ·
 // 09:55–15:38 · 5 h 43 min" and moves the map to it (Whole route brings the day back).
 // The words: en.json with the strings sidecar (src/i18n/parts/driver-3.json) merged in while it exists; a missing key fails the test.
-import { act, fireEvent, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { Stack } from 'expo-router';
 
@@ -33,6 +33,10 @@ function mockWords(): (key: string, vars?: Record<string, string | number>) => s
 }
 let mockT: ReturnType<typeof mockWords> | null = null;
 const mockFocus: { frames: unknown[] } = { frames: [] };
+/** The map engine the stand-in RouteMap reports (Round 48: snap to roads is asked on Google's map only, or under the open package). */
+const mockEngine: { value: 'google' | 'open' } = { value: 'google' };
+/** The signed-in person (the fixture's package is open; a test sets google to stand for a phone whose Google map failed). */
+const mockMe: { value: Record<string, unknown> } = { value: require('../src/office/__fixtures__/me.json') };
 
 jest.mock('@/office/client', () => ({ officeApi: require('./fakeOffice').mockOfficeApi }));
 jest.mock('@/state/app', () => ({
@@ -41,17 +45,23 @@ jest.mock('@/state/app', () => ({
     return { ...require('./fakeOffice').mockUseApp(), t: mockT };
   },
 }));
-jest.mock('@/office/store', () => ({ useOfficeMe: () => require('./fakeOffice').FIX('me'), getOfficeMe: () => require('./fakeOffice').FIX('me'), setOfficeMe: () => undefined }));
+jest.mock('@/office/store', () => ({ useOfficeMe: () => mockMe.value, getOfficeMe: () => mockMe.value, setOfficeMe: () => undefined }));
 // The map needs a phone: the stand-in shows each stop pin as a button that taps it, and keeps the frames it is moved to.
 jest.mock('@/components/RouteMap', () => {
   const { createElement } = require('react');
   const { Pressable, Text, View } = require('react-native');
   return {
-    RouteMap: ({ stops, focus, onStop }: { stops: { key: string; label?: string }[]; focus: unknown; onStop?: (key: string) => void }) => {
+    useRouteMapEngine: () => mockEngine.value,
+    RouteMap: ({ stops, focus, onStop, controls, lines }: { stops: { key: string; label?: string }[]; focus: unknown; onStop?: (key: string) => void; controls?: unknown; lines: { points: unknown[] }[] }) => {
       if (focus) mockFocus.frames.push(focus);
-      return createElement(View, { testID: 'route-map-stub' }, stops.map((s) => createElement(Pressable, {
-        key: s.key, accessibilityRole: 'button', accessibilityLabel: s.label, onPress: () => onStop?.(s.key), testID: `pin-${s.key}`,
-      }, createElement(Text, null, s.key))));
+      // The distinct points drawn (legs share their joints): the snapped line's count or the recorded points'.
+      const drawn = new Set(lines.flatMap((l) => (l.points as { lat: number; lng: number }[]).map((p) => `${p.lat},${p.lng}`))).size;
+      return createElement(View, { testID: 'route-map-stub', accessibilityValue: { text: String(drawn) } }, [
+        ...stops.map((s) => createElement(Pressable, {
+          key: s.key, accessibilityRole: 'button', accessibilityLabel: s.label, onPress: () => onStop?.(s.key), testID: `pin-${s.key}`,
+        }, createElement(Text, null, s.key))),
+        createElement(View, { key: 'controls', testID: 'route-map-controls-stub' }, controls ?? null),
+      ]);
     },
   };
 });
@@ -79,7 +89,7 @@ const ROUTE: DriverRoute = {
 } as DriverRoute;
 
 const routes = {
-  _layout: () => <OfficeProvider me={ME}><Stack screenOptions={{ headerShown: false }} /></OfficeProvider>,
+  _layout: () => <OfficeProvider me={mockMe.value as unknown as OfficeMe}><Stack screenOptions={{ headerShown: false }} /></OfficeProvider>,
   'office/driver/[username]/route': DriverDayRoute,
 };
 
@@ -87,6 +97,8 @@ let errors: ReturnType<typeof failOnConsoleError>;
 beforeEach(() => {
   resetFake();
   mockFocus.frames = [];
+  mockEngine.value = 'google';
+  mockMe.value = ME as unknown as Record<string, unknown>;
   act(() => hideSnackbar());
   answers.driver_profile = () => ({ driver: { name: 'Nuwan Perera', username: 'nuwan.p' } });
   answers.driver_route = () => ROUTE;
@@ -164,6 +176,54 @@ describe("Office mode: a driver's day (§33.6 item 1)", () => {
     expect(screen.getByTestId('route-filter')).toBeTruthy();
     expect(screen.queryByTestId('filter-chip')).toBeNull();
     expect(errors.seen).toEqual([]);
+  });
+
+  // Round 48 item 5: snap to roads on Google's map, the chip, the fallback (office/snapLogic.ts).
+  it("Google's map: driver_route is asked with snap, the snapped line is drawn and said so; the chip brings the GPS line back", async () => {
+    const SNAPPED: DriverRoute = {
+      ...ROUTE,
+      route_snapped: { columns: ['time', 'lat', 'lng', 'km/h', 'at', 'acc', 'snapped'], points: [['08:01', 6.88, 79.86, 0, iso('08:01'), null, 0], ['08:30', 6.9, 79.87, 30, iso('08:30'), null, 1], ['09:55', 6.96, 79.89, 38, iso('09:55'), null, 1], ['14:00', 6.96, 79.89, 0, iso('14:00'), null, 0]] },
+      snapped: { provider: 'google_roads', status: 'ok', legs: 1, matched: 1 },
+    };
+    answers.driver_route = (args: Record<string, unknown>) => (args.snap === true ? SNAPPED : { ...ROUTE, snapped: { provider: 'google_roads', status: 'off' } });
+    renderRouter(routes, { initialUrl: '/office/driver/nuwan.p/route' });
+    await screen.findByTestId('day-summary', {}, { timeout: 5000 });
+    expect(calls.filter((c) => c.tool === 'driver_route').every((c) => c.args.snap === true)).toBe(true);
+    // The snapped line is drawn (its road vertex at 08:30 makes 3 distinct places; the recorded points are 2), the note
+    // says so, the km stay the server's.
+    expect(screen.getByTestId('route-map-stub').props.accessibilityValue.text).toBe('3');
+    expect(screen.getByTestId('snap-note').props.children).toBe(mockT!('office.live.snap_snapped'));
+    expect(screen.getByText('41.2')).toBeTruthy();
+    const chip = screen.getByTestId('snap-chip');
+    expect(chip.props.accessibilityState.checked).toBe(true);
+    expect(screen.getByText(mockT!('office.live.snapOn'))).toBeTruthy();
+    // Off: asked again without snap; the GPS line (2 distinct places) and its words.
+    fireEvent.press(chip);
+    await waitFor(() => expect(screen.getByTestId('snap-chip').props.accessibilityState.checked).toBe(false), { timeout: 5000 });
+    await waitFor(() => expect(calls.filter((c) => c.tool === 'driver_route').at(-1)!.args.snap).toBeUndefined(), { timeout: 5000 });
+    expect(screen.getByTestId('route-map-stub').props.accessibilityValue.text).toBe('2');
+    expect(screen.getByTestId('snap-note').props.children).toBe(mockT!('office.live.snap_gps'));
+    expect(errors.seen).toEqual([]);
+  });
+
+  it("the free map under the google package (Google's failed on this phone): never asked with snap, no chip, the GPS line said", async () => {
+    mockEngine.value = 'open';
+    mockMe.value = { ...(ME as unknown as Record<string, unknown>), map: { package: 'google', places: true } };
+    answers.driver_route = () => ({ ...ROUTE, snapped: { provider: 'google_roads', status: 'off' } });
+    renderRouter(routes, { initialUrl: '/office/driver/nuwan.p/route' });
+    await screen.findByTestId('day-summary', {}, { timeout: 5000 });
+    expect(calls.filter((c) => c.tool === 'driver_route').every((c) => !('snap' in c.args))).toBe(true);
+    expect(screen.queryByTestId('snap-chip')).toBeNull();
+    expect(screen.getByTestId('snap-note').props.children).toBe(mockT!('office.live.snap_gps'));
+    expect(errors.seen).toEqual([]);
+  });
+
+  it('no provider on the server: nothing new on the screen', async () => {
+    answers.driver_route = () => ({ ...ROUTE, snapped: { provider: 'none', status: 'off' } });
+    renderRouter(routes, { initialUrl: '/office/driver/nuwan.p/route' });
+    await screen.findByTestId('day-summary', {}, { timeout: 5000 });
+    expect(screen.queryByTestId('snap-chip')).toBeNull();
+    expect(screen.queryByTestId('snap-note')).toBeNull();
   });
 
   it('no gaps: no "No GPS" line', async () => {

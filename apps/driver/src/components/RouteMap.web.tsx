@@ -9,7 +9,7 @@
 // (lib/cluster.ts, from the zoom the engine reports after each move; a tap zooms in two steps). The wheel over the map
 // zooms the map (MapLibre's scrollZoom, Google's greedy gestures), never the page: the map is outside the page's scroll.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { clusterMarkers, clusterZoom } from '@/lib/cluster';
@@ -70,9 +70,11 @@ interface Props {
   layers?: RouteLayers;
   selected?: string | null;
   onGap?: (key: string) => void;
+  /** The screen's controls over the map (Round 48: the snap-to-roads chip), under the compass, only while a map is mounted. */
+  controls?: ReactNode;
 }
 
-export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage, ends = null, gaps = [], layers = NO_ROUTE_LAYERS, selected = null, onGap }: Props) {
+export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage, ends = null, gaps = [], layers = NO_ROUTE_LAYERS, selected = null, onGap, controls }: Props) {
   const { t } = useApp();
   const mapMount = useMapMount(mapPackage);
   const { mount, dispatch } = mapMount;
@@ -168,6 +170,7 @@ export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage,
         ) : null}
       </BrowserMap>
       <MapCompass heading={turn.heading} pitch={turn.pitch} label={t('map.northUp')} onPress={() => map?.northUp()} style={{ top: 12, right: 12 }} />
+      {controls ? <View style={styles.cluster} pointerEvents="box-none" testID="route-map-controls">{controls}</View> : null}
       <CreditLine text={routeCredit(mount.engine === 'google', lines)} testID="route-map-credit" />
     </View>
   );
@@ -176,3 +179,7 @@ export function RouteMap({ lines, stops, fit, focus, marker, onStop, mapPackage,
 function spec(l: RouteLine) {
   return { points: l.points, color: BAND_COLORS[l.band], width: lineWidth(l), dash: l.dashed ? DASH.route : null };
 }
+
+const styles = StyleSheet.create({
+  cluster: { position: 'absolute', top: 68, right: 12, alignItems: 'flex-end', gap: 8 },
+});

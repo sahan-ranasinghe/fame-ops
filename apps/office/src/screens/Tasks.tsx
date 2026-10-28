@@ -59,6 +59,8 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
       <span className={`status ${statusTone(col, t.status)}`}>{t.status || ""}</span>
       {/* Hotfix 2 (K): who sent it to the driver. */}
       {t.approved_by && <span className="muted small" data-testid="card-approved-by">{decidedText("approved", t.approved_by)}</span>}
+      {/* Round 48 (item 1): a change proposed by someone without approve, waiting for the fleet admin. */}
+      {t.pending_change && <span className="status warn" data-testid="card-pending-change">{t.pending_change.text}</span>}
       {/* Phase 7: finished far under the plan (the odometer or the time); the words on hover and on the task. */}
       {/* Round 4–7 (4b): a trip nobody drives with the app, closed without its odometer: Completed · not confirmed (grey). */}
       {(() => {

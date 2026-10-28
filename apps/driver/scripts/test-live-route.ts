@@ -72,10 +72,10 @@ const answer: DriverRoute = {
 const route = routeOf('sunil', answer);
 const p = route.points;
 
-console.log('\n== The tool: what is asked, never snap ==');
+console.log('\n== The tool: what is asked; snap only through office/snapLogic.ts ==');
 {
   check(same(routeArgs('sunil'), { driver: 'sunil', line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true }), 'driver_route { driver, tolerance 0, 3,000 points, the estimated roads }', routeArgs('sunil'));
-  check(!('snap' in routeArgs('sunil')) && !('snap' in ROUTE_ARGS) && !('date' in routeArgs('sunil')), 'no snap (the free map must not get Google\'s roads; a Roads call costs) and no date (today)');
+  check(!('snap' in routeArgs('sunil')) && !('snap' in ROUTE_ARGS) && !('date' in routeArgs('sunil')), 'no snap by itself (the trails, and the free map in Google\'s place, must not get Google\'s roads; a Roads call costs: Round 48 adds it through withSnap where the map may draw it) and no date (today)');
 }
 
 console.log('\n== The answer on the phone (routeOf) ==');
@@ -236,8 +236,12 @@ console.log('\n== The screen and the two engines ==');
   // The bar and its clock moved to the shared components/office/PlaybackBar.tsx (Stage 1: one playback bar everywhere).
   const screen = read('src/app/office/(tabs)/live.tsx') + read('src/components/office/PlaybackBar.tsx');
   const calls = (screen.match(/api\.call<DriverRoute>\('driver_route'/g) ?? []).length;
-  const withArgs = (screen.match(/api\.call<DriverRoute>\('driver_route', routeArgs\(\w+\)\)/g) ?? []).length;
-  check(calls === 3 && withArgs === 3 && !/snap/.test(screen), 'every driver_route call (the shown route, a trail, the refresh) with routeArgs(username); never snap', { calls, withArgs });
+  const trailCalls = (screen.match(/api\.call<DriverRoute>\('driver_route', routeArgs\(u\)\)/g) ?? []).length;
+  const shownCalls = (screen.match(/api\.call<DriverRoute>\('driver_route', withSnap\(routeArgs\(\w+\), snapOn\)\)/g) ?? []).length;
+  // Round 48: the shown route (first load, the refresh) asks snap where this map may draw it (useSnap: Google's map, or the
+  // open package; never the free map in Google's place); a trail never does (only a route a person opens is snapped).
+  check(calls === 3 && trailCalls === 1 && shownCalls === 2 && /const snap = useSnap\(me\.map\?\.package\);/.test(screen) && /const snapOn = snap\.on;/.test(screen),
+    'every driver_route call with routeArgs(username): the trail never with snap; the shown route and its refresh with snap only where the map may draw it', { calls, trailCalls, shownCalls });
   check(/const routes = me\.tools\.includes\('driver_route'\);/.test(screen) && /const trails = routes && trailsOn\(values\);/.test(screen) && /route=\{routes \? \{/.test(screen),
     'the trails control and the route only for a person who may call driver_route');
   // Stage 1 (O3 item 4f): the screen's control sits in the map's one cluster (zoom in, zoom out, the trails, fit), which

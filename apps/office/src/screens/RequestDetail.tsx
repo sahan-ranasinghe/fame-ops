@@ -21,7 +21,7 @@ import { Loading, Notice } from "../ui/basics";
 import { PageTop, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { ContactButtons } from "../ui/ContactButtons";
-import { isProposal, requestView, withdrawInput } from "./approvalLogic";
+import { changeLine, isChange, isProposal, requestView, withdrawInput } from "./approvalLogic";
 import { DecidedBy, ReviewingLine } from "./approvers";
 import { AskedWho, ChangesList, LateNotice, RequestAgain, RequestHead, RequestStatusPill, SelfDriveLicence, Timeline } from "./requestParts";
 import { AssignedBlock, TellRequester } from "./RequestOutcome";
@@ -113,7 +113,7 @@ export function RequestDetail() {
     setBusy(true);
     try {
       await transport.call("cancel_request", v.input);
-      toast(q && isProposal(q) ? "Task withdrawn" : "Request withdrawn");
+      toast(q && isChange(q) ? "Change withdrawn" : q && isProposal(q) ? "Task withdrawn" : "Request withdrawn");
       void store.invalidate();
       afterSave(home);
     } catch (e) {
@@ -126,11 +126,13 @@ export function RequestDetail() {
   if (!q) return <><PageTop title="Vehicle request" backTo={home} /><Loading>Loading the request…</Loading></>;
   const view = requestView(q, me);
   const task = isProposal(q);
+  // Round 48 (item 1): a change to an existing task, waiting for the fleet admin (the task is as it was).
+  const change = isChange(q);
   const p = view.proposal ? q.proposed : undefined;
   return (
     <div data-testid="request-detail">
       <PageTop
-        title={task ? "Proposed task" : "Vehicle request"}
+        title={change ? "Proposed change" : task ? "Proposed task" : "Vehicle request"}
         sub={<RequestStatusPill status={q.status} />}
         backTo={home}
         actions={(q.status === "waiting" || q.status === "changed") && decides ? <Link className="btn small dark" to={`/requests/${id}/decide`}>Review</Link> : undefined}
@@ -138,6 +140,13 @@ export function RequestDetail() {
       <div className="card card-b">
         <RequestHead q={q} proposal={view.proposal} />
         {q.late && <div style={{ marginTop: 12 }}><LateNotice approver={approver} /></div>}
+        {change && (
+          <div className="notice" style={{ marginTop: 12 }} data-testid="change-notice">
+            <p><b>{q.status === "waiting" ? "The task is as it was until the fleet admin decides." : q.status === "approved" ? "Approved: the task took this change." : "The task was left as it was."}</b> {changeLine(q)}</p>
+            <ChangesList changes={q.change?.changes} testId="change-lines" />
+            {q.change?.task_id && canOpenTask(me) && <p><Link to={`/tasks/${q.change.task_id}`}>Open the task →</Link></p>}
+          </div>
+        )}
         {q.status === "changed" && (
           <div className="notice" style={{ marginTop: 12 }} data-testid="changed-notice">
             <p><b>Changed{q.changed?.by ? ` by ${q.changed.by}` : ""}{q.changed?.at ? ` · ${whenText(q.changed.at)}` : ""} · needs re-approval.</b> The booking keeps its old plan until the office decides again.</p>
@@ -206,19 +215,19 @@ export function RequestDetail() {
       {view.withdraw && withdrawing && (
         <div className="confirm" data-testid="withdraw">
           <div className="field">
-            <label htmlFor="rq-withdraw">Withdraw this {task ? "task" : "request"} with a reason</label>
+            <label htmlFor="rq-withdraw">Withdraw this {change ? "change" : task ? "task" : "request"} with a reason</label>
             <input id="rq-withdraw" maxLength={300} placeholder="e.g. The trip is off" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} autoFocus />
           </div>
           {msg && <Notice tone="bad">{msg}</Notice>}
           <div className="acts">
             <button type="button" className="btn" disabled={busy} onClick={() => { setWithdrawing(false); setMsg(null); }}>Keep it</button>
-            <button type="button" className="btn dark" disabled={busy} onClick={() => void withdraw()}>{task ? "Withdraw the task" : "Withdraw the request"}</button>
+            <button type="button" className="btn dark" disabled={busy} onClick={() => void withdraw()}>{change ? "Withdraw the change" : task ? "Withdraw the task" : "Withdraw the request"}</button>
           </div>
         </div>
       )}
       {q.status === "waiting" && (decides
         ? <Link className="btn dark" to={`/requests/${id}/decide`}>Approve or decline</Link>
-        : <Notice tone="info">{task ? "The fleet admin will approve or decline this task. It is sent to the driver only when approved." : "The fleet office will approve or decline this request."}</Notice>)}
+        : <Notice tone="info">{change ? "The fleet admin will approve or decline this change. The task changes only when approved." : task ? "The fleet admin will approve or decline this task. It is sent to the driver only when approved." : "The fleet office will approve or decline this request."}</Notice>)}
       {q.status === "changed" && (decides
         ? <Link className="btn dark" to={`/requests/${id}/decide`}>Decide the change</Link>
         : <Notice tone="info">The fleet office will keep, change or decline the changed booking.</Notice>)}

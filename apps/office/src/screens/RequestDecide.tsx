@@ -54,6 +54,7 @@ import { decisionInput, dwellChanges, redecideInput } from "./requestLogic";
 import { DecideBanner, RequestStatusPill, VehicleGroups, VehicleOption } from "./requestParts";
 import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
 import { TripDecide } from "./TripDecide";
+import { ChangeDecide } from "./ChangeDecide";
 import { isChoice, knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 import { TripDayPicker } from "../ui/DayPicker";
 import { SkeletonRows } from "../ui/ListKit";
@@ -93,6 +94,8 @@ export function RequestDecide() {
   }, [q, trip]);
   if (err) return <section className="view"><PageTop title="Vehicle request" backTo="/requests" /><Notice tone="bad">{err}</Notice></section>;
   if (!q || trip === null) return <section className="view"><PageTop title="Vehicle request" backTo="/requests" /><Loading>Loading the request…</Loading></section>;
+  // Round 48 (item 1): a change to an existing task: approve it as proposed, or decline it (the task is as it was).
+  if (q.kind === "change") return <ChangeDecide id={id} q={q} setQ={setQ} />;
   // Round 4–7 (item 10): deciding someone else's request, a place box offers the requester's recent places too.
   return <SuggestFor request={someoneElsesRequest(q, me) ? id : undefined}>{trip ? <TripDecide id={id} q={q} setQ={setQ} /> : <ClassicDecide id={id} q={q} setQ={setQ} />}</SuggestFor>;
 }

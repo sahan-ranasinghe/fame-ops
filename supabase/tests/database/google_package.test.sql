@@ -65,11 +65,15 @@ select is((select count(*) from public.recent_places('Galle Fort', now() - inter
 select is((select count(*) from public.recent_places('Our office', now() - interval '90 days', 5)), 1::bigint, 'our own typed stop still is');
 
 -- 6. The 30-day clean-up: the old pin, the stop and the start that copied it lose Google's details; the id stays;
---    the fresh one is kept; Google-snapped lines over 30 days old go, others stay.
+--    the fresh one is kept. Google-snapped lines are never stored since Round 48 (the table refuses them: a Roads
+--    answer is display only, kept 30 minutes in the server's memory), so the clean-up has none to remove; an OSRM
+--    line is stored as before and stays (the retention job removes it with the location points).
+select throws_ok($$ insert into public.route_matched (employee_id, date, provider, leg_from, leg_to, geometry, matched_at, status) values
+  ('10000000-0000-0000-0000-0000000000c5', current_date - 40, 'google_roads', now() - interval '40 days', now() - interval '40 days' + interval '10 minutes', '[]', now() - interval '40 days', 'ok') $$,
+  '23514', null, 'a Google-snapped line cannot be stored (Round 48)');
 insert into public.route_matched (employee_id, date, provider, leg_from, leg_to, geometry, matched_at, status) values
-  ('10000000-0000-0000-0000-0000000000c5', current_date - 40, 'google_roads', now() - interval '40 days', now() - interval '40 days' + interval '10 minutes', '[]', now() - interval '40 days', 'ok'),
   ('10000000-0000-0000-0000-0000000000c5', current_date - 40, 'osrm', now() - interval '40 days', now() - interval '40 days' + interval '10 minutes', '[]', now() - interval '40 days', 'ok');
-select is(public.prune_google_content(), '{"pins": 1, "stops": 1, "starts": 1, "matched": 1, "lines": 0, "request_stops": 0, "request_starts": 0}'::jsonb, 'one pin, one stop, one start and one snapped leg over 30 days old (no request''s)');
+select is(public.prune_google_content(), '{"pins": 1, "stops": 1, "starts": 1, "matched": 0, "lines": 0, "request_stops": 0, "request_starts": 0}'::jsonb, 'one pin, one stop and one start over 30 days old (no request''s); no Google-snapped leg exists to remove');
 select is((select coalesce(lat::text, 'none') || '|' || coalesce(address, 'none') || '|' || place_name || '|' || google_place_id
   from public.task_stops where id = '50000000-0000-0000-0000-0000000000c2'),
   'none|none|Google place (details removed after 30 days)|g-old', 'the old stop keeps only the Google place id');
@@ -77,7 +81,7 @@ select is((select coalesce(start_lat::text, 'none') || '|' || start_name from pu
   'none|Google place (details removed after 30 days)', 'the start too');
 select is((select lat from public.task_stops where id = '50000000-0000-0000-0000-0000000000c1'), 7.2931::double precision, 'the fresh one is kept');
 select is((select count(*) from public.google_pins), 1::bigint, 'the old pin is gone, the fresh one kept');
-select is((select count(*) from public.route_matched where employee_id = '10000000-0000-0000-0000-0000000000c5'), 1::bigint, 'the old OSRM line stays (90 days)');
+select is((select count(*) from public.route_matched where employee_id = '10000000-0000-0000-0000-0000000000c5'), 1::bigint, 'the old OSRM line stays (the retention job removes it with the location points, not this clean-up)');
 
 -- 7. Nobody but the server counts calls or reads the counter and the pins.
 set local role authenticated;

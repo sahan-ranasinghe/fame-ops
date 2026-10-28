@@ -18,6 +18,40 @@ export const LATE_BADGE = "Leave-by passed";
 /** A task proposed by someone without the approve permission. */
 export const isProposal = (q: Pick<RequestCard, "kind">) => q.kind === "task";
 
+/** Round 48 (item 1): a change to an existing task proposed by someone without the approve permission. */
+export const isChange = (q: Pick<RequestCard, "kind">) => q.kind === "change";
+
+/** "Change to Team drop · Galle · driver Kamal instead of Nuwan · proposed by Sashen" */
+export function changeLine(q: Pick<RequestCard, "change" | "requested_by" | "title">): string {
+  return joinDots([q.change?.summary || "a change", `proposed by ${q.requested_by}`]);
+}
+
+/**
+ * What a change page says after update_task / update_task_stops / reassign_task: the task changed, or (Round 48: no approve
+ * permission while tasks need the fleet admin's OK) the change waits in the approval queue and the task is as it was.
+ */
+export function changeOutcome(p: { waiting_for_approval?: boolean; request_id?: string; next?: string; summary?: string }, done: string): {
+  waiting: boolean;
+  toast: string;
+  head?: string;
+  link?: { to: string; label: string };
+} {
+  if (p.waiting_for_approval) {
+    return {
+      waiting: true,
+      toast: "Waiting for the fleet admin's OK · the task is unchanged",
+      head: p.next ?? "Waiting for the fleet admin's OK · you'll be notified. The task stays as it is until then.",
+      link: p.request_id ? { to: `/requests/${p.request_id}`, label: "Open the request" } : undefined,
+    };
+  }
+  return { waiting: false, toast: done };
+}
+
+/** Where a pending change's line opens: the decide page for an approver, else the request. */
+export function pendingChangeTarget(requestId: string, me: Pick<Me, "tools">): string {
+  return me.tools.includes("decide_request") ? `/requests/${requestId}/decide` : `/requests/${requestId}`;
+}
+
 /** A waiting proposal, or a waiting request planned with its stops: the trip decide page (the stops as asked, nothing retyped). */
 export function decidesTrip(q: Pick<RequestCard, "status" | "kind" | "trip">): boolean {
   return q.status === "waiting" && (q.kind === "task" || !!q.trip?.stops.length);
@@ -46,10 +80,11 @@ export interface RequestView {
 export function requestView(q: Pick<RequestCard, "kind" | "status" | "requested_by">, me: Pick<Me, "permissions" | "tools" | "name">): RequestView {
   const approver = me.permissions.includes("approve");
   const own = !approver || q.requested_by === me.name;
-  const task = isProposal(q);
+  // Round 48: a proposed change shows its lines the same way (its proposer, or an approver).
+  const task = isProposal(q) || isChange(q);
   return {
     proposal: task && (approver || own),
-    conflicts: task && (approver || (own && me.permissions.includes("assign_tasks"))),
+    conflicts: isProposal(q) && (approver || (own && me.permissions.includes("assign_tasks"))),
     withdraw: !approver && own && q.status === "waiting" && me.tools.includes("cancel_request"),
   };
 }

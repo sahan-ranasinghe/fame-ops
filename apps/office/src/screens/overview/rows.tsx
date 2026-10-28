@@ -5,26 +5,30 @@ import { Link } from "react-router";
 import type { NeedsDriverTask, RequestCard } from "../../data/types";
 import { joinDots } from "../../lib/format";
 import { Pill } from "../../ui/basics";
-import { LATE_BADGE, proposalLine } from "../approvalLogic";
+import { changeLine, LATE_BADGE, proposalLine } from "../approvalLogic";
 import { liveTone, liveWord } from "../myTripsLogic";
 import { bestLine, findDriverPath, whenTone } from "../needsDriverLogic";
 import type { TripRow } from "./overviewLogic";
 
 export function RequestLine({ q, decide }: { q: RequestCard; decide: boolean }) {
   const proposal = q.kind === "task";
+  const change = q.kind === "change";
   return (
     <div className="row ov-row" data-testid="request-row">
       <div className="grow">
         <div className="name">
-          {proposal
+          {change
+            ? <><Pill tone="warn">Change</Pill> <Link to={`/requests/${q.id}`}>{q.title || q.change?.task_title || "Proposed change"}</Link></>
+            : proposal
             ? <><Pill tone="live">Task</Pill> <Link to={`/requests/${q.id}`}>{q.title || "Proposed task"}</Link></>
             : <><Link to={`/requests/${q.id}`}>{q.requested_by}</Link>{q.on_behalf_of && <span className="muted"> · for {q.on_behalf_of}</span>}</>}
           {q.status === "changed" && <Pill tone="warn">Changed</Pill>}
           {q.late && <Pill tone="bad">{LATE_BADGE}</Pill>}
         </div>
         <div className="sub">
-          {joinDots([q.when, q.route, proposal ? null : q.need])}
+          {joinDots([q.when, q.route, proposal || change ? null : q.need])}
           {proposal && <>{q.when || q.route ? " · " : ""}<span data-testid="proposal-line">{proposalLine(q)}</span></>}
+          {change && <>{q.when || q.route ? " · " : ""}<span data-testid="proposal-line">{changeLine(q)}</span></>}
         </div>
       </div>
       {decide && <Link className="btn small dark" to={`/requests/${q.id}/decide`}>Decide</Link>}

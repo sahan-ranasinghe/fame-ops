@@ -213,12 +213,13 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
       'Assign a task opens with the driver picked (the Who step keeps them; the best match never replaces them)');
   }
   const dayPage = read('src/app/office/driver/[username]/route.tsx');
-  check(/useTool<DriverRoute>\('driver_route', dayRouteArgs\(username, day\), \{ every: routeEvery\(day, today\) \}\)/.test(dayPage) && /const mayRoute = me\.tools\.includes\('driver_route'\);/.test(page) && /todaySummaryArgs\(username, today\), \{ enabled: mayRoute/.test(page),
+  // Round 48: the day's call carries snap where the map may draw the snapped line (withSnap; scripts/test-snap.ts).
+  check(/useTool<DriverRoute>\('driver_route', withSnap\(dayRouteArgs\(username, day\), snap\.on\), \{ every: routeEvery\(day, today\) \}\)/.test(dayPage) && /const mayRoute = me\.tools\.includes\('driver_route'\);/.test(page) && /todaySummaryArgs\(username, today\), \{ enabled: mayRoute/.test(page),
     'driver_route for the chosen day on its own screen (tolerance 0, 3,000 points, the estimated roads), today every minute; the profile\'s card only when the person may');
   check(/useTool<DriversBoard>\('drivers_board', \{ search: username \}, \{ enabled: mayBoard, every: 60_000 \}\)/.test(page), 'today\'s state from the board\'s row, only when the person may read the board');
   check(/<BackHeader title=\{d\?\.name \?\? username\}/.test(page), 'a stack screen with the back header (back means back)');
-  // Round 48: the RouteMap line grew (the ends, the gaps, the layers, the selection on a second line).
-  check(/<RouteMap lines=\{lines\} stops=\{stops\} fit=\{fit\} focus=\{focus\} marker=\{marker\} onStop=\{pickStop\} mapPackage=\{mapPackage\}\s+ends=/.test(read('src/components/office/DayRoute.tsx')) && /<DayRoute\b/.test(dayPage), 'the map (components/office/DayRoute.tsx) gets the lines, the stops, the frame, the focus, the playback marker, the stop pin\'s tap and the office\'s map package');
+  // Round 48: the RouteMap line grew (the snap chip as its control, then the ends, the gaps, the layers, the selection on the lines after).
+  check(/<RouteMap lines=\{lines\} stops=\{stops\} fit=\{fit\} focus=\{focus\} marker=\{marker\} onStop=\{pickStop\} mapPackage=\{mapPackage\}\s+controls=/.test(read('src/components/office/DayRoute.tsx')) && /\s+ends=\{ends\} gaps=\{shownGaps\}/.test(read('src/components/office/DayRoute.tsx')) && /<DayRoute\b/.test(dayPage), 'the map (components/office/DayRoute.tsx) gets the lines, the stops, the frame, the focus, the playback marker, the stop pin\'s tap, the office\'s map package and (Round 48) the snap chip as its control');
   // §33.6 item 1 (Round 4–7): the timeline row's move went to the stop pin: a tap moves the map to it (again on a second tap). Round 48: one moveTo for a stop or a gap.
   check(/setFocus\(\(f\) => \(\{ frame: \{ kind: 'point', center: \{ lat: p\.lat, lng: p\.lng \} \}, nonce: \(f\?\.nonce \?\? 0\) \+ 1 \}\)\)/.test(read('src/components/office/DayRoute.tsx')) && /const pickStop = \(key: string\) => \{[\s\S]*?moveTo\(s\);/.test(read('src/components/office/DayRoute.tsx')), 'a stop pin tapped moves the map to it (again on a second tap)');
   const dayRoute = read('src/components/office/DayRoute.tsx');

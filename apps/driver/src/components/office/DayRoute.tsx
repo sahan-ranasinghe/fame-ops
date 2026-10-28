@@ -34,6 +34,7 @@ import { mapHeight, routeLayerDefs, routeLayersOf } from '@/lib/mapLayout';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { dayNumbers, daySummary, gapLine, gapMarks, noGpsLine, routeEnds, routeFrame, routeLines, routePoints, stopLine, stopMarks } from '@/office/driversLogic';
 import { canPlay, cursorAt, gapWindowsOf, playbackPath, routeOf } from '@/office/liveRouteLogic';
+import { snapControl, snapNoteKey, snapView } from '@/office/snapLogic';
 import { type LegendEntry, mapInfo } from '@/office/routeInfo';
 import { visibleGaps } from '@/office/routeMarks';
 import type { DriverRoute, FleetError } from '@/office/types';
@@ -41,6 +42,7 @@ import { ListFailed } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, shadow } from '@/theme';
 import { PlaybackBar, usePlayback } from './PlaybackBar';
+import { SnapChip, type SnapState } from './SnapChip';
 
 interface Props {
   data: DriverRoute | null;
@@ -57,13 +59,20 @@ interface Props {
   onRefresh?: () => void;
   /** Scrolls under the summary card (the day's tasks, a task's km). */
   children?: ReactNode;
+  /** Round 48 item 5: snap to roads (the screen asked driver_route with snap when `on`); the chip over the map, the note under it. */
+  snap?: SnapState;
 }
 
-export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText, above, refreshing, onRefresh, children }: Props) {
+export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText, above, refreshing, onRefresh, children, snap }: Props) {
   const { t, settings } = useApp();
   const { height } = useWindowDimensions();
-  const points = useMemo(() => (data ? routePoints(data) : []), [data]);
-  const lines = useMemo(() => (data ? routeLines(data) : []), [data]);
+  // Round 48 item 5: the line drawn is the snapped one in the route's place when the chip is on and the server gave it
+  // (office/snapLogic.ts); the summary's numbers stay the server's (`data`: km from the odometer and the raw points).
+  const snapOn = snap?.on === true;
+  const shown = useMemo(() => (data ? snapView(data, snapOn) : null), [data, snapOn]);
+  const snapUi = snapControl(data?.snapped, snap?.allowed === true, snap?.wanted === true);
+  const points = useMemo(() => (shown ? routePoints(shown) : []), [shown]);
+  const lines = useMemo(() => (shown ? routeLines(shown) : []), [shown]);
   // Each stop with its words (the pin's card, and its name for a screen reader).
   const stops = useMemo(() => (data ? stopMarks(data).map((s) => ({ ...s, label: stopLine(s, t) })) : []), [data, t]);
   // Round 48: the route's ends and its gap markers (the timeline's no-GPS and no-app rows).
@@ -112,8 +121,9 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
   const estimated = lines.filter((l) => l.band === 'estimated').length;
   const info = useMemo(() => mapInfo({ googleMap: engine === 'google', estimated: estimated > 0, estimatedGaps: estimated, kmNote: data?.km_note, estimatedNote: data?.estimated_note }, t), [engine, estimated, data?.km_note, data?.estimated_note, t]);
 
-  // The playback (Live's rules, office/liveRouteLogic.ts): the path in time order, the gaps, the marker at the clock.
-  const played = useMemo(() => (data ? routeOf(data.driver, data) : null), [data]);
+  // The playback (Live's rules, office/liveRouteLogic.ts): the path in time order along the line drawn (the roads when
+  // snapped, as on the site), the gaps, the marker at the clock.
+  const played = useMemo(() => (shown ? routeOf(shown.driver, shown) : null), [shown]);
   const path = useMemo(() => (played ? playbackPath(played.points, played.estimated) : []), [played]);
   const windows = useMemo(() => gapWindowsOf(played), [played]);
   const playback = usePlayback(path, useIsFocused());
@@ -127,6 +137,7 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
       {/* Round 48 (item 2): the map at a fixed height, never inside the scroll (a pinch zooms it, the page never scrolls it). */}
       <View style={[styles.map, { height: mapHeight(height) }]} testID="driver-route-map">
         <RouteMap lines={lines} stops={stops} fit={fit} focus={focus} marker={marker} onStop={pickStop} mapPackage={mapPackage}
+          controls={snap && snapUi.toggle && points.length > 0 ? <SnapChip on={snapUi.on} onChange={snap.setWanted} /> : null}
           ends={ends} gaps={shownGaps} layers={layers} selected={selected} onGap={pickGap} />
         {cardText && (
           <View style={styles.stopCard} testID={pickedStop ? 'stop-card' : 'gap-card'}>
@@ -147,6 +158,8 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
           <FilterBar defs={routeLayerDefs(t)} values={values} onApply={setValues} testID="route-filter" />
         </View>
       </View>
+      {/* Round 48 item 5: which line the map draws ("Snapped to roads · km from the odometer", "GPS line"…), always in view with the chip. */}
+      {snapUi.note && points.length > 0 && <Txt variant="small" size={12} style={styles.snapNote} testID="snap-note">{t(snapNoteKey(snapUi.note))}</Txt>}
       {canPlay(path) && <View style={styles.bar}><PlaybackBar playback={playback} cursor={marker} /></View>}
       <ScrollView
         style={{ flex: 1 }}
@@ -278,6 +291,7 @@ const styles = StyleSheet.create({
   controls: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 16, paddingTop: 8 },
   info: { width: 50, height: 50, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   bar: { paddingHorizontal: 16, paddingBottom: 4 },
+  snapNote: { paddingHorizontal: 16, paddingTop: 4 },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 36 },
   legendMark: { width: 40, alignItems: 'center', justifyContent: 'center' },

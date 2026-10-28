@@ -3155,6 +3155,72 @@ if CHANNEL == "api":
         ok, body = as_coordinator(ch, "create_task", {"title": f"Intern task {u}", "date": (today + dt.timedelta(days=3)).isoformat(), "start_time": "10:00",
                                                        "driver": f"intern.{u}", "vehicle": plate_u, "pickup": "Head office", "dropoff": "Galle"})
         check(ok and "waiting_for_approval" in body, f"{tag}: assigns a task, which waits for a fleet admin's OK (tasks_need_approval on)", body[:200])
+
+        # Round 48 (item 1): a change to an existing task by someone without approve waits in the same queue; the driver
+        # never gets it until a fleet admin approves it (the hole: a dispatcher reassigned a declined task straight to a new driver).
+        def result_of(text):
+            try:
+                return json.loads(text)
+            except (ValueError, TypeError):
+                return {}
+        tool("create_driver", {"name": f"Intern Two {u}", "code": f"J{u}", "username": f"intern2.{u}", "pin": "482917", "phone": f"+94 71 78{int(u, 16) % 100000:05d}"})
+        t48 = tool("create_task", {"title": f"Round 48 task {u}", "date": (today + dt.timedelta(days=4)).isoformat(), "start_time": "09:00",
+                                   "driver": f"intern.{u}", "vehicle": plate_u, "pickup": "Head office", "dropoff": "Galle"})
+        t48_id = t48["task_id"]
+        driver_of = lambda: psql(f"select e.username from tasks t join employees e on e.id = t.employee_id where t.id = '{t48_id}'")
+        time_of = lambda: psql(f"select to_char(start_at at time zone 'Asia/Colombo', 'HH24:MI') from tasks where id = '{t48_id}'")
+        ok, body = as_coordinator(ch, "reassign_task", {"task_id": t48_id, "driver": f"intern2.{u}"})
+        r48 = result_of(body)
+        check(ok and r48.get("waiting_for_approval") is True and r48.get("task_unchanged") is True and "Kamal" not in body,
+              f"{tag}: a Coordinator's reassignment waits for approval (waiting_for_approval, the task unchanged)", body[:200])
+        check(driver_of() == f"intern.{u}", f"{tag}: the task keeps its driver while the change waits", driver_of())
+        check(psql(f"select count(*) from push_log where task_id = '{t48_id}'") == "0", f"{tag}: no push went to any driver", "")
+        change_id = r48.get("request_id", "")
+        ok, body = as_coordinator(ch, "update_task", {"task_id": t48_id, "plan_version": t48.get("plan_version", 0), "time": "10:00"})
+        check(not ok and "already waiting" in body, f"{tag}: a second change to the same task is refused while one waits", body[:200])
+        q = tool("list_requests", {"kind": "change"})
+        mine = [x for x in q["requests"] if x["id"] == change_id]
+        check(len(mine) == 1 and mine[0]["kind"] == "change" and mine[0]["change"]["task_id"] == t48_id
+              and "driver" in mine[0]["change"]["changes"] and mine[0]["proposed"]["username"] == f"intern2.{u}",
+              f"{tag}: the queue lists the change with its task, what changes and the proposed driver", json.dumps(mine)[:300])
+        d = tool("decide_request", {"request_id": change_id, "decision": "approve"})
+        check(d.get("decision") == "approved" and d.get("task_id") == t48_id and d["request"]["status"] == "approved",
+              f"{tag}: the fleet admin approves the change", json.dumps(d)[:300])
+        check(driver_of() == f"intern2.{u}", f"{tag}: and only then the task goes to the new driver", driver_of())
+        hist = psql(f"select actor from task_assignment_events where task_id = '{t48_id}' and action = 'reassigned' order by id desc limit 1")
+        check(hist == ACTOR_NAME, f"{tag}: the reassignment is in the admin's name (applied by the approver)", hist)
+        # A time change waits too; the proposer withdraws it.
+        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        ok, body = as_coordinator(ch, "update_task", {"task_id": t48_id, "plan_version": pv, "time": "10:30"})
+        r48b = result_of(body)
+        check(ok and r48b.get("waiting_for_approval") is True and time_of() == "09:00",
+              f"{tag}: a time change waits for approval and the task keeps its time", body[:200])
+        ok, body = as_coordinator(ch, "cancel_request", {"request_id": r48b.get("request_id", ""), "reason": "typed the wrong time"})
+        check(ok and '"was": "waiting"' in body.replace('":"', '": "') and time_of() == "09:00",
+              f"{tag}: the proposer withdraws it (cancel_request); the task is untouched", body[:200])
+        # New stops wait too; the admin declines: nothing changes.
+        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        ok, body = as_coordinator(ch, "update_task_stops", {"task_id": t48_id, "plan_version": pv,
+                                                            "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]})
+        r48c = result_of(body)
+        check(ok and r48c.get("waiting_for_approval") is True and "stops" in r48c.get("changes", {}),
+              f"{tag}: a stop change waits for approval with what changes", body[:200])
+        stops_before = psql(f"select string_agg(place_name, '|' order by seq) from task_stops where task_id = '{t48_id}' and status <> 'removed'")
+        d = tool("decide_request", {"request_id": r48c.get("request_id", ""), "decision": "decline", "reason": "Kandy is not on this job"})
+        stops_after = psql(f"select string_agg(place_name, '|' order by seq) from task_stops where task_id = '{t48_id}' and status <> 'removed'")
+        check(d["request"]["status"] == "declined" and stops_after == stops_before and "Kandy" not in stops_after,
+              f"{tag}: the fleet admin declines it: the task's stops are as they were", f"{stops_before} -> {stops_after}")
+        # The words alone go straight to the task (title, passengers, contact, notes).
+        pv = tool("task_detail", {"task_id": t48_id})["plan_version"]
+        ok, body = as_coordinator(ch, "update_task", {"task_id": t48_id, "plan_version": pv, "title": f"Round 48 task {u} renamed"})
+        check(ok and "waiting_for_approval" not in body and psql(f"select title from tasks where id = '{t48_id}'") == f"Round 48 task {u} renamed",
+              f"{tag}: a title change alone goes straight to the task", body[:200])
+        # The setting off: a Coordinator reassigns directly, as before Phase 7.
+        tool("update_settings", {"key": "tasks_need_approval", "value": False})
+        ok, body = as_coordinator(ch, "reassign_task", {"task_id": t48_id, "driver": f"intern.{u}"})
+        check(ok and "waiting_for_approval" not in body and driver_of() == f"intern.{u}",
+              f"{tag}: with tasks_need_approval off the reassignment is direct", body[:200])
+        tool("update_settings", {"key": "tasks_need_approval", "value": True})
         for name, args, why in [
             ("decide_request", {"request_id": str(uuid.uuid4()), "decision": "approve"}, "cannot approve a request"),
             ("update_settings", {"key": "buffer_min", "value": 20}, "cannot change the settings"),

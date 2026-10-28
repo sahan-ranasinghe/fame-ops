@@ -18,6 +18,7 @@ import { useLists } from "../data/hooks";
 import type { Conflict, Passenger, TaskDetail, UpdateTaskResult } from "../data/types";
 import { cap, joinDots, plateOf, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
+import { changeOutcome } from "./approvalLogic";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
@@ -210,9 +211,15 @@ export function TaskEdit() {
       const out = await transport.call<UpdateTaskResult & { conflicts?: Conflict[] }>("update_task", input);
       draft.clear();
       const vehicleWords = !f.vehicle && def && input.vehicle === def.reg_no ? ` · ${def.reg_no} (${def.why})` : "";
-      toast((needsDriver && f.driver ? `Task sent to ${out.driver ?? "the driver"}` : "Task changed") + vehicleWords);
+      // Round 48 (item 1): without approve the change waits for the fleet admin; the task is as it was.
+      const outcome = changeOutcome(out, (needsDriver && f.driver ? `Task sent to ${out.driver ?? "the driver"}` : "Task changed") + vehicleWords);
+      toast(outcome.toast);
       void store.invalidate();
       setBusy(false);
+      if (outcome.waiting) {
+        afterSave(back);
+        return;
+      }
       const warnings = warnList(out);
       // Back to where the person came from. New warnings must be read on the task page: from it, they wait there (data/flash);
       // from anywhere else, the task page takes this page's place so they are seen.

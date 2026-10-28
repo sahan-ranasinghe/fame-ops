@@ -972,6 +972,46 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 34. Round 48 (28 October 2026, branch `phase9-r48` from main `99dbab9`, worktree `~/projects/fame-ops-r47`)
+
+**State at the start (28 October):** main `99dbab9` pushed and green (CI 39782874213); Round 4–7 deployed on 22 October
+(migrations through `20261022130000` on the remote; `office-api`, `office-mcp`, `driver-api` and the jobs with the new tools
+live: `vehicle_checks`, `holder_asks`, `retention_preview`, `list_app_errors`…; the website `f50802c2` from `99dbab9`; EAS
+update group `093e3162-c2d6-471e-b804-29239796dc89`, runtime 1.3.0-gmaps, "Round 4–7: vehicle check, fuel card, passengers,
+who holds it, lists, retention, per person, new screens"). Nothing unmerged on main's side; `phase9-rd` (the design pilot) and
+the `design-pilot-*` branches stay parked (§32); the r47 worktrees (`fame-ops-r47-*`) are merged and can go.
+
+### 34.1 Item 1: the approval bypass (security, done first)
+
+The hole: with `tasks_need_approval` on, only `create_task` went to the fleet admin (§33). A dispatcher (assign_tasks, no
+approve) who resolved a "driver declined" task gave it straight to the new driver: `reassign_task` (Give it a driver, the
+needs-a-driver list, Use this driver / Assign →), `update_task` (the day, time, end, driver or vehicle) and
+`update_task_stops` (the stops, and with them the plan and the leave-by) all wrote the task and pushed the driver.
+
+The fix (server, both channels, one gate): `tools/changes.ts` `needsApproval(settings, actor)`. When it says so, the call is
+written as a vehicle request of **kind change** that names its task (`vehicle_requests.change_task_id`, migration
+`20261028100000_round48_proposed_changes.sql`) and carries the exact call, what changes and the task's plan version in
+`proposal_json`; the task is untouched; the approvers are pushed "Change to approve · Sashen proposes driver Kamal instead of
+Nuwan"; the answer is `waiting_for_approval` + `task_unchanged`. One waiting change per task (a second is refused naming who
+proposed what and when). `decide_request` approve applies it by running the same tool as the approver (the history,
+`approved_by` and the audit are theirs; a stop change whose plan moved on since is refused); decline leaves the task alone;
+`cancel_request` lets the proposer withdraw it; `update_request` refuses to edit a proposal. The words alone (title,
+passengers, contact, notes) go straight. `list_requests kind change` and the cards' `change {task_id, task_title, tool,
+summary, changes, task_was}`; `pending_change` on the board's cards, the needs-a-driver rows and `task_detail`; the
+`request_waiting` issue and the 30-minute reminders name a proposed change.
+
+Every write path audited (the table): see "Item 1 write paths" in the checkpoint; the ones left direct on purpose (for
+Sahan to confirm): `cancel_task`, `reopen_task`, `move_driver_vehicle` (a live swap on a breakdown), `swap_reading`,
+`set_trip_purpose`, `clock_out_driver`, a driver's own trip (`driver-api /trips`).
+
+Clients: the website (ChangeDecide, the notices on the task page, the board, needs a driver, Requests, the Overview, My
+trips, the request's page) and Office mode / /m/ (the same places in the app).
+
+Tests: `tools/changes_test.ts`; pgTAP `round48_proposed_changes.test.sql`; the connector suite's Coordinator section on
+both channels (the reassignment waits, the task keeps its driver and gets no push; a second change refused; the queue lists
+it; approve → only then the driver changes, in the admin's name; a time change withdrawn; a stop change declined leaves the
+stops; a title alone goes straight; the setting off = direct); the site's `changeDecide.test.tsx` and `giveDriver.test.tsx`.
+
 ## 33. Round 4–7 plan (Sahan, 22 October 2026, branch `phase9-r47` from main `e6057b2`, worktree `~/projects/fame-ops-r47`)
 
 Rounds 4, 5, 6 and 7 are one round: build everything, then test once, review once, deploy once. Each feature has its own
