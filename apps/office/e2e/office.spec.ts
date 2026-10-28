@@ -697,11 +697,27 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await expect(pickedDriver(page)).toHaveAttribute("data-value", d2.username);
   await expect(page.getByTestId("give-to")).toContainText(`Give to ${d2.name.split(" ")[0]}`);
   await page.getByTestId("give-to").click();
-  await expect(page.getByRole("status")).toHaveText(`Task sent to ${d2.name}`);
+  // Round 48 (item 1): this dispatcher has no approve permission and tasks need the fleet admin's OK, so the reassignment
+  // waits in the queue: the toast says so, the page goes back to the task, the task says a change waits, the standby
+  // driver sees no task of theirs, and the history shows no reassignment yet.
+  await expect(page.locator("#toast")).toHaveText("Waiting for the fleet admin's OK · the task is unchanged");
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+(\?date=.*)?$/);
+  await expect(detail.getByTestId("pending-change")).toContainText(`Change waiting for approval · E2E Dispatcher Two · driver ${d2.name} instead of ${d1.name}`);
   await expect(detail.getByTestId("history")).toContainText("Declined");
-  await expect(detail.getByTestId("history")).toContainText("Reassigned");
+  await expect(detail.getByTestId("history")).not.toContainText("Reassigned");
+  const standby = await driverRest(d2.username, d2.pin);
+  expect(await standby.get<{ id: string }[]>(`tasks?select=id&id=eq.${t2.task_id}`)).toHaveLength(0);
+  // An approver decides it (the connector runs as the office): only then the task goes to the standby driver.
+  const queue = await tool<{ requests: { id: string; kind?: string; change?: { task_id?: string } }[] }>("list_requests", { kind: "change" });
+  const change = queue.requests.find((q) => q.change?.task_id === t2.task_id);
+  expect(change).toBeTruthy();
+  const decided = await tool<{ decision: string; task_id: string }>("decide_request", { request_id: change!.id, decision: "approve" });
+  expect(decided.decision).toBe("approved");
+  await page.reload();
+  await expect(detail.getByTestId("history")).toContainText("Reassigned", { timeout: 15000 });
+  await expect(detail.getByTestId("pending-change")).toHaveCount(0);
   await expect(detail.getByText(d2.name).first()).toBeVisible();
+  expect(await standby.get<{ id: string }[]>(`tasks?select=id&id=eq.${t2.task_id}`)).toHaveLength(1);
   await page.keyboard.press("Escape");
   await expect(detail).toHaveCount(0);
   await expect(page).toHaveURL(/\/tasks/);
@@ -829,8 +845,12 @@ for (const scheme of ["light", "dark"] as const) {
 
     // The decide page with nothing chosen: the best match (Twin A, nearer) is the default and its row is picked. The
     // page's clock is ours from here, so a minute's refresh can be brought forward.
-    const day = new Date(Date.now() + 5.5 * 3600000 + 86400000).toISOString().slice(0, 10); // tomorrow in Colombo
-    const rq = await tool<{ request: { id: string } }>("create_request", { requested_by: "E2E Twins Desk", date: day, time: "13:00", route_from: depot.name, route_to: "Galle", need_type: "van", pax: 3 });
+    // Round 48 (item 4): the best match is "on duty now, nearest the first stop" only for a trip starting within two hours;
+    // a later trip ranks everyone free that day. So the request leaves in 90 minutes (Colombo), today or just past midnight.
+    const soon = new Date(Date.now() + 90 * 60000 + 5.5 * 3600000);
+    const day = soon.toISOString().slice(0, 10);
+    const leaveAt = soon.toISOString().slice(11, 16);
+    const rq = await tool<{ request: { id: string } }>("create_request", { requested_by: "E2E Twins Desk", date: day, time: leaveAt, route_from: depot.name, route_to: "Galle", need_type: "van", pax: 3 });
     // The vehicle for the other day's tasks below, registered now: a vehicle that becomes free is new data (the list above
     // the panel grows by a row), not a refresh.
     const spare = `WP TWC-${scheme[0].toUpperCase()}${stamp.slice(-4).toUpperCase()}`;
