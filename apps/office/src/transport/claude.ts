@@ -1,10 +1,11 @@
 // The artifact build: the page talks to the viewer's "Fame Fleet" connector
 // through the Claude artifact runtime. No key lives in the page.
+import { LOOP_ERROR, LoopBreaker } from "./breaker";
 import { PERMISSIONS } from "@fleet/permissions";
 import connector from "../connector.json";
 import { asFleetError } from "./errors";
 import { isWrite } from "./retryRule";
-import { ALL_TOOLS, type Me, type Transport, type WatchEvent } from "./types";
+import { ALL_TOOLS, type FleetError, type Me, type Transport, type WatchEvent } from "./types";
 
 /**
  * The connector's name as claude.ai shows it ("Fame Fleet"). One source for
@@ -64,7 +65,11 @@ export class ClaudeTransport implements Transport {
     return { name, role: "admin", permissions: [...PERMISSIONS], tools: ALL_TOOLS };
   }
 
+  /** Round 48 (6c): the same circuit breaker as the web's; the artifact has no error reporting, so it only stops the loop. */
+  private breaker = new LoopBreaker();
+
   async call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {
+    if (this.breaker.check(tool).open) throw { ...LOOP_ERROR } satisfies FleetError;
     try {
       return payloadOf(await this.mcp.callTool(SERVER, tool, args)) as T;
     } catch (e) {

@@ -2,7 +2,9 @@
 // the person's Supabase session. office-api checks the session, the role and
 // the second step on every call and audits it with the person's name.
 import { normalisePermissions, permissionsForRole } from "@fleet/permissions";
+import { LOOP_ERROR, LoopBreaker, loopReportMessage } from "./breaker";
 import { emitWriteDropped, gestureOrigin } from "./gesture";
+import { reportBody, sendReport } from "./report";
 import { BACKGROUND_WRITES, dropped, isWrite, mayRetry, onceMore, QUICK_RETRY_MS, TIMED_OUT, timeoutFor } from "./retryRule";
 import type { FleetError, Me, Transport, WatchEvent } from "./types";
 
@@ -28,7 +30,8 @@ export function mapHttpError(status: number, body: ApiErrorBody | null): FleetEr
   }
   if (status === 404) return { code: "no_such_tool", message: "That tool does not exist.", status };
   if (status === 409) return { code: "tool_error", message: err || "Fame Fleet refused the request.", status };
-  if (status === 429) return { code: "rate_limited", message: "Too many calls in a minute. Wait a moment.", status };
+  // Round 48: the server's own sentence when it sends one ("Too many requests · try again in a minute").
+  if (status === 429) return { code: "rate_limited", message: (body as { message?: string } | null)?.message || "Too many requests · try again in a minute", status };
   return { code: "upstream_error", message: err || "Fame Fleet did not answer.", status };
 }
 
@@ -36,8 +39,25 @@ export class ApiTransport implements Transport {
   readonly kind = "api" as const;
   private watchers = new Set<() => void>();
 
-  constructor(private base: string, private token: TokenSource, private fetchFn: typeof fetch = (...a) => fetch(...a)) {
+  constructor(
+    private base: string,
+    private token: TokenSource,
+    private fetchFn: typeof fetch = (...a) => fetch(...a),
+    /** Round 48 (6c): the circuit breaker per tool (tests pass one with their own clock). */
+    private breaker: LoopBreaker = new LoopBreaker(),
+  ) {
     this.base = base.replace(/\/$/, "");
+  }
+
+  /** The breaker before a tool call: a looping screen is stopped here and reported once (never a report per refused call). */
+  private async guard(tool: string): Promise<void> {
+    const v = this.breaker.check(tool);
+    if (!v.open) return;
+    if (v.report) {
+      const token = await this.token().catch(() => null);
+      if (token) sendReport(this.base, token, reportBody({ message: loopReportMessage(tool, v.calls) }), this.fetchFn);
+    }
+    throw { ...LOOP_ERROR } satisfies FleetError;
   }
 
   private async request<T>(method: "GET" | "POST", path: string, body?: unknown, timeoutMs = timeoutFor()): Promise<T> {
@@ -84,6 +104,7 @@ export class ApiTransport implements Transport {
   }
 
   async call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {
+    await this.guard(tool);
     // What the person pressed to start it (a write they may want to try again), taken before the call waits.
     const origin = isWrite(tool) && !BACKGROUND_WRITES.has(tool) ? gestureOrigin() : null;
     try {

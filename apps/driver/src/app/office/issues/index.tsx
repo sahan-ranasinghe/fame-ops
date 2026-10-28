@@ -54,7 +54,7 @@ const KIND_ICONS: Record<string, LucideIcon> = {
   vehicle_report: TriangleAlert, odometer_flag: Gauge, km_gap: Route, service_due: Wrench, document: FileText, documents_missing: FileText, licence: IdCard,
   allowance: Gauge, rental: Calendar, garage_booked: Wrench, signal: MapPin, late_start: Clock, running_late: Clock, not_accepted: User, declined: User,
   request_waiting: ClipboardCheck, vehicle_conflict: Car, app_stopped: Bell, arrival_override: MapPin, completed_early: Check, vehicle_needed: Van,
-  missed_task: CalendarX, push_failed: Bell, routing_failed: Navigation, map_fallback: MapPin, trip_not_confirmed: ListChecks,
+  missed_task: CalendarX, push_failed: Bell, routing_failed: Navigation, map_fallback: MapPin, trip_not_confirmed: ListChecks, usage_cap: Gauge,
 };
 const SEVERITY_RANK: Record<string, number> = { critical: 0, warning: 1, info: 2 };
 /** A group heading's severity by its shape (Sahan, 22 October 2026: never colour alone; issuesLogic.ts severityIcon). */
