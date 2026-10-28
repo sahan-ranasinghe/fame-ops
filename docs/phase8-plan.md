@@ -1030,6 +1030,13 @@ and a growing leg went out only in whole 100-point chunks.
   `issues_test.ts`, pgTAP `round48_snap_budget.test.sql`, the clients' argument tests.
 - Also in this update: the show/hide eye on every password and PIN field (Material's visibility toggle), all four surfaces.
 
+**Hotfix deployed (28 October 2026, Sahan's chained go after CI run 40681397500 on `r48-snap-hotfix` passed: 49 e2e
+tests, none flaky):** `db push` applied `20261028150000_round48_snap_budget` alone (the dry run listed it alone);
+`office-api`, `office-mcp`, `driver-api`, `fleet-jobs` deployed. Checked live: `get_settings` answers
+`roads_trip_daily_cap` 20; `routing_usage` answers `sources_today` from the first Roads call counted after the deploy
+(today's 679 calls were all before it). Main fast-forwarded to the hotfix branch; the website and /m/ and the EAS update
+"R48 hotfix: snap incremental and budgeted, password eye" follow in the same chain (their ids in the checkpoint).
+
 ### 34.1 Item 1: the approval bypass (security, done first)
 
 The hole: with `tasks_need_approval` on, only `create_task` went to the fleet admin (§33). A dispatcher (assign_tasks, no
