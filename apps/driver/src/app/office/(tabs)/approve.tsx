@@ -18,6 +18,7 @@ import { Txt } from '@/components/ui';
 import { whenWords } from '@/lib/dateWords';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { approveRowShown, requestChipShown } from '@/office/lists2Logic';
+import { changeLine, changeTitle, isChange } from '@/office/changeLogic';
 import { CalendarX } from '@/components/icons';
 import { selfDriveLine } from '@/office/licenceLogic';
 import { appendRequests, arrivals, isExpired, requestsArgs, requestsChoice, requestsFilterDefs, statusTone, withArrivals } from '@/office/requestsLogic';
@@ -129,7 +130,8 @@ export default function ApproveTab() {
               const licence = selfDriveLine(r);
               // Round 4–7 (item 8): the requester once beside the avatar (the title is the trip; a request with no trip
               // words keeps the name as its title and leaves it out of the line).
-              const words = approveRowShown(r, whenWords(t, r.when));
+              // Round 48 (item 1): a proposed change to a task reads "Change · <task>" with what changes and who proposes it.
+              const words = isChange(r) ? { title: changeTitle(r, t), line: changeLine(r, t) } : approveRowShown(r, whenWords(t, r.when));
               return (
                 <View key={r.id}>
                   {i > 0 && <Divider />}

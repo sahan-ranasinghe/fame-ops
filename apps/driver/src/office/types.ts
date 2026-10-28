@@ -129,6 +129,8 @@ export interface NeedsDriverTask {
   when: string;
   /** The best free driver for it, with the vehicle they would take. */
   best?: BestMatch;
+  /** Round 48: a reassignment proposed by someone without approve, waiting for the fleet admin. */
+  pending_change?: PendingChange;
   /** Round 48: the window the best match is for ("tomorrow 09:00–13:00"). */
   window_words?: string;
 }
@@ -172,6 +174,8 @@ export type TripPurpose = "company" | "personal";
 
 export interface BoardCard {
   id: string;
+  /** Round 48: a change proposed by someone without approve, waiting for the fleet admin. */
+  pending_change?: PendingChange;
   time: string;
   started_on?: string;
   label?: string;
@@ -264,6 +268,40 @@ export interface AssignmentEvent {
 
 /** A diff in the office's words: { time: { from: "09:00", to: "09:30" } }. */
 export type FieldChanges = Record<string, { from?: string | null; to?: string | null }>;
+
+/** Round 48 (item 1): a change to a task proposed by someone without approve, as the request card carries it. */
+export interface RequestChange {
+  task_id?: string;
+  task_title?: string;
+  tool?: "reassign_task" | "update_task" | "update_task_stops";
+  /** "driver Kamal Silva instead of Nuwan Perera · time Thu 29 Oct 10:00 instead of Thu 29 Oct 09:00" */
+  summary: string;
+  changes: FieldChanges;
+  /** The task's status when it was proposed ("declined" = it needed a driver). */
+  task_was?: string;
+}
+
+/** Round 48 (item 1): a change waiting for approval, on the task it is for (task_detail, the board, needs a driver). */
+export interface PendingChange {
+  request_id: string;
+  by: string;
+  /** "10:42" today, else the day too. */
+  at: string;
+  tool?: string;
+  summary: string;
+  changes: FieldChanges;
+  /** "Change waiting for approval · Sashen · driver Kamal instead of Nuwan" */
+  text: string;
+}
+
+/** Round 48 (item 1): what update_task, reassign_task and update_task_stops answer when the change waits for approval. */
+export interface WaitingChange {
+  waiting_for_approval?: boolean;
+  request_id?: string;
+  task_unchanged?: boolean;
+  summary?: string;
+  next?: string;
+}
 /** Who is free at a task's time (task_detail.suggestions for a declined task). */
 export interface FreeAt {
   drivers: { name: string; username?: string | null; availability: string; free_text?: string; free_day?: string }[];
@@ -602,6 +640,8 @@ export interface ReportRead {
 
 export interface TaskDetail {
   task: {
+    /** Round 48: a change proposed by someone without approve, waiting for the fleet admin (the task is as it was). */
+    pending_change?: PendingChange;
     id: string;
     title: string;
     /** Hotfix 2 (J): specific, or chosen on the day (driver_day) or any vehicle of a type; vehicle_text "Vehicle: on the day". */
@@ -818,10 +858,13 @@ export interface RequestCard {
   /** Round 4–7 (4b): a trip nobody drives with the app, on the person's account: what it asks of them now (my_trip). */
   trip_action?: TripAction;
   id: string;
-  /** Phase 7 (§33): "task" = a task proposed by someone without approve; "request" = a vehicle request. */
-  kind?: "request" | "task";
-  /** A proposed task's title. */
+  /** Phase 7 (§33): "task" = a task proposed by someone without approve; "request" = a vehicle request; Round 48: "change" = a
+   * change to an existing task proposed by someone without approve. */
+  kind?: "request" | "task" | "change";
+  /** A proposed task's title (a proposed change: the task's title). */
   title?: string;
+  /** Round 48: the task the change is for and what changes; the task stays as it is until decided. */
+  change?: RequestChange;
   requested_by: string;
   /** Round 3: the asker's photo (initials until there is one). */
   requested_by_photo_url?: string;
@@ -1301,7 +1344,7 @@ export interface CreateTaskResult {
   vehicle_changed?: string;
 }
 
-export interface UpdateStopsResult {
+export interface UpdateStopsResult extends WaitingChange {
   task_id: string;
   plan_version: number;
   leave_by?: string;
@@ -1870,7 +1913,7 @@ export interface NotificationSettings {
 }
 
 /** The task change tools' answers (Phase 6). */
-export interface UpdateTaskResult {
+export interface UpdateTaskResult extends WaitingChange {
   task_id: string;
   title?: string;
   when?: string;

@@ -20,13 +20,14 @@ import { Button, Mono, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { driverParts, driverPill, presenceLine, rankedDrivers, tripChipText } from '@/office/approveLogic';
 import { sentenceText } from '@/office/statusWords';
+import { changeOutcome } from '@/office/changeLogic';
 import { askTargets } from '@/office/askLogic';
 import { holderOf, wantedOfWindow } from '@/office/holderLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { extrasFor } from '@/office/taskExtrasLogic';
 import { availabilityArgsForTask, CANCEL_TEXT, cancelInput, declinedThisTask, firstPickForTask, leaveIn, plateOf, reassignInput } from '@/office/taskLogic';
-import type { Availability, Conflict, FleetError, SettingsResult, TaskDetail } from '@/office/types';
+import type { Availability, Conflict, FleetError, SettingsResult, TaskDetail, WaitingChange } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -76,8 +77,16 @@ export default function GiveDriverScreen() {
     setBusy('give');
     setProblem(null);
     try {
-      const out = await api.call<{ warnings?: string[]; was?: string; conflicts?: Conflict[] }>('reassign_task', reassignInput(task.id, pickedDriver));
+      const out = await api.call<WaitingChange & { warnings?: string[]; was?: string; conflicts?: Conflict[] }>('reassign_task', reassignInput(task.id, pickedDriver));
       done.current = true;
+      // Round 48 (item 1): without approve the reassignment waits for the fleet admin and the task is as it was (the changed
+      // booking's decide-again pattern): back to where the person came from, the snackbar says so, nothing is flashed.
+      if (changeOutcome(out).waiting) {
+        if (router.canGoBack()) router.back();
+        else router.replace('/office');
+        showSnackbar({ text: t('office.saved.changeWaiting') });
+        return;
+      }
       // Hotfix O2-H2, Part 1b: the task opens (the one under this page, else in its place), a snackbar says who has it, and
       // the warnings wait on the task. Round 4–7 (7): with the conflicts that name who holds the driver or vehicle.
       setSavedNotice(`task:${task.id}`, [...(out.warnings ?? []), ...(out.conflicts ?? []).map((c) => c.text)], undefined, out.conflicts);

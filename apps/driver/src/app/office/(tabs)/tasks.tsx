@@ -21,6 +21,7 @@ import { Clock } from '@/components/icons';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Txt } from '@/components/ui';
 import { SavedNotice } from '@/components/office/SavedNotice';
+import { PendingChangeLine } from '@/components/office/ChangeParts';
 import { colomboDate } from '@/lib/time';
 import { whenWords } from '@/lib/dateWords';
 import { has } from '@/office/nav';
@@ -77,6 +78,8 @@ export default function TasksTab() {
       line2={c.late_report ? sentenceText(t, c.late_report.text) : undefined}
       // Round 4–7 (item 8): the chip only when neither the section nor the line says it ("Done" was three times in DONE).
       chip={(() => { const k = taskChip(column, c); return taskChipShown(column, k.key, c) ? { text: chipText(t, k), tone: k.tone } : null; })()}
+      // Round 48 (item 1): a change proposed by someone without approve, waiting for the fleet admin (a tap opens the request).
+      below={c.pending_change ? <PendingChangeLine change={c.pending_change} compact testID={`card-pending-change-${c.id}`} /> : undefined}
       onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: c.id } })}
     />
   );
@@ -123,6 +126,7 @@ export default function TasksTab() {
                 <Row
                   title={x.title}
                   line={`${whenWords(t, x.start)} · ${x.line}`}
+                  below={x.pending_change ? <PendingChangeLine change={x.pending_change} compact testID={`needs-pending-change-${x.task_id}`} /> : undefined}
                   right={<Button kind="dark" label={t('office.home.giveDriver')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: x.task_id } })} style={{ minHeight: 48, backgroundColor: colors.red, paddingHorizontal: 14 }} />}
                   onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: x.task_id } })}
                 />

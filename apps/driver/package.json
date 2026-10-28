@@ -141,7 +141,8 @@
     "test:map-layout": "tsx scripts/test-map-layout.ts",
     "test:snap": "tsx scripts/test-snap.ts",
     "test:breaker": "tsx scripts/test-breaker.ts",
-    "test:trip-window": "tsx scripts/test-trip-window.ts"
+    "test:trip-window": "tsx scripts/test-trip-window.ts",
+    "test:proposed-change": "tsx scripts/test-proposed-change.ts"
   },
   "private": true,
   "expo": {

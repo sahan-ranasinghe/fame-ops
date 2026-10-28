@@ -39,6 +39,8 @@ import { Bell, Check, ChevronDown, ChevronRight, ClipboardCheck, FileText, MapPi
 import { RowIcon, RowPlate } from '@/components/patterns/ListRow';
 import { look } from '@/components/patterns/look';
 import { SavedNotice } from '@/components/office/SavedNotice';
+import { PendingChangeLine } from '@/components/office/ChangeParts';
+import { changeLine, changeTitle, isChange } from '@/office/changeLogic';
 import { Sheet } from '@/components/patterns/Sheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { attentionCount, attentionGroups, chipTarget, reminderTile, snoozeCalls, withoutGroups } from '@/office/overviewLogic';
@@ -153,8 +155,9 @@ export default function OfficeHome() {
                   inset
                   chevron
                   left={r.requested_by_photo_url ? <Avatar name={r.requested_by} photo={r.requested_by_photo_url} /> : <RowIcon icon={ClipboardCheck} tone="amber" />}
-                  title={requestTitle(r)}
-                  line={[requestLine({ ...r, when: whenWords(t, r.when) }), r.asked ? whenWords(t, r.asked) : ''].filter(Boolean).join(' · ')}
+                  // Round 48 (item 1): a proposed change to a task reads "Change · <task>" with what changes and who proposes it.
+                  title={isChange(r) ? changeTitle(r, t) : requestTitle(r)}
+                  line={[isChange(r) ? changeLine(r, t) : requestLine({ ...r, when: whenWords(t, r.when) }), r.asked ? whenWords(t, r.asked) : ''].filter(Boolean).join(' · ')}
                   onPress={() => router.push({ pathname: '/office/request/[id]', params: { id: r.id } })}
                 />
               </View>
@@ -174,6 +177,7 @@ export default function OfficeHome() {
                   left={<RowIcon icon={UserX} tone="red" />}
                   title={x.title}
                   line={`${whenWords(t, x.start)} · ${x.line}`}
+                  below={x.pending_change ? <PendingChangeLine change={x.pending_change} compact testID={`home-pending-change-${x.task_id}`} /> : undefined}
                   right={has(me.permissions, 'assign_tasks')
                     ? <Button kind="dark" label={t('office.home.giveDriver')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: x.task_id } })} style={{ minHeight: 44, backgroundColor: colors.red, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }} />
                     : <Pill text={whenWords(t, x.when)} tone="red" />}

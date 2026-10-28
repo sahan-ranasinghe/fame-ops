@@ -60,6 +60,8 @@ import { requestAgainDraft, setDraft } from '@/office/trip/draft';
 import { telLink } from '@/lib/format';
 import { alreadyDecided, approveProblem, availabilityArgs, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, presenceLine, rankedDrivers, tripChipText, tripView } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
+import { ChangeDecide } from '@/components/office/ChangeDecide';
+import { isChange } from '@/office/changeLogic';
 import { askedOf, availabilityAt, decideTimes, hasChange, redecideTimes, shownOf } from '@/office/decideLogic';
 import { CANCEL_TEXT, canCancelBooking, cancelReason, canRequestAgain, canWithdrawOwn, decides, eventLine, expiredText, isExpired } from '@/office/requestsLogic';
 import { canEdit as canEditTrip } from '@/office/tripsLogic';
@@ -272,6 +274,10 @@ export default function ApproveRequest() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [allDrivers, setAllDrivers] = useState(false);
   const shownDrivers = allDrivers || !pick ? drivers : drivers.filter((d) => d.username === pick);
+
+  // Round 48 (item 1): a change to an existing task proposed by someone without approve (kind change): approve it as
+  // proposed or decline it, the task as it was until then (the changed booking's decide-again pattern, Phase 6 Part 2).
+  if (card && isChange(card)) return <ChangeDecide card={card} others={others} refreshing={q.refreshing} error={q.error} reload={refresh} onSignIn={() => void signOut()} />;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
