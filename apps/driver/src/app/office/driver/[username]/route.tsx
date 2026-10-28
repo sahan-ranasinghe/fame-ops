@@ -2,11 +2,13 @@
 // Samsara): a driver's day on its own screen, opened from the profile's "Today's route" card, from Live's "Earlier days"
 // (?date=) or from a link with a day. The day strip (today and the 89 days before it), driver_route at tolerance 0 (up to
 // 3,000 points, the estimated roads; today read again every minute, a past day once), the day's tasks with their km
-// (list_tasks, with assign_tasks; a row opens the task) and components/office/DayRoute.tsx: the day's summary card above the
-// map (§33.6 item 1: no timeline list), the map on both engines with the stops as pins, one playback bar. Back means back.
-// Round 48 item 5: the line snapped to roads where the map may draw it (Google's map, or the open package; office/snapLogic.ts),
-// asked of the server with `snap` and switched by the chip over the map; the last answer of the day stays drawn while the
-// next one (with or without snap) loads. The rules: office/historyLogic.ts.
+// (list_tasks, with assign_tasks; a row opens the task) and components/office/DayRoute.tsx: the map on both engines with the
+// stops as dots and the start and end pins, one playback bar, the day's summary card (§33.6 item 1: no timeline list). Back
+// means back. Round 48 (item 2, Google Maps Timeline): the day strip and the map are fixed, the playback bar under the map,
+// the summary and the tasks scroll below (DayRoute owns the layout). Round 48 item 5: the line snapped to roads where the map
+// may draw it (Google's map, or the open package; office/snapLogic.ts), asked of the server with `snap` and switched by the
+// chip over the map; the last answer of the day stays drawn while the next one (with or without snap) loads. The rules:
+// office/historyLogic.ts.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -22,7 +24,7 @@ import { dayRouteArgs, dayTasks, dayTasksArgs, historyDay, historyMin, routeEver
 import { withSnap } from '@/office/snapLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriverProfile, DriverRoute, TaskHistory } from '@/office/types';
-import { BackHeader, ListFailed, Screen } from '@/office/ui';
+import { BackHeader, ListFailed } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -54,40 +56,38 @@ export default function DriverDayRoute() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={name} subtitle={t('office.history.routeTitle')} />
-      <Screen refreshing={route.refreshing} onRefresh={refresh} bottom={24}>
-        <DayStrip value={day} onChange={setDay} max={today} min={historyMin(today)} testID="history-day" />
-        <View>
-          <DayRoute
-            data={routeData}
-            error={route.error}
-            onRetry={refresh}
-            onSignIn={() => void signOut()}
-            mapPackage={me.map?.package}
-            emptyText={t('office.history.noDayPoints')}
-            snap={snap}
-          >
-            {mayTasks && (
-              <View style={{ paddingVertical: 8, gap: 2 }} testID="history-tasks">
-                <Txt variant="strong" size={15}>{t('office.history.dayTasks')}</Txt>
-                {!theDay && !tasks.error && <SkeletonRows rows={2} lines={1} />}
-                {tasks.error && <ListFailed stale={!!theDay} error={tasks.error} onRetry={() => void tasks.reload()} onSignIn={() => void signOut()} />}
-                {theDay && theDay.tasks.length === 0 && <Txt variant="muted" size={15}>{t('office.history.noDayTasks')}</Txt>}
-                {theDay && theDay.tasks.length > 0 && <Txt variant="small">{t('office.history.dayTasksLine', { n: theDay.tasks.length, km: theDay.km })}</Txt>}
-                {theDay?.tasks.map((x) => (
-                  <Pressable key={x.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: x.id } })}
-                    style={({ pressed }) => [styles.taskRow, pressed && { opacity: 0.8 }]} testID="history-task">
-                    <Mono size={14} bold>{x.time}</Mono>
-                    <View style={{ flex: 1 }}>
-                      <Txt variant="strong" size={15} numberOfLines={1}>{x.title}</Txt>
-                      <Txt variant="small" numberOfLines={1}>{[t(`office.history.status_${x.status}`), x.vehicle, x.km != null ? t('office.history.kmLine', { km: x.km }) : ''].filter(Boolean).join(' · ')}</Txt>
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </DayRoute>
-        </View>
-      </Screen>
+      <DayRoute
+        data={routeData}
+        error={route.error}
+        onRetry={refresh}
+        onSignIn={() => void signOut()}
+        mapPackage={me.map?.package}
+        emptyText={t('office.history.noDayPoints')}
+        refreshing={route.refreshing}
+        onRefresh={refresh}
+        above={<DayStrip value={day} onChange={setDay} max={today} min={historyMin(today)} testID="history-day" />}
+        snap={snap}
+      >
+        {mayTasks && (
+          <View style={{ paddingVertical: 8, gap: 2 }} testID="history-tasks">
+            <Txt variant="strong" size={15}>{t('office.history.dayTasks')}</Txt>
+            {!theDay && !tasks.error && <SkeletonRows rows={2} lines={1} />}
+            {tasks.error && <ListFailed stale={!!theDay} error={tasks.error} onRetry={() => void tasks.reload()} onSignIn={() => void signOut()} />}
+            {theDay && theDay.tasks.length === 0 && <Txt variant="muted" size={15}>{t('office.history.noDayTasks')}</Txt>}
+            {theDay && theDay.tasks.length > 0 && <Txt variant="small">{t('office.history.dayTasksLine', { n: theDay.tasks.length, km: theDay.km })}</Txt>}
+            {theDay?.tasks.map((x) => (
+              <Pressable key={x.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: x.id } })}
+                style={({ pressed }) => [styles.taskRow, pressed && { opacity: 0.8 }]} testID="history-task">
+                <Mono size={14} bold>{x.time}</Mono>
+                <View style={{ flex: 1 }}>
+                  <Txt variant="strong" size={15} numberOfLines={1}>{x.title}</Txt>
+                  <Txt variant="small" numberOfLines={1}>{[t(`office.history.status_${x.status}`), x.vehicle, x.km != null ? t('office.history.kmLine', { km: x.km }) : ''].filter(Boolean).join(' · ')}</Txt>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </DayRoute>
     </View>
   );
 }

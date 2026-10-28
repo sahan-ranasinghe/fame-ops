@@ -1,20 +1,27 @@
 // The free map for a driver's day (RouteMap.tsx; Office mode, Phase 8 O2): MapLibre with OpenFreeMap's tiles, no key, in
 // every build, as OpenDriversMap.tsx. The same content as Google's map (the positions are ours: nothing is held back here):
 // the day's line as one GeoJSON source with a colour and a width per leg (the holes and the estimated roads on a dashed
-// layer), a circle per stop over 10 minutes with its time, the frame around the day, and the move to a tapped timeline
+// layer), a dot per stop over 10 minutes, the frame around the day, and the move to a tapped timeline
 // row. It says when it has loaded (onDidFinishLoadingMap) or failed (onDidFailLoadingMap).
+// Round 48 (item 3, Google Maps Timeline; Google Maps' marker clustering): the start and end pins, the gap markers the
+// Layers filter shows, the stop's time when tapped or asked for, and the markers that would overlap as one numbered circle
+// (the same helper as Google's map, lib/cluster.ts, from the zoom the map reports after each move; a tap zooms in two
+// steps). MapLibre's markers are views over the map, above every layer, so the dots are small and the line reads through.
 
 import { Camera, type CameraRef, type CameraStop, GeoJSONSource, Layer, Map, Marker } from '@maplibre/maplibre-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 
 import { freeMapStyle, useMapScheme } from '@/lib/appTheme';
-import { BAND_COLORS } from '@/office/driversLogic';
+import { clusterMarkers, clusterZoom } from '@/lib/cluster';
+import { BAND_COLORS, endLine, gapLine } from '@/office/driversLogic';
+import { routeMarkerPoints } from '@/office/routeMarks';
 import { useApp } from '@/state/app';
 import { MapCompass } from './MapCompass';
 import { nextTurn, ONE_PLACE_ZOOM, SRI_LANKA, type Turn } from './mapPins';
-import { lineWidth, PlaybackPin, ROUTE_PADDING, ROUTE_PIN, ROUTE_ZOOM, type RouteEngineProps, RouteStopPin } from './RouteMap';
-import type { Frame } from './taskMapLogic';
+import { lineWidth, PlaybackPin, ROUTE_DEFAULTS, ROUTE_PADDING, ROUTE_ZOOM, type RouteEngineProps } from './RouteMap';
+import { ClusterPin, GapPin, ROUTE_DOT, RouteEndPin, RouteStopDot } from './routePins';
+import type { Frame, LatLng } from './taskMapLogic';
 
 function stopFor(f: Frame, zoom: number): CameraStop {
   if (f.kind === 'box') return { bounds: [f.sw.lng, f.sw.lat, f.ne.lng, f.ne.lat], padding: ROUTE_PADDING };
@@ -22,11 +29,13 @@ function stopFor(f: Frame, zoom: number): CameraStop {
   return { center: [SRI_LANKA.lng, SRI_LANKA.lat], zoom: 6.4 };
 }
 
-export function OpenRouteMap({ lines, stops, fit, focus, marker, onStop, onLoaded, onFailed }: RouteEngineProps) {
+export function OpenRouteMap({ lines, stops, fit, focus, marker, onStop, onGap, onLoaded, onFailed, ends = ROUTE_DEFAULTS.ends, gaps = ROUTE_DEFAULTS.gaps, layers = ROUTE_DEFAULTS.layers, selected = ROUTE_DEFAULTS.selected }: RouteEngineProps) {
   const { t } = useApp();
   const scheme = useMapScheme();
   const camera = useRef<CameraRef>(null);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
+  // The zoom the map last reported (null until it does): the cluster helper's input.
+  const [zoom, setZoom] = useState<number | null>(null);
   const focusedRow = focus !== null;
 
   const framed = useMemo((): CameraStop => stopFor(fit.frame, ONE_PLACE_ZOOM), [fit]);
@@ -77,6 +86,14 @@ export function OpenRouteMap({ lines, stops, fit, focus, marker, onStop, onLoade
     })),
   }), [lines]);
 
+  // The markers at this zoom: the clusters, and the singles by what they are (the selected one is never clustered).
+  const points = useMemo(() => routeMarkerPoints(ends, stops, gaps, layers, selected), [ends, stops, gaps, layers, selected]);
+  const grouped = useMemo(() => clusterMarkers(points, zoom), [points, zoom]);
+  const single = new Set(grouped.singles.map((m) => m.key));
+  const shownStops = stops.filter((s) => single.has(s.key) || s.key === selected);
+  const shownGaps = gaps.filter((g) => single.has(g.key) || g.key === selected);
+  const zoomInto = (c: LatLng) => move({ center: [c.lng, c.lat], zoom: clusterZoom(zoom) });
+
   return (
     <>
       <Map
@@ -86,7 +103,10 @@ export function OpenRouteMap({ lines, stops, fit, focus, marker, onStop, onLoade
         compass={false}
         onDidFinishLoadingMap={onLoaded}
         onDidFailLoadingMap={onFailed}
-        onRegionDidChange={(e) => setTurn((prev) => nextTurn(prev, e.nativeEvent.bearing, e.nativeEvent.pitch))}
+        onRegionDidChange={(e) => {
+          setZoom(Number.isFinite(e.nativeEvent.zoom) ? e.nativeEvent.zoom : null);
+          setTurn((prev) => nextTurn(prev, e.nativeEvent.bearing, e.nativeEvent.pitch));
+        }}
       >
         <Camera ref={camera} {...stop} duration={600} easing="ease" />
         {lines.length > 0 && (
@@ -99,12 +119,42 @@ export function OpenRouteMap({ lines, stops, fit, focus, marker, onStop, onLoade
               paint={{ 'line-color': ['get', 'color'], 'line-width': ['get', 'width'] }} />
           </GeoJSONSource>
         )}
-        {stops.map((s) => (
-          // The circle's centre on the position whatever the label: anchored at the top, moved up by half a circle.
-          <Marker key={`${s.key}:${s.time}`} id={`route-stop-${s.key}`} lngLat={[s.lng, s.lat]} anchor="top" offset={[0, -ROUTE_PIN.circle / 2]}>
-            {/* §33.6 item 1: a tap says where and how long (the screen's card) and moves the map to it. */}
-            <Pressable accessibilityRole="button" accessibilityLabel={s.label} disabled={!onStop} onPress={() => onStop?.(s.key)} hitSlop={8} testID={`route-stop-pin-${s.key}`}>
-              <RouteStopPin stop={s} />
+        {/* The ends: the start's flag, the end's square, centred on the point. */}
+        {ends && single.has('start') && (
+          <Marker id="route-start" lngLat={[ends.start.lng, ends.start.lat]} anchor="center">
+            <Pressable accessibilityRole="image" accessibilityLabel={endLine(ends.start, t)}><RouteEndPin end={ends.start} /></Pressable>
+          </Marker>
+        )}
+        {ends?.end && single.has('end') && (
+          <Marker id="route-end" lngLat={[ends.end.lng, ends.end.lat]} anchor="center">
+            <Pressable accessibilityRole="image" accessibilityLabel={endLine(ends.end, t)}><RouteEndPin end={ends.end} /></Pressable>
+          </Marker>
+        )}
+        {shownStops.map((s) => {
+          const open = s.key === selected;
+          const labelled = open || layers.stopTimes;
+          return (
+            // The dot's centre on the position whatever the label: anchored at the bottom, moved down by half a dot.
+            <Marker key={`${s.key}:${s.time}`} id={`route-stop-${s.key}`} lngLat={[s.lng, s.lat]} anchor="bottom" offset={[0, ROUTE_DOT.size / 2]}>
+              {/* §33.6 item 1: a tap says where and how long (the screen's card) and moves the map to it. */}
+              <Pressable accessibilityRole="button" accessibilityLabel={s.label} disabled={!onStop} onPress={() => onStop?.(s.key)} hitSlop={10} testID={`route-stop-pin-${s.key}`}>
+                <RouteStopDot time={s.time} labelled={labelled} open={open} />
+              </Pressable>
+            </Marker>
+          );
+        })}
+        {shownGaps.map((g) => (
+          <Marker key={g.key} id={`route-gap-${g.key}`} lngLat={[g.lng, g.lat]} anchor="center">
+            <Pressable accessibilityRole="button" accessibilityLabel={gapLine(g, t)} disabled={!onGap} onPress={() => onGap?.(g.key)} hitSlop={8} testID={`route-gap-pin-${g.key}`}>
+              <GapPin gap={g} open={g.key === selected} />
+            </Pressable>
+          </Marker>
+        ))}
+        {grouped.clusters.map((c) => (
+          // Google Maps' marker clustering: one numbered circle; a tap zooms in two steps so its markers come apart.
+          <Marker key={c.key} id={`route-${c.key}`} lngLat={[c.lng, c.lat]} anchor="center">
+            <Pressable accessibilityRole="button" accessibilityLabel={t('dayRoute.cluster', { n: c.count })} onPress={() => zoomInto(c)} testID="route-cluster">
+              <ClusterPin count={c.count} />
             </Pressable>
           </Marker>
         ))}

@@ -142,7 +142,7 @@ function EngineBox({ mapMount, start, padding, onAdapter, events, children }: Br
     const on: MapEvents = {
       loaded: () => { if (alive) latest.current.mapMount.dispatch({ type: 'loaded' }); },
       failed: () => { if (alive) latest.current.mapMount.dispatch({ type: 'error' }); },
-      moved: (c) => latest.current.events?.moved?.(c),
+      moved: (c, z) => latest.current.events?.moved?.(c, z),
       userMove: () => latest.current.events?.userMove?.(),
       turned: (h, p) => latest.current.events?.turned?.(h, p),
     };

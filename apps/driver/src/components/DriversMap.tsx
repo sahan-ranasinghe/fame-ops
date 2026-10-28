@@ -15,6 +15,9 @@
 // estimated roads dashed slate, the stops as circles with their times) and the playback marker with its time. The two
 // pins the engines share (the stop circle, the playback marker) live here and reach the engines as props; the credit line
 // gains openrouteservice's whenever an estimated road is drawn.
+// Round 48 (item 3, Google Maps Timeline; Google Maps' marker clustering): the shown route's start and end pins, its gap
+// markers while the Filter sheet's Layers say so, every stop's time when asked, and overlapping markers as one numbered
+// circle (lib/cluster.ts; the pins in routePins.tsx, the marker set in office/routeMarks.ts), the same on both engines.
 // Stage 1 (O3 item 4f): the one control cluster down the right side (Sahan, 20 October 2026: no zoom buttons, pinch and the
 // wheel zoom; the screen's own controls, then fit everyone), under the compass each engine shows while the map is turned.
 // A tap is a command (MapCommand, a new nonce each time) the mounted engine carries out on its own camera: a zoom step,
@@ -50,8 +53,8 @@ export interface LiveLayerProps {
 }
 
 export interface LivePins {
-  /** A stop over 10 minutes: a small circle; its times above it while it is open (tapped). */
-  Stop: (props: { stop: StopMark; open: boolean }) => ReactNode;
+  /** A stop over 10 minutes: a small circle; its times above it while it is open (tapped) or the Stop times layer is on. */
+  Stop: (props: { stop: StopMark; open: boolean; labelled?: boolean }) => ReactNode;
   /** The playback marker: the dot (hollow while estimated) under its time and speed. */
   Cursor: (props: { cursor: Cursor }) => ReactNode;
 }
@@ -210,11 +213,11 @@ class MapBoundary extends Component<{ onError: () => void; children: ReactNode }
 
 // --- The route pins (O2), the same picture on both engines ------------------------------------------------------------
 
-/** A stop over 10 minutes: a small white circle with a grey ring; tapped, its times and length sit above it. */
-function StopDot({ stop, open }: { stop: StopMark; open: boolean }) {
+/** A stop over 10 minutes: a small white circle with a grey ring; tapped (or with the Stop times layer), its times and length sit above it. */
+function StopDot({ stop, open, labelled = false }: { stop: StopMark; open: boolean; labelled?: boolean }) {
   return (
     <View style={{ alignItems: 'center' }}>
-      {open && (
+      {(open || labelled) && (
         <View style={[pinStyles.label, { height: STOP_PIN.labelHeight, marginBottom: STOP_PIN.gap }]}>
           <Mono size={12} bold>{stop.label}</Mono>
         </View>

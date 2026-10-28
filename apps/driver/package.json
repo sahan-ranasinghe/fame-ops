@@ -138,6 +138,7 @@
     "test:lists2": "tsx scripts/test-lists2.ts",
     "test:office-3": "tsx scripts/test-office-3.ts",
     "test:availability-words": "tsx scripts/test-availability-words.ts",
+    "test:map-layout": "tsx scripts/test-map-layout.ts",
     "test:snap": "tsx scripts/test-snap.ts",
     "test:breaker": "tsx scripts/test-breaker.ts"
   },

@@ -45,7 +45,7 @@ import { Button, Plate, Txt } from '@/components/ui';
 import { plusDays } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
 import {
-  batteryText, canClockOut, clockOutInput, clockOutLine, type ClockOutResult, filterCounts, filterDrivers, focusOf, frameAll, liveChoice, liveFilterDefs, markersOf, moveMode, trailsOn,
+  batteryText, canClockOut, clockOutInput, clockOutLine, type ClockOutResult, filterCounts, filterDrivers, focusOf, frameAll, liveChoice, liveFilterDefs, liveLayersOf, markersOf, moveMode, trailsOn,
   pillOf, rowLine, speedText, WATCH_EVERY_MS, watchBatches, watchList,
 } from '@/office/liveLogic';
 import {
@@ -243,7 +243,9 @@ export default function LiveTab() {
   const windows = useMemo(() => gapWindowsOf(drawnRoute), [drawnRoute]);
   const playback = usePlayback(path, focused);
   const cursor = useMemo(() => (playback.active ? cursorAt(drawnRoute, path, windows, playback.t) : null), [playback.active, playback.t, drawnRoute, path, windows]);
-  const layers = useMemo<LiveLayers>(() => ({ trails: trailLines, route: drawing, cursor }), [trailLines, drawing, cursor]);
+  // Round 48 (item 3): the Map section's Layers choices (the gap markers, every stop's time) travel with the route layers.
+  const show = useMemo(() => liveLayersOf(values), [values]);
+  const layers = useMemo<LiveLayers>(() => ({ trails: trailLines, route: drawing, cursor, show }), [trailLines, drawing, cursor, show]);
   // The driver's live marker is hidden while the playback marker stands for them.
   const markers = useMemo(() => (cursor && drawing ? allMarkers.filter((m) => m.username !== drawing.username) : allMarkers), [allMarkers, cursor, drawing]);
   const loadingTrails = trails && trailsLoading(plan.draw, trailMap);

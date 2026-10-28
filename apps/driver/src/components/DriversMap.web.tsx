@@ -6,16 +6,21 @@
 // speed with its holes and estimated roads, its stops that open their times on a tap, the playback marker. The one control
 // cluster down the right side (no zoom buttons since 20 October 2026: pinch and the wheel zoom; the screen's own controls,
 // then fit everyone) under the compass the free map shows while it is turned (a tap turns north); shown only while a map
-// is mounted, never over "Map not available".
+// is mounted, never over "Map not available". Round 48 (item 3): the shown route's start and end pins, its gap markers
+// while the Filter sheet's Layers say so, every stop's time when asked, and overlapping route markers as one numbered
+// circle (lib/cluster.ts, from the zoom the engine reports; a tap zooms in two steps), as on the phones.
 
 import Maximize from 'lucide-react-native/icons/maximize';
 import type { LucideIcon } from 'lucide-react-native';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { clusterMarkers, clusterZoom } from '@/lib/cluster';
 import type { MapPackage } from '@/lib/mapEngine';
+import { endLine, gapLine } from '@/office/driversLogic';
 import { fitAllFrame, type MapCommand } from '@/office/liveLogic';
 import { creditWithOrs, ESTIMATED_COLOR, HOLE_COLOR, type LiveLayers, NO_LAYERS, STOP_PIN } from '@/office/liveRouteLogic';
+import { routeMarkerPoints, visibleGaps } from '@/office/routeMarks';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { MapCompass } from './MapCompass';
@@ -24,7 +29,7 @@ import { mapCredit } from './taskMapLogic';
 import type { MapAdapter } from './web/adapters';
 import { BrowserMap, CreditLine, MapLines, MapMarker, UnavailableCard, useMapMount } from './web/BrowserMap';
 import { cameraFor, DASH } from './web/browserMapLogic';
-import { CursorPin, StopDot } from './web/pins';
+import { ClusterPin, CursorPin, GapPin, RouteEndPin, StopDot } from './web/pins';
 
 type Props = Omit<DriversEngineProps, 'onLoaded' | 'onFailed'> & {
   mapPackage?: MapPackage;
@@ -84,8 +89,18 @@ export function DriversMap({ markers, fit, focus, onPressMarker, mapPackage, lay
     else map.zoomBy(c.kind);
   }, [map, command?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The marker whose card is open (a stop's or a gap's key): its label shown, never clustered.
   const [openStop, setOpenStop] = useState<string | null>(null);
   useEffect(() => setOpenStop(null), [routeKey]);
+  // The zoom the engine last reported (null until it does): the cluster helper's input.
+  const [zoom, setZoom] = useState<number | null>(null);
+  const show = layers.show;
+  const gaps = useMemo(() => visibleGaps(route?.gaps ?? [], show, openStop), [route, show, openStop]);
+  const points = useMemo(() => routeMarkerPoints(route?.ends ?? null, route?.stops ?? [], route?.gaps ?? [], show, openStop), [route, show, openStop]);
+  const grouped = useMemo(() => clusterMarkers(points, zoom), [points, zoom]);
+  const single = new Set(grouped.singles.map((m) => m.key));
+  const ends = route?.ends ?? null;
+  const zoomInto = (c: { lat: number; lng: number }) => map?.show({ kind: 'center', center: c, zoom: clusterZoom(zoom) }, DRIVERS_PADDING);
 
   // The lines, made once per route or set of trails (the playback marker re-renders the map several times a second).
   const trails = useMemo(() => layers.trails.map((tr) => ({ points: tr.points, color: tr.color, width: 3, opacity: 0.85 })), [layers.trails]);
@@ -109,7 +124,7 @@ export function DriversMap({ markers, fit, focus, onPressMarker, mapPackage, lay
         start={cameraFor(fit.frame, ONE_PLACE_ZOOM)}
         padding={DRIVERS_PADDING}
         onAdapter={setMap}
-        events={{ turned: (h, p) => setTurn((prev) => nextTurn(prev, h, p)) }}
+        events={{ moved: (_c, z) => setZoom(Number.isFinite(z) ? z : null), turned: (h, p) => setTurn((prev) => nextTurn(prev, h, p)) }}
       >
         {/* Today's trails under everything; the shown route's holes and estimated roads under its runs by speed. */}
         <MapLines group="live-trails" z={1} lines={trails} />
@@ -117,15 +132,37 @@ export function DriversMap({ markers, fit, focus, onPressMarker, mapPackage, lay
         <MapLines group="live-route-holes" z={2} lines={holes} />
         <MapLines group="live-route-estimated" z={2} lines={estimated} />
         <MapLines group="live-route" z={3} lines={runs} />
-        {(route?.stops ?? []).map((s) => {
+        {ends && single.has('start') && (
+          <MapMarker at={ends.start} anchor="center" z={5}>
+            <View accessibilityLabel={endLine(ends.start, t)}><RouteEndPin end={ends.start} /></View>
+          </MapMarker>
+        )}
+        {ends?.end && single.has('end') && (
+          <MapMarker at={ends.end} anchor="center" z={5}>
+            <View accessibilityLabel={endLine(ends.end, t)}><RouteEndPin end={ends.end} /></View>
+          </MapMarker>
+        )}
+        {(route?.stops ?? []).filter((s) => single.has(s.key) || s.key === openStop).map((s) => {
           const open = openStop === s.key;
+          const labelled = open || show.stopTimes;
           // The circle's centre on the position whatever the label's height: anchored at the bottom, moved down by half a circle.
           return (
             <MapMarker key={s.key} at={s} anchor="bottom" offsetY={STOP_PIN.size / 2} z={open ? 5 : 4} onPress={() => setOpenStop((o) => (o === s.key ? null : s.key))}>
-              <StopDot stop={s} open={open} />
+              <StopDot stop={s} open={open} labelled={labelled} />
             </MapMarker>
           );
         })}
+        {gaps.filter((g) => single.has(g.key) || g.key === openStop).map((g) => (
+          <MapMarker key={g.key} at={g} anchor="center" z={openStop === g.key ? 5 : 4} onPress={() => setOpenStop((o) => (o === g.key ? null : g.key))}>
+            <View accessibilityLabel={gapLine(g, t)}><GapPin gap={g} open={openStop === g.key} /></View>
+          </MapMarker>
+        ))}
+        {grouped.clusters.map((c) => (
+          // Google Maps' marker clustering: one numbered circle; a tap zooms in two steps so its markers come apart.
+          <MapMarker key={c.key} at={c} anchor="center" z={5} onPress={() => zoomInto(c)}>
+            <View accessibilityLabel={t('dayRoute.cluster', { n: c.count })} testID="live-cluster"><ClusterPin count={c.count} /></View>
+          </MapMarker>
+        ))}
         {markers.map((m) => (
           <MapMarker key={m.username} at={m} anchor="bottom" offsetY={DRIVER_PIN.size / 2}
             z={m.selected ? 9 : m.tone === 'blue' ? 8 : m.tone === 'green' ? 7 : 6} onPress={() => onPressMarker(m.username)}>

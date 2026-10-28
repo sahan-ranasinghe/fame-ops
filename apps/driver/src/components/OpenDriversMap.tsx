@@ -8,18 +8,26 @@
 // when it arrives. line-dasharray is a layer's, never a feature's, so the dashed lines have layers of their own.
 // Stage 1 (O3 item 4f): the cluster's commands (DriversMap.tsx): a zoom step from the zoom the map last reported, or the
 // frame around every marker and the shown route.
+// Round 48 (item 3): the route's start and end pins, its gap markers (the Layers filter), the stop's time when tapped or
+// asked for, and the route markers that would overlap as one numbered circle (the same helper as Google's map,
+// lib/cluster.ts, from the zoom the map reports; a tap zooms in two steps). Markers are views above every layer, so the
+// dots stay small.
 
 import { Camera, type CameraRef, type CameraStop, GeoJSONSource, Layer, Map, Marker } from '@maplibre/maplibre-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 
 import { freeMapStyle, useMapScheme } from '@/lib/appTheme';
+import { clusterMarkers, clusterZoom } from '@/lib/cluster';
+import { endLine, gapLine } from '@/office/driversLogic';
 import { fitAllFrame, zoomStep } from '@/office/liveLogic';
 import { ESTIMATED_COLOR, HOLE_COLOR, type HoleLine, STOP_PIN } from '@/office/liveRouteLogic';
+import { routeMarkerPoints, visibleGaps } from '@/office/routeMarks';
 import { useApp } from '@/state/app';
 import type { LiveLayerProps } from './DriversMap';
 import { MapCompass } from './MapCompass';
 import { DRIVER_PIN, DRIVER_ZOOM, DriverPin, DRIVERS_PADDING, type DriversEngineProps, nextTurn, ONE_PLACE_ZOOM, SRI_LANKA, type Turn } from './mapPins';
+import { ClusterPin, GapPin, RouteEndPin } from './routePins';
 import type { LatLng } from './taskMapLogic';
 
 export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, onFailed, layers, pins, command }: DriversEngineProps & LiveLayerProps) {
@@ -105,8 +113,18 @@ export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, o
     type: 'FeatureCollection',
     features: (route?.estimated ?? []).map((e) => line(e.points, { color: ESTIMATED_COLOR })),
   }), [route]);
+  // The marker whose card is open (a stop's or a gap's key): its label shown, never clustered.
   const [openStop, setOpenStop] = useState<string | null>(null);
   useEffect(() => setOpenStop(null), [routeKey]);
+  // The zoom the map last reported (null until it does): the cluster helper's input (the cluster's steps use zoomNow).
+  const [zoom, setZoom] = useState<number | null>(null);
+  const show = layers.show;
+  const gaps = useMemo(() => visibleGaps(route?.gaps ?? [], show, openStop), [route, show, openStop]);
+  const points = useMemo(() => routeMarkerPoints(route?.ends ?? null, route?.stops ?? [], route?.gaps ?? [], show, openStop), [route, show, openStop]);
+  const grouped = useMemo(() => clusterMarkers(points, zoom), [points, zoom]);
+  const single = new Set(grouped.singles.map((m) => m.key));
+  const ends = route?.ends ?? null;
+  const zoomInto = (c: LatLng) => move({ center: [c.lng, c.lat], zoom: clusterZoom(zoom) });
 
   const northUp = () => {
     setTurn({ heading: 0, pitch: 0 });
@@ -151,6 +169,7 @@ export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, o
         onDidFailLoadingMap={onFailed}
         onRegionDidChange={(e) => {
           zoomNow.current = e.nativeEvent.zoom;
+          setZoom(Number.isFinite(e.nativeEvent.zoom) ? e.nativeEvent.zoom : null);
           setTurn((prev) => nextTurn(prev, e.nativeEvent.bearing, e.nativeEvent.pitch));
         }}
       >
@@ -177,9 +196,21 @@ export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, o
           <Layer id="live-route-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
             paint={{ 'line-color': ['get', 'color'], 'line-width': 5 }} />
         </GeoJSONSource>
+        {/* The route's ends: the start's flag and the end's square (unless clustered). */}
+        {ends && single.has('start') && (
+          <Marker id="live-route-start" lngLat={[ends.start.lng, ends.start.lat]} anchor="center">
+            <Pressable accessibilityRole="image" accessibilityLabel={endLine(ends.start, t)}><RouteEndPin end={ends.start} /></Pressable>
+          </Marker>
+        )}
+        {ends?.end && single.has('end') && (
+          <Marker id="live-route-end" lngLat={[ends.end.lng, ends.end.lat]} anchor="center">
+            <Pressable accessibilityRole="image" accessibilityLabel={endLine(ends.end, t)}><RouteEndPin end={ends.end} /></Pressable>
+          </Marker>
+        )}
         {/* The stops: a circle each, its centre on the position whatever the label's height; a tap opens its times. */}
-        {(route?.stops ?? []).map((s) => {
+        {(route?.stops ?? []).filter((s) => single.has(s.key) || s.key === openStop).map((s) => {
           const open = openStop === s.key;
+          const labelled = open || show.stopTimes;
           return (
             <Marker
               key={s.key}
@@ -189,10 +220,26 @@ export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, o
               offset={[0, STOP_PIN.size / 2]}
               onPress={() => setOpenStop((o) => (o === s.key ? null : s.key))}
             >
-              <pins.Stop stop={s} open={open} />
+              <pins.Stop stop={s} open={open} labelled={labelled} />
             </Marker>
           );
         })}
+        {/* The gaps (the Layers filter, or the one open): where the signal went; a tap opens its words. */}
+        {gaps.filter((g) => single.has(g.key) || g.key === openStop).map((g) => (
+          <Marker key={g.key} id={`live-gap-${g.key}`} lngLat={[g.lng, g.lat]} anchor="center" onPress={() => setOpenStop((o) => (o === g.key ? null : g.key))}>
+            <Pressable accessibilityRole="button" accessibilityLabel={gapLine(g, t)} onPress={() => setOpenStop((o) => (o === g.key ? null : g.key))} hitSlop={8}>
+              <GapPin gap={g} open={openStop === g.key} />
+            </Pressable>
+          </Marker>
+        ))}
+        {grouped.clusters.map((c) => (
+          // Google Maps' marker clustering: one numbered circle; a tap zooms in two steps so its markers come apart.
+          <Marker key={c.key} id={`live-${c.key}`} lngLat={[c.lng, c.lat]} anchor="center">
+            <Pressable accessibilityRole="button" accessibilityLabel={t('dayRoute.cluster', { n: c.count })} onPress={() => zoomInto(c)} testID="live-cluster">
+              <ClusterPin count={c.count} />
+            </Pressable>
+          </Marker>
+        ))}
         {markers.map((m) => (
           // The ring's centre on the position whatever the label's height: anchored at the bottom, moved down by half a ring.
           <Marker

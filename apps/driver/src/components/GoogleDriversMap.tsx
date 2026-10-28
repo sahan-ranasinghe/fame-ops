@@ -9,18 +9,25 @@
 // content), so the free map draws exactly the same.
 // Stage 1 (O3 item 4f): the cluster's commands (DriversMap.tsx): a zoom step from the camera as it is, or the frame around
 // every marker and the shown route.
+// Round 48 (item 3): the route's start and end pins, its gap markers (the Layers filter), the stop's time when tapped or
+// asked for, and the route markers that would overlap as one numbered circle (lib/cluster.ts, from the camera's zoom read
+// after each move; a tap zooms in two steps). The SDK draws markers above polylines, so the dots stay small.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import GoogleMapView, { Marker as GoogleMarker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import { useMapScheme } from '@/lib/appTheme';
+import { clusterMarkers, clusterZoom } from '@/lib/cluster';
+import { endLine, gapLine } from '@/office/driversLogic';
 import { fitAllFrame, zoomStep } from '@/office/liveLogic';
 import { ESTIMATED_COLOR, HOLE_COLOR, stopPinAnchorY } from '@/office/liveRouteLogic';
+import { routeMarkerPoints, visibleGaps } from '@/office/routeMarks';
 import { useApp } from '@/state/app';
 import type { LiveLayerProps } from './DriversMap';
 import { MapCompass } from './MapCompass';
 import { DRIVER_ZOOM, DriverPin, driverPinAnchorY, DRIVERS_PADDING, type DriversEngineProps, nextTurn, ONE_PLACE_ZOOM, SRI_LANKA, type Turn } from './mapPins';
+import { ClusterPin, GapPin, RouteEndPin } from './routePins';
 import type { LatLng } from './taskMapLogic';
 
 export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded, layers, pins, command }: DriversEngineProps & LiveLayerProps) {
@@ -29,6 +36,8 @@ export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded,
   const map = useRef<GoogleMapView>(null);
   const [ready, setReady] = useState(false);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
+  // The camera's zoom after each move (null until the map says): the cluster helper's input.
+  const [zoom, setZoom] = useState<number | null>(null);
   const focused = focus !== null;
 
   // Everyone: when the map is ready, when the set of drivers with a position changes (fit.key), and when the selection is
@@ -71,8 +80,16 @@ export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded,
   const runs = useMemo(() => (route?.runs ?? []).map((r, i) => ({ key: `run:${i}`, color: r.color, coords: r.points.map(at) })), [route]);
   const holes = useMemo(() => (route?.holes ?? []).map((h) => ({ key: `hole:${h.fromAt}`, coords: [at(h.from), at(h.to)] })), [route]);
   const estimated = useMemo(() => (route?.estimated ?? []).map((e) => ({ key: e.key, coords: e.points.map(at) })), [route]);
+  // The marker whose card is open (a stop's or a gap's key): its label shown, never clustered.
   const [openStop, setOpenStop] = useState<string | null>(null);
   useEffect(() => setOpenStop(null), [routeKey]);
+  const show = layers.show;
+  const gaps = useMemo(() => visibleGaps(route?.gaps ?? [], show, openStop), [route, show, openStop]);
+  const points = useMemo(() => routeMarkerPoints(route?.ends ?? null, route?.stops ?? [], route?.gaps ?? [], show, openStop), [route, show, openStop]);
+  const grouped = useMemo(() => clusterMarkers(points, zoom), [points, zoom]);
+  const single = new Set(grouped.singles.map((m) => m.key));
+  const ends = route?.ends ?? null;
+  const zoomInto = (c: LatLng) => map.current?.animateCamera({ center: at(c), zoom: clusterZoom(zoom) }, { duration: 500 });
 
   // The cluster: one command per tap (its nonce), on the camera as it is now.
   const latest = useRef({ markers, route: layers.route });
@@ -97,7 +114,10 @@ export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded,
 
   const readTurn = () => {
     map.current?.getCamera()
-      .then((c) => setTurn((prev) => nextTurn(prev, c.heading ?? 0, c.pitch ?? 0)))
+      .then((c) => {
+        setTurn((prev) => nextTurn(prev, c.heading ?? 0, c.pitch ?? 0));
+        setZoom(typeof c.zoom === 'number' && Number.isFinite(c.zoom) ? c.zoom : null);
+      })
       .catch(() => undefined);
   };
   const northUp = () => {
@@ -139,22 +159,51 @@ export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded,
         {runs.map((r) => (
           <Polyline key={r.key} coordinates={r.coords} strokeColor={r.color} strokeWidth={5} lineCap="round" lineJoin="round" zIndex={3} />
         ))}
+        {/* The route's ends: the start's flag and the end's square (unless clustered). */}
+        {ends && single.has('start') && (
+          <GoogleMarker key={`start:${ends.start.time}`} coordinate={at(ends.start)} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false} zIndex={5} accessibilityLabel={endLine(ends.start, t)}>
+            <RouteEndPin end={ends.start} />
+          </GoogleMarker>
+        )}
+        {ends?.end && single.has('end') && (
+          <GoogleMarker key={`end:${ends.end.time}`} coordinate={at(ends.end)} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false} zIndex={5} accessibilityLabel={endLine(ends.end, t)}>
+            <RouteEndPin end={ends.end} />
+          </GoogleMarker>
+        )}
         {/* The stops: a circle each; a tap opens its times (a marker's picture is taken once: open or closed is in the key). */}
-        {(route?.stops ?? []).map((s) => {
+        {(route?.stops ?? []).filter((s) => single.has(s.key) || s.key === openStop).map((s) => {
           const open = openStop === s.key;
+          const labelled = open || show.stopTimes;
           return (
             <GoogleMarker
-              key={`${s.key}:${open}`}
+              key={`${s.key}:${open}:${labelled}`}
               coordinate={at(s)}
-              anchor={{ x: 0.5, y: stopPinAnchorY(open) }}
+              anchor={{ x: 0.5, y: stopPinAnchorY(labelled) }}
               tracksViewChanges={false}
               zIndex={open ? 5 : 4}
               onPress={() => setOpenStop((o) => (o === s.key ? null : s.key))}
             >
-              <pins.Stop stop={s} open={open} />
+              <pins.Stop stop={s} open={open} labelled={labelled} />
             </GoogleMarker>
           );
         })}
+        {/* The gaps (the Layers filter, or the one open): where the signal went; a tap opens its words. */}
+        {gaps.filter((g) => single.has(g.key) || g.key === openStop).map((g) => {
+          const open = openStop === g.key;
+          return (
+            <GoogleMarker key={`${g.key}:${open}`} coordinate={at(g)} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false} zIndex={open ? 5 : 4}
+              onPress={() => setOpenStop((o) => (o === g.key ? null : g.key))} accessibilityLabel={gapLine(g, t)}>
+              <GapPin gap={g} open={open} />
+            </GoogleMarker>
+          );
+        })}
+        {grouped.clusters.map((c) => (
+          // Google Maps' marker clustering: one numbered circle; a tap zooms in two steps so its markers come apart.
+          <GoogleMarker key={`${c.key}:${c.count}`} coordinate={at(c)} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false} zIndex={5}
+            onPress={() => zoomInto(c)} accessibilityLabel={t('dayRoute.cluster', { n: c.count })}>
+            <ClusterPin count={c.count} />
+          </GoogleMarker>
+        ))}
         {markers.map((m) => (
           // A marker's picture is taken once (tracksViewChanges off): a new ring, label or letters makes a new marker.
           <GoogleMarker

@@ -3861,6 +3861,27 @@
     "gaps": "{n} gaps",
     "stopNear": "Stopped near {place} · {span} · {duration}",
     "stopped": "Stopped · {span} · {duration}",
-    "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The day's numbers are above."
+    "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The day's numbers are above.",
+    "about": "About this map",
+    "legendTitle": "Legend",
+    "legendStart": "Start of the route",
+    "legendEnd": "End of the route",
+    "legendStop": "A stop over 10 minutes · tap it for the time",
+    "legendGap": "No GPS, or the app not running · shown by Filters → Layers",
+    "legendCluster": "Several markers together · tap to zoom in",
+    "estimatedNote": "Dashed slate: the likely road over {n} gaps, from openrouteservice. Never counted as km.",
+    "kmNoteTitle": "How the km are counted",
+    "mapData": "Map data",
+    "start": "Start · {time}",
+    "end": "End · {time}",
+    "gapNoGps": "No GPS signal · {span} · {duration}",
+    "gapNoData": "App not running · {span} · {duration}",
+    "gapsTitle": "Gaps",
+    "gapsHint": "Tap a gap to see where the signal was lost.",
+    "showGaps": "Show the gaps",
+    "layersSection": "Layers",
+    "layerEvents": "Gaps and signal loss",
+    "layerStopTimes": "Stop times",
+    "cluster": "{n} markers · tap to zoom in"
   }
 }

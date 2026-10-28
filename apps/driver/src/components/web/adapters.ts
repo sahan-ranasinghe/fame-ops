@@ -56,8 +56,8 @@ export interface MarkerHandle {
 export interface MapEvents {
   loaded: () => void;
   failed: (note: string) => void;
-  /** The camera came to rest (the map's centre then). */
-  moved?: (center: LatLng) => void;
+  /** The camera came to rest (the map's centre then, and its zoom: Round 48, the cluster helper's input). */
+  moved?: (center: LatLng, zoom: number) => void;
   /** The person started moving the map (a drag, a pinch, the wheel). */
   userMove?: () => void;
   turned?: (heading: number, pitch: number) => void;
@@ -187,7 +187,7 @@ export function createFreeMap(container: HTMLElement, start: Camera, padding: Pa
   });
   m.on('moveend', () => {
     const c = m.getCenter();
-    on.moved?.({ lat: c.lat, lng: c.lng });
+    on.moved?.({ lat: c.lat, lng: c.lng }, m.getZoom());
     on.turned?.(m.getBearing(), m.getPitch());
   });
   m.on('rotate', () => on.turned?.(m.getBearing(), m.getPitch()));
@@ -283,7 +283,7 @@ export function createGoogleMap(container: HTMLElement, g: GoogleApi, entry: Goo
   listeners.push(m.addListener('dragstart', () => on.userMove?.()));
   listeners.push(m.addListener('idle', () => {
     const c = m.getCenter();
-    if (c) on.moved?.({ lat: c.lat(), lng: c.lng() });
+    if (c) on.moved?.({ lat: c.lat(), lng: c.lng() }, m.getZoom() ?? 7);
   }));
 
   const Overlay = overlayClass(g);
