@@ -1025,11 +1025,15 @@ lines; the 2 missing ones cost 4 calls and 4 errors today): both share one poor 
 about 1.2 km off the road, with only a footpath within 350 m (OpenStreetMap's Overpass). openrouteservice answers that
 with HTTP 404 and its own error 2010 ("Could not find routable point within a radius of 350.0 meters"); `orsFetch` took
 every 404 for "the path moved" and asked the old host too (two requests, two errors per gap), and a failure is not cached,
-so every view of the day asked again. Fix: `orsFetch` returns openrouteservice's own JSON error as the answer (the old host
-only for a gateway's 404); a gap with no road (2010) or no route (2009) is a call made (not an error), kept 30 days as an
-empty line in `route_gap_lines` (no migration) and drawn straight with "Some gaps have no road near a GPS point (a poor
-fix): they are straight". Tests: orsHosts_test, gapRoutes_test (one request per gap, counted ok, cached, the next view asks
-nothing; a 500 still an error and not cached). Deploy: office-api, office-mcp, driver-api, fleet-jobs (routing.ts's road
+so every view of the day asked again. Fix (narrowed at Sahan's review): `orsFetch` skips the old host ONLY when the
+answer is openrouteservice's "no road near a point" (code 2010, or its message "Could not find routable point"); any
+other 404 or 410 (2009 no route, another code, a gateway's) still tries the old host, and other statuses (a 5xx) are the
+answer as before. Only that no-road result is remembered: the gap counts as a call made (not an error), is kept 30 days
+as an empty line in `route_gap_lines` (no migration) and is drawn straight with "Some gaps have no road near a GPS point
+(a poor fix): they are straight"; every other failure is an error and is asked again next time. Tests: orsHosts_test
+(2010, the message alone, 2009 / another code / a gateway's 404 fall back, a 5xx unchanged), gapRoutes_test (no road:
+one request, counted ok, kept, the next view asks nothing; by message too; 2009: both hosts, an error, not kept; a 500:
+an error, not kept). Deploy: office-api, office-mcp, driver-api, fleet-jobs (routing.ts's road
 times use orsFetch too).
 
 ## 34. Round 48 (28 October 2026, branch `phase9-r48` from main `99dbab9`, worktree `~/projects/fame-ops-r47`)

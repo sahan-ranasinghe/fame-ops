@@ -1,6 +1,6 @@
 // openrouteservice's hosts (15 October 2026): the new host first, the old one only on 404 or 410.
-import { assertEquals } from "@std/assert";
-import { ORS_AUTOCOMPLETE_URLS, ORS_DIRECTIONS_URLS, orsErrorCode, orsFetch } from "./orsHosts.ts";
+import { assert, assertEquals } from "@std/assert";
+import { ORS_AUTOCOMPLETE_URLS, ORS_DIRECTIONS_URLS, orsFetch, orsNotRoutable } from "./orsHosts.ts";
 
 const answering = (codes: Record<string, number>, seen: string[]) =>
   ((url: string) => {
@@ -56,19 +56,52 @@ Deno.test("Round 48: onFallback runs once, before the old host is tried, and nev
   assertEquals(none, 0);
 });
 
-Deno.test("Round 49: openrouteservice's own 404 (no road near a point, 2010) is the answer: the old host is not asked", async () => {
+const orsAnswer = (body: unknown, status: number, seen: string[]) =>
+  ((url: string) => {
+    seen.push(url);
+    return Promise.resolve(Response.json(body, { status }));
+  }) as unknown as typeof fetch;
+
+Deno.test("Round 49: no road near a point (code 2010) is the answer: the old host is not asked", async () => {
   const seen: string[] = [];
+  let fallbacks = 0;
   const body = {
     error: { code: 2010, message: "Could not find routable point within a radius of 350.0 meters of specified coordinate 0" },
   };
-  const f = ((url: string) => {
-    seen.push(url);
-    return Promise.resolve(Response.json(body, { status: 404 }));
-  }) as unknown as typeof fetch;
-  let fallbacks = 0;
-  const res = await orsFetch(ORS_DIRECTIONS_URLS, {}, "", f, () => fallbacks++);
+  const res = await orsFetch(ORS_DIRECTIONS_URLS, {}, "", orsAnswer(body, 404, seen), () => fallbacks++);
   assertEquals([res.status, seen.length, fallbacks], [404, 1, 0]);
-  assertEquals(orsErrorCode(await res.json()), 2010, "the answer's body is still readable by the caller");
-  // A gateway's 404 (no openrouteservice error code) still means the path moved: the old host is asked.
-  assertEquals(orsErrorCode({ error: "Not Found" }), null);
+  assert(orsNotRoutable(await res.json()), "the answer's body is still readable by the caller");
+});
+
+Deno.test("Round 49: the same error by its message alone (no code) is the answer too", async () => {
+  const seen: string[] = [];
+  const body = { error: { message: "Could not find routable point within a radius of 350.0 meters of specified coordinate 1" } };
+  const res = await orsFetch(ORS_DIRECTIONS_URLS, {}, "", orsAnswer(body, 404, seen));
+  assertEquals([res.status, seen.length], [404, 1]);
+  assert(orsNotRoutable({ error: "Could not find routable point within a radius of 350.0 meters" }), "a plain string error too");
+});
+
+Deno.test("Round 49: any other 404 keeps the old-host fallback (no route 2009, another code, a gateway's)", async () => {
+  for (
+    const body of [{ error: { code: 2009, message: "Route could not be found" } }, { error: { code: 2099, message: "Unknown" } }, {
+      error: "Not Found",
+    }, {}]
+  ) {
+    const seen: string[] = [];
+    let fallbacks = 0;
+    const res = await orsFetch(ORS_DIRECTIONS_URLS, {}, "", orsAnswer(body, 404, seen), () => fallbacks++);
+    assertEquals([res.status, seen.length, fallbacks], [404, 2, 1], JSON.stringify(body));
+    assert(!orsNotRoutable(body));
+  }
+});
+
+Deno.test("Round 49: a 5xx stays as before: it is the answer, the old host is not asked", async () => {
+  const seen: string[] = [];
+  const res = await orsFetch(
+    ORS_DIRECTIONS_URLS,
+    {},
+    "",
+    orsAnswer({ error: { code: 2099, message: "Unknown internal error" } }, 500, seen),
+  );
+  assertEquals([res.status, seen.length], [500, 1]);
 });

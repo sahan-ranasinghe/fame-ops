@@ -10,12 +10,13 @@
 // budget (ORS_DAILY_BUDGET of openrouteservice's 2,000 a day); at most 25 new gaps per route
 // asked, and the 40 a minute shared with the road times. Over a cap, without a key or on an
 // error, the gap stays a straight dashed line and the answer says why.
-// Round 49: a gap with no road near one of its ends (a poor fix off the road: openrouteservice's 2010, or 2009 no
-// route) is an answer, not an error: counted as a call made, cached 30 days as an empty line (geometry []) so no view
-// asks again, and drawn straight with its own note. Before, each view asked again and counted two errors.
+// Round 49: a gap with no road near one of its ends (a poor fix off the road: openrouteservice's 2010, "Could not find
+// routable point") is an answer, not an error: counted as a call made, cached 30 days as an empty line (geometry []) so
+// no view asks again, and drawn straight with its own note. Only that answer is kept: any other failure is an error and
+// is asked again next time, as before.
 
 import type { Db } from "./db.ts";
-import { ORS_GEOJSON_URLS, ORS_NO_ROUTE_CODES, orsErrorCode, orsFetch } from "./orsHosts.ts";
+import { ORS_GEOJSON_URLS, orsErrorCode, orsFetch, orsNotRoutable } from "./orsHosts.ts";
 import type { Jump } from "./route.ts";
 import { simplifyKeep } from "./route.ts";
 import { bump, callsToday, ORS_DAILY_BUDGET, orsMinute, TIMEOUT_MS } from "./routing.ts";
@@ -150,7 +151,7 @@ export async function estimatedLines(
       );
       const json = await res.json();
       const code = orsErrorCode(json);
-      if (!res.ok && code !== null && ORS_NO_ROUTE_CODES.has(code)) {
+      if (!res.ok && orsNotRoutable(json)) {
         // No road near one end: openrouteservice's real answer. Counted as made, kept as an empty line for 30 days.
         await bump(db, GAP_PROVIDER, true);
         await db.from("route_gap_lines").upsert({ ...gapKey(j), geometry: [], km: null, provider: "ors", fetched_at: now.toISOString() }, {

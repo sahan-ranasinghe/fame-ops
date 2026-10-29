@@ -239,3 +239,34 @@ Deno.test("Round 49: a real failure (a 500) is still an error and is not cached"
     assertEquals(r.note, "openrouteservice did not answer for some gaps: they are straight");
   });
 });
+
+Deno.test("Round 49: the same answer by its message alone is kept 30 days too", async () => {
+  await withKey("KEY", async () => {
+    const { db, cache } = fakeDb();
+    let asked = 0;
+    const fetchFn = () => {
+      asked += 1;
+      return Promise.resolve(
+        Response.json({ error: { message: "Could not find routable point within a radius of 350.0 meters" } }, { status: 404 }),
+      );
+    };
+    const r = await estimatedLines(db, { ors_gap_daily_cap: 300 }, [jump(0)], NOW, fetchFn as unknown as Fetcher);
+    assertEquals([r.lines.length, asked, r.note, cache.size], [0, 1, NO_ROAD_NOTE, 1]);
+  });
+});
+
+Deno.test("Round 49: no route (2009) is not remembered: both hosts asked, an error, and the next view asks again", async () => {
+  await withKey("KEY", async () => {
+    const { db, cache, counts } = fakeDb();
+    const urls: string[] = [];
+    const fetchFn = (url: string) => {
+      urls.push(url);
+      return Promise.resolve(Response.json({ error: { code: 2009, message: "Route could not be found" } }, { status: 404 }));
+    };
+    const r = await estimatedLines(db, { ors_gap_daily_cap: 300 }, [jump(0)], NOW, fetchFn as unknown as Fetcher);
+    assertEquals([r.lines.length, urls.length, cache.size, counts.ors_gap], [0, 2, 0, 2]);
+    assertEquals(r.note, "openrouteservice did not answer for some gaps: they are straight");
+    await estimatedLines(db, { ors_gap_daily_cap: 300 }, [jump(0)], NOW, fetchFn as unknown as Fetcher);
+    assertEquals(urls.length, 4, "asked again: only the no-road answer is kept");
+  });
+});
