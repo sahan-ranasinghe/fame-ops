@@ -173,7 +173,8 @@ function StopRow({ list, i, onChange, idPrefix, offset, fallback, sameAsStart, o
       <label className="route-lab" htmlFor={`${idPrefix}-place-${s.key}`}>{name}</label>
       <div className="route-field">
         {list.length > 1 && (
-          <span className="route-grip" draggable aria-label={`Drag ${name} to move it`} title="Drag to move (or Move up / Move down in Options)"
+          // The handle is for the mouse; the keyboard and screen readers move a row with Move up / Move down in ⋯ Options.
+          <span className="route-grip" draggable aria-hidden="true" title={`Drag ${name} to move it (or Move up / Move down in Options)`}
             onDragStart={drag.start} onDragEnd={drag.end} data-testid="stop-grip">
             <i /><i /><i />
           </span>

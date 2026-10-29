@@ -124,8 +124,10 @@ test("every main screen of the site: readable light and dark (desktop and phone 
   found.push(...(await bothThemes(page, testInfo, "assign-clock")));
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("time-dial")).toHaveCount(0);
-  // A stop's Stay sheet (the two lists), where the form shows the field.
-  const stay = page.getByTestId("dwell-picker").first().getByRole("button").first();
+  // A stop's Stay sheet (the two lists), where the form shows the field: Fix B, in To's ⋯ Options.
+  await page.getByRole("button", { name: "Options for To" }).click();
+  await expect(page.getByTestId("stop-options")).toBeVisible();
+  const stay = page.getByTestId("stop-options").getByTestId("dwell-picker").getByRole("button").first();
   if (await stay.isVisible()) {
     await stay.focus();
     await page.keyboard.press("Enter");
@@ -133,6 +135,8 @@ test("every main screen of the site: readable light and dark (desktop and phone 
     found.push(...(await bothThemes(page, testInfo, "assign-stay")));
     await page.keyboard.press("Escape");
   }
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("stop-options")).toHaveCount(0);
 
   await page.goto("/vehicles");
   await settle(page, heading("Vehicles"));

@@ -11,6 +11,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./offline";
 import { linkPath } from "./links";
+import { arriveByAtTo, twoStops } from "./route";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { totp } from "./totp";
@@ -297,9 +298,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   const title = `E2E drop ${stamp}`;
   await page.getByLabel("Task", { exact: true }).fill(title);
   await page.getByLabel("Leave by", { exact: true }).fill("09:30");
-  // The stops are rows with their own type; the labels are numbered within the type.
-  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
-  await page.getByLabel("Stop 2", { exact: true }).fill("Nugegoda");
+  // Fix B: From / To / Add stop: the pickup at Head office (People get in, under Stop 1's ⋯ Options) and To Nugegoda.
+  await twoStops(page, "Head office", "Nugegoda");
   await chooseDriver(page, driver.username);
   await page.getByLabel("Vehicle", { exact: true }).selectOption(plate);
   // The plan follows the form in one line (1.5 s after the last change): "Leave by 09:30 · … · estimated times".
@@ -657,8 +657,7 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   await expect(page.getByLabel("On behalf of")).toBeVisible();
   // Phase 7 (§34): the request is the trip editor (Leave by, the stops).
   await page.getByLabel("Leave by", { exact: true }).fill("09:00");
-  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
-  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+  await twoStops(page, "Head office", "Galle");
   await page.getByRole("button", { name: "Save request" }).click();
   await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
   await expect(page.locator("tr", { hasText: "E2E Requester" })).toBeVisible();
@@ -1014,8 +1013,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.goto("/tasks/new");
     await pickTripDay(page, "Date", day);
     await page.getByLabel("Leave by", { exact: true }).fill("13:00");
-    await page.getByLabel("Stop 1", { exact: true }).fill(depot.name);
-    await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+    await twoStops(page, depot.name, "Galle");
     const rowBNew = rowOf(page.getByTestId("availability"), b.name);
     await rowBNew.click();
     await expect(rowBNew).toHaveAttribute("aria-pressed", "true");
@@ -1137,8 +1135,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await page.getByLabel("On behalf of").fill("Someone from HR");
   await pickTripDay(page, "Day", day);
   await page.getByLabel("Leave by", { exact: true }).fill("09:30");
-  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
-  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+  await twoStops(page, "Head office", "Galle");
   await expect(page.getByTestId("group-free_pool")).toContainText(plate);
   await page.getByTestId("group-free_pool").locator(".opt", { hasText: plate }).getByRole("radio").check();
   await chooseDriver(page, driver.username, page.getByTestId("assign-now"));
@@ -1233,8 +1230,7 @@ test("a requester changes an approved booking; the approver sees who is availabl
   await pickTripDay(page, "Day", day);
   await page.getByLabel("Leave by", { exact: true }).fill("09:00");
   await page.getByLabel("Back by").fill("12:00");
-  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
-  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+  await twoStops(page, "Head office", "Galle");
   await page.getByRole("button", { name: "Save request" }).click();
   await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
   const row = page.locator("tr", { hasText: visitor });
@@ -1253,7 +1249,8 @@ test("a requester changes an approved booking; the approver sees who is availabl
   await expect(page).toHaveURL(new RegExp(`/requests/${req.id}/edit$`));
   await expect(page.getByText("your change needs re-approval")).toBeVisible();
   await page.getByLabel("Leave by", { exact: true }).fill("09:30");
-  await page.getByLabel("Stop 2", { exact: true }).fill("Matara");
+  // Fix B: the drop-off is To on the edit form.
+  await page.getByLabel("To", { exact: true }).fill("Matara");
   await page.getByRole("button", { name: "Save · ask for re-approval" }).click();
   await expect(page.getByRole("status")).toHaveText("Changed · the office will decide again");
   await expect(page).toHaveURL(new RegExp(`/requests/${req.id}$`));
@@ -1433,13 +1430,15 @@ test("the location search box: sites by id with their badges, a pasted pin saved
 
   // Assign a task: a site by its id, with its badge; a site without a pin warns under the row.
   await spaGo(page, "/tasks/new");
+  // Fix B: From / To / Add stop: + Add stop puts Stop 1 before To.
+  await page.getByRole("button", { name: "Add stop" }).click();
   const pickup = page.getByLabel("Stop 1", { exact: true });
   await pickup.fill(pinned.toLowerCase());
   const option = page.getByRole("option", { name: new RegExp(`Pinned Site ${stamp}`) });
   await expect(option).toContainText("Site · Dialog");
   await option.click();
   await expect(pickup).toHaveValue(`Pinned Site ${stamp}`);
-  const drop = page.getByLabel("Stop 2", { exact: true });
+  const drop = page.getByLabel("To", { exact: true });
   await drop.fill(bare);
   await expect(page.getByRole("option", { name: new RegExp(`Bare Site ${stamp}`) })).toContainText("no pin");
   await page.getByRole("option", { name: new RegExp(`Bare Site ${stamp}`) }).click();
@@ -1465,7 +1464,8 @@ test("the location search box: sites by id with their badges, a pasted pin saved
     await route.fulfill({ json: { result: { text: body.text, results: [{ layer: "map", badge: "Map", name: `Map Cafe ${stamp}`, detail: "Map Cafe, Kandy, Central Province", pinned: true, lat: 7.2906, lng: 80.6337, ref: "openstreetmap:node/1", attribution: "© OpenStreetMap contributors · openrouteservice" }], map_cached: false } } });
   });
   await page.getByRole("button", { name: "Add stop" }).click();
-  const visit = page.getByLabel("Stop 3", { exact: true });
+  // A new row goes between the last stop and To.
+  const visit = page.getByLabel("Stop 2", { exact: true });
   await visit.fill("fakemap cafe");
   const mapRow = page.getByRole("option", { name: new RegExp(`Map Cafe ${stamp}`) });
   await expect(mapRow).toContainText("Map");
@@ -1481,9 +1481,9 @@ test("the location search box: sites by id with their badges, a pasted pin saved
 
   // The request form's stops use the same box (Phase 7, §34: the request is the trip editor).
   await spaGo(page, "/requests/new");
-  await page.getByLabel("Stop 1", { exact: true }).fill(pinned);
+  await page.getByLabel("To", { exact: true }).fill(pinned);
   await page.getByRole("option", { name: new RegExp(`Pinned Site ${stamp}`) }).click();
-  await expect(page.getByLabel("Stop 1", { exact: true })).toHaveValue(`Pinned Site ${stamp}`);
+  await expect(page.getByLabel("To", { exact: true })).toHaveValue(`Pinned Site ${stamp}`);
 
   // Places: find the bare site, give it a pin by hand; a later import never moves it.
   await spaGo(page, "/places?who=dialog");
@@ -1599,8 +1599,7 @@ test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps 
   // connectors marked "not the road" (no Google line on the open package); a pin highlights its timeline row.
   await page.goto("/tasks/new");
   await page.getByLabel("Leave by", { exact: true }).fill("09:30");
-  await page.getByLabel("Stop 1", { exact: true }).fill("Kandy");
-  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+  await twoStops(page, "Kandy", "Galle");
   const planMap = page.getByTestId("plan-map");
   await expect(planMap).toBeVisible({ timeout: 15000 });
   await expect(planMap.locator(".plan-pin")).toHaveCount(2, { timeout: 15000 });
@@ -1678,9 +1677,8 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   await signIn(page, requester.set_password_link, `P3 requester ${stamp}!`);
   await page.goto("/requests/new");
   await pickTripDay(page, "Day", day);
-  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
-  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
-  await page.getByLabel("Arrive by").nth(1).fill("16:00");
+  await twoStops(page, "Head office", "Galle");
+  await arriveByAtTo(page, "16:00");
   await expect(page.getByTestId("plan-card")).toContainText("Leave by", { timeout: 20000 });
   await expect(page.getByTestId("availability")).toHaveCount(0); // a requester never sees who drives
   await page.getByLabel("Note").fill(`P3 trip ${tag}`);
@@ -1713,8 +1711,7 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   await dispatcherPage.getByLabel("Task", { exact: true }).fill(title);
   await pickTripDay(dispatcherPage, "Date", day);
   await dispatcherPage.getByLabel("Leave by", { exact: true }).fill("10:00");
-  await dispatcherPage.getByLabel("Stop 1", { exact: true }).fill("Head office");
-  await dispatcherPage.getByLabel("Stop 2", { exact: true }).fill("Kandy");
+  await twoStops(dispatcherPage, "Head office", "Kandy");
   await chooseDriver(dispatcherPage, driver.username);
   await expect(dispatcherPage.getByTestId("plan-card")).toContainText("Leave by", { timeout: 20000 });
   await dispatcherPage.getByRole("button", { name: "Send for approval" }).click();
@@ -1921,9 +1918,8 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   await signIn(page, requester.set_password_link, `HF2 requester ${stamp}!`);
   await page.goto("/requests/new");
   await pickTripDay(page, "Day", day);
-  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
-  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
-  await page.getByLabel("Arrive by").nth(1).fill("16:00");
+  await twoStops(page, "Head office", "Galle");
+  await arriveByAtTo(page, "16:00");
   await expect(page.getByTestId("plan-card")).toContainText("Leave by", { timeout: 20000 });
   await page.getByLabel("Note").fill(`HF2 trip ${tag}`);
   await page.getByRole("button", { name: "Save request" }).click();
@@ -1988,8 +1984,7 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   await onePage.goto("/tasks/new");
   await onePage.getByLabel("Task", { exact: true }).fill(`E2E time field ${tag}`);
   await pickTripDay(onePage, "Date", day);
-  await onePage.getByLabel("Stop 1", { exact: true }).fill("Head office");
-  await onePage.getByLabel("Stop 2", { exact: true }).fill("Kandy");
+  await twoStops(onePage, "Head office", "Kandy");
   await chooseDriver(onePage, driver.username);
   const leave = onePage.getByLabel("Leave by", { exact: true });
   await leave.fill("09:30");
@@ -2189,7 +2184,8 @@ test("screenshots of the site (desktop): Overview, Assign a task (Where, the clo
   await shot("overview");
 
   await page.goto("/tasks/new");
-  const firstStop = page.getByLabel("Stop 1", { exact: true });
+  // Fix B: a new trip's first place box is To.
+  const firstStop = page.getByLabel("To", { exact: true });
   await firstStop.click();
   await page.waitForTimeout(1_500);
   await shot("where-empty");
@@ -2199,7 +2195,11 @@ test("screenshots of the site (desktop): Overview, Assign a task (Where, the clo
   await expect(page.getByTestId("time-list").getByRole("group", { name: "Quick times" })).toHaveCount(0);
   await shot("time-clock");
   await page.keyboard.press("Escape");
-  const stay = page.getByTestId("dwell-picker").first().getByRole("button").first();
+  // Fix B: a stop's Stay is in its ⋯ Options.
+  await page.getByRole("button", { name: "Options for To" }).click();
+  await expect(page.getByTestId("stop-options")).toBeVisible();
+  await shot("stop-options");
+  const stay = page.getByTestId("stop-options").getByTestId("dwell-picker").getByRole("button").first();
   if (await stay.isVisible()) {
     // By keyboard: the sticky Save bar or an open drop-down can sit over the field at this window size.
     await stay.focus();
@@ -2208,6 +2208,8 @@ test("screenshots of the site (desktop): Overview, Assign a task (Where, the clo
     await shot("stay-sheet");
     await page.keyboard.press("Escape");
   }
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("stop-options")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Plan now" })).toHaveCount(0);
 
   await page.goto("/settings/fleet/dispatch");
