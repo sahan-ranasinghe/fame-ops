@@ -415,7 +415,8 @@ test("Round 50: Users → Can drive on /m/, then a self trip driven in the brows
   });
 
   // An admin on /m/: People → the self-driver's page → Can drive (self-drive trips in the app), saved at once.
-  await signInMobile(page, "users", ["view", "users"]);
+  // (approve too: an account holding approve is changed only by someone who holds it: accountGuards.ts)
+  await signInMobile(page, "users", ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"]);
   await page.goto(`/m/office/people/user/${encodeURIComponent(email)}`);
   const can = shown(page.getByTestId("can-drive"));
   await expect(can).toContainText("Can drive (self-drive trips in the app)");
