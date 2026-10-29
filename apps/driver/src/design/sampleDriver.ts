@@ -132,6 +132,13 @@ export function sampleApp(input: { language: Language; now: number; today?: Toda
     requireLocation: async () => true,
     signIn: async () => 'not_configured',
     signOut: async () => 'ok',
+    // Round 50: a driver's sample (Driving mode's tests set officeDriver and their own me).
+    officeDriver: false,
+    driving: true,
+    enterDriving: async () => 'ok',
+    leaveDriving: async () => 'drop',
+    showDriving: noop,
+    officeSignOutCheck: async () => 'ok',
     refresh: async () => undefined,
     sendNow: async () => undefined,
     setSharing: async () => 'cancelled',

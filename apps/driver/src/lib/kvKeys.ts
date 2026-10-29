@@ -94,4 +94,9 @@ export const KEYS = {
   /** When the refused points were last put back in line (ms), and for which app update. */
   rejectedRetryAt: 'sync.rejectedRetryAt',
   rejectedRetryUpdate: 'sync.rejectedRetryUpdate',
+  /**
+   * Round 50 (§37.4): an office person's driver screens are in front (true after Start driving, false after Back to office);
+   * their driver state may stay loaded behind Office mode while a trip runs. Never read for a driver.
+   */
+  drivingView: 'driving.view',
 } as const;

@@ -189,7 +189,7 @@ async function main() {
   check(aiFromPhone.error?.code === '42501', 'the phone cannot set what the server read from an odometer photo (ai_value)', aiFromPhone.error);
 
   const since = new Date(Date.now() - 3600000);
-  let tasks = await api.fetchTasks(client, since);
+  let tasks = await api.fetchTasks(client, since, { employeeId: a.row.id, selfOnly: false });
   check(tasks.length === 2 && tasks.every((t) => t.employee_id === a.row.id) && !tasks.some((t) => t.id === taskOfB), 'fetchTasks returns my 2 tasks and not the other driver\'s', tasks.map((t) => t.title));
   check(tasks.every((t) => Array.isArray(t.task_passengers)), 'Round 4–7 (§33.3): fetchTasks reads each task\'s passengers (the driver\'s own tasks, through RLS)', tasks.map((t) => t.task_passengers));
   check(tasks[0]?.id === task1 && tasks[0].task_stops.map((s) => s.type).join('>') === 'pickup>visit>drop', 'tasks come soonest first, stops in order (pickup, visit, drop)', tasks[0]?.task_stops.map((s) => s.seq));
@@ -341,7 +341,7 @@ async function main() {
     'the app hears every answer; a task given away meanwhile answers already_reassigned, not an error', answers);
   const history = must(await client.from('task_assignment_events').select('action').eq('task_id', task6).order('id'), 'events');
   check(history.map((e) => e.action).join(',') === 'assigned,declined', 'the driver reads the history of their own declined task', history);
-  check((await api.fetchTasks(client, since)).find((t) => t.id === task6)?.status === 'declined', 'fetchTasks shows the declined task as declined (the app lists it nowhere)');
+  check((await api.fetchTasks(client, since, { employeeId: a.row.id, selfOnly: false })).find((t) => t.id === task6)?.status === 'declined', 'fetchTasks shows the declined task as declined (the app lists it nowhere)');
   const photos = must(await admin.from('photos').select('id, kind, odometer_log_id, fuel_log_id, vehicle_report_id, storage_path').eq('employee_id', a.row.id), 'photos');
   check(photos.length === 4 && photos.find((p) => p.id === pStart)?.odometer_log_id === logStart && photos.find((p) => p.id === pFuel)?.fuel_log_id !== null && photos.find((p) => p.id === pReport)?.vehicle_report_id === report, '4 photo records, each linked to its reading, fuel entry or report', photos);
   const fuelRow = must(await admin.from('fuel_logs').select('video_status, video_uploaded_at, video_bytes, video_path, video_checklist').eq('id', fuelId).single(), 'fuel log');
@@ -378,7 +378,7 @@ async function main() {
   check(reports.length === 1 && reports[0]?.status === 'open' && reports[0].category === 'tyre', 'fetchReports shows my report as open');
   const mileage = await api.fetchMileage(client, van.id, new Date(now - 30 * 86400000));
   check(mileage.odometer.map((l) => l.reading_km).join(',') === '84512,84563' && mileage.fuel.length === 1 && Number(mileage.fuel[0]?.litres) === 32, 'fetchMileage returns my 2 readings and 1 fuel entry');
-  tasks = await api.fetchTasks(client, since);
+  tasks = await api.fetchTasks(client, since, { employeeId: a.row.id, selfOnly: false });
   check(tasks.find((t) => t.id === task1)?.status === 'completed' && tasks.find((t) => t.id === task2)?.status === 'assigned', 'fetchTasks now shows task 1 completed and task 2 still assigned');
 
   console.log('\n== Sending the same things again (answers lost on a bad connection) ==');
@@ -463,7 +463,7 @@ async function main() {
     && choices.find((c) => c.id === van.id)?.my_last === true && (await api.fetchMe(client))?.current_vehicle_id === null,
     'taken over: my newest row says by whom (the banner), the picker shows "With Test now", I hold none', { myRows, van: choices.find((c) => c.id === van.id) });
   // Task 2 on the van: the start takes it back (the later take wins); Arrived with the override, Done after it, Done without Arrived refused.
-  const stops2 = (await api.fetchTasks(client, since)).find((t) => t.id === task2)!.task_stops;
+  const stops2 = (await api.fetchTasks(client, since, { employeeId: a.row.id, selfOnly: false })).find((t) => t.id === task2)!.task_stops;
   queue.add(
     { kind: 'task_patch', id: task2, patch: { status: 'in_progress', start_odometer_km: 84570, started_at: new Date().toISOString() } },
     { kind: 'stop_patch', id: stops2[0]!.id, patch: { status: 'arrived', arrived_at: new Date().toISOString(), arrival_flag: 'override', arrival_distance_m: 42000 } },
@@ -480,7 +480,7 @@ async function main() {
 
   console.log('\n== Phase 7, Part 2: the office swaps the vehicle during the task; the phone sends both readings; I need another vehicle ==');
   const swap = must(await admin.rpc('office_swap_vehicle', { p_task: task2, p_vehicle: car.id, p_by: 'test' }), 'swap') as { result?: string };
-  const swapped = (await api.fetchTasks(client, since)).find((t) => t.id === task2)!;
+  const swapped = (await api.fetchTasks(client, since, { employeeId: a.row.id, selfOnly: false })).find((t) => t.id === task2)!;
   const owed = swapReadingsWaiting(swapped);
   check(swap.result === 'swapped' && swapped.vehicle_id === car.id && swapped.task_vehicle_segments?.length === 2
     && owed.oldEnd?.vehicleId === van.id && owed.oldEnd.startKm === 84570 && owed.newStart?.vehicleId === car.id,
@@ -492,7 +492,7 @@ async function main() {
   const needId = randomUUID();
   queue.add({ kind: 'report', row: { id: needId, vehicle_id: car.id, employee_id: a.row.id, task_id: task2, category: 'breakdown', note: 'Clutch gone', created_at: new Date().toISOString(), needs_vehicle: true } });
   result = await sync.flush();
-  const afterSwap = (await api.fetchTasks(client, since)).find((t) => t.id === task2)!;
+  const afterSwap = (await api.fetchTasks(client, since, { employeeId: a.row.id, selfOnly: false })).find((t) => t.id === task2)!;
   const need = must(await admin.from('vehicle_reports').select('needs_vehicle, task_id').eq('id', needId).single(), 'report');
   check(result.failed === 0 && swapReadingsWaiting(afterSwap).oldEnd === null && swapReadingsWaiting(afterSwap).newStart === null
     && taskKmSoFar(afterSwap, 12025) === 65 && need.needs_vehicle === true,
@@ -750,7 +750,7 @@ async function main() {
   check(seenByB[0].count === 0 && seenByB[1].count === 0 && seenByB[2].count === 0 && (seenByB[3].data ?? []).length === 0, 'driver B sees none of driver A\'s points, photos, readings or files');
 
   await admin.from('employees').update({ active: false }).eq('id', a.row.id);
-  check((await api.fetchMe(client)) === null && (await api.fetchTasks(client, since)).length === 0, 'once the office switches driver A off, the app gets nothing (it then signs out)');
+  check((await api.fetchMe(client)) === null && (await api.fetchTasks(client, since, { employeeId: a.row.id, selfOnly: false })).length === 0, 'once the office switches driver A off, the app gets nothing (it then signs out)');
 
   console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`);
   process.exit(failures === 0 ? 0 : 1);

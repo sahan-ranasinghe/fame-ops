@@ -74,6 +74,8 @@ import { type AskAnswerInput, askAnswerOp, type AskRow, mergeAsk, withAnswer } f
 import { licencePhotoPath, type LicenceSide, type ProfilePatch } from '@/lib/profile';
 import { queueVideoUpload, type RecordedVideo, videoSegmentRows, videoStoragePath } from '@/lib/video';
 import { sessionKind } from '@/lib/session';
+import { canEnterDriving, driverParts, drivingShown, isOfficeDriver, leaveOutcome, ownTasks, shouldStopSharing, taskScope, tripRunning } from '@/lib/drivingMode';
+import { getOfficeMe, OFFICE_KEYS, useOfficeMe } from '@/office/store';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
@@ -120,6 +122,10 @@ export type SignInOutcome = 'ok' | 'wrong' | 'network' | 'switched_off' | 'not_c
 /** Why a stop was skipped (task_stops.skip_reason); not_visited = the task was finished with the stop still open. */
 export type SkipReason = 'closed' | 'nobody_there' | 'not_needed' | 'not_visited' | 'other';
 export type SignOutOutcome = 'ok' | 'task' | 'duty' | 'queue';
+/** Round 50 (§37.4): Start driving: the driver screens are in front, or why not (no connection, or the person may not drive). */
+export type EnterDrivingOutcome = 'ok' | 'network' | 'refused';
+/** Round 50: Office mode's sign-out with the driver state behind it: not while a trip of theirs runs or its data waits. */
+export type OfficeSignOutCheck = 'ok' | 'task' | 'queue';
 export type StartWorkOutcome = 'on' | 'no_permission' | 'cancelled';
 /** "{plate} is now with {name}": the vehicle this driver held was taken by another driver (Phase 7, item 2). */
 export interface VehicleTaken {
@@ -294,6 +300,28 @@ export interface AppValue {
 
   signIn: (username: string, pin: string) => Promise<SignInOutcome>;
   signOut: () => Promise<SignOutOutcome>;
+  /**
+   * Round 50 (§37.4), Driving mode (Uber's driver mode switch: one account, the office side and the driver side): the
+   * loaded `me` is an office person driving their own trips (role not driver). false for every driver.
+   */
+  officeDriver: boolean;
+  /** The driver screens are in front: always for a driver; for an office person after Start driving, until Back to office. */
+  driving: boolean;
+  /**
+   * Start driving (Office mode's Home, More, My trip): loads the person's own employees row as the driver state, with no new
+   * sign-in and nothing forgotten (the queue stays), and puts the driver screens in front.
+   */
+  enterDriving: () => Promise<EnterDrivingOutcome>;
+  /**
+   * Back to office: Office mode in front. 'keep' = the driver state stays loaded behind it (a trip of theirs runs: the
+   * location and the queue go on in the background; or something waits to be sent: dropped once it is); 'drop' = it went
+   * (the sign-in stays).
+   */
+  leaveDriving: () => Promise<'keep' | 'drop'>;
+  /** The driver screens in front again (a task notification tapped while Office mode was), the state already loaded. */
+  showDriving: () => void;
+  /** Office mode's Sign out asks first: refused while a trip of theirs runs, or its data could not be sent yet. */
+  officeSignOutCheck: () => Promise<OfficeSignOutCheck>;
   refresh: () => Promise<void>;
   sendNow: (includeFailed?: boolean) => Promise<void>;
   setSharing: (on: boolean) => Promise<'on' | 'off' | 'no_permission' | 'cancelled'>;
@@ -453,6 +481,16 @@ const TRACKING_EVERY_TICKS = 4;
 export function AppProvider({ children }: { children: ReactNode }) {
   const [booted, setBooted] = useState(false);
   const [me, setMe] = useState<Employee | null>(() => getJson<Employee>(KEYS.me));
+  // Round 50 (§37.4): the office person on this phone (Office mode), and whether their driver screens are in front.
+  const officeMe = useOfficeMe();
+  const [drivingView, setDrivingViewState] = useState<boolean>(() => getJson<boolean>(KEYS.drivingView) === true);
+  const setDrivingView = useCallback((on: boolean) => {
+    setDrivingViewState(on);
+    setJson(KEYS.drivingView, on);
+  }, []);
+  const officeDriver = isOfficeDriver(me);
+  const officeDriverRef = useRef(officeDriver);
+  officeDriverRef.current = officeDriver;
   const [meFresh, setMeFresh] = useState(false);
   const [vehiclePhotos, setVehiclePhotos] = useState<Record<string, string>>(() => pendingVehiclePhotos());
   const [language, setLanguageState] = useState<Language>(() => getJson<Language>(KEYS.language) ?? deviceLanguage());
@@ -585,8 +623,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Notes how the vehicle held was taken (Today's check card answers with it). */
   const noteHeld = useCallback((vehicleId: string, how: CheckHow) => setJson(KEYS.heldHow, { vehicleId, how } satisfies HeldHow), []);
 
-  const forgetEverything = useCallback(() => {
+  /**
+   * Everything of the driver on this phone goes (sign-out, a switched-off account). Round 50: `keepPermissions` when an
+   * office person's driver state is dropped (Back to office with nothing running): the first-run Permissions step was done
+   * on this phone and is not asked again at their next Start driving.
+   */
+  const forgetEverything = useCallback((options?: { keepPermissions?: boolean }) => {
     saveMe(null);
+    remove(KEYS.drivingView);
+    setDrivingViewState(false);
     setMeFresh(false);
     removeFile(getJson<KeptProfilePhoto>(KEYS.profilePhoto)?.uri);
     remove(KEYS.profilePhoto);
@@ -614,7 +659,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setReports([]);
     remove(KEYS.vehicles);
     remove(KEYS.reports);
-    remove(KEYS.permissionsSeen);
+    if (!options?.keepPermissions) remove(KEYS.permissionsSeen);
     remove(KEYS.track);
     remove(KEYS.lastVehicle);
     lastVehicleRef.current = null;
@@ -799,6 +844,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!meRef.current) return;
+    const scope = taskScope(meRef.current);
     setRefreshing(true);
     try {
       // The driver asked (or the app came back): refused points get another go, and the upload backoff is ignored.
@@ -807,7 +853,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const [row, vehicleRows, taskRows, reportRows, shiftSettings, checkRows] = await Promise.all([
         api.fetchMe(supabase),
         api.fetchVehicles(supabase),
-        api.fetchTasks(supabase, startOfColomboDay(colomboDate())),
+        // Round 50: the person's own tasks (an office person's: only the trips they drive), never left to RLS alone.
+        api.fetchTasks(supabase, startOfColomboDay(colomboDate()), scope),
         api.fetchReports(supabase),
         api.fetchDriverSettings(supabase).catch(() => null),
         // Round 4–7: my checks of today (after a fresh sign-in too); none read = the phone's copy stays.
@@ -842,7 +889,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // While something is still waiting on the phone, keep what the driver did rather than the older server copy.
       // A trip this phone just made stays until the list has it (the list may have been read a moment before).
       if (!sent.offline) {
-        saveTasks(keepLocalTrips(taskRows, tasksRef.current, pendingTrips.current));
+        saveTasks(keepLocalTrips(ownTasks(taskRows, meRef.current), tasksRef.current, pendingTrips.current));
         // Hotfix 2: what the phone keeps per task follows the list; the open tasks' contacts are read when they changed.
         pruneTaskMemory(new Set(tasksRef.current.map((task) => task.id)));
         for (const task of tasksRef.current) if (task.status === 'assigned' || task.status === 'in_progress') loadTaskContacts(task.id);
@@ -1015,11 +1062,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [signedIn, checkTrackingNow]);
 
   // The shift nudge ("At work? Start work"): scheduled while the driver is signed in and off duty, gone while on duty.
+  // Round 50 (§37.2): never for an office person in Driving mode (no Start work for them): gone if one was armed.
   useEffect(() => {
     if (!signedIn) return;
-    if (sharing) void disarmShiftNudge();
+    if (sharing || !driverParts(officeDriver).shiftNudge) void disarmShiftNudge();
     else void armShiftNudge(shift, { title: t('shift.titleWork'), body: t('shift.bodyWork') });
-  }, [signedIn, sharing, shift, t]);
+  }, [signedIn, sharing, shift, t, officeDriver]);
 
   // While sharing is on: a heartbeat a minute, and one the moment Location or the permission changes.
   useEffect(() => {
@@ -1097,7 +1145,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `employee_id=eq.${myId}` }, (change) => {
         // A phone with a push token hears about the task from the server; the others from here. A trip the driver
         // started (kind self, Phase 7 §13) is not news to them.
-        if (change.eventType === 'INSERT' && !pushToken() && (change.new as { kind?: string }).kind !== 'self') {
+        // Round 50: none for an office person (the trips they drive are the ones they booked).
+        if (change.eventType === 'INSERT' && !pushToken() && driverParts(officeDriverRef.current).newTaskNotice && (change.new as { kind?: string }).kind !== 'self') {
           const task = change.new as { id?: string; title?: string; start_at?: string };
           void notifyNewTask(t('today.newTask'), [task.start_at ? colomboTime(task.start_at) : '', task.title ?? ''].join(' ').trim(), task.id ?? '');
         }
@@ -1154,6 +1203,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       saveMe(row);
       setMeFresh(true);
+      // Round 50: a driver signed in on this phone: the sign-in screen shows its Driver | Office switch again.
+      remove(OFFICE_KEYS.lastCanDrive);
       void refresh();
       void ensureChannels().then(registerPush);
       void registerTrackingCheck();
@@ -1181,6 +1232,97 @@ export function AppProvider({ children }: { children: ReactNode }) {
     forgetEverything();
     return 'ok';
   }, [forgetEverything]);
+
+  // --- Round 50 (§37.4): Driving mode, an office person's own trips on the driver screens -------------------------------
+  // Uber's driver mode switch: the same account; Office mode stays signed in underneath (its session is the one Supabase
+  // client's), the driver state is the person's own employees row (RLS reads it as a driver's).
+
+  /** Sharing ends with the trip (§37.2): the location service stops and the duty period closes (the server closes it too). */
+  const stopTripSharing = useCallback(async () => {
+    await stopSharing('driver');
+    setSharingState(false);
+    setTracking(TRACKING_OFF);
+    setDutySince(null);
+    const current = meRef.current;
+    if (current?.current_vehicle_id) saveMe({ ...current, current_vehicle_id: null });
+  }, [saveMe]);
+
+  const enterDriving = useCallback(async (): Promise<EnterDrivingOutcome> => {
+    // Loaded already (a trip of theirs runs behind Office mode, or its data waits): only the screens change.
+    if (meRef.current) {
+      setDrivingView(true);
+      return 'ok';
+    }
+    if (!canEnterDriving(getOfficeMe(), true)) return 'refused';
+    let row: Employee | null;
+    try {
+      row = await api.fetchMe(supabase);
+    } catch {
+      return 'network';
+    }
+    if (!row || !isOfficeDriver(row)) return 'refused';
+    // No signIn, nothing forgotten: the session is Office mode's; push is registered by Office mode already (every channel).
+    saveMe(row);
+    setMeFresh(true);
+    setDrivingView(true);
+    await checkTrackingNow();
+    void refresh();
+    void registerTrackingCheck();
+    return 'ok';
+  }, [saveMe, setDrivingView, checkTrackingNow, refresh]);
+
+  /** The driver state goes, the sign-in stays (Office mode is the same account). Only with nothing running or waiting. */
+  const dropDriving = useCallback(async () => {
+    if (getSharing()) await stopTripSharing();
+    await unregisterTrackingCheck();
+    await disarmShiftNudge();
+    forgetEverything({ keepPermissions: true });
+  }, [stopTripSharing, forgetEverything]);
+
+  const leaveDriving = useCallback(async (): Promise<'keep' | 'drop'> => {
+    setDrivingView(false);
+    // What waits goes now if it can (a moment at most); whatever is left keeps the state until it is sent.
+    if (dataAvailable) await Promise.race([flushNow(true), new Promise((resolve) => setTimeout(resolve, SEND_WAIT_MS))]);
+    const outcome = leaveOutcome({ tasks: tasksRef.current, queue: queueCounts() });
+    if (outcome === 'drop') await dropDriving();
+    return outcome;
+  }, [setDrivingView, dataAvailable, dropDriving]);
+
+  const showDriving = useCallback(() => {
+    if (officeDriverRef.current) setDrivingView(true);
+  }, [setDrivingView]);
+
+  const officeSignOutCheck = useCallback(async (): Promise<OfficeSignOutCheck> => {
+    if (!officeDriverRef.current) return 'ok';
+    if (tripRunning(tasksRef.current)) return 'task';
+    await Promise.race([flushNow(true), new Promise((resolve) => setTimeout(resolve, SEND_WAIT_MS))]);
+    const left = queueCounts();
+    return left.ops > 0 || left.points > 0 ? 'queue' : 'ok';
+  }, []);
+
+  // A trip of theirs ended without Finish on this phone (the office cancelled it, or it finished elsewhere): sharing stops
+  // once nothing of a start or finish waits on the phone (the list is the server's then).
+  useEffect(() => {
+    if (waitingTasks.size > 0) return;
+    if (shouldStopSharing({ officeDriver, sharing, tasks })) void stopTripSharing();
+  }, [officeDriver, sharing, tasks, waitingTasks, stopTripSharing]);
+
+  // Back to office with the state kept: it goes once no trip of theirs runs and everything is sent.
+  useEffect(() => {
+    if (!officeDriver || drivingView) return;
+    if (leaveOutcome({ tasks, queue }) === 'drop') void dropDriving();
+  }, [officeDriver, drivingView, tasks, queue, dropDriving]);
+
+  // Office mode signed out (the person, or the server: the session is gone): the driver state goes with it.
+  const officeSignedIn = officeMe !== null;
+  useEffect(() => {
+    if (officeSignedIn || !officeDriverRef.current) return;
+    void (async () => {
+      if (getSharing()) await stopTripSharing();
+      await unregisterTrackingCheck();
+      forgetEverything();
+    })();
+  }, [officeSignedIn, stopTripSharing, forgetEverything]);
 
   const sendNow = useCallback(async (includeFailed = false) => {
     if (includeFailed) retryFailed();
@@ -1562,9 +1704,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void disarmFuelReminder();
       endTaskKm();
       setGpsKm(kmCounters());
+      // Round 50 (§37.2): an office person shares only during their trip: it stops at Finish (after the finish in the
+      // queue, so the period closes after the trip), unless another trip of theirs runs. A driver stays on duty.
+      if (shouldStopSharing({ officeDriver: officeDriverRef.current, sharing: getSharing() !== null, tasks: tasksRef.current, except: task.id })) {
+        void stopTripSharing();
+      }
       void flushNow();
     },
-    [bumpOdometer, patchLocalTask, queueFuel],
+    [bumpOdometer, patchLocalTask, queueFuel, stopTripSharing],
   );
 
   // --- logs and reports outside a task ---------------------------------------
@@ -1970,7 +2117,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     booted, me, meFresh, language, t, tList, setLanguage,
     vehicles, vehicle, workVehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, settings: shift, wifiOnly, setWifiOnly, waitingTasks, refreshing, offline, dataAvailable,
     gate, resolveGate, requireLocation,
-    signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, undoStopStep, markStopPassed, skipStop,
+    signIn, signOut, officeDriver, driving: drivingShown(officeDriver, drivingView), enterDriving, leaveDriving, showDriving, officeSignOutCheck,
+    refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, undoStopStep, markStopPassed, skipStop,
     dutySince, startWork, changeVehicle, finishWork, loadVehicleChoices, vehicleTaken, dismissVehicleTaken, dutyEnded, clearDutyEnded,
     acceptTask, declineTask, notice, clearNotice,
     startTask, completeTask, logOdometer, logFuel, fillOnWay, sendReport,

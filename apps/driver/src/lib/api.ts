@@ -13,6 +13,7 @@ import { type AvailArgs, parseAvailAnswer, type UnavailabilityRow } from './avai
 import { type OfficeContacts, parseOfficeContacts, parseTaskContacts, type TaskContacts } from './contacts';
 import { type FuelAnswer, type FuelAnswerReply, type FuelEstimate, parseFuelEstimate } from './fuelCard';
 import type { LateReply } from './late';
+import type { TaskScope } from './drivingMode';
 import type { LicenceSide } from './profile';
 import { parsePersonalTrips, type PersonalTrips } from './trips';
 import type { Employee, FuelLog, Language, OdometerLog, TaskWithStops, Vehicle, VehicleReport } from './types';
@@ -213,12 +214,17 @@ export async function fetchVehicles(client: Client): Promise<Vehicle[]> {
 /**
  * Tasks still to do or under way, plus everything that starts at or after `since`. Never a missed one (Hotfix 3: never
  * started, its leave-by over a day ago): the app shows it nowhere.
+ * Round 50 (§37.4): always the person's own (`scope.employeeId`): RLS lets an office person with view read every task, so
+ * the filter is never left to RLS; in Driving mode (`scope.selfOnly`) only the trips they drive themselves (driven_by self).
  */
-export async function fetchTasks(client: Client, since: Date): Promise<TaskWithStops[]> {
+export async function fetchTasks(client: Client, since: Date, scope: TaskScope): Promise<TaskWithStops[]> {
+  let query = client
+    .from('tasks')
+    .select(`*, task_stops(*), task_vehicle_segments(*), task_passengers(${PASSENGER_COLUMNS})`)
+    .eq('employee_id', scope.employeeId);
+  if (scope.selfOnly) query = query.eq('driven_by', 'self');
   const tasks = check(
-    await client
-      .from('tasks')
-      .select(`*, task_stops(*), task_vehicle_segments(*), task_passengers(${PASSENGER_COLUMNS})`)
+    await query
       .or(`status.in.(assigned,in_progress),start_at.gte."${since.toISOString()}"`)
       .neq('status', 'missed')
       .order('start_at'),
