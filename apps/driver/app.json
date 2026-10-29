@@ -3,7 +3,7 @@
     "name": "Fame Fleet",
     "slug": "fame-driver",
     "owner": "fame-global",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "scheme": "famedriver",
     "platforms": [
       "android"
@@ -70,7 +70,9 @@
             "./assets/sounds/general.wav",
             "./assets/sounds/task_ring.ogg",
             "./assets/sounds/task_update.ogg",
-            "./assets/sounds/office_ask.ogg"
+            "./assets/sounds/office_ask.ogg",
+            "./assets/sounds/request_waiting.ogg",
+            "./assets/sounds/issue_critical.ogg"
           ]
         }
       ],
@@ -105,6 +107,7 @@
       ],
       "./plugins/withMlKitFromPlayServices",
       "./plugins/withKeptSounds",
+      "./plugins/withLightOnly",
       "expo-asset",
       [
         "expo-audio",

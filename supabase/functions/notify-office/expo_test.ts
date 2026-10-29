@@ -1,5 +1,13 @@
 import { assertEquals } from "@std/assert";
-import { expoMessagesFor, OFFICE_ISSUES, OFFICE_REQUESTS, officeChannelFor, readTickets } from "./expo.ts";
+import {
+  expoMessagesFor,
+  OFFICE_ISSUES,
+  OFFICE_ISSUES_2,
+  OFFICE_REQUESTS,
+  OFFICE_REQUESTS_2,
+  officeChannelFor,
+  readTickets,
+} from "./expo.ts";
 
 const phone13 = { id: "t1", token: "ExponentPushToken[a]", channels: ["task-ring", "task-updates", "task-reminders", "office-asks"] };
 const phone12 = { id: "t2", token: "ExponentPushToken[b]", channels: ["tasks-new", "tasks-changed", "general", "new-tasks"] };
@@ -60,6 +68,27 @@ Deno.test("an office phone with its own channels: issues on Issues, every other 
   assertEquals(officeChannelFor("alarm", ["task-ring", OFFICE_REQUESTS], "issue.opened"), "task-ring");
   assertEquals(officeChannelFor("urgent", ["task-ring", OFFICE_ISSUES], "request.created"), "task-ring");
   // Per phone: the office phone's own channel; a phone without it as before (a critical issue loud).
-  const msgs = expoMessagesFor("issue.opened", { title: "Critical", body: "x" }, [{ id: "1", token: "t1", channels: office }, { id: "2", token: "t2", channels: ["task-ring"] }]);
+  const msgs = expoMessagesFor("issue.opened", { title: "Critical", body: "x" }, [{ id: "1", token: "t1", channels: office }, {
+    id: "2",
+    token: "t2",
+    channels: ["task-ring"],
+  }]);
   assertEquals(msgs.map((m) => m.channelId), [OFFICE_ISSUES, "task-ring"]);
+});
+
+Deno.test("release 1.4.0: a phone with the office's own sounds gets them first; a 1.3.0 office phone keeps its pair", () => {
+  const both = ["task-ring", "task-updates", OFFICE_REQUESTS_2, OFFICE_ISSUES_2];
+  assertEquals(officeChannelFor("urgent", both, "request.created"), OFFICE_REQUESTS_2);
+  assertEquals(officeChannelFor("alarm", both, "issue.opened"), OFFICE_ISSUES_2);
+  // Between the new pair being made and the old one deleted the phone has all four: the new pair wins.
+  const four = [...both, OFFICE_REQUESTS, OFFICE_ISSUES];
+  assertEquals([officeChannelFor("urgent", four, "request.created"), officeChannelFor("alarm", four, "issue.opened")], [
+    OFFICE_REQUESTS_2,
+    OFFICE_ISSUES_2,
+  ]);
+  const old = ["task-ring", "task-updates", OFFICE_REQUESTS, OFFICE_ISSUES];
+  assertEquals([officeChannelFor("urgent", old, "request.created"), officeChannelFor("alarm", old, "issue.opened")], [
+    OFFICE_REQUESTS,
+    OFFICE_ISSUES,
+  ]);
 });

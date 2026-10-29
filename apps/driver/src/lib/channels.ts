@@ -107,26 +107,38 @@ export const OFFICE_ISSUES_CHANNEL = 'office-issues';
 export const OFFICE_ISSUES_SOUND = 'new_task.wav';
 export const OFFICE_ISSUES_VIBRATION = [0, 600, 250, 600, 250, 600];
 
-export function officeRequestsChannel(t: Translate): ChannelSpec {
+// Release 1.4.0 (docs/release-1.4.0.md item 5): the office's own two sounds, under new ids (a channel's sound is fixed when it
+// is made). A 1.4.0 build makes these instead of the two above and deletes the old two once the server has its token with
+// the new ones (replacedChannels); notify-office prefers them.
+//   office-requests-2  "Requests and approvals": request_waiting.ogg (a bright rising C–E–G twice: decide this)
+//   office-issues-2    "Issues": issue_critical.ogg (quick alternating high–low pulses twice: an alarm)
+export const OFFICE_REQUESTS_2_CHANNEL = 'office-requests-2';
+export const OFFICE_REQUESTS_2_SOUND = 'request_waiting.ogg';
+export const OFFICE_ISSUES_2_CHANNEL = 'office-issues-2';
+export const OFFICE_ISSUES_2_SOUND = 'issue_critical.ogg';
+
+/** "Requests and approvals"; `own` (a 1.4.0 build) = the office's own sound under the new id. */
+export function officeRequestsChannel(t: Translate, own = false): ChannelSpec {
   return {
-    id: OFFICE_REQUESTS_CHANNEL,
+    id: own ? OFFICE_REQUESTS_2_CHANNEL : OFFICE_REQUESTS_CHANNEL,
     name: t('channel.officeRequests'),
     description: t('channel.officeRequestsDesc'),
     importance: 'max',
-    sound: OFFICE_REQUESTS_SOUND,
+    sound: own ? OFFICE_REQUESTS_2_SOUND : OFFICE_REQUESTS_SOUND,
     vibrationPattern: OFFICE_REQUESTS_VIBRATION,
     lockscreen: 'public',
     lightColor: '#f2a900',
   };
 }
 
-export function officeIssuesChannel(t: Translate): ChannelSpec {
+/** "Issues"; `own` (a 1.4.0 build) = the office's own sound under the new id. */
+export function officeIssuesChannel(t: Translate, own = false): ChannelSpec {
   return {
-    id: OFFICE_ISSUES_CHANNEL,
+    id: own ? OFFICE_ISSUES_2_CHANNEL : OFFICE_ISSUES_CHANNEL,
     name: t('channel.officeIssues'),
     description: t('channel.officeIssuesDesc'),
     importance: 'max',
-    sound: OFFICE_ISSUES_SOUND,
+    sound: own ? OFFICE_ISSUES_2_SOUND : OFFICE_ISSUES_SOUND,
     vibrationPattern: OFFICE_ISSUES_VIBRATION,
     lockscreen: 'public',
     lightColor: '#b3261e',
@@ -193,6 +205,9 @@ export interface ChannelsReady {
   /** Office mode (21 October 2026): only on a phone with an office person signed in. */
   officeRequests?: boolean;
   officeIssues?: boolean;
+  /** Release 1.4.0: the office's own sounds (office-requests-2, office-issues-2). */
+  officeRequests2?: boolean;
+  officeIssues2?: boolean;
 }
 
 /**
@@ -210,6 +225,8 @@ export function channelsToRegister(ready: boolean | ChannelsReady): string[] {
     ...(r.reminders ? [REMINDERS_CHANNEL] : []),
     ...(r.officeRequests ? [OFFICE_REQUESTS_CHANNEL] : []),
     ...(r.officeIssues ? [OFFICE_ISSUES_CHANNEL] : []),
+    ...(r.officeRequests2 ? [OFFICE_REQUESTS_2_CHANNEL] : []),
+    ...(r.officeIssues2 ? [OFFICE_ISSUES_2_CHANNEL] : []),
   ];
 }
 
@@ -221,6 +238,9 @@ export function channelsToRegister(ready: boolean | ChannelsReady): string[] {
  *   driver-asks    a question                             → office-asks
  *   tasks-new      new, leave now, accept, a question     → task-ring, task-reminders, office-asks
  *   tasks-changed  changed, cancelled, leave in 30, reopened → task-updates, task-reminders
+ * Release 1.4.0, the same rule for the office's two 1.3.0 channels:
+ *   office-requests  → office-requests-2
+ *   office-issues    → office-issues-2
  */
 export function replacedChannels(registered: readonly string[]): string[] {
   const has = (c: string) => registered.includes(c);
@@ -229,7 +249,16 @@ export function replacedChannels(registered: readonly string[]): string[] {
     ...(has(OFFICE_ASKS_CHANNEL) ? [ASKS_CHANNEL] : []),
     ...(has(RING_CHANNEL) && has(REMINDERS_CHANNEL) && has(OFFICE_ASKS_CHANNEL) ? [OLD_TASKS_NEW_CHANNEL] : []),
     ...(has(UPDATES_CHANNEL) && has(REMINDERS_CHANNEL) ? [OLD_TASKS_CHANGED_CHANNEL] : []),
+    ...(has(OFFICE_REQUESTS_2_CHANNEL) ? [OFFICE_REQUESTS_CHANNEL] : []),
+    ...(has(OFFICE_ISSUES_2_CHANNEL) ? [OFFICE_ISSUES_CHANNEL] : []),
   ];
+}
+
+/** Release 1.4.0: whether the installed build carries the office's two sounds (1.4.0 or later). */
+export function hasOfficeSounds(nativeVersion: string | null | undefined): boolean {
+  const [major, minor] = (nativeVersion ?? '').split('.').map((n) => Number.parseInt(n, 10));
+  if (!Number.isFinite(major) || !Number.isFinite(minor)) return false;
+  return major > 1 || (major === 1 && minor >= 4);
 }
 
 /**

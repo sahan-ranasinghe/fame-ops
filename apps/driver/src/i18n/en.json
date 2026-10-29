@@ -2218,6 +2218,7 @@
       "videoReload": "Pull down to read the list again, then tap the video.",
       "videoOpenFailed": "The video did not open. Try again.",
       "videosBrowser": "A video opens in the phone's browser. Its link works for one hour.",
+      "videosInApp": "A video plays in the app. Its link works for one hour.",
       "filterVehicle": "Vehicle",
       "filterDriver": "Driver"
     },
@@ -3682,6 +3683,17 @@
       "field_contact": "Contact",
       "field_notes": "Notes",
       "field_day": "Day"
+    },
+    "video": {
+      "title": "Fuel video",
+      "steps": "Steps",
+      "interrupted": "Interrupted · {n} pieces",
+      "interruptedLine": "The recording stopped and was continued; the pieces play one after another.",
+      "piece": "Piece {n}",
+      "linkHour": "the link works for 1 hour",
+      "openBrowser": "Open in the browser",
+      "gone": "This video is no longer open. Open it again from the fill.",
+      "failed": "The video did not play. Try again, or open it in the browser."
     }
   },
   "patterns": {
@@ -3743,6 +3755,8 @@
     "showDetails": "Show details",
     "hideDetails": "Hide details",
     "copy": "Copy",
+    "copied": "Copied",
+    "share": "Share",
     "soft": "Something didn't work. Try again."
   },
   "done": {

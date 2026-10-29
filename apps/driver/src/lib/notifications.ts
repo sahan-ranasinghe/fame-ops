@@ -50,6 +50,7 @@ import {
   asksChannel,
   type ChannelSpec,
   type ChannelsReady,
+  hasOfficeSounds,
   hasPart6Sounds,
   isRinging,
   newTasksChannel,
@@ -144,6 +145,8 @@ let officeAsksReady = false;
 let remindersReady = false;
 let officeRequestsReady = false;
 let officeIssuesReady = false;
+let officeRequests2Ready = false;
+let officeIssues2Ready = false;
 
 /** The "New tasks" channel in a language (Android lets an existing channel's name and description change, nothing else). */
 async function setNewTasksChannel(language: Language): Promise<boolean> {
@@ -185,12 +188,23 @@ async function removeChannel(id: string): Promise<void> {
 }
 
 /** Part 6: the 1.3.0 build's three channels in a language. */
-/** Office mode's two channels in a language. */
+/**
+ * Office mode's two channels in a language: on a 1.4.0 build the office's own sounds under the new ids (the 1.3.0 two are
+ * deleted once the server has the token with these: removeReplacedChannels), on an older build the 1.3.0 two.
+ */
 async function setOfficeChannels(language: Language): Promise<void> {
   const t = (key: string, vars?: Record<string, string | number>) => translate(language, key, vars);
+  if (hasOfficeSounds(Application.nativeApplicationVersion)) {
+    officeRequests2Ready = await setChannel(officeRequestsChannel(t, true));
+    officeIssues2Ready = await setChannel(officeIssuesChannel(t, true));
+    return;
+  }
   officeRequestsReady = await setChannel(officeRequestsChannel(t));
   officeIssuesReady = await setChannel(officeIssuesChannel(t));
 }
+
+/** The office's channels are made (the 1.4.0 pair, or the 1.3.0 pair on an older build). */
+const officeChannelsMade = () => (officeRequests2Ready && officeIssues2Ready) || (officeRequestsReady && officeIssuesReady);
 
 async function setPart6Channels(language: Language): Promise<void> {
   const t = (key: string, vars?: Record<string, string | number>) => translate(language, key, vars);
@@ -214,7 +228,7 @@ export async function renameChannels(language: Language): Promise<void> {
   if (newTasksReady) await setNewTasksChannel(language);
   if (asksReady) await setAsksChannel(language);
   if (ringReady || updatesReady || officeAsksReady || remindersReady) await setPart6Channels(language);
-  if (officeRequestsReady || officeIssuesReady) await setOfficeChannels(language);
+  if (officeRequestsReady || officeIssuesReady || officeRequests2Ready || officeIssues2Ready) await setOfficeChannels(language);
 }
 
 /** Whether the "New tasks" channel exists (the push token is registered with it only then). */
@@ -236,9 +250,11 @@ export async function ensureChannels(): Promise<ChannelsReady> {
     reminders: remindersReady,
     officeRequests: officeRequestsReady,
     officeIssues: officeIssuesReady,
+    officeRequests2: officeRequests2Ready,
+    officeIssues2: officeIssues2Ready,
   });
   // Office mode's channels: whenever an office person is signed in (also after a sign-in in a running app), never for a driver.
-  if (getOfficeMe() && hasPart6Sounds(Application.nativeApplicationVersion) && !(officeRequestsReady && officeIssuesReady)) {
+  if (getOfficeMe() && hasPart6Sounds(Application.nativeApplicationVersion) && !officeChannelsMade()) {
     await setOfficeChannels(getJson<Language>(KEYS.language) === 'si' ? 'si' : 'en');
   }
   if (channelsReady) return ready();

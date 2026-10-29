@@ -50,15 +50,22 @@ check(camera?.[1].barcodeScannerEnabled === false && /-dontwarn com\.google\.mlk
   'app.json turns the camera\'s barcode scanner off; withLeanAndroid tells R8 its classes are left out');
 const { soundNames } = require('../plugins/withKeptSounds') as { soundNames: (c: unknown) => string[] };
 const kept = read('plugins/withKeptSounds.js');
-check(JSON.stringify(soundNames(appJson.expo)) === JSON.stringify(['new_task', 'task_changed', 'general', 'task_ring', 'task_update', 'office_ask'])
+check(JSON.stringify(soundNames(appJson.expo)) === JSON.stringify(['new_task', 'task_changed', 'general', 'task_ring', 'task_update', 'office_ask', 'request_waiting', 'issue_critical'])
   && /fame_sounds_keep\.xml/.test(kept) && /tools:keep=/.test(kept),
-  'every notification sound is kept through resource shrinking (raw/fame_sounds_keep.xml)', soundNames(appJson.expo));
+  'every notification sound is kept through resource shrinking (raw/fame_sounds_keep.xml): the eight of 1.4.0', soundNames(appJson.expo));
+// Release 1.4.0 (item 6): force dark refused on the app's theme, and the light style kept.
+const { lightOnlyStyles } = require('../plugins/withLightOnly') as { lightOnlyStyles: (s: unknown) => { resources: { style?: { $: { name: string }; item?: { $: { name: string }; _: string }[] }[] } } };
+const styled = lightOnlyStyles({ resources: { style: [{ $: { name: 'AppTheme', parent: 'Theme.AppCompat.Light.NoActionBar' }, item: [] }] } });
+const appTheme = styled.resources.style?.find((x) => x.$.name === 'AppTheme');
+check(appTheme?.item?.some((i) => i.$.name === 'android:forceDarkAllowed' && i._ === 'false') === true
+  && (appJson.expo.plugins ?? []).some((p: unknown) => p === './plugins/withLightOnly') && appJson.expo.userInterfaceStyle === 'light',
+  'light only: userInterfaceStyle light, and AppTheme refuses force dark (android:forceDarkAllowed false)', appTheme);
 const names = (c: ReturnType<typeof appConfig>) => (c.plugins ?? []).map((p) => (Array.isArray(p) ? String(p[0]) : String(p)));
 const lean = configFor({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' });
 const dev = configFor({});
 check(!names(lean).includes('expo-dev-client') && names(lean).includes('@maplibre/maplibre-react-native') && names(lean).at(-1) === './plugins/withLeanAndroid'
-  && lean.runtimeVersion === '1.3.0-gmaps' && lean.version === '1.3.0',
-  'the drivers config: no dev client, MapLibre kept, withLeanAndroid added, runtime 1.3.0-gmaps', { plugins: names(lean), runtime: lean.runtimeVersion });
+  && lean.runtimeVersion === '1.4.0-gmaps' && lean.version === '1.4.0',
+  'the drivers config: no dev client, MapLibre kept, withLeanAndroid added, runtime 1.4.0-gmaps', { plugins: names(lean), runtime: lean.runtimeVersion });
 check(names(dev).includes('expo-dev-client') && names(dev).includes('@maplibre/maplibre-react-native') && !names(dev).includes('./plugins/withLeanAndroid'),
   'the development config is as before');
 check(names(dev).includes('./plugins/withKeptSounds') && names(lean).includes('./plugins/withKeptSounds'),

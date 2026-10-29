@@ -11,8 +11,9 @@
 // Round 4–7 (item 8, the list audit): each Mileage section shows its first 5 rows, "Show all N" 25, then Load more 25 at
 // a time (MileageSection; before: every row at once).
 
+import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { DateRangeButton } from '@/components/patterns/Calendar';
 import { FilterBar } from '@/components/patterns/FilterBar';
@@ -25,6 +26,7 @@ import {
   appendDuty, appendFuel, clockOut, dutyArgs, heldLine, hoursText, mileageView, outHowKey, outsideKm, rangeArgs, rangeFits, REPORT_MAX_DAYS, type ReportSection, reportSections, rowCells,
   clockOf, linksStale, reportFilterArgs, reportFilterDefs, videoChip, videoLine, videoPieces, amountsOf, amountWords, fuelTextParts,
 } from '@/office/manageLogic';
+import { handToPlayer, startPiece } from '@/office/fuelPlayer';
 import { SECTION_FIRST, sectionNext, sectionShown } from '@/office/lists2Logic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriversList, DutyLog, FleetError, FuelList, MileageSummary, Row, VehiclesList } from '@/office/types';
@@ -194,21 +196,31 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
   // A tap on a stale list: read again, then open that piece from the fresh answer (or say it is no longer on the first page).
   const [pending, setPending] = useState<{ id: string; n: number } | null>(null);
   const [videoNote, setVideoNote] = useState<string | null>(null);
+  // Release 1.4.0: the fill's video plays in the app (office/fuel-video.tsx), from the piece tapped; 1.3.0 opened the browser.
+  const router = useRouter();
+  function play(id: string, n: number, list: FuelList) {
+    const e = list.entries.find((x) => x.id === id);
+    if (!e || !videoPieces(e.video).some((x) => x.n === n)) {
+      setVideoNote(t('office.reports.videoReload'));
+      return;
+    }
+    handToPlayer({ title: dateWords(t, e.at), sub: [e.vehicle, e.driver].filter(Boolean).join(' · '), video: e.video, start: startPiece(e.video, n) });
+    router.push('/office/fuel-video');
+  }
   useEffect(() => {
     if (!pending || !d || linksStale(loadedAt.current, Date.now())) return;
-    const piece = videoPieces(d.entries.find((e) => e.id === pending.id)?.video ?? { status: 'none' }).find((x) => x.n === pending.n);
     setPending(null);
-    if (piece) void Linking.openURL(piece.url).catch(() => setVideoNote(t('office.reports.videoOpenFailed')));
-    else setVideoNote(t('office.reports.videoReload'));
+    play(pending.id, pending.n, d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d, pending, t]);
-  function watch(id: string, n: number, url: string) {
+  function watch(id: string, n: number) {
     setVideoNote(null);
     if (linksStale(loadedAt.current, Date.now())) {
       setPending({ id, n });
       void q.reload();
       return;
     }
-    void Linking.openURL(url).catch(() => setVideoNote(t('office.reports.videoOpenFailed')));
+    if (d) play(id, n, d);
   }
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
   const n = (x: number | null | undefined) => (Number(x) || 0).toLocaleString('en-US');
@@ -259,7 +271,7 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
                   {videoPieces(e.video).length > 0 && (
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                       {videoPieces(e.video).map((piece, k, all) => (
-                        <Pressable key={piece.n} accessibilityRole="link" onPress={() => watch(e.id, piece.n, piece.url)} testID="fuel-video"
+                        <Pressable key={piece.n} accessibilityRole="link" onPress={() => watch(e.id, piece.n)} testID="fuel-video"
                           style={({ pressed }) => [{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line }, pressed && { opacity: 0.8 }]}>
                           <Txt variant="strong" size={15} color={colors.blue}>
                             {pending?.id === e.id && pending.n === piece.n ? t('office.reports.videoRenewing') : all.length > 1 ? t('office.reports.watchPiece', { n: k + 1, d: piece.duration_s != null ? clockOf(piece.duration_s) : '' }) : t('office.reports.watch')}
@@ -275,7 +287,7 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
             {d.next && <LoadMore shown={d.entries.length} total={d.total} busy={more.busy} onPress={() => void loadMore()} />}
           </Section>
           {videoNote && <Txt variant="small" color={colors.red}>{videoNote}</Txt>}
-          <Txt variant="small">{t('office.reports.videosBrowser')}</Txt>
+          <Txt variant="small">{t('office.reports.videosInApp')}</Txt>
         </>
       )}
     </Screen>

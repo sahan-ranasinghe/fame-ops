@@ -267,7 +267,10 @@
   OpenFreeMap map. A Google stop is never drawn on the OpenFreeMap map (`lib/mapRule.ts`).
   Phones still on 1.1.0 got their last update from d63c838; updates from later commits target 1.2.0.
   1.3.0 (Phase 7 Part 6) is the `drivers` profile (runtime `1.3.0-gmaps`), installed once; once it is on main, updates
-  target 1.3.0 only. A release build shrinks resources: anything named only at run time (a channel's sound, a
+  target 1.3.0 only. 1.4.0 (`release-1.4.0`, 29 October 2026; `docs/release-1.4.0.md`): expo-video (the in-app fuel
+  video player), expo-clipboard, the SDK 57 patches, the office's own sounds (`office-requests-2` / `office-issues-2`), force
+  dark refused (`plugins/withLightOnly.js`); the same `drivers` profile, runtime `1.4.0-gmaps`, versionCode 3; once on main,
+  updates target 1.4.0 only (a fix for 1.3.0 phones is published from a 1.3.0 commit). A release build shrinks resources: anything named only at run time (a channel's sound, a
   `getIdentifier` name) needs a keep rule (the 1.2.0 build lost `new_task.wav` and `general.wav`: those channels play the
   phone's default sound).
 - ALL native modules are installed before the first development build, so the rest of the

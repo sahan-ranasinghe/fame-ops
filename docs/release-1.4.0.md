@@ -8,6 +8,29 @@ native change, never a build to try something). **Nothing here is built yet.** U
 
 Collected 20 October 2026 (Stage 1 item 7).
 
+## Applied, 29 October 2026 (branch `release-1.4.0` from main `2e27b87`; not built)
+
+Sahan's decisions at the prep: the build uses the **`drivers`** profile (as 1.3.0; the `preview` profile is the old 1.2.0
+one: the dev client in a release APK, not lean, no version code raise) and the runtime stays **`1.4.0-gmaps`** (the
+existing rule: `<version>-gmaps` with EAS's GOOGLE_ANDROID_MAPS on).
+
+| # | Item | State |
+|---|---|---|
+| 1 | Native date and time pickers | Dropped (21 October): the time sheet is a JavaScript dial and the calendar stays JavaScript; `@react-native-community/datetimepicker` is not added |
+| 2 | In-app fuel video player | Done: `expo-video` 57.0.5; `app/office/fuel-video.tsx` + `office/fuelPlayer.ts` (pieces one after another, the steps as bookmarks, the pieces to pick, "Open in the browser" kept); Reports → Fuel and a task's fills open it. expo-video's own config plugin (background playback, picture-in-picture) is not added: not needed |
+| 3 | expo-doctor patches | Done: `npx expo install --fix` (12 by now: the 11 listed plus expo-network 57.0.3; expo 57.0.31, expo-router 57.0.29, expo-location 57.0.22, expo-notifications 57.0.24, expo-updates 57.0.26 …). expo-doctor 21/21 |
+| 4 | expo-clipboard | Done: `expo-clipboard` 57.0.2; the crash screen's Copy puts the scrubbed details on the clipboard and says "Copied" for 2 s (no snackbar there: the crash screen needs no provider); Share (the 1.3.0 way) stays beside it |
+| 5 | The office's own sounds | Done: `request_waiting.ogg` and `issue_critical.ogg` moved to `assets/sounds/`, listed in app.json (eight sounds, all kept by withKeptSounds); a 1.4.0 build makes `office-requests-2` / `office-issues-2` instead of the 1.3.0 pair and deletes the old two once the server has its token with the new ones (`replacedChannels`); notify-office prefers the `-2` ids (**deploy notify-office before the first 1.4.0 phone**: until then a 1.4.0 office phone's pushes would fall back to the driver channels' sounds) |
+| 6 | Light only | Done: `userInterfaceStyle` "light" kept; `plugins/withLightOnly.js` sets `android:forceDarkAllowed="false"` on AppTheme (the prebuilt styles.xml carries it; `test:build` checks the plugin) |
+| 7 | Version | 1.4.0 (app.json); runtime `1.4.0-gmaps`; the version code is EAS's (remote, 2 after 1.3.0): the drivers profile's autoIncrement makes it **3** at this build |
+
+The Android permissions (prebuilt manifest of the drivers config, plus every native module's own manifest, compared with the
+1.3.0 dependencies: the same 12 library permissions; expo-video adds INTERNET only, expo-clipboard none): ACCESS_COARSE_LOCATION,
+ACCESS_FINE_LOCATION, ACCESS_BACKGROUND_LOCATION, FOREGROUND_SERVICE, FOREGROUND_SERVICE_LOCATION, CAMERA, POST_NOTIFICATIONS,
+REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, READ_EXTERNAL_STORAGE and WRITE_EXTERNAL_STORAGE (both up to Android 12, maxSdk 32),
+INTERNET, VIBRATE, MODIFY_AUDIO_SETTINGS; removed as before (`tools:node="remove"`): RECORD_AUDIO, SYSTEM_ALERT_WINDOW,
+USE_BIOMETRIC, USE_FINGERPRINT. Nothing new; RECORD_AUDIO stays out (the player only plays).
+
 ## 1. The native date and time pickers: dropped (21 October 2026)
 
 Not needed any more. The time sheet is now a pure JavaScript clock (Material 3's time picker: a 24-hour dial with a
@@ -109,10 +132,9 @@ The app and /m/ are light on purpose for now (a proper dark theme is a later ite
 ## The build, when Sahan says go
 
 1. Count this month's builds (`eas build:list`) and say how many are left.
-2. `npx expo install @react-native-community/datetimepicker expo-video expo-clipboard` and `npx expo install --check` (the 11 patches).
-3. The full suite; `expo prebuild` into a scratch folder (nothing committed); `expo-doctor` (21/21); `npm run test:build`.
-4. Raise the version to 1.4.0 (`app.json`); the runtime follows.
-5. `eas build --profile drivers --platform android --no-wait`; check with `eas build:view`.
-6. Download the APK: its size, an arm64-v8a and an armeabi-v7a copy of every native library, 16 KB alignment, all eight
-   sounds.
-7. Install on the test phone; then the update channel targets 1.4.0.
+2. Deploy notify-office first (its go): the `-2` channels.
+3. From `apps/driver` on `release-1.4.0`: `npx eas build --platform android --profile drivers --no-wait`; check with `eas build:view`.
+4. Download the APK: its size, an arm64-v8a and an armeabi-v7a copy of every native library, 16 KB alignment, all eight
+   sounds, version 1.4.0 (3), runtime 1.4.0-gmaps.
+5. Install on the test phone (the checks after the build: items 2, 4, 5 and 6 above), then the pilot phones.
+6. Fast-forward main to the build's commit; from then every EAS update targets 1.4.0-gmaps only.

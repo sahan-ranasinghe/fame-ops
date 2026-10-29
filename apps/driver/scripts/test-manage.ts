@@ -267,9 +267,10 @@ console.log('\nFuel videos open in the browser (Stage 1, O3 item 4)');
     'nothing to watch until uploaded, after pruning, or without an https link');
   check(VIDEO_LINK_FRESH_MS === 50 * 60_000 && !linksStale(0, 50 * 60_000) && linksStale(0, 50 * 60_000 + 1), 'a list read over 50 minutes ago is read again before a link opens (the links last an hour)');
   const screen = read('app/office/reports/index.tsx');
-  check(screen.includes('Linking.openURL(url)') && screen.includes('testID="fuel-video"') && screen.includes('linksStale(loadedAt.current, Date.now())') && screen.includes('appending.current = true'),
-    "Reports: Watch video opens the link in the phone's browser; a stale list is read again first; Load more keeps the oldest time");
-  check(!screen.includes('videosLaptop') && screen.includes("t('office.reports.videosBrowser')") && screen.includes('e.video.timeline'), "the note says the browser, not the laptop; the steps' marks under the row");
+  // Release 1.4.0: the video plays in the app (office/fuel-video.tsx; scripts/test-fuel-player.ts), no longer the browser.
+  check(screen.includes('handToPlayer(') && !screen.includes('Linking.openURL(') && screen.includes('testID="fuel-video"') && screen.includes('linksStale(loadedAt.current, Date.now())') && screen.includes('appending.current = true'),
+    'Reports: Watch video plays it in the app; a stale list is read again first; Load more keeps the oldest time');
+  check(!screen.includes('videosLaptop') && screen.includes("t('office.reports.videosInApp')") && screen.includes('e.video.timeline'), "the note says the app, not the laptop; the steps' marks under the row");
 }
 
 console.log('\nReports: the vehicle and the driver (O3 rows 7 and 10)');

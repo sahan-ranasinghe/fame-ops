@@ -972,6 +972,22 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 36. Release 1.4.0 prep (29 October 2026, branch `release-1.4.0` from main `2e27b87`; not built)
+
+The native items of `docs/release-1.4.0.md` applied (the final list and the permissions there): the in-app fuel video player
+(expo-video), the SDK 57 patches (expo-doctor 21/21), expo-clipboard on the crash screen, the office's two sounds on
+`office-requests-2` / `office-issues-2` (the 1.3.0 pair deleted once replaced; notify-office prefers the new ids), light
+only (force dark refused). Version 1.4.0, versionCode 3 (EAS raises it at the drivers build), runtime `1.4.0-gmaps`, the
+`drivers` profile (Sahan's decisions at the prep).
+
+**Updates after the build.** EAS Update gives a phone only the updates published for its own runtime. Phones still on
+1.3.0 (`1.3.0-gmaps`) keep working on the last update published for that runtime (group 4ddf1877, "Password links: 7 days,
+preview-safe", commit c0cc9c0) and get nothing newer until they install the 1.4.0 APK; the server keeps answering them as
+before (their channels, their tools). **Round 50 and later publish to runtime `1.4.0-gmaps` only**: once main carries 1.4.0,
+`eas update --channel preview --environment preview` from main targets it. A JavaScript fix that 1.3.0 phones must still
+get is published from a commit whose app.json says 1.3.0 (as the 1.1.0 phones got theirs from d63c838), never from main.
+So: build from `release-1.4.0`, install the pilot phones, then fast-forward main.
+
 ## 35. Round 49: set-password links survive being opened (29 October 2026, branch `r49-password-links` from main `c3103a3`)
 
 **What broke.** Shashen Herath (created 28 October 18:06) could not set his password; a second link followed at 18:10.

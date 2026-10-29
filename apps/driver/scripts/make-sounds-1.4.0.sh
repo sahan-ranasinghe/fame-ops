@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # The two office sounds for 1.4.0 (Sahan, 21 October 2026; docs/release-1.4.0.md): original synthesised tones (pure sines
-# with a sine envelope, as scripts/make-sounds.sh makes the six in 1.3.0), under 2 s, as loud as those. Drafts to listen to:
-# they go into assets/sound-drafts/, which app.json does NOT list, so no build carries them until 1.4.0 moves them into
-# assets/sounds/ with their channels.
+# with a sine envelope, as scripts/make-sounds.sh makes the six in 1.3.0), under 2 s, as loud as those. Shipped in 1.4.0:
+# assets/sounds/ (app.json's expo-notifications sounds, kept by plugins/withKeptSounds.js), the sounds of the channels
+# office-requests-2 and office-issues-2 (lib/channels.ts).
 #
 #   request_waiting.ogg  a request to approve, a task that needs a driver: a bright rising C–E–G, twice ("decide this")
 #   issue_critical.ogg   a critical issue: quick alternating high–low pulses, twice (an alarm, unlike every other tone)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 command -v ffmpeg >/dev/null || { echo "ffmpeg is needed" >&2; exit 2; }
-mkdir -p assets/sound-drafts
+mkdir -p assets/sounds
 
 note() { # start length hz → one enveloped sine
   echo "if(between(t,$1,$1+$2),sin(2*PI*$3*t)*sin(PI*(t-$1)/$2),0)"
 }
 ogg() { # file duration amplitude expression
-  ffmpeg -loglevel error -y -f lavfi -i "aevalsrc='$3*($4)':s=44100:d=$2" -ac 1 -ar 44100 -c:a libvorbis -q:a 4 "assets/sound-drafts/$1"
-  echo "  $1  $(du -h "assets/sound-drafts/$1" | cut -f1)"
+  ffmpeg -loglevel error -y -f lavfi -i "aevalsrc='$3*($4)':s=44100:d=$2" -ac 1 -ar 44100 -c:a libvorbis -q:a 4 "assets/sounds/$1"
+  echo "  $1  $(du -h "assets/sounds/$1" | cut -f1)"
 }
 
 # Rising C6 E6 G6 (1047, 1319, 1568 Hz; the last longer), then again after a pause: 1.6 s.

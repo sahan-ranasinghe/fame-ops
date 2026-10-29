@@ -59,6 +59,7 @@ import { ReasonSheet } from '@/components/ReasonSheet';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { PendingChangeLine } from '@/components/office/ChangeParts';
 import { Button, Txt } from '@/components/ui';
+import { handToPlayer, startPiece } from '@/office/fuelPlayer';
 import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
 import { useSwitch } from '@/office/switches';
@@ -114,14 +115,21 @@ export default function TaskDetailScreen() {
   const [pendingLink, setPendingLink] = useState<LinkKey | null>(null);
   const [linkNote, setLinkNote] = useState<string | null>(null);
   const openUrl = (url: string) => void Linking.openURL(url).catch(() => setLinkNote(t('office.task.linkOpenFailed')));
+  // Release 1.4.0: a fill's video plays in the app (office/fuel-video.tsx), from the piece tapped; photos still open as links.
+  function openFound(data: TaskDetail, key: LinkKey, url: string) {
+    setLinkNote(null);
+    const fill = key.kind === 'video' ? data.fuel[key.i] : undefined;
+    if (!fill?.video) return openUrl(url);
+    const plate = data.task?.vehicle ? plateOf(data.task.vehicle) : '';
+    handToPlayer({ title: dateWords(t, fill.at), sub: [plate, data.task?.driver ?? ''].filter(Boolean).join(' · '), video: fill.video, start: key.kind === 'video' ? startPiece(fill.video, key.n) : 0 });
+    router.push('/office/fuel-video');
+  }
   useEffect(() => {
     if (!pendingLink || !q.data || Date.now() - loadedAt.current > DETAIL_LINKS_FRESH_MS) return;
     const url = linkOf(q.data, pendingLink);
     setPendingLink(null);
-    if (url) {
-      setLinkNote(null);
-      openUrl(url);
-    } else setLinkNote(t('office.task.linkGone'));
+    if (url) openFound(q.data, pendingLink, url);
+    else setLinkNote(t('office.task.linkGone'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q.data, pendingLink]);
   // The reading again failed: no link waits for ever (Stage 1 review); the reason in words, Try again by tapping again.
@@ -140,10 +148,7 @@ export default function TaskDetailScreen() {
       return;
     }
     const url = linkOf(q.data, key);
-    if (url) {
-      setLinkNote(null);
-      openUrl(url);
-    }
+    if (url) openFound(q.data, key, url);
   }
 
   async function cancel(label: string, note: string) {

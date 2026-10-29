@@ -1,14 +1,16 @@
 // Hotfix O2-H2, Part 1c: the screen a crash shows instead of a white page (react-error-boundary's fallback, as production
 // apps have). "Something went wrong" / "Your work was saved if you pressed Save.", Go back (resets that stack), Reload app
 // (expo-updates reloadAsync, JavaScript only), and Show details (the error, the screen, the app version, the update id, the
-// runtime and the first stack lines, scrubbed of anything personal: lib/crashLogic.ts) with Copy (Android's share sheet,
-// whose Copy puts it on the clipboard; the text itself can be selected too). It needs nothing that may be the thing that
+// runtime and the first stack lines, scrubbed of anything personal: lib/crashLogic.ts) with Copy (release 1.4.0: expo-clipboard
+// puts it on the clipboard and the button says "Copied" for 2 s, WhatsApp's "Message copied"; no snackbar here, the screen
+// needs no provider) and Share (Android's share sheet, 1.3.0's way); the text itself can be selected too. It needs nothing that may be the thing that
 // broke: no app provider (the language from the key store), no custom fonts, no router (the caller passes the actions).
 //
 // `RouteCrash` is the per-stack boundary (expo-router's `export function ErrorBoundary` in a layout): it reports the
 // error once and offers Go back within that stack.
 
 import { useRouter, type ErrorBoundaryProps } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
@@ -46,6 +48,16 @@ export function CrashScreen({ crash, onBack, onReload }: { crash: CrashDetails; 
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const text = detailsText(crash);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  // The clipboard, else the share sheet (a phone where the clipboard said no).
+  const copy = () => {
+    void Clipboard.setStringAsync(text).then(() => setCopied(true), () => Share.share({ message: text }).catch(() => undefined));
+  };
   // A crash while the app was starting: the splash goes, so the crash screen is seen (never a frozen splash).
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => undefined);
@@ -69,8 +81,11 @@ export function CrashScreen({ crash, onBack, onReload }: { crash: CrashDetails; 
         {open ? (
           <View style={styles.details} testID="crash-details">
             <Text selectable style={styles.mono}>{text}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void Share.share({ message: text }).catch(() => undefined)} style={[styles.btn, styles.outline]} testID="crash-copy">
-              <Text style={styles.outlineText}>{t('crash.copy')}</Text>
+            <Pressable accessibilityRole="button" onPress={copy} style={[styles.btn, styles.outline]} testID="crash-copy">
+              <Text style={styles.outlineText}>{copied ? t('crash.copied') : t('crash.copy')}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => void Share.share({ message: text }).catch(() => undefined)} style={[styles.btn, styles.outline]} testID="crash-share">
+              <Text style={styles.outlineText}>{t('crash.share')}</Text>
             </Pressable>
           </View>
         ) : null}

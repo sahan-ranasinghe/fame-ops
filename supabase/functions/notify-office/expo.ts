@@ -15,16 +15,23 @@ const OLD_SOFT = "general";
 /** Office mode's own channels (21 October 2026; the app makes them only for an office person, lib/channels.ts). */
 export const OFFICE_REQUESTS = "office-requests";
 export const OFFICE_ISSUES = "office-issues";
+/** Release 1.4.0: the same two with the office's own sounds (request_waiting.ogg, issue_critical.ogg), preferred when made. */
+export const OFFICE_REQUESTS_2 = "office-requests-2";
+export const OFFICE_ISSUES_2 = "office-issues-2";
 
 /**
  * The channel of an office push on a phone with these channels (never one it did not register): an issue on "Issues", every
- * other event on "Requests and approvals" once the phone has them; before that, loud (the 30 s ring) for something to decide,
+ * other event on "Requests and approvals" once the phone has them (the 1.4.0 pair with the office's own sounds first, then the
+ * 1.3.0 pair); before that, loud (the 30 s ring) for something to decide,
  * a task that needs a driver or a critical issue, and the rest a tone.
  */
 export function officeChannelFor(kind: InboxKind, channels: readonly string[], event = ""): string {
   const has = (c: string) => channels.includes(c);
-  if (event.startsWith("issue.") && has(OFFICE_ISSUES)) return OFFICE_ISSUES;
-  if (!event.startsWith("issue.") && has(OFFICE_REQUESTS)) return OFFICE_REQUESTS;
+  const issue = event.startsWith("issue.");
+  if (issue && has(OFFICE_ISSUES_2)) return OFFICE_ISSUES_2;
+  if (!issue && has(OFFICE_REQUESTS_2)) return OFFICE_REQUESTS_2;
+  if (issue && has(OFFICE_ISSUES)) return OFFICE_ISSUES;
+  if (!issue && has(OFFICE_REQUESTS)) return OFFICE_REQUESTS;
   if (kind === "urgent" || kind === "alarm") return has(RING) ? RING : OLD_LOUD;
   return has(UPDATES) ? UPDATES : OLD_SOFT;
 }
