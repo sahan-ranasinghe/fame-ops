@@ -46,12 +46,19 @@ export function taskScope(me: DriverRow): TaskScope {
 }
 
 /** A task the driver screens may show for this person (the same rule again on the phone's copy: never another person's). */
-export function isOwnTask(task: Pick<TaskWithStops, 'employee_id'> & { driven_by?: string | null }, me: DriverRow): boolean {
+export function isOwnTask(
+  task: Pick<TaskWithStops, 'employee_id'> & { driven_by?: string | null; driven_in?: string | null },
+  me: DriverRow,
+): boolean {
   if (task.employee_id !== me.id) return false;
-  return !isOfficeDriver(me) || task.driven_by === 'self';
+  // An office person: their self trips only, and never one under way on the web or from My trip (it finishes there).
+  return !isOfficeDriver(me) || (task.driven_by === 'self' && (task.driven_in == null || task.driven_in === 'app'));
 }
 
-export function ownTasks<T extends Pick<TaskWithStops, 'employee_id'> & { driven_by?: string | null }>(tasks: readonly T[], me: DriverRow | null): T[] {
+export function ownTasks<T extends Pick<TaskWithStops, 'employee_id'> & { driven_by?: string | null; driven_in?: string | null }>(
+  tasks: readonly T[],
+  me: DriverRow | null,
+): T[] {
   return me ? tasks.filter((task) => isOwnTask(task, me)) : [];
 }
 

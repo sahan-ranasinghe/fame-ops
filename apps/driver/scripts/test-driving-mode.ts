@@ -81,8 +81,21 @@ async function main(): Promise<void> {
     const eqs = (log: [string, unknown[]][]) => log.filter(([n]) => n === 'eq').map(([, a]) => a);
     check(same(eqs(forDriver), [['employee_id', 'e-driver']]), 'a driver\'s query: employee_id = me, nothing about driven_by', eqs(forDriver));
     check(same(eqs(forOffice), [['employee_id', 'e-office'], ['driven_by', 'self']]), 'an office person\'s query: employee_id = me and driven_by = self', eqs(forOffice));
-    const rest = (log: [string, unknown[]][]) => log.filter(([n]) => n !== 'eq');
+    // The fresh review (finding 10): an office person's query also leaves out a trip under way on the web or from My trip.
+    const notElsewhere = (a: unknown[]) => same(a, ['driven_in.is.null,driven_in.eq.app']);
+    check(forOffice.some(([n, a]) => n === 'or' && notElsewhere(a)) && !forDriver.some(([n, a]) => n === 'or' && notElsewhere(a)),
+      'an office person\'s query leaves out trips started on the web or from My trip (a driver\'s does not ask)');
+    const rest = (log: [string, unknown[]][]) => log.filter(([n, a]) => n !== 'eq' && !(n === 'or' && notElsewhere(a)));
     check(same(rest(forDriver), rest(forOffice)), 'the rest of the query is the same for both (the window, never a missed task, by start)');
+    check(!isOwnTask({ employee_id: OFFICE.id, driven_by: 'self', driven_in: 'web' }, OFFICE)
+      && !isOwnTask({ employee_id: OFFICE.id, driven_by: 'self', driven_in: 'office' }, OFFICE)
+      && isOwnTask({ employee_id: OFFICE.id, driven_by: 'self', driven_in: 'app' }, OFFICE)
+      && isOwnTask({ employee_id: OFFICE.id, driven_by: 'self', driven_in: null }, OFFICE)
+      && isOwnTask({ employee_id: DRIVER.id, driven_by: 'driver', driven_in: 'web' }, DRIVER),
+      'on the phone too: an office person\'s web or My-trip start stays out of Driving mode; a driver is unchanged');
+    const appSource = readFileSync(join(__dirname, '..', 'src/state/app.tsx'), 'utf8');
+    check(/forgetEverything\(\{ keepQueue: left\.ops > 0 \|\| left\.points > 0 \}\)/.test(appSource) && /if \(!options\?\.keepQueue\) clearQueue\(\);/.test(appSource),
+      'a sign-out forced mid-trip keeps the trip\'s unsent finish, readings and points on the phone');
     check(forDriver.some(([n, a]) => n === 'neq' && same(a, ['status', 'missed'])) && forDriver.some(([n, a]) => n === 'or' && String(a[0]).includes('status.in.(assigned,in_progress)')), 'the window as before: still to do or under way, or from the day\'s start; no missed task');
   }
 

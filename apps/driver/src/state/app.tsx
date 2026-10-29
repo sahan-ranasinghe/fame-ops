@@ -633,7 +633,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * office person's driver state is dropped (Back to office with nothing running): the first-run Permissions step was done
    * on this phone and is not asked again at their next Start driving.
    */
-  const forgetEverything = useCallback((options?: { keepPermissions?: boolean }) => {
+  const forgetEverything = useCallback((options?: { keepPermissions?: boolean; keepQueue?: boolean }) => {
     saveMe(null);
     remove(KEYS.drivingView);
     setDrivingViewState(false);
@@ -688,7 +688,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSeen({});
     setPushed({});
     pendingTrips.current.clear();
-    clearQueue();
+    if (!options?.keepQueue) clearQueue();
     seenQueued.current.clear();
   }, [saveMe, saveTasks]);
 
@@ -1335,14 +1335,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (leaveOutcome({ tasks, queue }) === 'drop') void dropDriving();
   }, [officeDriver, drivingView, tasks, queue, dropDriving]);
 
-  // Office mode signed out (the person, or the server: the session is gone): the driver state goes with it.
+  // Office mode signed out (the person, or the server: the session is gone): the driver state goes with it. A trip's
+  // finish, readings and points still waiting are their own rows: they stay on the phone and go up after the next sign-in
+  // (the fresh review, finding 6: a sign-out forced mid-trip never deletes them).
   const officeSignedIn = officeMe !== null;
   useEffect(() => {
     if (officeSignedIn || !officeDriverRef.current) return;
     void (async () => {
       if (getSharing()) await stopTripSharing();
       await unregisterTrackingCheck();
-      forgetEverything();
+      const left = queueCounts();
+      forgetEverything({ keepQueue: left.ops > 0 || left.points > 0 });
     })();
   }, [officeSignedIn, stopTripSharing, forgetEverything]);
 

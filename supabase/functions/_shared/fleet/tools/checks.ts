@@ -409,24 +409,38 @@ export const webTripAction = tool({
     if (!t || t.employee_id !== me) throw new ToolError("Not one of your trips.");
     if (t.driven_by !== "self") throw new ToolError("Only a trip you drive yourself can be driven here.");
     const settings = await loadSettings(db);
-    const refused = webRefusal(t, settings, await canDriveOf(db, me));
-    if (refused) throw new ToolError(refused);
+    // Starting needs the capability and the switch; a web trip already under way can always be driven to its end (an admin
+    // taking can_drive away mid-trip must not strand the trip and its vehicle).
+    if (args.action === "start") {
+      const refused = webRefusal(t, settings, await canDriveOf(db, me));
+      if (refused) throw new ToolError(refused);
+    } else if (t.driven_in === "app") throw new ToolError(WEB_IN_APP);
+    else if (t.driven_in !== "web" || t.status !== "in_progress") {
+      throw new ToolError(t.status === "completed" ? "This trip is already finished." : "Start the trip first.");
+    }
     const at = now.toISOString();
     const pos = args.position;
     let answer: Record<string, unknown>;
     let stopId: string | null = null;
 
     if (args.action === "start") {
-      if (t.status !== "assigned") throw new ToolError("This trip is already on its way.");
+      const startLog = unwrapMaybe(
+        await db.from("odometer_logs").select("id").eq("task_id", t.id).eq("kind", "task_start").limit(1).maybeSingle(),
+        "odometer",
+      );
+      // A start that failed after the trip went on its way (its answer was never kept): finish recording it, never twice.
+      const resumed = t.status === "in_progress" && t.driven_in === "web";
+      if (t.status !== "assigned" && !resumed) throw new ToolError("This trip is already on its way.");
       const window = tripWindow(t.start_at, now);
-      if (!window.open) throw new ToolError(`This trip can start from ${window.opens_at}.`);
+      if (!window.open && !resumed) throw new ToolError(`This trip can start from ${window.opens_at}.`);
       if (args.odometer_km == null || !args.odometer_photo_id) throw new ToolError("Take the odometer photo and type the reading.");
       const last = await lastReading(db, t.vehicle_id!);
-      const odoWrong = odometerProblem(args.odometer_km, last);
+      const odoWrong = resumed ? null : odometerProblem(args.odometer_km, last);
       if (odoWrong) throw new ToolError(odoWrong);
-      await ownPhotos(db, me, [args.odometer_photo_id], "odometer");
+      if (!startLog) await ownPhotos(db, me, [args.odometer_photo_id], "odometer");
       const check = args.check;
-      if (settings.vehicle_check) {
+      const checkDone = unwrapMaybe(await db.from("vehicle_checks").select("id").eq("id", args.client_id).maybeSingle(), "vehicle check");
+      if (settings.vehicle_check && !checkDone) {
         if (!check) throw new ToolError("Answer the vehicle check first.");
         const problem = check.result === "problem";
         if (problem && !check.category) throw new ToolError("Pick what the problem is.");
@@ -467,32 +481,36 @@ export const webTripAction = tool({
           unwrap(await db.from("photos").update({ vehicle_report_id: report.id }).in("id", check.photos ?? []), "photos");
         }
       }
-      const started = unwrap(
-        await db.from("tasks").update({
-          status: "in_progress",
-          started_at: at,
-          start_odometer_km: args.odometer_km,
-          driven_in: "web",
-          ...(args.fuel_answer && { fuel_answer: args.fuel_answer, fuel_answer_at: at }),
-        }).eq("id", t.id).eq("status", "assigned").select("id"),
-        "task",
-      );
-      if (!started.length) throw new ToolError("This trip is already on its way.");
-      const log = unwrap(
-        await db.from("odometer_logs").insert({
-          vehicle_id: t.vehicle_id!,
-          employee_id: me,
-          task_id: t.id,
-          reading_km: args.odometer_km,
-          kind: "task_start",
-          logged_at: at,
-          entry: "web",
-          photo_id: args.odometer_photo_id,
-        }).select("id").single(),
-        "odometer",
-      );
-      unwrap(await db.from("photos").update({ odometer_log_id: log.id }).eq("id", args.odometer_photo_id), "photos");
-      answer = { task_id: t.id, status: "in_progress", driven_in: "web", next: `On the way · left ${colomboTime(now)}` };
+      if (!resumed) {
+        const started = unwrap(
+          await db.from("tasks").update({
+            status: "in_progress",
+            started_at: at,
+            start_odometer_km: args.odometer_km,
+            driven_in: "web",
+            ...(args.fuel_answer && { fuel_answer: args.fuel_answer, fuel_answer_at: at }),
+          }).eq("id", t.id).eq("status", "assigned").select("id"),
+          "task",
+        );
+        if (!started.length) throw new ToolError("This trip is already on its way.");
+      }
+      if (!startLog) {
+        const log = unwrap(
+          await db.from("odometer_logs").insert({
+            vehicle_id: t.vehicle_id!,
+            employee_id: me,
+            task_id: t.id,
+            reading_km: args.odometer_km,
+            kind: "task_start",
+            logged_at: at,
+            entry: "web",
+            photo_id: args.odometer_photo_id,
+          }).select("id").single(),
+          "odometer",
+        );
+        unwrap(await db.from("photos").update({ odometer_log_id: log.id }).eq("id", args.odometer_photo_id), "photos");
+      }
+      answer = { task_id: t.id, status: "in_progress", driven_in: "web", next: `On the way · left ${colomboTime(t.started_at ?? now)}` };
     } else if (args.action === "arrive" || args.action === "leave") {
       if (t.status !== "in_progress") throw new ToolError("Start the trip first.");
       if (!args.stop_id) throw new ToolError("Which stop?");
@@ -537,31 +555,40 @@ export const webTripAction = tool({
         };
       }
     } else {
-      if (t.status !== "in_progress") throw new ToolError("Start the trip first.");
       if (args.odometer_km == null || !args.odometer_photo_id) throw new ToolError("Take the odometer photo and type the reading.");
       const start = t.start_odometer_km ?? 0;
+      // A finish that failed part-way: the rows already written are not written again.
+      const [endLogRes, fuelRes] = await Promise.all([
+        db.from("odometer_logs").select("id").eq("task_id", t.id).eq("kind", "task_end").limit(1).maybeSingle(),
+        db.from("fuel_logs").select("id").eq("task_id", t.id).eq("employee_id", me).gte("logged_at", t.started_at ?? at).limit(1)
+          .maybeSingle(),
+      ]);
+      const endLog = unwrapMaybe(endLogRes, "odometer");
+      const fuelDone = unwrapMaybe(fuelRes, "fuel");
       if (args.odometer_km < start) {
         throw new ToolError(`The odometer now (${args.odometer_km} km) is under the start (${start} km). Check the number.`);
       }
       const tooFar = odometerProblem(args.odometer_km, start, "The odometer now");
       if (tooFar) throw new ToolError(tooFar);
-      await ownPhotos(db, me, [args.odometer_photo_id], "odometer");
-      if (args.fuel?.receipt_photo_id) await ownPhotos(db, me, [args.fuel.receipt_photo_id], "fuel_receipt");
-      const log = unwrap(
-        await db.from("odometer_logs").insert({
-          vehicle_id: t.vehicle_id!,
-          employee_id: me,
-          task_id: t.id,
-          reading_km: args.odometer_km,
-          kind: "task_end",
-          logged_at: at,
-          entry: "web",
-          photo_id: args.odometer_photo_id,
-        }).select("id").single(),
-        "odometer",
-      );
-      unwrap(await db.from("photos").update({ odometer_log_id: log.id }).eq("id", args.odometer_photo_id), "photos");
-      if (args.fuel) {
+      if (!endLog) await ownPhotos(db, me, [args.odometer_photo_id], "odometer");
+      if (args.fuel?.receipt_photo_id && !fuelDone) await ownPhotos(db, me, [args.fuel.receipt_photo_id], "fuel_receipt");
+      if (!endLog) {
+        const log = unwrap(
+          await db.from("odometer_logs").insert({
+            vehicle_id: t.vehicle_id!,
+            employee_id: me,
+            task_id: t.id,
+            reading_km: args.odometer_km,
+            kind: "task_end",
+            logged_at: at,
+            entry: "web",
+            photo_id: args.odometer_photo_id,
+          }).select("id").single(),
+          "odometer",
+        );
+        unwrap(await db.from("photos").update({ odometer_log_id: log.id }).eq("id", args.odometer_photo_id), "photos");
+      }
+      if (args.fuel && !fuelDone) {
         const fuel = unwrap(
           await db.from("fuel_logs").insert({
             vehicle_id: t.vehicle_id!,

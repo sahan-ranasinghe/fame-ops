@@ -14,6 +14,10 @@
 --   6. privacy, enforced here: an office person may open a duty session only while a self trip of theirs started in the
 --      app is in progress; their location points must fall inside a session's time; their session is closed when their
 --      last running self trip ends (which releases the vehicle, as a clock-out does);
+--   8. the fresh review's hardening (§37.10): the cut-off ends an office person's recording even while their trip runs
+--      (the brief's safety net), the trip's own times bound their points and heartbeat rows, a session cannot start before
+--      the trip or end in the future, a heartbeat outside a trip writes nothing, their last position is cleared when the
+--      trip ends, the two helpers answer only about the caller;
 --   7. web_trip_actions: a /m/ trip's actions (start, arrive, leave, finish), each with ONE browser position taken at that
 --      moment (or none), the action's answer kept so a retry never doubles. Never location points: no GPS line, no Live
 --      state, nothing for Realtime's trails (a web trip has no tracking); odometer_logs.entry and vehicle_checks.channel
@@ -71,10 +75,13 @@ stable
 security definer
 set search_path = ''
 as $$
-  select exists (
-    select 1 from public.employees e
-    where e.id = p_employee and e.active
-      and (e.role = 'driver' or (e.can_drive is true and public.fleet_switch('self_drive_mode'))));
+  -- A signed-in person asks only about themselves (the policies and RPCs pass their own id); the server's jobs, triggers
+  -- and office-api about anyone.
+  select (coalesce(auth.role(), '') <> 'authenticated' or p_employee = public.current_employee_id())
+    and exists (
+      select 1 from public.employees e
+      where e.id = p_employee and e.active
+        and (e.role = 'driver' or (e.can_drive is true and public.fleet_switch('self_drive_mode'))));
 $$;
 revoke all on function public.drives_with_app(uuid) from public, anon;
 grant execute on function public.drives_with_app(uuid) to authenticated, service_role;
@@ -93,8 +100,43 @@ as $$
     else false
   end;
 $$;
-revoke all on function public.app_trip(text, uuid) from public, anon;
-grant execute on function public.app_trip(text, uuid) to authenticated, service_role;
+revoke all on function public.app_trip(text, uuid) from public, anon, authenticated;
+grant execute on function public.app_trip(text, uuid) to service_role;
+
+/** Round 50: the duty cut-off after a trip's start (the setting duty_cutoff, 21:00 by default); none when it is not set. */
+create or replace function public.trip_cutoff(p_started timestamptz)
+returns timestamptz
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with cut as (select coalesce((select s.value #>> '{}' from public.fleet_settings s where s.key = 'duty_cutoff'), '21:00') as v)
+  select case when cut.v ~ '^\d{2}:\d{2}$' then public.duty_cutoff_after(p_started, cut.v) else 'infinity'::timestamptz end from cut;
+$$;
+revoke all on function public.trip_cutoff(timestamptz) from public, anon;
+grant execute on function public.trip_cutoff(timestamptz) to authenticated, service_role;
+
+/**
+ * Round 50: the time an office person's own self trip started in the app covers: from its start (2 minutes' grace) to its
+ * completion, or now while it runs, never past the duty cut-off of its day (the brief's safety net). Their points, their
+ * heartbeat history and their duty session must fall inside it.
+ */
+create or replace function public.self_trip_covers(p_employee uuid, p_at timestamptz)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.tasks t
+    where t.employee_id = p_employee and t.driven_by = 'self' and t.driven_in = 'app' and t.started_at is not null
+      and p_at >= t.started_at - interval '2 minutes'
+      and p_at <= least(coalesce(t.completed_at, now()), public.trip_cutoff(t.started_at)) + interval '2 minutes');
+$$;
+revoke all on function public.self_trip_covers(uuid, timestamptz) from public, anon;
+grant execute on function public.self_trip_covers(uuid, timestamptz) to authenticated, service_role;
 
 -- 1, 4: a self-drive task grants can_drive (never over a false) and is accepted when made ------------------------------
 create or replace function public.tasks_self_drive_defaults()
@@ -143,7 +185,8 @@ as $$
 begin
   -- A signed-in person's own write (the driver screens; RLS, never office-api) taking the trip in progress.
   if new.status = 'in_progress' and old.status is distinct from 'in_progress' and new.driven_in is null
-     and coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') = 'authenticated' then
+     and coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') = 'authenticated'
+     and public.app_trip(new.driven_by, new.employee_id) then
     new.driven_in := 'app';
   end if;
   return new;
@@ -161,12 +204,16 @@ create policy duty_sessions_insert_own on public.duty_sessions
   with check (
     employee_id = (select public.current_employee_id())
     and (end_reason is null or end_reason in ('driver', 'auto'))
-    -- A driver clocks in as before; an office person only while a self trip of theirs started in the app is in progress.
+    -- A driver clocks in as before; an office person only while a self trip of theirs started in the app is in progress,
+    -- open (no end of their own choosing), from no earlier than the trip's start, and before the day's cut-off.
     and (exists (select 1 from public.employees e where e.id = employee_id and e.role = 'driver')
          or (public.drives_with_app(employee_id)
+             and ended_at is null
              and exists (select 1 from public.tasks t
                          where t.employee_id = duty_sessions.employee_id and t.driven_by = 'self'
-                           and t.status = 'in_progress' and t.driven_in = 'app'))));
+                           and t.status = 'in_progress' and t.driven_in = 'app'
+                           and duty_sessions.started_at >= t.started_at - interval '2 minutes'
+                           and now() < public.trip_cutoff(t.started_at)))));
 
 drop policy location_points_insert_own on public.location_points;
 create policy location_points_insert_own on public.location_points
@@ -177,10 +224,37 @@ create policy location_points_insert_own on public.location_points
       select 1 from public.duty_sessions s
       where s.id = location_points.session_id
         and s.employee_id = (select public.current_employee_id())
-        -- An office person's points only inside their session's time (a trip's); a driver's as before.
+        -- An office person's points only inside their own trip's time (self_trip_covers); a driver's as before.
         and (exists (select 1 from public.employees e where e.id = s.employee_id and e.role = 'driver')
-             or (location_points.recorded_at >= s.started_at - interval '2 minutes'
-                 and location_points.recorded_at <= coalesce(s.ended_at, now()) + interval '2 minutes'))));
+             or public.self_trip_covers(s.employee_id, location_points.recorded_at))));
+
+-- Their heartbeat history the same way (battery, Location on or off, the app's state: only during their trip).
+drop policy driver_heartbeats_insert_own on public.driver_heartbeats;
+create policy driver_heartbeats_insert_own on public.driver_heartbeats
+  for insert to authenticated
+  with check (
+    employee_id = (select public.current_employee_id())
+    and (exists (select 1 from public.employees e where e.id = employee_id and e.role = 'driver')
+         or public.self_trip_covers(employee_id, at)));
+
+/** A session's end is never in the future (a phone clock running ahead cannot keep one "open" by closing it later). */
+create or replace function public.duty_sessions_end_not_ahead()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.ended_at is not null and new.ended_at > now() then
+    new.ended_at := now();
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.duty_sessions_end_not_ahead() from public, anon, authenticated;
+create trigger duty_sessions_end_not_ahead
+  before insert or update of ended_at on public.duty_sessions
+  for each row execute function public.duty_sessions_end_not_ahead();
 
 /** An office person's last running self trip ended: their duty session closes and the vehicle is released (no holding a
     vehicle, no sharing, after their trip). */
@@ -194,7 +268,8 @@ begin
   if new.driven_by = 'self' and new.status in ('completed', 'cancelled') and old.status is distinct from new.status
      and not exists (select 1 from public.employees e where e.id = new.employee_id and e.role = 'driver')
      and not exists (select 1 from public.tasks t
-                     where t.employee_id = new.employee_id and t.status = 'in_progress' and t.id <> new.id) then
+                     where t.employee_id = new.employee_id and t.status = 'in_progress' and t.id <> new.id
+                       and t.driven_by = 'self' and t.driven_in = 'app') then
     perform set_config('fleet.by', 'system', true);
     update public.duty_sessions set ended_at = now(), end_reason = 'auto'
      where employee_id = new.employee_id and ended_at is null;
@@ -202,6 +277,8 @@ begin
     if exists (select 1 from public.vehicle_assignments a where a.employee_id = new.employee_id and a.to_at is null) then
       perform public.release_vehicle(new.employee_id, now(), 'auto', 'system');
     end if;
+    -- Their last position is not kept after the trip (where they finished may be their home): Live never shows them then.
+    delete from public.driver_latest where employee_id = new.employee_id;
   end if;
   return null;
 end;
@@ -226,6 +303,12 @@ begin
   -- Drivers, and (Round 50) office people who drive with the app: their phone reports while a trip of theirs shares.
   if v_me is null or not public.drives_with_app(v_me) then
     raise exception 'Only a signed-in driver can send a heartbeat';
+  end if;
+  -- An office person's phone reports only while their trip's session is open: outside it nothing is written, and the
+  -- answer tells the app to stop sharing.
+  if not exists (select 1 from public.employees e where e.id = v_me and e.role = 'driver')
+     and not exists (select 1 from public.duty_sessions s where s.employee_id = v_me and s.ended_at is null) then
+    return jsonb_build_object('on_duty', false);
   end if;
   if p_permission is not null and p_permission not in ('always', 'foreground', 'denied', 'unknown') then
     raise exception 'Unknown permission value %', p_permission;
@@ -383,7 +466,10 @@ begin
       from public.duty_sessions s
       where s.ended_at is null
         and public.duty_cutoff_after(s.started_at, v_cut) <= now()
-        and not exists (select 1 from public.tasks t where t.employee_id = s.employee_id and t.status = 'in_progress')
+        -- A driver is never clocked out while a task runs; an office person's recording ends at the cut-off whatever runs
+        -- (Round 50: the brief's safety net; they finish the trip in the app later).
+        and (not exists (select 1 from public.tasks t where t.employee_id = s.employee_id and t.status = 'in_progress')
+             or not exists (select 1 from public.employees e where e.id = s.employee_id and e.role = 'driver'))
     loop
       v_end := least(now(), greatest(
         v_session.cutoff_at,
@@ -391,7 +477,8 @@ begin
                   where t.employee_id = v_session.employee_id and t.completed_at > v_session.started_at), v_session.started_at)));
       perform set_config('fleet.by', 'system', true);
       update public.duty_sessions set ended_at = v_end, end_reason = 'auto' where id = v_session.id;
-      if (v_end at time zone 'Asia/Colombo')::date = v_today then
+      if (v_end at time zone 'Asia/Colombo')::date = v_today
+         and exists (select 1 from public.employees e where e.id = v_session.employee_id and e.role = 'driver') then
         perform public.send_push(null, 'duty_auto_out', v_session.employee_id,
                                  jsonb_build_object('time', to_char(v_end at time zone 'Asia/Colombo', 'HH24:MI')));
         v_out := v_out + 1;
@@ -420,7 +507,8 @@ begin
   where t.status = 'in_progress'
     -- A driver's task, or (Round 50) a self trip started in the app by someone who drives with it; never a web or
     -- office-started trip (they have no phone sharing).
-    and (e.role = 'driver' or (t.driven_by = 'self' and t.driven_in = 'app' and public.drives_with_app(e.id)))
+    and (e.role = 'driver'
+         or (t.driven_by = 'self' and t.driven_in = 'app' and public.drives_with_app(e.id) and now() < public.trip_cutoff(t.started_at)))
     and t.started_at < now() - interval '5 minutes'
     and not exists (select 1 from public.duty_sessions s
                     where s.employee_id = t.employee_id and (s.ended_at is null or s.ended_at >= t.started_at));
@@ -585,3 +673,15 @@ begin
   return null;
 end;
 $function$;
+
+-- 8 (one-off): an office person's open duty session with no self trip of theirs in progress in the app (sessions any
+-- signed-in employee could open before this round: tests, the demo) is closed, and their kept last position cleared.
+select set_config('fleet.by', 'system', true);
+update public.duty_sessions s set ended_at = now(), end_reason = 'auto'
+ where s.ended_at is null
+   and not exists (select 1 from public.employees e where e.id = s.employee_id and e.role = 'driver')
+   and not exists (select 1 from public.tasks t
+                   where t.employee_id = s.employee_id and t.status = 'in_progress' and t.driven_by = 'self' and t.driven_in = 'app');
+delete from public.driver_latest d
+ where not exists (select 1 from public.employees e where e.id = d.employee_id and e.role = 'driver')
+   and not exists (select 1 from public.duty_sessions s where s.employee_id = d.employee_id and s.ended_at is null);

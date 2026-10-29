@@ -5,7 +5,8 @@ import type { Db } from "./db.ts";
 import { unwrap } from "./db.ts";
 import type { Actor } from "./roles.ts";
 
-const HIDDEN_KEYS = new Set(["pin", "password"]);
+// Round 50: a /m/ trip's positions are kept with the trip (web_trip_actions), never repeated in the activity log.
+const HIDDEN_KEYS = new Set(["pin", "password", "position"]);
 const MAX_TEXT = 1000;
 
 function redact(value: unknown): unknown {

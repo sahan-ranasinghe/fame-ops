@@ -58,6 +58,12 @@ set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000050a1","
 select throws_ok($$ insert into public.duty_sessions (employee_id, vehicle_id, started_at)
                     values ('10000000-0000-0000-0000-0000000050a1', '20000000-0000-0000-0000-0000000050a1', now()) $$,
   '42501', null, 'no duty session for an office person before their trip is in progress (no recording outside a trip)');
+select is(public.send_heartbeat(now(), true, true, 'always'), '{"on_duty": false}'::jsonb,
+  'a heartbeat before their trip writes nothing and says off duty');
+select throws_ok($$ insert into public.driver_heartbeats (employee_id, at) values ('10000000-0000-0000-0000-0000000050a1', now()) $$,
+  '42501', null, 'no heartbeat history outside a trip');
+select is(public.drives_with_app('10000000-0000-0000-0000-0000000050c1'), false, 'a signed-in person cannot ask about someone else (the driver)');
+select throws_ok($$ select public.app_trip('self', '10000000-0000-0000-0000-0000000050a1') $$, '42501', null, 'app_trip is the server''s alone');
 -- Start task in the app: driven_in app.
 select lives_ok($$ update public.tasks set status = 'in_progress', started_at = now(), start_odometer_km = 1000
                    where id = '50000000-0000-0000-0000-0000000050a1' $$, 'they start their own self trip in the app');
@@ -65,9 +71,17 @@ reset role;
 select is((select driven_in from public.tasks where id = '50000000-0000-0000-0000-0000000050a1'), 'app', 'the app''s own start says driven_in app');
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000050a1","role":"authenticated"}';
+select throws_ok($$ insert into public.duty_sessions (employee_id, vehicle_id, started_at)
+                    values ('10000000-0000-0000-0000-0000000050a1', '20000000-0000-0000-0000-0000000050a1', now() - interval '1 hour') $$,
+  '42501', null, 'a session cannot start before the trip');
+select throws_ok($$ insert into public.duty_sessions (employee_id, vehicle_id, started_at, ended_at, end_reason)
+                    values ('10000000-0000-0000-0000-0000000050a1', '20000000-0000-0000-0000-0000000050a1', now(), now() + interval '1 day', 'driver') $$,
+  '42501', null, 'nor arrive already closed (an end of its own choosing)');
 select lives_ok($$ insert into public.duty_sessions (id, employee_id, vehicle_id, started_at)
                    values ('60000000-0000-0000-0000-0000000050a1', '10000000-0000-0000-0000-0000000050a1', '20000000-0000-0000-0000-0000000050a1', now()) $$,
   'with their app trip in progress: the session opens');
+select lives_ok($$ insert into public.driver_heartbeats (employee_id, at) values ('10000000-0000-0000-0000-0000000050a1', now()) $$,
+  'heartbeat history during the trip: stored');
 select lives_ok($$ insert into public.location_points (employee_id, session_id, recorded_at, lat, lng, accuracy_m)
                    values ('10000000-0000-0000-0000-0000000050a1', '60000000-0000-0000-0000-0000000050a1', now(), 7.29, 80.63, 8) $$,
   'a point inside the session: stored');
@@ -84,6 +98,36 @@ select ok((select ended_at is not null and end_reason = 'auto' from public.duty_
   'their last running trip ended: the session closed (sharing stops on the server too)');
 select ok((select to_at is not null from public.vehicle_assignments where employee_id = '10000000-0000-0000-0000-0000000050a1' order by from_at desc limit 1),
   'and the vehicle is released with it');
+select is((select count(*) from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000050a1'), 0::bigint,
+  'their last position is not kept after the trip');
+-- A session closed with an end in the future is closed now.
+insert into public.duty_sessions (id, employee_id, started_at) values ('60000000-0000-0000-0000-0000000050a2', '10000000-0000-0000-0000-0000000050c1', now() - interval '1 hour');
+update public.duty_sessions set ended_at = now() + interval '1 day', end_reason = 'driver' where id = '60000000-0000-0000-0000-0000000050a2';
+select ok((select ended_at <= now() from public.duty_sessions where id = '60000000-0000-0000-0000-0000000050a2'), 'a session''s end is never in the future');
+-- Someone else's trip of theirs started by a hand-made write does not count as driven in the app.
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, created_by, driven_by, driver_name) values
+  ('50000000-0000-0000-0000-0000000050f2', 'Booked for a visitor', '10000000-0000-0000-0000-0000000050a1', '20000000-0000-0000-0000-0000000050a1', now(), 'Self Driver', 'other', 'Visitor');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000050a1","role":"authenticated"}';
+update public.tasks set status = 'in_progress', started_at = now(), start_odometer_km = 1042 where id = '50000000-0000-0000-0000-0000000050f2';
+reset role;
+select is((select driven_in from public.tasks where id = '50000000-0000-0000-0000-0000000050f2'), null, 'a someone-else trip is never "driven in the app"');
+update public.tasks set status = 'cancelled', cancelled_reason = 'test' where id = '50000000-0000-0000-0000-0000000050f2';
+-- The cut-off ends an office person's recording even while their trip runs (the safety net); a driver's is kept.
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, created_by, driven_by, status, started_at, start_odometer_km, driven_in) values
+  ('50000000-0000-0000-0000-0000000050f3', 'Forgot to finish', '10000000-0000-0000-0000-0000000050a1', '20000000-0000-0000-0000-0000000050a1', now() - interval '2 days', 'Self Driver', 'self', 'in_progress', now() - interval '2 days', 1042, 'app');
+insert into public.duty_sessions (id, employee_id, started_at) values ('60000000-0000-0000-0000-0000000050f3', '10000000-0000-0000-0000-0000000050a1', now() - interval '2 days');
+select lives_ok($$ select public.duty_jobs() $$, 'the duty job runs');
+select ok((select ended_at is not null and end_reason = 'auto' from public.duty_sessions where id = '60000000-0000-0000-0000-0000000050f3'),
+  'past the cut-off: an office person''s session closes even with their trip still running');
+select is((select count(*) from public.duty_sessions where employee_id = '10000000-0000-0000-0000-0000000050a1' and ended_at is null), 0::bigint,
+  'and the server does not open another for that trip');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000050a1","role":"authenticated"}';
+select throws_ok($$ insert into public.duty_sessions (employee_id, started_at) values ('10000000-0000-0000-0000-0000000050a1', now()) $$,
+  '42501', null, 'nor can the app open one after the cut-off');
+reset role;
+update public.tasks set status = 'cancelled', cancelled_reason = 'test' where id = '50000000-0000-0000-0000-0000000050f3';
 
 -- 4. Without can_drive: never a session, even with a self trip in progress (started by the office path).
 update public.tasks set status = 'in_progress', started_at = now(), start_odometer_km = 1042, driven_in = 'office'

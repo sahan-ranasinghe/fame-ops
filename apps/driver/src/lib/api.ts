@@ -215,14 +215,16 @@ export async function fetchVehicles(client: Client): Promise<Vehicle[]> {
  * Tasks still to do or under way, plus everything that starts at or after `since`. Never a missed one (Hotfix 3: never
  * started, its leave-by over a day ago): the app shows it nowhere.
  * Round 50 (§37.4): always the person's own (`scope.employeeId`): RLS lets an office person with view read every task, so
- * the filter is never left to RLS; in Driving mode (`scope.selfOnly`) only the trips they drive themselves (driven_by self).
+ * the filter is never left to RLS; in Driving mode (`scope.selfOnly`) only the trips they drive themselves (driven_by self)
+ * that are not under way on the web or from My trip (driven_in null or app).
  */
 export async function fetchTasks(client: Client, since: Date, scope: TaskScope): Promise<TaskWithStops[]> {
   let query = client
     .from('tasks')
     .select(`*, task_stops(*), task_vehicle_segments(*), task_passengers(${PASSENGER_COLUMNS})`)
     .eq('employee_id', scope.employeeId);
-  if (scope.selfOnly) query = query.eq('driven_by', 'self');
+  // Never a trip started on the web (/m/) or from My trip: it finishes where it started (the fresh review, finding 10).
+  if (scope.selfOnly) query = query.eq('driven_by', 'self').or('driven_in.is.null,driven_in.eq.app');
   const tasks = check(
     await query
       .or(`status.in.(assigned,in_progress),start_at.gte."${since.toISOString()}"`)
