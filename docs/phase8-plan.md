@@ -972,6 +972,76 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 37. Round 50: office people who drive themselves get the driver flow (29 October 2026, branch `phase9-r50` from main `9398b64`)
+
+Patterns: Uber's one account with a mode switch (rider ↔ driver); Samsara / Motive's driver capability on any user; Zipcar /
+Turo's trip flow for whoever drives. Runtime 1.4.0-gmaps (the app part is JavaScript only). Two read-only audits first (the
+server's driver paths, the app's driver screens and mode decisions): their tables are §37.8 and §37.9.
+
+### 37.1 The model (the contract for the server and the three clients)
+
+- **`employees.can_drive`** (boolean, null = never decided). true = the capability; false = an admin took it away. Granted
+  automatically (null → true, never over a false) when a self-drive trip is made for the person: decide_request approving a
+  `driven_by self` request, book_vehicle / create_task with `driven_by self`. Admins grant or revoke it in Users
+  (`update_office_user(can_drive)`, the users permission; `list_office_users` and `/me` answer `can_drive`).
+- **Setting `self_drive_mode`** (default on): off = no Driving mode anywhere (office self-drivers keep the manual My trip
+  flow of Round 4–7, as today).
+- **Drives with the app** (SQL `drives_with_app(employee)`, TS `drivesWithApp`): an active driver, or an office person with
+  `can_drive` true while `self_drive_mode` is on. **An app trip** = `driven_by driver`, or `driven_by self` on such a person.
+  `driven_by other` never.
+- **`tasks.driven_in`** app | web | office (null until started): where the trip was started. Set to app by the driver
+  screens' start (a trigger on the in_progress write from a signed-in person), web by /m/'s driver-lite start, office by
+  `my_trip_check`'s start. The no-app path (`no_app_trips`: "Trip finished? Enter the odometer", "Completed · not
+  confirmed", the issue `trip_not_confirmed`) runs only for self / other trips with `driven_in` null or office.
+  `my_trip_check` / `finish_my_trip` refuse a trip started in the app or on the web ("This trip is being driven in the app").
+- **Self trips need no Accept**: a `driven_by self` task is accepted when it is made (the person booked it), backfilled.
+
+### 37.2 Privacy (office people), enforced on the server, not only in the app
+
+- Location is shared only during their own trip: the app starts sharing at Start task and stops it at Finish (or cancel);
+  the server refuses a duty session for an office person unless they have a self trip in progress (duty_sessions insert
+  policy), refuses their location points outside a session's time, and closes their open session when their last running
+  self trip completes or is cancelled (which also releases the vehicle, as a clock-out does). The cut-off stays the safety
+  net. No "Start work", no shift nudge, no "Start a trip", no Change vehicle for them. The task screen says
+  "Sharing location until this trip ends".
+- Nothing is recorded outside a trip: no heartbeat loop while not sharing (as for drivers), no ask-a-driver, no phone-health
+  issues (app_stops stays drivers only).
+
+### 37.3 Server changes (the role checks the audit found)
+
+`send_heartbeat`, `my_office_contacts`, `tasks_take_vehicle`, `queue_task_reminders`, the server-opened session in
+`duty_jobs` and push-task's recipient: drivers, or `drives_with_app` people on their own app trips. driver-api: places search,
+/errors and the trip stops' endpoints for them; `/trips` (driver-started trips) and `/profile` stay drivers only
+(403 `drivers_only`). read-odometer (driver mode): `drives_with_app`. Push: changed / cancelled / reminders to a self-driver
+on an app trip; no "New task" push for a trip they booked themselves. Accept reminders, missed tasks, late start, licence and
+phone-health issues stay drivers only. Office tools: `live_drivers` includes a self-driver while a trip of theirs runs
+(card `self_drive: true`; a web trip `web_trip: true` with `last_seen {at, stop}` and never the Live state);
+`driver_route` / `task_detail` / the route views treat their trip like a driver's (`driver` resolves an office person by
+name or e-mail too); `mileage_summary` / `list_fuel` include their logs under the vehicle and the person.
+
+### 37.4 The app: Driving mode (Office mode ↔ the driver screens, one account)
+
+- Home: "You have a trip to drive · Start driving" while a self trip of theirs is today (assigned or in progress); More:
+  "Driving". Entering loads the person's employee row as the driver state without a new sign-in, and shows the existing
+  driver screens for THEIR self trips only (`employee_id = me` and `driven_by self`: never another person's task, whatever
+  their view permission); "Back to office" returns (a running trip keeps sharing in the background until it ends).
+- Off for them: Start work / Finish work, the duty tiles, the shift nudge, Start a trip, Change vehicle, Availability, the
+  forced phone and photo steps, Sign out on Me (they sign out from Office mode). Kept: Today, vehicle check, fuel card, the
+  task with its slides, Navigate, odometer photo + OCR, Log mileage, the fuel video, Report a problem, Me.
+- The sign-in's Driver | Office switch is hidden once this phone's last office account can drive (they sign in as office);
+  drivers-only accounts see no change.
+
+### 37.5 /m/ driver-lite (browsers cannot track in the background, and the page says so)
+
+The same trip in the browser for a self-driver: Start (vehicle check, fuel card, odometer photo from the camera), Arrived /
+Done slides per stop, Finish (odometer photo, fuel with a receipt photo; no video: MediaRecorder is not reliable on iOS
+Safari). Each action sends ONE browser position taken at that moment (with permission; without it the action still saves,
+"no position"). Tool `web_trip_action(task_id, action start|arrive|leave|finish, stop_id?, client_id, at, lat?, lng?,
+accuracy_m?, odometer_km?, odometer_photo?, check?, fuel?)`; its points are stored as location points of a web session
+(`device_info` web) and never make a Live state. The office sees the timeline with the real times and the stops joined by
+straight dashed lines labelled "No live route · web trip"; Live: "Web trip · last seen at <stop> HH:MM". The trip page says
+"Live tracking needs the Fame Fleet app".
+
 ## 36. Release 1.4.0 prep (29 October 2026, branch `release-1.4.0` from main `2e27b87`; not built)
 
 The native items of `docs/release-1.4.0.md` applied (the final list and the permissions there): the in-app fuel video player
