@@ -1,0 +1,38 @@
+// Round 50 (docs/phase8-plan.md §37.4): Office mode's Home says "You have a trip to drive · Start driving" while a trip the
+// person drives themselves is today and still to start, or under way ("Your trip is under way · Continue driving"). The
+// button opens Driving mode on that trip (office/driving.tsx). Nothing for someone who cannot drive, nor in a browser.
+
+import { StyleSheet, View } from 'react-native';
+
+import { Car } from '@/components/icons';
+import { RowIcon } from '@/components/patterns/ListRow';
+import { look } from '@/components/patterns/look';
+import { Button } from '@/components/ui';
+import { colomboTime } from '@/lib/time';
+import { useStartDriving, useTripToDrive } from '@/office/driving';
+import { Row } from '@/office/ui';
+import { useApp } from '@/state/app';
+import { colors } from '@/theme';
+
+export function DriveLine() {
+  const { t } = useApp();
+  const trip = useTripToDrive();
+  const { busy, start } = useStartDriving();
+  if (!trip) return null;
+  const running = trip.status === 'in_progress';
+  return (
+    <View style={styles.card} testID="home-drive-line">
+      <Row
+        inset
+        left={<RowIcon icon={Car} tone="blue" />}
+        title={t(running ? 'driving.homeLineRunning' : 'driving.homeLine')}
+        line={[colomboTime(trip.leave_by ?? trip.start_at), trip.title].filter(Boolean).join(' · ')}
+        right={<Button compact label={t(running ? 'driving.continue' : 'driving.start')} busy={busy} onPress={() => void start(trip.id)} testID="home-start-driving" />}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { backgroundColor: colors.card, borderColor: look.border, borderWidth: 1, borderRadius: look.radius, overflow: 'hidden' },
+});

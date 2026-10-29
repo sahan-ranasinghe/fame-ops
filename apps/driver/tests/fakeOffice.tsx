@@ -87,6 +87,14 @@ export function mockUseApp() {
     setLanguage: jest.fn(),
     settings: DEFAULT_DRIVER_SETTINGS,
     dataAvailable: true,
+    // Round 50: no driver state behind Office mode (Driving mode's tests give their own).
+    me: null,
+    tasks: [],
+    officeDriver: false,
+    driving: false,
+    enterDriving: async () => 'ok',
+    officeSignOutCheck: async () => 'ok',
+    loadDriveTrips: async () => null,
   };
 }
 

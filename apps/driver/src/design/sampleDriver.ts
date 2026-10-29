@@ -139,6 +139,7 @@ export function sampleApp(input: { language: Language; now: number; today?: Toda
     leaveDriving: async () => 'drop',
     showDriving: noop,
     officeSignOutCheck: async () => 'ok',
+    loadDriveTrips: async () => null,
     refresh: async () => undefined,
     sendNow: async () => undefined,
     setSharing: async () => 'cancelled',

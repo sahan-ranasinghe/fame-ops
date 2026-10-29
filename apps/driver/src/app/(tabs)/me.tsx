@@ -6,16 +6,20 @@
 // update check; then the rows Availability (app/availability.tsx, H1), Phone setup (Phase 7 item 7: the brand's battery
 // and auto-start steps, amber when the phone stopped the app lately), Documents (the held vehicle's, §28) and
 // Permissions; Sign out (not while a task is in progress, nor on duty: Finish work first).
+// Round 50 (§37.4): an office person in Driving mode has Back to office in place of Sign out (they sign out from Office
+// mode), and no Edit (their profile is Office mode's My profile; driver-api /profile is drivers only), no Change vehicle,
+// no Availability (the driver's day is not theirs); everything else as for a driver.
 
 import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { BatteryCharging, CalendarX, Camera, ChevronRight, FileText, type LucideIcon, LogOut, Pencil, RefreshCw, ShieldCheck, Wifi } from '@/components/icons';
+import { ArrowLeft, BatteryCharging, CalendarX, Camera, ChevronRight, FileText, type LucideIcon, LogOut, Pencil, RefreshCw, ShieldCheck, Wifi } from '@/components/icons';
 import { useCallback, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CallButtons } from '@/components/CallButtons';
+import { useBackToOffice } from '@/components/DrivingCard';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { useStoppedNote } from '@/components/PhoneSetup';
 import { Thumb, useLicencePhotos, useMyPhoto } from '@/components/Photos';
@@ -23,6 +27,7 @@ import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { PRIVACY_URL } from '@/config';
 import { fetchMonthTasks } from '@/lib/api';
+import { driverParts } from '@/lib/drivingMode';
 import { availLine, type UnavailabilityRow, upcomingEntries } from '@/lib/availability';
 import { officeCalls, phoneDisplay } from '@/lib/contacts';
 import { thousands } from '@/lib/format';
@@ -122,6 +127,8 @@ export default function MeScreen() {
   }
 
   const taskRunning = app.tasks.some((task) => task.status === 'in_progress');
+  const parts = driverParts(app.officeDriver);
+  const backToOffice = useBackToOffice();
   // Sign out waits for the task to be finished, then for Finish work.
   const signOutBlocked = taskRunning ? 'me.signOutTask' : sharing ? 'me.finishWorkFirst' : null;
 
@@ -193,7 +200,7 @@ export default function MeScreen() {
               <Txt variant="muted" color={colors.amberText}>{t('me.notSet')}</Txt>
             )}
           </View>
-          <Button kind="outline" icon={Pencil} label={t('me.edit')} onPress={edit} />
+          {parts.profileEdit && <Button kind="outline" icon={Pencil} label={t('me.edit')} onPress={edit} />}
         </Card>
 
         <Card style={{ gap: 12 }}>
@@ -203,10 +210,10 @@ export default function MeScreen() {
 
         <Card style={{ gap: 14 }}>
           <Line label={t('me.vehicle')}>
-            {vehicle ? <Plate regNo={vehicle.reg_no} /> : <Txt variant="muted">{t(sharing ? 'duty.noVehicle' : 'duty.offDuty')}</Txt>}
+            {vehicle ? <Plate regNo={vehicle.reg_no} /> : parts.duty ? <Txt variant="muted">{t(sharing ? 'duty.noVehicle' : 'duty.offDuty')}</Txt> : <Txt variant="muted">–</Txt>}
           </Line>
           {/* The vehicle changes only while on duty; off duty, Start work on Today picks it. */}
-          {sharing && <Button kind="outline" label={t('vehicle.change')} onPress={() => router.push({ pathname: '/vehicle', params: { mode: 'change' } })} />}
+          {parts.changeVehicle && sharing && <Button kind="outline" label={t('vehicle.change')} onPress={() => router.push({ pathname: '/vehicle', params: { mode: 'change' } })} />}
           <Line label={t('me.thisMonth')}>
             {month
               ? <Txt variant="strong">{t('me.monthLine', { tasks: month.tasks, km: thousands(month.km) })}</Txt>
@@ -264,13 +271,15 @@ export default function MeScreen() {
         </Card>
 
         {/* Part 3b (H1): when I can't take trips (pushed; back returns here). */}
-        <Row
-          icon={CalendarX}
-          title={t('me.availability')}
-          hint={nextAway ? availLine(t, dateLabel, nextAway) : t('avail.none')}
-          onPress={() => router.push('/availability')}
-          testID="me-availability"
-        />
+        {parts.availability && (
+          <Row
+            icon={CalendarX}
+            title={t('me.availability')}
+            hint={nextAway ? availLine(t, dateLabel, nextAway) : t('avail.none')}
+            onPress={() => router.push('/availability')}
+            testID="me-availability"
+          />
+        )}
 
         {/* Phase 7 item 7: the brand's steps moved here from Today; a pushed page, back returns to Me. */}
         <Pressable accessibilityRole="button" onPress={() => router.push('/phone-setup')} testID="me-phone-setup">
@@ -292,8 +301,14 @@ export default function MeScreen() {
         <Row icon={FileText} title={t('common.privacy')} onPress={() => void Linking.openURL(PRIVACY_URL)} />
 
         {problem && <Notice tone="danger" text={problem} />}
-        {signOutBlocked && <Txt variant="muted" style={{ textAlign: 'center' }}>{t(signOutBlocked)}</Txt>}
-        <Button kind="outline" icon={LogOut} label={t('me.signOut')} disabled={signOutBlocked !== null} busy={busy} onPress={confirmSignOut} />
+        {parts.signOut ? (
+          <>
+            {signOutBlocked && <Txt variant="muted" style={{ textAlign: 'center' }}>{t(signOutBlocked)}</Txt>}
+            <Button kind="outline" icon={LogOut} label={t('me.signOut')} disabled={signOutBlocked !== null} busy={busy} onPress={confirmSignOut} />
+          </>
+        ) : (
+          <Button kind="dark" icon={ArrowLeft} label={t('driving.backToOffice')} busy={backToOffice.busy} onPress={() => void backToOffice.back()} testID="me-back-to-office" />
+        )}
       </ScrollView>
     </View>
   );

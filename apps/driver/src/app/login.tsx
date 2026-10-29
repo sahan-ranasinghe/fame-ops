@@ -1,6 +1,9 @@
 // Sign in (design/office 01): Driver (username, 6-digit PIN, as always) or Office (work e-mail and password through
 // Supabase Auth, the same account as the site; Phase 8, O1). Drivers never see an e-mail address on their side. The session
 // decides the interface: a driver's account opens the driver app, an office account Office mode (office/auth.ts).
+// Round 50 (§37.4): once this phone's last office account can drive, the Driver | Office switch is hidden and the Office side
+// shows (they drive their own trips in Driving mode, inside Office mode); a small "Driver? Sign in with your PIN" under it
+// keeps the Driver side one tap away. Drivers-only phones see no change.
 
 import Constants from 'expo-constants';
 import { Redirect, useRouter } from 'expo-router';
@@ -14,6 +17,7 @@ import { LanguagePill } from '@/components/LanguageSwitch';
 import { SecretInput } from '@/components/SecretInput';
 import { PRIVACY_URL } from '@/config';
 import { Button, Card, Field, Notice, Txt } from '@/components/ui';
+import { showSideSwitch } from '@/lib/drivingMode';
 import { getJson } from '@/lib/kv';
 import { type OfficeSignInOutcome, signInOffice, signOutOffice } from '@/office/auth';
 import { OFFICE_KEYS, useOfficeMe } from '@/office/store';
@@ -47,7 +51,11 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   // The mobile website (Phase 8, O4) is Office mode only: no Driver side in a browser.
   const webOnly = Platform.OS === 'web';
-  const [side, setSide] = useState<Side>(() => (webOnly || getJson<string>(OFFICE_KEYS.email) ? 'office' : 'driver'));
+  const officeDrives = getJson<boolean>(OFFICE_KEYS.lastCanDrive) === true;
+  const switchShown = showSideSwitch({ web: webOnly, lastOfficeCanDrive: officeDrives });
+  // "Driver? Sign in with your PIN" tapped: the switch as before.
+  const [driverAsked, setDriverAsked] = useState(false);
+  const [side, setSide] = useState<Side>(() => (webOnly || officeDrives || getJson<string>(OFFICE_KEYS.email) ? 'office' : 'driver'));
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState(() => getJson<string>(OFFICE_KEYS.email) ?? '');
@@ -105,7 +113,7 @@ export default function LoginScreen() {
           </View>
           <Txt variant="title" color="#ffffff" style={{ marginTop: 18, fontFamily: fonts.heading }}>{t('login.title')}</Txt>
           {/* Driver | Office (design 01); a browser has only the Office side. */}
-          {!webOnly && <View style={styles.switch} accessibilityRole="tablist">
+          {(switchShown || driverAsked) && <View style={styles.switch} accessibilityRole="tablist" testID="login-side-switch">
             {(['driver', 'office'] as const).map((s) => {
               const on = s === side;
               return (
@@ -175,6 +183,19 @@ export default function LoginScreen() {
               {problem && <Notice tone="danger" text={t(problem)} />}
               <Button label={t('login.signIn')} onPress={submit} disabled={!ready} busy={busy} />
             </Card>
+          )}
+          {!switchShown && !driverAsked && !webOnly && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setDriverAsked(true);
+                pick('driver');
+              }}
+              style={{ alignSelf: 'center', minHeight: 44, justifyContent: 'center' }}
+              testID="login-driver-link"
+            >
+              <Txt variant="strong" size={16} color={colors.blue}>{t('driving.driverLink')}</Txt>
+            </Pressable>
           )}
           <Txt variant="muted" style={{ textAlign: 'center', paddingHorizontal: 12 }}>{t(side === 'driver' ? 'login.help' : webOnly ? 'office.login.helpWeb' : 'office.login.help')}</Txt>
           {/* Part 6: the app's name and version, and the privacy policy (design/office 01 Sign in). */}

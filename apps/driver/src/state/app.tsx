@@ -322,6 +322,11 @@ export interface AppValue {
   showDriving: () => void;
   /** Office mode's Sign out asks first: refused while a trip of theirs runs, or its data could not be sent yet. */
   officeSignOutCheck: () => Promise<OfficeSignOutCheck>;
+  /**
+   * Office mode's Home, before Driving mode is entered: the person's own row and the trips they drive themselves from today
+   * (read as the driver screens read them; nothing kept). null = no row. Throws without a connection.
+   */
+  loadDriveTrips: () => Promise<{ me: Pick<Employee, 'id' | 'role'>; tasks: TaskWithStops[] } | null>;
   refresh: () => Promise<void>;
   sendNow: (includeFailed?: boolean) => Promise<void>;
   setSharing: (on: boolean) => Promise<'on' | 'off' | 'no_permission' | 'cancelled'>;
@@ -1292,6 +1297,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (officeDriverRef.current) setDrivingView(true);
   }, [setDrivingView]);
 
+  const loadDriveTrips = useCallback(async () => {
+    const row = await api.fetchMe(supabase);
+    if (!row) return null;
+    const rows = await api.fetchTasks(supabase, startOfColomboDay(colomboDate()), { employeeId: row.id, selfOnly: true });
+    return { me: row, tasks: ownTasks(rows, row) };
+  }, []);
+
   const officeSignOutCheck = useCallback(async (): Promise<OfficeSignOutCheck> => {
     if (!officeDriverRef.current) return 'ok';
     if (tripRunning(tasksRef.current)) return 'task';
@@ -2117,7 +2129,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     booted, me, meFresh, language, t, tList, setLanguage,
     vehicles, vehicle, workVehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, settings: shift, wifiOnly, setWifiOnly, waitingTasks, refreshing, offline, dataAvailable,
     gate, resolveGate, requireLocation,
-    signIn, signOut, officeDriver, driving: drivingShown(officeDriver, drivingView), enterDriving, leaveDriving, showDriving, officeSignOutCheck,
+    signIn, signOut, officeDriver, driving: drivingShown(officeDriver, drivingView), enterDriving, leaveDriving, showDriving, officeSignOutCheck, loadDriveTrips,
     refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, undoStopStep, markStopPassed, skipStop,
     dutySince, startWork, changeVehicle, finishWork, loadVehicleChoices, vehicleTaken, dismissVehicleTaken, dutyEnded, clearDutyEnded,
     acceptTask, declineTask, notice, clearNotice,

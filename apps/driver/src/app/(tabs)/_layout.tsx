@@ -5,6 +5,7 @@ import type { ComponentProps } from 'react';
 
 import { RouteCrash } from '@/components/patterns/CrashScreen';
 import { TabBarView } from '@/components/TabBarView';
+import { driverParts } from '@/lib/drivingMode';
 import { getJson, KEYS } from '@/lib/kv';
 import { needsProfilePhoto, profilePhotoDeferred } from '@/lib/photoRules';
 import { needsPhonePrompt, phonePromptDeferred } from '@/lib/profile';
@@ -18,13 +19,20 @@ function TabBar({ state, navigation }: TabBarProps) {
 }
 
 export default function TabsLayout() {
-  const { me, meFresh, tasks } = useApp();
+  const { me, meFresh, tasks, officeDriver, driving } = useApp();
   const officeMe = useOfficeMe();
   // Office mode (Phase 8): the session decides the interface; an office sign-in never sees the driver's screens.
   if (!me && officeMe) return <Redirect href="/office" />;
+  // Round 50 (§37.4): an office person's driver screens only in Driving mode (after Start driving, until Back to office);
+  // their driver state may stay loaded behind Office mode while a trip of theirs runs.
+  if (me && officeMe && !driving) return <Redirect href="/office" />;
   if (!me) return <Redirect href="/login" />;
+  // The first-run Permissions (location "Allow all the time": a trip records in the background) also the first time an
+  // office person enters Driving mode.
   if (!getJson<boolean>(KEYS.permissionsSeen)) return <Redirect href="/permissions" />;
   const taskRunning = tasks.some((task) => task.status === 'in_progress');
+  // Round 50: no forced phone or photo step for an office person (they keep their profile in Office mode).
+  if (!driverParts(officeDriver).forcedSteps) return <DriverTabs />;
   // Part 3b (G): "Your phone number" first, while the server says there is none (never over a running task; after
   // Continue with no connection, again at the next start).
   if (needsPhonePrompt(me, { fresh: meFresh, taskRunning, deferred: phonePromptDeferred() })) return <Redirect href="/phone-prompt" />;
@@ -33,6 +41,10 @@ export default function TabsLayout() {
     return <Redirect href="/profile-photo" />;
   }
 
+  return <DriverTabs />;
+}
+
+function DriverTabs() {
   return (
     <Tabs initialRouteName="index" backBehavior="initialRoute" screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
       <Tabs.Screen name="index" />

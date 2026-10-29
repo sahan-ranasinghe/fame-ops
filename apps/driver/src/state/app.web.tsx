@@ -65,6 +65,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Round 50: no Driving mode in a browser (/m/ has its driver-lite page).
     officeDriver: false,
     driving: false,
+    officeSignOutCheck: async () => 'ok',
     booted: true,
     signIn: async (): Promise<SignInOutcome> => 'not_configured',
   }) as unknown as AppValue, [t, tList, language, setLanguage, online]);

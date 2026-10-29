@@ -14,6 +14,8 @@
 // garage grey; each opens its list as before), "Needs you now" with its total over the kinds that wait (requests, trips
 // that need a driver, needs attention, the reminders), each a card of list rows with an icon tile and its own View all;
 // then On the road, Today's tasks and My trips as list-look sections; the floating New trip button.
+// Round 50 (§37.4): at the top, "You have a trip to drive · Start driving" for a person who drives their own trips
+// (components/office/DriveLine.tsx; Driving mode).
 
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -39,6 +41,7 @@ import { Bell, Check, ChevronDown, ChevronRight, ClipboardCheck, FileText, MapPi
 import { RowIcon, RowPlate } from '@/components/patterns/ListRow';
 import { look } from '@/components/patterns/look';
 import { SavedNotice } from '@/components/office/SavedNotice';
+import { DriveLine } from '@/components/office/DriveLine';
 import { PendingChangeLine } from '@/components/office/ChangeParts';
 import { changeLine, changeTitle, isChange } from '@/office/changeLogic';
 import { Sheet } from '@/components/patterns/Sheet';
@@ -128,6 +131,8 @@ export default function OfficeHome() {
       <TopBar greeting={t(`office.home.${greeting()}`, { name: firstName(me.name) })} date={shortDate(names, Date.now())} />
       <Screen refreshing={refreshing} onRefresh={refresh} bottom={actions.length > 0 ? 96 : 24} style={{ paddingTop: 4 }}>
         <SavedNotice noticeKey="/office" />
+        {/* Round 50 (§37.4): a trip the person drives themselves today: Start driving opens Driving mode on it. */}
+        <DriveLine />
         {ov && (
           <StatTiles light tiles={[
             ...(chips.includes('road') ? [{ key: 'road', n: ov.vehicles.on_the_road, label: t('office.home.tileRoad'), tone: 'blue' as const, icon: MapPin, onPress: go('road') }] : []),

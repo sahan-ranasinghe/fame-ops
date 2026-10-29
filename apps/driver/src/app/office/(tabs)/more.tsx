@@ -9,12 +9,13 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, View } from 'react-native';
 
-import { Bell, Calendar, ChartColumn, Clock, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, ShieldCheck, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
+import { Bell, Calendar, Car, ChartColumn, Clock, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, ShieldCheck, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty } from '@/components/patterns/ListState';
 import { MORE_SECTION, type MoreItem, type MoreSection, moreFor } from '@/office/nav';
 import { useOffice } from '@/office/state';
+import { useCanDrive, useStartDriving } from '@/office/driving';
 import { useSwitch } from '@/office/switches';
 import { Avatar, DarkHeader, Divider, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -50,7 +51,7 @@ const SECTIONS: { key: MoreSection; label: string }[] = [
 ];
 
 export default function MoreTab() {
-  const { t } = useApp();
+  const { t, officeSignOutCheck } = useApp();
   const { me, signOut } = useOffice();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -65,6 +66,9 @@ export default function MoreTab() {
   const needle = find.trim().toLowerCase();
   const matches = (key: MoreItem) => !needle || [t(ITEM[key].label), lineOf(key) ?? ''].some((w) => w.toLowerCase().includes(needle));
   const shown = items.filter(matches);
+  const canDrive = useCanDrive();
+  const driving = useStartDriving();
+  const drivingMatches = !needle || [t('driving.moreRow'), t('driving.start'), t('driving.moreLine')].some((w) => w.toLowerCase().includes(needle));
 
   function confirmSignOut() {
     Alert.alert(t('office.common.signOut'), t('office.more.signOutBody'), [
@@ -72,8 +76,15 @@ export default function MoreTab() {
       {
         text: t('office.common.signOut'),
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
           setBusy(true);
+          // Round 50: not while a trip of theirs runs in Driving mode, nor before its data is sent.
+          const check = await officeSignOutCheck();
+          if (check !== 'ok') {
+            setBusy(false);
+            Alert.alert(t('office.common.signOut'), t(check === 'task' ? 'driving.signOutTrip' : 'driving.signOutQueue'));
+            return;
+          }
           void signOut().then(() => router.replace('/login'));
         },
       },
@@ -97,7 +108,20 @@ export default function MoreTab() {
           />
         </Section>}
         <FilterBar search={find} onSearch={setFind} placeholder={t('office.more.search')} defs={[]} values={{}} onApply={() => undefined} testID="more-search" />
-        {needle && shown.length === 0 && <ListEmpty text={t('office.more.noMatch', { text: find.trim() })} />}
+        {needle && shown.length === 0 && !(canDrive && drivingMatches) && <ListEmpty text={t('office.more.noMatch', { text: find.trim() })} />}
+        {/* Round 50 (§37.4): Driving mode, for a person who drives their own trips (the app only; Uber's driver mode switch). */}
+        {canDrive && drivingMatches && (
+          <Section title={t('driving.moreRow')}>
+            <Row
+              left={<Car size={24} color={colors.ink} />}
+              title={t('driving.start')}
+              line={t('driving.moreLine')}
+              right={<ChevronRight size={22} color={colors.muted} />}
+              onPress={() => void driving.start()}
+              testID="more-driving"
+            />
+          </Section>
+        )}
         {SECTIONS.map((s) => {
           const rows = shown.filter((key) => MORE_SECTION[key] === s.key);
           if (rows.length === 0) return null;

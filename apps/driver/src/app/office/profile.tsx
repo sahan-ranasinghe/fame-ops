@@ -46,7 +46,7 @@ interface ProfileAnswer {
 }
 
 export default function OfficeProfile() {
-  const { t } = useApp();
+  const { t, officeSignOutCheck } = useApp();
   const { me, api, refreshMe, signOut } = useOffice();
   const router = useRouter();
   // Round 1 (7b): my own photo, initials until there is one; Change photo = the camera or the gallery (square crop).
@@ -171,8 +171,15 @@ export default function OfficeProfile() {
       {
         text: t('office.common.signOut'),
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
           setSigningOut(true);
+          // Round 50: not while a trip of theirs runs in Driving mode, nor before its data is sent.
+          const check = await officeSignOutCheck();
+          if (check !== 'ok') {
+            setSigningOut(false);
+            Alert.alert(t('office.common.signOut'), t(check === 'task' ? 'driving.signOutTrip' : 'driving.signOutQueue'));
+            return;
+          }
           void signOut().then(() => router.replace('/login'));
         },
       },
