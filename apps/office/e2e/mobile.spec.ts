@@ -375,7 +375,8 @@ async function asPerson<T>(email: string, password: string, name: string, args: 
     method: "POST", headers: { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${access_token}` }, body: JSON.stringify(args),
   });
   if (!res.ok) throw new Error(`${name}: ${res.status} ${await res.text()}`);
-  return (await res.json()) as T;
+  // office-api answers { result } (the connector's JSON inside).
+  return ((await res.json()) as { result: T }).result;
 }
 
 /** A 1 × 1 PNG: the odometer's "photo" from the phone's photos (the shared PhotoPick's Choose from photos). */
@@ -410,10 +411,6 @@ test("Round 50: Users → Can drive on /m/, then a self trip driven in the brows
   const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date());
   const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", hourCycle: "h23" }).format(new Date()));
   const start = `${String(Math.min(hour + 1, 22)).padStart(2, "0")}:00`;
-  const task = await asPerson<{ task_id: string }>(email, password, "create_task", {
-    title: `Web trip ${stamp}`, date: day, start_time: start, driven_by: "self", vehicle: plate, pickup: "Head office", dropoff: "Galle",
-  });
-
   // An admin on /m/: People → the self-driver's page → Can drive (self-drive trips in the app), saved at once.
   // (approve too: an account holding approve is changed only by someone who holds it: accountGuards.ts)
   await signInMobile(page, "users", ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"]);
@@ -423,6 +420,11 @@ test("Round 50: Users → Can drive on /m/, then a self trip driven in the brows
   await can.getByRole("switch").click();
   await expect(can.getByRole("switch")).toBeChecked();
   expect((await tool<{ users: { email: string; can_drive?: boolean }[] }>("list_office_users", { search: email })).users.find((u) => u.email === email)?.can_drive).toBe(true);
+  // Then the person books their own trip (made at once: they hold approve). Can drive was turned on first: a self-drive
+  // task would also give it by itself (Round 50), and the switch would then turn it off.
+  const task = await asPerson<{ task_id: string }>(email, password, "create_task", {
+    title: `Web trip ${stamp}`, date: day, start_time: start, driven_by: "self", vehicle: plate, pickup: "Head office", dropoff: "Galle",
+  });
 
   // The self-driver on /m/ in a browser that gives a position when asked (one, per action).
   await context.clearCookies();

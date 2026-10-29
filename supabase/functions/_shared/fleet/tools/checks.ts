@@ -178,15 +178,16 @@ export const vehicleChecks = tool({
 // ---- The self-driver's side: a trip nobody drives with the app ----------------------------------------------------
 
 /** The person's own no-app trip (self-drive, or booked for someone else), or a clear refusal. */
-async function ownNoAppTrip(db: Db, taskId: string, employeeId: string | null): Promise<Task> {
+async function ownNoAppTrip(db: Db, taskId: string, employeeId: string | null, opts: { manual?: boolean } = {}): Promise<Task> {
   if (!employeeId) throw new ToolError("This is personal: it needs a signed-in person (the web app) or a personal connector key.");
   const t = unwrapMaybe(await db.from("tasks").select("*").eq("id", taskId).maybeSingle(), "task");
   if (!t || t.employee_id !== employeeId) throw new ToolError("Not one of your trips.");
   if (t.driven_by === "driver") throw new ToolError("A driver does this trip: the driver checks the vehicle in the app.");
   if (!t.vehicle_id) throw new ToolError("This trip has no vehicle yet.");
-  // Round 50: a trip started in the app or on /m/ is finished there (its readings, stops and photos are its own).
-  if (t.driven_in === "app") throw new ToolError(WEB_IN_APP);
-  if (t.driven_in === "web") throw new ToolError("This trip was started on the web: finish it on its trip page.");
+  // Round 50: a trip started in the app or on /m/ is finished there (its readings, stops and photos are its own): the manual
+  // check and finish refuse it; my_trip still shows it (the trip page and the web page read it).
+  if (opts.manual && t.driven_in === "app") throw new ToolError(WEB_IN_APP);
+  if (opts.manual && t.driven_in === "web") throw new ToolError("This trip was started on the web: finish it on its trip page.");
   return t;
 }
 
@@ -735,7 +736,7 @@ export const myTripCheck = tool({
     sides: z.array(z.object({ photo_id: zId, side: z.enum(SIDES) })).max(4).optional().describe("All good: the four sides"),
   }),
   async run(args, { db, now, actor }) {
-    const t = await ownNoAppTrip(db, args.task_id, actor.employeeId);
+    const t = await ownNoAppTrip(db, args.task_id, actor.employeeId, { manual: true });
     const me = actor.employeeId!;
     if (t.status !== "assigned") {
       throw new ToolError(
@@ -856,7 +857,7 @@ export const finishMyTrip = tool({
     photo: zId.optional().describe("An odometer photo (kind odometer) the page uploaded"),
   }),
   async run(args, { db, now, actor }) {
-    const t = await ownNoAppTrip(db, args.task_id, actor.employeeId);
+    const t = await ownNoAppTrip(db, args.task_id, actor.employeeId, { manual: true });
     const me = actor.employeeId!;
     const state = noAppState(t);
     if (state === "done") throw new ToolError("This trip is already finished.");

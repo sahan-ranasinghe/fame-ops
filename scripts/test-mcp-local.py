@@ -3735,6 +3735,10 @@ if CHANNEL == "api":
         check(psql(f"select driven_in || ',' || coalesce(fuel_answer, '') from tasks where id = '{T50}'") == "web,enough"
               and psql(f"select channel from vehicle_checks where task_id = '{T50}'") == "web",
               "the task says web, the fuel answer and the vehicle check (channel web) are kept")
+        ok_, mt_run = call_as(A, "api", "my_trip", {"task_id": T50})
+        check(ok_ and mt_run["web"]["started"] and mt_run["web"]["driven_in"] == "web" and mt_run["start_odometer_km"] == int(last) + 1
+              and not mt_run["can"]["finish"] and not mt_run["can"]["check"],
+              "my_trip after the web start: started on the web, the start reading; no manual check or finish offered", json.dumps(mt_run)[:300])
         ok_, manual = call_as(A, "api", "my_trip_check", {"task_id": T50, "result": "ok", "odometer_km": int(last) + 2})
         check(not ok_ and "started on the web" in str(manual), "the manual check steps aside for a web trip", str(manual)[:200])
         stop1 = web["stops"][0]["id"]
