@@ -2884,7 +2884,7 @@ if CHANNEL == "api":
                                              "my_inbox", "my_notification_settings", "my_prefs", "my_trip", "my_trip_check", "my_trips", "place_detail",
                                              "plan_task", "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
                                              "set_my_notification_settings", "set_my_prefs", "task_detail", "update_my_profile", "update_request",
-                                             "vehicle_checks", "watch_drivers"]
+                                             "vehicle_checks", "watch_drivers", "web_trip_action"]
           and me.get("map") == {"package": "open", "places": False},
           "a requester signs in without a second step and sees the request tools plus view's (any permission implies view, Phase 7 §12; the map: open with no keys)",
           f"{code} {str(me)[:200]}")
@@ -3428,8 +3428,10 @@ check(ap6["driver"] == "Pool Custodian" and ap6.get("driven_by") == "self" and a
       and psql(f"select driven_by || '|' || (employee_id = '{CUST}')::text from tasks where id = '{T6}'") == "self|true",
       "approved with a pool vehicle: the asker drives it, on their own account", json.dumps(ap6)[:300])
 b6 = tool("task_board", {"date": day(5)})
-check(any(c["id"] == T6 and c.get("driven_by") == "self" and c["status"] == "Drives themselves · no app" for c in b6["assigned"]),
-      "the board: drives themselves, no app", json.dumps(b6["assigned"])[:300])
+# Round 50: approving the person's own self-drive request gave them can_drive: the board says they drive it in the app.
+check(any(c["id"] == T6 and c.get("driven_by") == "self" and c.get("self_drive") is True and c["status"] == "Self-drive · in the app"
+          for c in b6["assigned"]),
+      "the board: their own self-drive trip, in the app (Round 50: the approval gave them can_drive)", json.dumps(b6["assigned"])[:300])
 r = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "10:00", "route_to": "Galle", "driven_by": "other", "driver_name": "Nimal Perera"}, expect_error=True)
 check("give their phone" in r, "someone else needs a phone", r)
 re7 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "10:00", "route_to": "Matara", "driven_by": "other",
@@ -3696,6 +3698,107 @@ if CHANNEL == "api":
               "the vehicle's odometer follows; both readings and the fuel logged with the trip")
     else:
         print("  SKIP  the self-drive trip (it would be tomorrow at this hour)")
+
+    # Round 50 (§37): A's approved self-drive trip gave her can_drive; she drives a second trip on /m/ (web_trip_action), one
+    # position per action, no location points; Live, the route and the task page see it; the manual path steps aside.
+    print("\n== Round 50: self-drive, the web trip ==")
+    check(psql(f"select can_drive from employees where id = '{A['id']}'") == "t" and psql(f"select can_drive from employees where id = '{B['id']}'") == "",
+          "an approved self-drive trip gave A can_drive; B (no self-drive trip) is undecided")
+    code, me_a = http("GET", f"{API}/functions/v1/office-api/me", api_headers(A["token"]))
+    check(code == 200 and me_a.get("can_drive") is True and me_a.get("self_drive_mode") is True, "/me: can_drive and self_drive_mode", str(me_a)[:200])
+    when50 = (now.astimezone(colombo) + dt.timedelta(minutes=45))
+    if when50.date() == today:
+        ok_, r50 = call_as(A, "api", "create_request", {"date": today.isoformat(), "time": when50.strftime("%H:%M"), "route_from": "Head office",
+                                                        "route_to": "Kandy", "driven_by": "self"})
+        T50 = tool("decide_request", {"request_id": r50["request"]["id"], "decision": "approve", "vehicle": f"WP RF{R}-4701"}).get("task_id") \
+            or psql(f"select task_id from vehicle_requests where id = '{r50['request']['id']}'")
+        ok_, mt50 = call_as(A, "api", "my_trip", {"task_id": T50})
+        web = mt50.get("web", {}) if ok_ else {}
+        check(ok_ and web.get("allowed") is True and not web.get("started") and len(web.get("stops", [])) >= 1
+              and all(x.get("id") and x.get("status") == "pending" for x in web["stops"]),
+              "my_trip's web block: allowed, not started, the stops with their ids", json.dumps(web)[:300])
+        check(psql(f"select accepted_at is not null from tasks where id = '{T50}'") == "t", "a self-drive task is accepted when made")
+        photo = lambda kind: psql(f"insert into photos (employee_id, kind, storage_path, taken_at) values ('{A['id']}', '{kind}', '{A['id']}/2026-10-30/{uuid.uuid4()}.jpg', now()) returning id")
+        last = psql(f"select current_odometer_km from vehicles where id = '{VF}'")
+        start_id = str(uuid.uuid4())
+        ok_, no_photo = call_as(A, "api", "web_trip_action", {"task_id": T50, "client_id": str(uuid.uuid4()), "action": "start", "odometer_km": int(last) + 1})
+        check(not ok_ and "odometer photo" in str(no_photo), "start without the odometer photo: refused in words", str(no_photo)[:200])
+        odo1 = photo("odometer")
+        start_args = {"task_id": T50, "client_id": start_id, "action": "start", "odometer_km": int(last) + 1, "odometer_photo_id": odo1,
+                      "check": {"result": "ok"}, "fuel_answer": "enough", "position": {"lat": 6.9271, "lng": 79.8612, "accuracy_m": 12}}
+        ok_, st50 = call_as(A, "api", "web_trip_action", start_args)
+        check(ok_ and st50["status"] == "in_progress" and st50["driven_in"] == "web", "web start: on the way, driven on the web", json.dumps(st50)[:200])
+        ok_, again = call_as(A, "mcp", "web_trip_action", start_args)
+        check(ok_ and again == st50 and psql(f"select count(*) from odometer_logs where task_id = '{T50}'") == "1"
+              and psql(f"select count(*) from web_trip_actions where task_id = '{T50}'") == "1",
+              "the same start again (her key on office-mcp): the same answer, nothing doubled", json.dumps(again)[:200])
+        check(psql(f"select driven_in || ',' || coalesce(fuel_answer, '') from tasks where id = '{T50}'") == "web,enough"
+              and psql(f"select channel from vehicle_checks where task_id = '{T50}'") == "web",
+              "the task says web, the fuel answer and the vehicle check (channel web) are kept")
+        ok_, manual = call_as(A, "api", "my_trip_check", {"task_id": T50, "result": "ok", "odometer_km": int(last) + 2})
+        check(not ok_ and "started on the web" in str(manual), "the manual check steps aside for a web trip", str(manual)[:200])
+        stop1 = web["stops"][0]["id"]
+        ok_, arr = call_as(A, "api", "web_trip_action", {"task_id": T50, "client_id": str(uuid.uuid4()), "action": "arrive", "stop_id": stop1,
+                                                         "position": {"lat": 7.2906, "lng": 80.6337, "accuracy_m": 20}})
+        check(ok_ and arr["stop"]["status"] == "arrived", "web Arrived at the first stop", json.dumps(arr)[:200])
+        check(psql(f"select arrival_flag from task_stops where id = '{stop1}'") in ("override", "no_pin", "ok"), "the arrival is flagged from its one position")
+        ok_, early = call_as(A, "api", "web_trip_action", {"task_id": T50, "client_id": str(uuid.uuid4()), "action": "leave", "stop_id": web["stops"][-1]["id"]})
+        if len(web["stops"]) > 1:
+            check(not ok_ and "mark Arrived first" in str(early), "Done before Arrived: refused", str(early)[:200])
+        ok_, lv = call_as(A, "api", "web_trip_action", {"task_id": T50, "client_id": str(uuid.uuid4()), "action": "leave", "stop_id": stop1})
+        check(ok_ and lv["stop"]["status"] == "done", "web Done at the first stop, with no position (saved without)", json.dumps(lv)[:200])
+        live = tool("live_drivers", {})
+        card = next((c for c in live["drivers"] if c.get("employee_id") == A["id"]), None)
+        check(card is not None and card.get("self_drive") and card.get("web_trip") and card.get("last_seen", {}).get("at")
+              and card.get("status") != "live" and card.get("lat") is not None,
+              "Live: A while her trip runs, Self-drive, a web trip, last seen at her last action, never Live", json.dumps(card)[:300])
+        route = tool("driver_route", {"task_id": T50})
+        check(route.get("web_trip") and len(route.get("web_points", [])) == 2 and route.get("recorded_points") == 0
+              and "No live route" in route.get("note", ""),
+              "driver_route: the web points (start and Arrived; Done had none), no GPS points, said so", json.dumps(route)[:300])
+        board = tool("task_detail", {"task_id": T50})["task"]
+        check(board.get("self_drive") and board.get("driven_in") == "web" and "web trip" in board.get("status_line", board.get("status", "")),
+              "task_detail: Self-drive, started on the web", json.dumps({k: board.get(k) for k in ("self_drive", "driven_in", "status_line", "status")}))
+        odo2 = photo("odometer")
+        rec = photo("fuel_receipt")
+        ok_, fin50 = call_as(A, "api", "web_trip_action", {"task_id": T50, "client_id": str(uuid.uuid4()), "action": "finish", "odometer_km": int(last) + 31,
+                                                           "odometer_photo_id": odo2, "fuel": {"litres": 8, "lkr": 2900, "receipt_photo_id": rec},
+                                                           "position": {"lat": 6.93, "lng": 79.86}})
+        check(ok_ and fin50["status"] == "completed" and fin50["km"] == 30, "web Finish: completed, 30 km", json.dumps(fin50)[:200])
+        check(psql(f"select count(*) from location_points where employee_id = '{A['id']}'") == "0"
+              and psql(f"select count(*) from duty_sessions where employee_id = '{A['id']}'") == "0"
+              and psql(f"select count(*) from vehicle_assignments where employee_id = '{A['id']}' and to_at is null") == "0",
+              "a web trip records no location points and no duty session, and leaves no vehicle held")
+        check(psql(f"select count(*) from fuel_logs where task_id = '{T50}' and receipt_photo_id = '{rec}'") == "1"
+              and psql(f"select count(*) from task_stops where task_id = '{T50}' and status = 'skipped' and skip_reason = 'not_visited'") == str(len(web["stops"]) - 1),
+              "the fuel with its receipt; the stops not reached are skipped, not visited")
+        # Taken away: the web page says why; the switch off: the same.
+        tool("update_office_user", {"email": A["email"], "can_drive": False})
+        T51 = tool("decide_request", {"request_id": call_as(A, "api", "create_request", {"date": today.isoformat(), "time": when50.strftime("%H:%M"),
+                                                                                         "route_to": "Galle", "driven_by": "self"})[1]["request"]["id"],
+                                      "decision": "approve", "vehicle": f"WP RF{R}-4701"}).get("task_id")
+        ok_, mt51 = call_as(A, "api", "my_trip", {"task_id": T51})
+        check(ok_ and mt51["web"]["allowed"] is False and "Can drive" in mt51["web"]["why"]
+              and psql(f"select can_drive from employees where id = '{A['id']}'") == "f",
+              "can_drive taken away: no web trip, said why; a new self-drive booking does not give it back", json.dumps(mt51.get("web"))[:200])
+        users = tool("list_office_users", {"search": A["email"]})["users"]
+        check(users and users[0].get("can_drive") is False, "list_office_users answers can_drive", str(users[:1])[:200])
+        tool("update_office_user", {"email": A["email"], "can_drive": True})
+        tool("update_settings", {"key": "self_drive_mode", "value": False})
+        ok_, mt52 = call_as(A, "api", "my_trip", {"task_id": T51})
+        code, me_off = http("GET", f"{API}/functions/v1/office-api/me", api_headers(A["token"]))
+        check(ok_ and mt52["web"]["allowed"] is False and "off" in mt52["web"]["why"] and me_off.get("self_drive_mode") is False,
+              "self_drive_mode off: no web trip, and /me says so", json.dumps(mt52.get("web"))[:200])
+        tool("update_settings", {"key": "self_drive_mode", "value": True})
+        # driver-api for an office person who drives: the place search, never the driver-started trips or the profile.
+        code, ds = http("POST", f"{API}/functions/v1/driver-api/places/search", api_headers(A["token"]), {"text": "Kandy"})
+        code2, dt_ = http("POST", f"{API}/functions/v1/driver-api/trips", api_headers(A["token"]), {})
+        check(code == 200 and code2 == 403 and (dt_ or {}).get("error") == "drivers_only",
+              "driver-api: the place search for a self-driver; driver-started trips stay drivers only", f"{code} {code2} {str(dt_)[:100]}")
+        code3, db_ = http("POST", f"{API}/functions/v1/driver-api/places/search", api_headers(B["token"]), {"text": "Kandy"})
+        check(code3 == 403, "driver-api: an office person who may not drive is refused as before", f"{code3} {str(db_)[:100]}")
+    else:
+        print("  SKIP  the web trip (it would be tomorrow at this hour)")
 
     # Feature 7: B asks A for the vehicle her trip holds; A says Yes in one tap.
     TH = psql(f"select id from tasks where employee_id = '{KASUN}' and status in ('assigned', 'in_progress') order by start_at limit 1")

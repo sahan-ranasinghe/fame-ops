@@ -1010,8 +1010,8 @@ server's driver paths, the app's driver screens and mode decisions): their table
 ### 37.3 Server changes (the role checks the audit found)
 
 `send_heartbeat`, `my_office_contacts`, `tasks_take_vehicle`, `queue_task_reminders`, the server-opened session in
-`duty_jobs` and push-task's recipient: drivers, or `drives_with_app` people on their own app trips. driver-api: places search,
-/errors and the trip stops' endpoints for them; `/trips` (driver-started trips) and `/profile` stay drivers only
+`duty_jobs` and push-task's recipient: drivers, or `drives_with_app` people on their own app trips. driver-api: places search and
+/errors for them; `/trips` and its stops and cancel (the trips a driver starts in the app) and `/profile` stay drivers only
 (403 `drivers_only`). read-odometer (driver mode): `drives_with_app`. Push: changed / cancelled / reminders to a self-driver
 on an app trip; no "New task" push for a trip they booked themselves. Accept reminders, missed tasks, late start, licence and
 phone-health issues stay drivers only. Office tools: `live_drivers` includes a self-driver while a trip of theirs runs
@@ -1037,8 +1037,9 @@ The same trip in the browser for a self-driver: Start (vehicle check, fuel card,
 Done slides per stop, Finish (odometer photo, fuel with a receipt photo; no video: MediaRecorder is not reliable on iOS
 Safari). Each action sends ONE browser position taken at that moment (with permission; without it the action still saves,
 "no position"). Tool `web_trip_action(task_id, action start|arrive|leave|finish, stop_id?, client_id, at, lat?, lng?,
-accuracy_m?, odometer_km?, odometer_photo?, check?, fuel?)`; its points are stored as location points of a web session
-(`device_info` web) and never make a Live state. The office sees the timeline with the real times and the stops joined by
+accuracy_m?, odometer_km?, odometer_photo?, check?, fuel?)`; each action and its one position are kept in
+`web_trip_actions` (never location points: no GPS line, no Live state, nothing for the trails), its answer kept so a retry
+never doubles. The office sees the timeline with the real times and the stops joined by
 straight dashed lines labelled "No live route · web trip"; Live: "Web trip · last seen at <stop> HH:MM". The trip page says
 "Live tracking needs the Fame Fleet app".
 

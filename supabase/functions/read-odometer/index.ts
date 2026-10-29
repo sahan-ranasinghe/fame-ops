@@ -244,7 +244,12 @@ async function driverMode(request: Request, token: string): Promise<Response> {
 
   // Row Level Security returns the caller's own employee row and nothing else.
   const { data: me } = await asCaller.from("employees").select("id, active, role").maybeSingle();
-  if (!me || !me.active || me.role !== "driver") return json(403, { error: "not_a_driver" });
+  if (!me || !me.active) return json(403, { error: "not_a_driver" });
+  // Round 50: an office person driving their own trip with the app reads their odometer photo too (drives_with_app).
+  if (me.role !== "driver") {
+    const { data: drives } = await asCaller.rpc("drives_with_app", { p_employee: me.id });
+    if (drives !== true) return json(403, { error: "not_a_driver" });
+  }
 
   let body: Record<string, unknown>;
   try {

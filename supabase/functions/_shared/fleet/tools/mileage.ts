@@ -3,7 +3,7 @@
 import { z } from "zod";
 import type { Db } from "../db.ts";
 import { fetchAll, inChunks, ToolError, unwrap, unwrapMaybe } from "../db.ts";
-import { describeGap, findDriver, findVehicle, gapPlaces, loadGaps, loadRefs, odometerCheck } from "../fleet.ts";
+import { describeGap, findDriverOrSelfDriver, findVehicle, gapPlaces, loadGaps, loadRefs, odometerCheck } from "../fleet.ts";
 import { centsToLkr, contactLinks, plain } from "../format.ts";
 import { syncIssues } from "../issues.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
@@ -16,7 +16,7 @@ import { pageInfo, pageWindow } from "../paging.ts";
 const UNLOGGED_KM = 2;
 
 type MileageVehicle = ReturnType<typeof findVehicle>;
-type MileageDriver = ReturnType<typeof findDriver>;
+type MileageDriver = ReturnType<typeof findDriverOrSelfDriver>;
 
 /**
  * One span's mileage (a Colombo month, or a range of days from the date-range control, Phase 7 §8): per vehicle the
@@ -227,7 +227,7 @@ export const mileageSummary = tool({
     const { from, to } = monthRange(which);
     const refs = await loadRefs(db);
     const onlyVehicle = vehicle ? findVehicle(refs, vehicle) : null;
-    const onlyDriver = driver ? findDriver(refs, driver) : null;
+    const onlyDriver = driver ? findDriverOrSelfDriver(refs, driver) : null;
     const [m, r] = await Promise.all([
       mileageOf(db, refs, from, to, onlyVehicle, onlyDriver),
       span ? mileageOf(db, refs, span.start, span.end, onlyVehicle, onlyDriver, false) : null,

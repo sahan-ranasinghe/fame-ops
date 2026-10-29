@@ -79,6 +79,8 @@ export interface Settings {
    *  no-app trip, the fuel card at Start task, passengers on trips, who holds a busy driver or vehicle (and Ask for it). */
   vehicle_check: boolean;
   trip_close_prompt: boolean;
+  /** Round 50: office people with can_drive drive their own self-drive trips with the app (Driving mode); off = the manual My trip flow. */
+  self_drive_mode: boolean;
   /** Round 4–7 (item 9): how long each kind of data is kept (days); the nightly retention job removes the rest. */
   retention: Retention;
   fuel_card: boolean;
@@ -186,6 +188,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   planner_suggestions: true,
   vehicle_check: true,
   trip_close_prompt: true,
+  self_drive_mode: true,
   retention: { ...RETENTION_DEFAULTS },
   fuel_card: true,
   passengers: true,
@@ -256,6 +259,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     'The vehicle check before work: whenever a driver takes a vehicle, and before a self-drive or someone-else trip sets off, "Any damage or problem with <plate>?" (all good in one tap; a problem with photos becomes a pre-trip issue). Off = not asked',
   trip_close_prompt:
     '"Trip finished? Enter the odometer" for a trip nobody drives with the app (self-drive, someone else): asked at the back-by time or the duty cut-off, closed as Completed · not confirmed at 09:00 the next day when unanswered. Off = neither (the person can still finish it by hand)',
+  self_drive_mode:
+    "Office people who may drive (Users → Can drive) drive their own self-drive trips with the app: Driving mode with the driver's screens, location shared only from Start task to Finish. Off = the manual My trip flow (check, then the odometer at the end)",
   fuel_card:
     "The fuel card at Start task: the trip's km and roughly how many litres it takes, and \"Enough fuel?\" (Yes / I'll fill up on the way). Advisory, never blocks. Off = not shown",
   passengers:
@@ -407,6 +412,7 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
     }
     case "vehicle_check":
     case "trip_close_prompt":
+    case "self_drive_mode":
     case "fuel_card":
     case "passengers":
     case "holder_contact":

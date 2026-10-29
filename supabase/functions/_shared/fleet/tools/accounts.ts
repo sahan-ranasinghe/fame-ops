@@ -107,7 +107,9 @@ export const listOfficeUsers = tool({
     const [users, keys] = await Promise.all([
       fetchAll(
         (a, b) =>
-          db.from("employees").select("id, code, name, email, phone, role, permissions, active, created_at, driver_contact, photo_id")
+          db.from("employees").select(
+            "id, code, name, email, phone, role, permissions, active, created_at, driver_contact, photo_id, can_drive",
+          )
             .in("role", [...OFFICE_ROLES]).order("name").range(a, b),
         "office users",
       ),
@@ -138,6 +140,8 @@ export const listOfficeUsers = tool({
           active: u.active,
           // Round 1: shown to drivers as a contact (Me: name, Call, WhatsApp).
           driver_contact: u.driver_contact === true,
+          // Round 50: drives their own self-drive trips with the app (true), taken away (false), never decided (absent).
+          can_drive: u.can_drive ?? undefined,
           since: colomboDateTime(u.created_at),
           connector_keys: !seesKeys ? undefined : keys.filter((k) => k.employee_id === u.id && !k.revoked_at).map((k) => ({
             id: k.id,
@@ -213,7 +217,9 @@ export const updateOfficeUser = tool({
   description: "Changes an office user's name, phone and/or permissions (view, request, approve, assign_tasks, vehicles, issues, users). " +
     "The permissions list replaces the old one and takes effect on the person's next call. Nobody changes their own role or permissions, nobody gives or takes away a permission they do not hold, and only an admin changes an admin. " +
     "The phone is a Sri Lankan number (stored +94…; null clears it); every change of a number is logged. driver_contact: shown to " +
-    "drivers as a contact on the app's Me (name, Call, WhatsApp; 'Fleet admin' when they also approve, else 'Office').",
+    "drivers as a contact on the app's Me (name, Call, WhatsApp; 'Fleet admin' when they also approve, else 'Office'). " +
+    "can_drive (Round 50): the person drives their own self-drive trips with the app (Driving mode, location only during the trip); " +
+    "false takes it away, and a later self-drive booking does not give it back.",
   readOnly: false,
   input: z.object({
     email: zEmail,
@@ -222,12 +228,16 @@ export const updateOfficeUser = tool({
     permissions: zPermissions.optional().describe("The full new list"),
     role: zOfficeRole.optional().describe("The label. Default: derived from the permissions"),
     driver_contact: z.boolean().optional().describe("Show as a contact for drivers (the app's Me)"),
+    can_drive: z.boolean().optional().describe("Drives their own self-drive trips with the app (Round 50)"),
   }),
-  async run({ email, name, phone: typedPhone, permissions, role, driver_contact }, { db, actor }) {
+  async run({ email, name, phone: typedPhone, permissions, role, driver_contact, can_drive }, { db, actor }) {
     const phone = storedPhone(typedPhone);
     const user = await officeUser(db, email);
-    if (name === undefined && phone === undefined && permissions === undefined && role === undefined && driver_contact === undefined) {
-      throw new ToolError("Nothing to change: give a name, phone, permissions, role and/or driver_contact.");
+    if (
+      name === undefined && phone === undefined && permissions === undefined && role === undefined && driver_contact === undefined &&
+      can_drive === undefined
+    ) {
+      throw new ToolError("Nothing to change: give a name, phone, permissions, role, driver_contact and/or can_drive.");
     }
     const perms = permissions !== undefined ? normalisePermissions(permissions) : normalisePermissions(user.permissions);
     await guard(db, actor, { kind: "update", target: targetOf(user), permissions: permissions !== undefined ? perms : undefined, role });
@@ -239,7 +249,8 @@ export const updateOfficeUser = tool({
         ...(permissions !== undefined && { permissions: perms }),
         ...((permissions !== undefined || role !== undefined) && { role: label }),
         ...(driver_contact !== undefined && { driver_contact }),
-      }).eq("id", user.id).select("name, email, phone, role, permissions, driver_contact").single(),
+        ...(can_drive !== undefined && { can_drive }),
+      }).eq("id", user.id).select("name, email, phone, role, permissions, driver_contact, can_drive").single(),
       "office user",
     );
     if (phone !== undefined) await logPhoneChange(db, user.id, user.phone, updated.phone, actor);
@@ -249,11 +260,17 @@ export const updateOfficeUser = tool({
       permissions !== undefined && "permissions",
       role !== undefined && "role",
       driver_contact !== undefined && (driver_contact ? "shown to drivers" : "not shown to drivers"),
+      can_drive !== undefined && (can_drive ? "can drive with the app" : "cannot drive with the app"),
     ]
       .filter(Boolean);
     return {
       result: {
-        updated: { ...updated, phone_display: phoneDisplay(updated.phone), permissions: normalisePermissions(updated.permissions) },
+        updated: {
+          ...updated,
+          can_drive: updated.can_drive ?? undefined,
+          phone_display: phoneDisplay(updated.phone),
+          permissions: normalisePermissions(updated.permissions),
+        },
       },
       summary: `updated office user ${email}: ${changed.join(", ")}${permissions !== undefined ? ` (${perms.join(", ") || "none"})` : ""}`,
     };

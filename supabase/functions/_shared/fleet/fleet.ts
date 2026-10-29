@@ -91,6 +91,26 @@ export function findDriver(refs: Refs, typed: string, opts: { demoToo?: boolean 
   return pickOne(partial, "driver", typed, show, "Use list_drivers to see the drivers.");
 }
 
+/**
+ * Round 50: a driver, else an office person who drives their own trips with the app (can_drive), by name, code or e-mail:
+ * the route views and Live treat their trip like a driver's.
+ */
+export function findDriverOrSelfDriver(refs: Refs, typed: string): Employee {
+  try {
+    return findDriver(refs, typed);
+  } catch (driverError) {
+    const want = typed.trim().toLowerCase();
+    const selfDrivers = refs.employees.filter((e) => e.role !== "driver" && e.can_drive === true);
+    const exact = selfDrivers.filter((e) =>
+      e.name.toLowerCase() === want || e.code.toLowerCase() === want || (e.email ?? "").toLowerCase() === want
+    );
+    if (exact.length === 1) return exact[0];
+    const partial = selfDrivers.filter((e) => e.name.toLowerCase().includes(want));
+    if (exact.length === 0 && partial.length === 1) return partial[0];
+    throw driverError;
+  }
+}
+
 /** An office person (a custodian) by name, code, username or e-mail. */
 export function findPerson(refs: Refs, typed: string): Employee {
   const people = refs.employees.filter((e) => e.role !== "driver" && e.active);

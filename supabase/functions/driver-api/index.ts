@@ -16,6 +16,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { sessionFailure } from "../_shared/fleet/sessionCheck.ts";
 import { adminClient } from "../_shared/fleet/db.ts";
+import type { Role } from "../_shared/fleet/roles.ts";
 import { createHandler, type ResolvedDriver } from "./handler.ts";
 
 const db = adminClient();
@@ -43,13 +44,27 @@ async function resolveDriver(request: Request): Promise<ResolvedDriver> {
   // Signed out only when Auth refused the token; Auth not answering is a 503 the app asks again (sessionCheck.ts).
   if (error || !data.user) return { ok: false, ...sessionFailure(error) };
   const row = await driverRow(data.user.id);
-  if (!row || row.role !== "driver") return { ok: false, status: 403, error: "not_a_driver" };
+  if (!row) return { ok: false, status: 403, error: "not_a_driver" };
+  // Round 50: a driver, or an office person who drives their own trips with the app (drives_with_app: can_drive while the
+  // switch self_drive_mode is on); the handler keeps the driver-only endpoints for drivers.
+  if (row.role !== "driver") {
+    const { data: drives, error: drivesError } = await db.rpc("drives_with_app", { p_employee: row.id });
+    if (drivesError) throw new Error(`drives_with_app failed: ${drivesError.message}`);
+    if (!drives) return { ok: false, status: 403, error: "not_a_driver" };
+  }
   if (!row.active) return { ok: false, status: 403, error: "switched_off" };
   return {
     ok: true,
     driver: {
       row,
-      actor: { employeeId: row.id, name: row.name, role: "driver", permissions: [], authUserId: data.user.id, channel: "driver" },
+      actor: {
+        employeeId: row.id,
+        name: row.name,
+        role: row.role === "driver" ? "driver" : row.role as Role,
+        permissions: [],
+        authUserId: data.user.id,
+        channel: "driver",
+      },
     },
   };
 }

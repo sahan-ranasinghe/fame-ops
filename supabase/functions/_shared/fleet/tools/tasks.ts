@@ -55,7 +55,14 @@ import { notifyEvent } from "../notifications.ts";
 import { shortName } from "../names.ts";
 import { driverPhotoLinks, vehiclePhotoLinks } from "../media.ts";
 import { logRequestEvent, requester } from "./requestCore.ts";
-import { needsApproval, pendingChangeCard, proposeChange, tellApproversOfDispatch, waitingChangeFor, waitingChangesFor } from "./changes.ts";
+import {
+  needsApproval,
+  pendingChangeCard,
+  proposeChange,
+  tellApproversOfDispatch,
+  waitingChangeFor,
+  waitingChangesFor,
+} from "./changes.ts";
 import { requestStopsOf, saveRequestTrip } from "./requestTrip.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
 import type { Actor } from "../roles.ts";
@@ -1040,6 +1047,8 @@ function declinedLine(task: Task): string {
 function statusLine(task: Task, latest: Latest | undefined, now: Date, employee?: Employee): string {
   switch (task.status) {
     case "assigned":
+      // Round 50: an office person who drives their own trips with the app (Driving mode, or /m/'s trip page).
+      if (task.driven_by === "self" && employee?.can_drive === true) return "Self-drive · in the app";
       // Round 3: a trip with no app behind it (the person drives it themselves, or someone not in Fame Fleet).
       if (noAppLine(task.driven_by)) return noAppLine(task.driven_by)!;
       if (employee && !isDriver(employee)) return "Drives themselves · no app";
@@ -1048,6 +1057,9 @@ function statusLine(task: Task, latest: Latest | undefined, now: Date, employee?
     case "declined":
       return declinedLine(task);
     case "in_progress": {
+      // Round 50: a trip driven on the web has no tracking (one position per action); one started from My trip none at all.
+      if (task.driven_in === "web") return `Started ${task.started_at ? colomboTime(task.started_at) : "?"} · web trip (no live location)`;
+      if (task.driven_in === "office") return `Started ${task.started_at ? colomboTime(task.started_at) : "?"} · no app`;
       const share = sharing(latest, now);
       const where = share.state === "sharing"
         ? "sharing location"
@@ -1559,7 +1571,11 @@ export const updateTaskStops = tool({
     if (needsApproval(settings, actor)) {
       // Rule 10 (review L3): a Google pick's name is not kept with the proposal: the card says "Google place".
       const anon = (s: ResolvedStop) => (s.pin_from === "google" ? { ...s, place_name: "Google place" } : s);
-      const moved = stopChanges(existing.filter((s) => s.status !== "removed").map(stopForChange), [...kept, ...stops.map(anon)].map(stopForChange), 3);
+      const moved = stopChanges(
+        existing.filter((s) => s.status !== "removed").map(stopForChange),
+        [...kept, ...stops.map(anon)].map(stopForChange),
+        3,
+      );
       const changes: Record<string, FieldChange> = {};
       if (moved.list.length > 0) {
         changes.stops = {
@@ -1785,6 +1801,12 @@ export const taskBoard = tool({
         driver: shownDriver(t, refs.emp.get(t.employee_id)),
         // Round 3: self = the person on the task drives it themselves, other = someone not in Fame Fleet (no photo).
         driven_by: t.driven_by !== "driver" ? t.driven_by : undefined,
+        // Round 50: an office person driving their own trip with the app or on /m/; where it was started.
+        self_drive:
+          t.driven_by === "self" && (t.driven_in === "app" || t.driven_in === "web" || refs.emp.get(t.employee_id)?.can_drive === true)
+            ? true
+            : undefined,
+        driven_in: t.driven_in ?? undefined,
         driver_photo_url: t.driven_by === "other" ? undefined : driverPhotos.get(t.employee_id),
         vehicle: t.vehicle_id ? refs.veh.get(t.vehicle_id)?.reg_no : undefined,
         vehicle_text: t.vehicle_id ? undefined : vehicleText(t.vehicle_mode, t.vehicle_type_wanted),
@@ -1965,9 +1987,11 @@ export const taskDetail = tool({
     };
     // Round 4–7 (5): the fuel card the driver saw at Start task (the estimate is the database's) and their answer.
     // Nothing while the switch fuel_card is off (the driver is not asked then).
-    const fuelCard = settings.fuel_card && task.driven_by === "driver" && task.vehicle_id
-      ? (unwrapMaybe(await db.rpc("fuel_estimate", { p_task_id: task.id }), "fuel estimate") as FuelEstimate | null)
-      : null;
+    // Round 50: also a self-drive trip driven in the app or on the web (the person answered it at Start).
+    const fuelCard =
+      settings.fuel_card && (task.driven_by === "driver" || task.driven_in === "app" || task.driven_in === "web") && task.vehicle_id
+        ? (unwrapMaybe(await db.rpc("fuel_estimate", { p_task_id: task.id }), "fuel estimate") as FuelEstimate | null)
+        : null;
 
     const projectIds = split.flatMap((row) => row.project_id ? [row.project_id] : []);
     const [projectsRes, links, request, unlogged, gps, eta, videos] = await Promise.all([
@@ -2046,6 +2070,10 @@ export const taskDetail = tool({
           plan_version: task.plan_version,
           driver: shownDriver(task, driver),
           driven_by: task.driven_by !== "driver" ? task.driven_by : undefined,
+          self_drive: task.driven_by === "self" && (task.driven_in === "app" || task.driven_in === "web" || driver?.can_drive === true)
+            ? true
+            : undefined,
+          driven_in: task.driven_in ?? undefined,
           driver_photo_url: task.driven_by === "other" ? undefined : driverPhoto,
           vehicle: vehicle ? `${vehicle.reg_no}${vehicle.make_model ? ` · ${vehicle.make_model}` : ""}` : undefined,
           vehicle_photo_url: vehiclePhoto?.photo,
@@ -2405,7 +2433,10 @@ function proposedTaskChanges(
   // The words in the same call go with the proposal, so the approval applies the whole call.
   if (args.title !== undefined && args.title !== task.title) changes.title = { from: task.title, to: args.title };
   if (args.passengers !== undefined && args.passengers !== task.passengers) {
-    changes.passengers = { from: task.passengers == null ? null : String(task.passengers), to: args.passengers == null ? null : String(args.passengers) };
+    changes.passengers = {
+      from: task.passengers == null ? null : String(task.passengers),
+      to: args.passengers == null ? null : String(args.passengers),
+    };
   }
   if (args.contact_name !== undefined && args.contact_name !== task.contact_name) {
     changes.contact = { from: task.contact_name, to: args.contact_name };

@@ -90,3 +90,45 @@ Deno.test("the general limit: 60 calls a minute per driver, then 429; an unknown
   assertEquals((await p2("/nowhere")).status, 404);
   assertEquals(l2.unauth.peek("203.0.113.9"), 19);
 });
+
+Deno.test("Round 50: an office person who drives with the app reaches the place search and the crash report, nothing else", async () => {
+  const office = {
+    row: { id: "o1", name: "Shashen", role: "office", active: true } as unknown as DriverRow,
+    actor: { employeeId: "o1", name: "Shashen", role: "office" as const, permissions: [], authUserId: "u2", channel: "driver" as const },
+  };
+  const searched = { n: 0 };
+  const handle = createHandler({
+    db: {} as Db,
+    resolveDriver: () => Promise.resolve({ ok: true, driver: office }),
+    work: {
+      // deno-lint-ignore require-await
+      searchPlaces: async () => {
+        searched.n += 1;
+        return { result: { results: [], text: "" } } as never;
+      },
+      // deno-lint-ignore require-await
+      saveAppError: async () => {},
+    },
+  });
+  const post = (path: string, body: unknown) =>
+    handle(
+      new Request(`https://x.test/functions/v1/driver-api${path}`, {
+        method: "POST",
+        headers: { authorization: "Bearer tok", "x-real-ip": "203.0.113.20" },
+        body: JSON.stringify(body),
+      }),
+    );
+  assertEquals((await post("/places/search", { text: "Kandy" })).status, 200);
+  assertEquals(searched.n, 1);
+  for (
+    const path of [
+      "/trips",
+      "/trips/00000000-0000-0000-0000-000000000001/stops",
+      "/trips/00000000-0000-0000-0000-000000000001/cancel",
+      "/profile",
+    ]
+  ) {
+    const res = await post(path, {});
+    assertEquals([path, res.status, await res.json()], [path, 403, { error: "drivers_only" }]);
+  }
+});

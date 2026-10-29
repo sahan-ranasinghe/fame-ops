@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 import { type Db, fetchAll, ToolError, unwrap } from "../db.ts";
-import { findDriver, findVehicle, loadRefs, vehicleLabel } from "../fleet.ts";
+import { findDriver, findDriverOrSelfDriver, findVehicle, loadRefs, vehicleLabel } from "../fleet.ts";
 import { buildRoute } from "../route.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange } from "../time.ts";
 import { realDate, tool, zDate, zId, zPaging, zText } from "../tool.ts";
@@ -51,7 +51,7 @@ export const dutyLog = tool({
     const fromIso = dayRange(first).from;
     const toIso = dayRange(last).to;
     const refs = await loadRefs(db);
-    const who = driver ? findDriver(refs, driver) : null;
+    const who = driver ? findDriverOrSelfDriver(refs, driver) : null;
 
     let sq = db.from("duty_sessions").select("id, employee_id, vehicle_id, started_at, ended_at, end_reason, device_info")
       .lt("started_at", toIso).or(`ended_at.is.null,ended_at.gte.${fromIso}`).eq("demo", false).order("started_at", { ascending: false })

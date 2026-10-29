@@ -1149,7 +1149,9 @@ export const myTrips = tool({
     const taskIds = page.rows.flatMap((c) => (typeof c.task_id === "string" ? [c.task_id] : []));
     const noApp = taskIds.length
       ? unwrap(
-        await db.from("tasks").select("id, employee_id, driven_by, status, started_at, finish_flag, finish_ask_sent_at, start_at")
+        await db.from("tasks").select(
+          "id, employee_id, driven_by, driven_in, status, started_at, finish_flag, finish_ask_sent_at, start_at",
+        )
           .in("id", taskIds).neq("driven_by", "driver"),
         "tasks",
       )

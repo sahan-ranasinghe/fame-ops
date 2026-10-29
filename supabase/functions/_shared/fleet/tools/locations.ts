@@ -1,8 +1,8 @@
 // Live locations and a driver's route for a day.
 
 import { z } from "zod";
-import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
-import { type Employee, findDriver, loadLatest, loadRefs, nearestTown, sharing, statusOf, vehicleLabel } from "../fleet.ts";
+import { type Db, fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
+import { type Employee, findDriverOrSelfDriver, loadLatest, loadRefs, nearestTown, sharing, statusOf, vehicleLabel } from "../fleet.ts";
 import { contactLinks, kmh, mapsPoint } from "../format.ts";
 import { taskEta } from "../eta.ts";
 import { GPS_KM_NOTE } from "../geo.ts";
@@ -55,7 +55,7 @@ export const watchDrivers = tool({
     const watched: string[] = [];
     const notYet: string[] = [];
     for (const name of [...new Set(drivers)]) {
-      const who = findDriver(refs, name);
+      const who = findDriverOrSelfDriver(refs, name);
       const { data, error } = await db.from("driver_latest").update({ watched_until: until }).eq("employee_id", who.id).select(
         "employee_id",
       );
@@ -92,7 +92,7 @@ export const liveDrivers = tool({
       loadLatest(db),
       loadSettings(db),
       db.from("tasks").select(
-        "id, title, employee_id, vehicle_id, status, started_at, return_to_base, avoid_expressway, late_report_min, late_report_at",
+        "id, title, employee_id, vehicle_id, status, started_at, return_to_base, avoid_expressway, late_report_min, late_report_at, driven_by, driven_in",
       ).eq(
         "status",
         "in_progress",
@@ -126,14 +126,27 @@ export const liveDrivers = tool({
     );
     const stops = tasks.length > 0
       ? unwrap(
-        await db.from("task_stops").select("task_id, seq, place_name, type, what, status, lat, lng, dwell_min, arrive_by")
+        await db.from("task_stops").select("id, task_id, seq, place_name, type, what, status, lat, lng, dwell_min, arrive_by")
           .in("task_id", tasks.map((t) => t.id)).neq("status", "removed").order("seq"),
         "stops",
       )
       : [];
 
-    // Every active driver (Phase 7): on a task, on duty or off duty.
-    const shown = refs.employees.filter((e) => e.role === "driver" && e.active);
+    // Every active driver (Phase 7): on a task, on duty or off duty. Round 50: and an office person while a self-drive trip
+    // of theirs runs in the app or on /m/ (never otherwise: they are shown only during their trip).
+    const selfDriving = new Map(
+      tasks.filter((t) => t.driven_by === "self" && (t.driven_in === "app" || t.driven_in === "web")).map((t) => [t.employee_id, t]),
+    );
+    const shown = refs.employees.filter((e) => e.active && (e.role === "driver" || selfDriving.has(e.id)));
+    // A web trip has no tracking: its last action (and the last one with a position) stand in for the position.
+    const webTaskIds = [...selfDriving.values()].filter((t) => t.driven_in === "web").map((t) => t.id);
+    const webActions = webTaskIds.length
+      ? unwrap(
+        await db.from("web_trip_actions").select("task_id, action, stop_id, at, lat, lng").in("task_id", webTaskIds)
+          .order("at", { ascending: false }),
+        "web trip actions",
+      )
+      : [];
     // Phase 7 (§5, §6): the drivers' and the vehicles' photos, in one batch each (the same links while they last).
     // Part 3b (H2): for the people who dispatch, the usual start, the next task and whether the driver is not available now.
     const dispatches = actor.permissions.includes("approve") || actor.permissions.includes("assign_tasks");
@@ -152,7 +165,10 @@ export const liveDrivers = tool({
       "availability",
     );
     const cards = await Promise.all(shown.map(async (e) => {
-      const pos = latest.get(e.id);
+      const webTask = selfDriving.get(e.id)?.driven_in === "web" ? selfDriving.get(e.id) : undefined;
+      const lastAction = webTask ? webActions.find((a) => a.task_id === webTask.id) : undefined;
+      const lastPlaced = webTask ? webActions.find((a) => a.task_id === webTask.id && a.lat != null && a.lng != null) : undefined;
+      const pos = webTask ? undefined : latest.get(e.id);
       const share = sharing(pos, now);
       const { fields } = statusOf(pos, now);
       const task = tasks.find((t) => t.employee_id === e.id);
@@ -199,7 +215,18 @@ export const liveDrivers = tool({
         near: hasPosition ? await nearestTown(db, pos.lat!, pos.lng!) : undefined,
         speed_kmh: share.state === "sharing" ? kmh(pos?.speed_mps) : undefined,
         battery_pct: pos?.battery_pct,
-        source: "Fame Driver app",
+        source: webTask ? "Web trip (no live location)" : "Fame Driver app",
+        // Round 50: an office person driving their own trip; a web trip's last action ("last seen at Kandy office 10:42").
+        self_drive: e.role !== "driver" ? true : undefined,
+        web_trip: webTask ? true : undefined,
+        last_seen: lastAction
+          ? {
+            at: colomboTime(lastAction.at),
+            stop: lastAction.stop_id
+              ? stops.find((x) => x.task_id === webTask!.id && x.id === lastAction.stop_id)?.place_name ?? undefined
+              : undefined,
+          }
+          : undefined,
         photo_url: driverPhotos.get(e.id),
         vehicle: vehicleId ? vehicleLabel(refs.veh.get(vehicleId)) : undefined,
         vehicle_thumb_url: vehicleId ? vehiclePhotos.get(vehicleId)?.thumb : undefined,
@@ -233,8 +260,8 @@ export const liveDrivers = tool({
           return u ? notAvailableNow(u, now) : undefined;
         })(),
         // The position itself (the web map draws it; the maps link stays for Claude), and the heading the marker turns to.
-        lat: hasPosition ? pos.lat! : undefined,
-        lng: hasPosition ? pos.lng! : undefined,
+        lat: hasPosition ? pos.lat! : lastPlaced?.lat ?? undefined,
+        lng: hasPosition ? pos.lng! : lastPlaced?.lng ?? undefined,
         heading: hasPosition && pos.heading != null ? Math.round(pos.heading) : undefined,
         links: { maps: hasPosition ? mapsPoint(pos.lat!, pos.lng!) : undefined, ...(phones ? contactLinks(e.phone) : {}) },
         minutes: share.minutes ?? Number.MAX_SAFE_INTEGER,
@@ -304,7 +331,10 @@ export const driverRoute = tool({
       "The screen asking (the web clients send it): counted with each snap-to-roads call so usage reads by source",
     ),
   }),
-  async run({ driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap, estimate_gaps, source: sourceArg }, { db, now, actor }) {
+  async run(
+    { driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap, estimate_gaps, source: sourceArg },
+    { db, now, actor },
+  ) {
     const refs = await loadRefs(db);
     let who: Employee;
     let fromIso: string;
@@ -335,7 +365,7 @@ export const driverRoute = tool({
       };
     } else {
       if (!driver) throw new ToolError("Say which driver (username, code or name), or give a task_id.");
-      who = findDriver(refs, driver);
+      who = findDriverOrSelfDriver(refs, driver);
       const day = realDate(date ?? colomboDate(now));
       const range = dayRange(day);
       fromIso = from ? utcIso(day, from) : range.from;
@@ -343,6 +373,8 @@ export const driverRoute = tool({
       if (toIso <= fromIso) throw new ToolError("The window ends before it starts.");
     }
     const day = colomboDate(fromIso);
+    // Round 50: a trip driven on /m/ has no tracking: its actions' positions, joined by straight lines on the map.
+    const web = await webPointsOf(db, who.id, fromIso, toIso, task?.id);
 
     const [rows, beats, settings] = await Promise.all([
       fetchAll(
@@ -401,7 +433,10 @@ export const driverRoute = tool({
           points_shown: 0,
           heartbeats: beats.length,
           location_restarts: restarts,
-          note: beats.length
+          ...web,
+          note: web.web_trip
+            ? "No live route · web trip: the trip was driven from a browser; its actions' positions are joined by straight lines (never km)."
+            : beats.length
             ? "No position was recorded in this time; the phone was on duty with no GPS signal."
             : "No location was shared in this time.",
         },
@@ -562,6 +597,7 @@ export const driverRoute = tool({
         window,
         task,
         recorded_points: rows.length,
+        ...web,
         points_stored: route.pointsStored,
         points_shown: route.pointsShown,
         usable_points: route.usable,
@@ -608,3 +644,27 @@ export const driverRoute = tool({
     };
   },
 });
+
+/** Round 50: a person's /m/ trip actions with a position in a window (one task's when given), for the route views. */
+async function webPointsOf(db: Db, employeeId: string, fromIso: string, toIso: string, taskId?: string) {
+  let q = db.from("web_trip_actions").select("task_id, action, stop_id, at, lat, lng").eq("employee_id", employeeId)
+    .gte("at", fromIso).lte("at", toIso).not("lat", "is", null).order("at");
+  if (taskId) q = q.eq("task_id", taskId);
+  const rows = unwrap(await q, "web trip actions");
+  if (!rows.length) return {};
+  const stopIds = rows.flatMap((r) => r.stop_id ? [r.stop_id] : []);
+  const names = stopIds.length
+    ? new Map(unwrap(await db.from("task_stops").select("id, place_name").in("id", stopIds), "stops").map((x) => [x.id, x.place_name]))
+    : new Map<string, string | null>();
+  return {
+    web_trip: true as const,
+    web_points: rows.map((r) => ({
+      at: r.at,
+      time: colomboTime(r.at),
+      lat: r.lat!,
+      lng: r.lng!,
+      action: r.action,
+      ...(r.stop_id && names.get(r.stop_id) && { stop: names.get(r.stop_id)! }),
+    })),
+  };
+}

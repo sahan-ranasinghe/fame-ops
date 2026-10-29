@@ -159,13 +159,14 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
 
     if (request.method === "GET" && path === "/me") {
       // Which map the web shows (never the key: register_map_load hands it out after counting the load).
-      const use = await settings(db).then(googleUse, () => null);
+      const fleetSettings = await settings(db).catch(() => null);
+      const use = fleetSettings ? googleUse(fleetSettings) : null;
       // Round 3: the person's own photo (initials until there is one) and driving licence (A5: for the trips they drive
       // themselves); a failed link is no photo, never a failed /me.
       const mine = actor.employeeId
         ? await (async () => {
           const { data } = await db.from("employees").select(
-            "id, photo_id, licence_no, licence_expiry, licence_front_photo_id, licence_back_photo_id",
+            "id, photo_id, licence_no, licence_expiry, licence_front_photo_id, licence_back_photo_id, can_drive",
           ).eq("id", actor.employeeId!).maybeSingle();
           if (!data) return undefined;
           const [photos, licence] = await Promise.all([
@@ -174,6 +175,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
           ]);
           return {
             photo: photos.get(data.id),
+            canDrive: data.can_drive === true,
             licence: {
               number: data.licence_no ?? undefined,
               expiry: data.licence_expiry ?? undefined,
@@ -196,6 +198,9 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
         mfa_required: deps.mfaRoles.includes(actor.role),
         tools: TOOLS.filter((t) => canCall(actor, t.name)).map((t) => t.name),
         map: { package: use?.map ? "google" : "open", places: use?.places ?? false },
+        // Round 50 (§37): Driving mode in the app for an office person who may drive, while the switch is on.
+        can_drive: mine?.canDrive ?? false,
+        self_drive_mode: fleetSettings?.self_drive_mode !== false,
         // Hotfix 2 (F): the person's own number; approvers and dispatchers without one see the banner until it is filled.
         phone: person.phone ?? undefined,
         phone_display: phoneDisplay(person.phone),

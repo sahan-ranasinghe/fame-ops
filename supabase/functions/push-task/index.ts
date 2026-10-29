@@ -225,7 +225,7 @@ Deno.serve(async (request) => {
   if (kind === "ask" && !askId) return json(400, { error: "bad_request" });
   const [taskRes, stopsRes, driverRes, tokensRes, askRes] = await Promise.all([
     taskId
-      ? admin.from("tasks").select("id, title, start_at, leave_by, status, cancelled_reason").eq("id", taskId).maybeSingle()
+      ? admin.from("tasks").select("id, title, start_at, leave_by, status, cancelled_reason, driven_by").eq("id", taskId).maybeSingle()
       : Promise.resolve({ data: null }),
     taskId
       ? admin.from("task_stops").select("seq, place_name").eq("task_id", taskId).neq("status", "removed").order("seq")
@@ -246,8 +246,13 @@ Deno.serve(async (request) => {
 
   const log = { task_id: taskId, employee_id: employeeId, kind, tokens: tokens.length };
   // Phase 8 (O1 item 9): an office person who drives a custodian's vehicle holds a token for the office's notifications,
-  // never for the driver's task pushes.
-  if (driver.role !== "driver") {
+  // never for the driver's task pushes. Round 50: unless they drive this self-drive trip with the app (app_trip), or, for a
+  // day message (the cut-off), drive with the app at all.
+  const appDriver = driver.role === "driver" ||
+    (task
+      ? (await admin.rpc("app_trip", { p_driven_by: task.driven_by ?? "driver", p_employee: employeeId })).data === true
+      : (await admin.rpc("drives_with_app", { p_employee: employeeId })).data === true);
+  if (!appDriver) {
     await admin.from("push_log").insert({ ...log, sent: 0, failed: 0, errors: [{ error: "not_a_driver" }] });
     return json(200, { sent: 0, failed: 0, reason: "not_a_driver" });
   }

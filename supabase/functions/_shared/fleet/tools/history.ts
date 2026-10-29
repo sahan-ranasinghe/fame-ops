@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 import { fetchAll, inChunks, ToolError, unwrap, unwrapMaybe } from "../db.ts";
-import { findDriver, findVehicle, loadRefs } from "../fleet.ts";
+import { findDriverOrSelfDriver, findVehicle, loadRefs } from "../fleet.ts";
 import { colomboDate, colomboDateTime, colomboTime } from "../time.ts";
 import { daySpan, tool, zDate, zId, zPaging, zSearch, zText } from "../tool.ts";
 import { pageOf, pageWindow } from "../paging.ts";
@@ -35,7 +35,7 @@ export const listTasks = tool({
   async run({ from, to, driver, vehicle, status, kind, search, limit, cursor }, { db }) {
     const span = daySpan(from, to)!;
     const refs = await loadRefs(db);
-    const onlyDriver = driver ? findDriver(refs, driver) : null;
+    const onlyDriver = driver ? findDriverOrSelfDriver(refs, driver) : null;
     const onlyVehicle = vehicle ? findVehicle(refs, vehicle) : null;
     const w = pageWindow(limit, cursor);
     // Paged: every task of the range (up to 5,000) for the totals, the stops for the page only. Not paged: 500, as before.

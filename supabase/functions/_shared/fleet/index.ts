@@ -72,7 +72,7 @@ import {
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
 import { listAppErrors } from "./tools/appErrors.ts";
 import { activityLog, setActivityTools } from "./tools/activity.ts";
-import { finishMyTrip, myTrip, myTripCheck, vehicleChecks } from "./tools/checks.ts";
+import { finishMyTrip, myTrip, myTripCheck, vehicleChecks, webTripAction } from "./tools/checks.ts";
 import { createdTargets, findPeople, requestTargets, taskTarget, withPassengerList } from "./tools/passengers.ts";
 import { answerHolderAsk, askForIt, dayTimeline, holderAsks, withConflicts } from "./tools/holders.ts";
 import { retentionPreview, runRetentionNow } from "./tools/retention.ts";
@@ -223,6 +223,7 @@ export const TOOLS: AnyTool[] = [
   myTrip,
   myTripCheck,
   finishMyTrip,
+  webTripAction,
   // Round 4–7 (6): people for the Passengers field (passenger_list rides on the trip tools above).
   findPeople,
   // Round 4–7 (7): someone else has that driver or vehicle: ask for it, answer, the asks, the day's timeline.

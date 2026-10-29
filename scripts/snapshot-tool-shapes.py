@@ -44,6 +44,10 @@ DB_CONTAINER = os.environ.get("DB_CONTAINER", "supabase_db_fame-ops")
 # Fields a tool leaves out when its data has nothing for them (run.ts prunes absent and null fields): a run whose rows carry
 # none of them is not a broken contract. Each with the code that decides it.
 OPTIONAL = {
+    "list_office_users": {
+        "users[].can_drive": "accounts.ts can_drive: u.can_drive ?? undefined (Round 50: absent while never decided; "
+                             "true granted, false taken away)",
+    },
     "availability": {
         "drivers[].next_task_start": "availability.ts:186 next_task_start: next ? hhmm(next.start_at) : undefined "
                                      "(only a driver with an assigned task after the window's start)",

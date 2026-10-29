@@ -163,6 +163,9 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
       return json(who.status, { error: who.error });
     }
     const { row, actor } = who.driver;
+    // Round 50: an office person driving their own trip with the app reaches the place search and the crash report; the
+    // trips a driver starts in the app (and their stops, their cancel) and the driver's profile stay drivers only.
+    if (row.role !== "driver" && path !== "/places/search" && path !== "/errors") return json(403, { error: "drivers_only" });
     if (!limits.general.take(row.id)) return rateLimitedResponse();
     if (PAID_PATHS(path) && !limits.paid.take(row.id)) return rateLimitedResponse();
     let raw: unknown = {};

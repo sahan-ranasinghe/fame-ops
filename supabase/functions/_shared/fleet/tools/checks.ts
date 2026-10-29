@@ -6,10 +6,13 @@
 
 import { z } from "zod";
 import { type Db, type Row, ToolError, unwrap, unwrapMaybe } from "../db.ts";
+import type { Json } from "../database.types.ts";
 import { type Employee, findVehicle, loadRefs, type Refs, vehicleLabel } from "../fleet.ts";
 import { contactLinks } from "../format.ts";
 import { pageOf, pageWindow } from "../paging.ts";
 import { photoLinks } from "../photos.ts";
+import { estimateText, type FuelEstimate } from "../fuelCard.ts";
+import { haversineKm } from "../geo.ts";
 import { loadSettings } from "../settings.ts";
 import { colomboDate, colomboDayTime, colomboTime, dayRange } from "../time.ts";
 import { daySpan, realDate, tool, zDate, zId, zPaging, zText } from "../tool.ts";
@@ -51,9 +54,7 @@ export async function checkCards(db: Db, refs: Refs, checks: readonly Check[], w
     ? unwrap(await db.from("vehicle_reports").select("id, check_id, category, note, status").in("check_id", ids), "vehicle reports")
     : [];
   const byCheck = new Map(reports.map((r) => [r.check_id!, r]));
-  const links = withPhotos && ids.length
-    ? await photoLinks(db, { checkIds: ids, reportIds: reports.map((r) => r.id) })
-    : null;
+  const links = withPhotos && ids.length ? await photoLinks(db, { checkIds: ids, reportIds: reports.map((r) => r.id) }) : null;
   const taskIds = [...new Set(checks.flatMap((c) => (c.task_id ? [c.task_id] : [])))];
   const tasks = taskIds.length ? unwrap(await db.from("tasks").select("id, title").in("id", taskIds), "tasks") : [];
   const title = new Map(tasks.map((t) => [t.id, t.title]));
@@ -183,8 +184,13 @@ async function ownNoAppTrip(db: Db, taskId: string, employeeId: string | null): 
   if (!t || t.employee_id !== employeeId) throw new ToolError("Not one of your trips.");
   if (t.driven_by === "driver") throw new ToolError("A driver does this trip: the driver checks the vehicle in the app.");
   if (!t.vehicle_id) throw new ToolError("This trip has no vehicle yet.");
+  // Round 50: a trip started in the app or on /m/ is finished there (its readings, stops and photos are its own).
+  if (t.driven_in === "app") throw new ToolError(WEB_IN_APP);
+  if (t.driven_in === "web") throw new ToolError("This trip was started on the web: finish it on its trip page.");
   return t;
 }
+
+const WEB_IN_APP = "This trip is being driven in the Fame Fleet app";
 
 /** The vehicle's last odometer reading (the prefilled number; never under it). */
 /** The vehicle's last known reading: its odometer, unless a vehicle check took a reading after the last logged one (a
@@ -207,7 +213,9 @@ async function lastReading(db: Db, vehicleId: string): Promise<number | null> {
 async function ownPhotos(db: Db, employeeId: string, ids: readonly string[], kind: string): Promise<void> {
   if (!ids.length) return;
   const rows = unwrap(
-    await db.from("photos").select("id, employee_id, kind, odometer_log_id, fuel_log_id, vehicle_report_id, claim_line_id, vehicle_check_id")
+    await db.from("photos").select(
+      "id, employee_id, kind, odometer_log_id, fuel_log_id, vehicle_report_id, claim_line_id, vehicle_check_id",
+    )
       .in("id", [...ids]),
     "photos",
   );
@@ -248,7 +256,9 @@ async function tripView(db: Db, t: Task, now: Date) {
     t.vehicle_id ? lastReading(db, t.vehicle_id) : Promise.resolve(null),
   ]);
   const check = unwrap(checks, "vehicle checks")[0];
+  const web = t.driven_by === "self" ? await webBlock(db, t, settings, last) : undefined;
   const state = noAppState(t);
+  const drivenElsewhere = t.driven_in === "app" || t.driven_in === "web";
   const window = tripWindow(t.start_at, now);
   const flag = t.finish_flag as { kind?: string } | null;
   const plannedKm = ((t.plan_json as { legs?: { km?: number; to_seq?: number }[] } | null)?.legs ?? [])
@@ -284,13 +294,324 @@ async function tripView(db: Db, t: Task, now: Date) {
         odometer_km: check.odometer_km,
       },
     }),
+    // Round 50: a trip started in the app or on /m/ finishes there: the manual check and finish are not offered.
     can: {
-      check: state === "to_check",
-      finish: state === "to_check" || state === "on_the_way" || state === "finish" || state === "not_confirmed",
+      check: state === "to_check" && !drivenElsewhere,
+      finish: !drivenElsewhere && (state === "to_check" || state === "on_the_way" || state === "finish" || state === "not_confirmed"),
     },
     ...(t.finish_ask_sent_at && { finish_asked: colomboDayTime(t.finish_ask_sent_at) }),
+    ...(t.driven_in && { driven_in: t.driven_in }),
+    ...(web && { web }),
   };
 }
+
+// ---- Round 50: /m/ driver-lite (docs/phase8-plan.md §37.5; Zipcar / Turo's trip flow in the browser) --------------
+
+type Settings = Awaited<ReturnType<typeof loadSettings>>;
+
+/** Why a self trip cannot be driven on the web now, or null when it can. */
+function webRefusal(t: Task, settings: Settings, canDrive: boolean): string | null {
+  if (!settings.self_drive_mode) return "Self-drive with the app is off (Settings).";
+  if (!canDrive) return "Driving your trips here needs Can drive (ask an admin: Users).";
+  if (t.driven_in === "app") return WEB_IN_APP;
+  if (t.driven_in === "office") return "This trip was started from My trip: finish it there.";
+  if (!["assigned", "in_progress"].includes(t.status)) return "This trip is over.";
+  if (!t.vehicle_id) return "This trip has no vehicle yet.";
+  return null;
+}
+
+async function canDriveOf(db: Db, employeeId: string): Promise<boolean> {
+  const e = unwrapMaybe(await db.from("employees").select("can_drive").eq("id", employeeId).maybeSingle(), "person");
+  return e?.can_drive === true;
+}
+
+/** The trip page's web block: whether the trip can be driven here, and its stops with their state. */
+async function webBlock(db: Db, t: Task, settings: Settings, last: number | null) {
+  const [canDrive, stops, fuel] = await Promise.all([
+    canDriveOf(db, t.employee_id),
+    db.from("task_stops").select("id, seq, type, place_name, status, arrived_at, done_at").eq("task_id", t.id).neq("status", "removed")
+      .order("seq"),
+    settings.fuel_card && t.vehicle_id ? db.rpc("fuel_estimate", { p_task_id: t.id }) : Promise.resolve({ data: null, error: null }),
+  ]);
+  const why = webRefusal(t, settings, canDrive);
+  const estimate = (fuel.data ?? null) as FuelEstimate | null;
+  return {
+    allowed: why === null,
+    ...(why && { why }),
+    started: t.status === "in_progress" && t.driven_in === "web",
+    ...(t.driven_in && { driven_in: t.driven_in }),
+    check_needed: settings.vehicle_check,
+    ...(settings.fuel_card &&
+      { fuel_card: { estimate_text: estimate ? estimateText(estimate) ?? undefined : undefined, asked: !!t.fuel_answer } }),
+    ...(last != null && { last_km: last }),
+    stops: unwrap(stops, "stops").map((x, i) => ({
+      id: x.id,
+      n: i + 1,
+      type: x.type,
+      place: x.place_name,
+      status: x.status,
+      ...(x.arrived_at && { arrived_at: colomboTime(x.arrived_at) }),
+      ...(x.done_at && { done_at: colomboTime(x.done_at) }),
+    })),
+  };
+}
+
+/** Within this distance of a stop's pin, a web Arrived is "ok" (the app's own rule: 300 m), else an override. */
+const WEB_ARRIVAL_M = 300;
+
+export const webTripAction = tool({
+  name: "web_trip_action",
+  title: "Drive my trip on the web",
+  description: "Round 50: the person's own self-drive trip driven from a browser (/m/), one action at a time: start (the vehicle " +
+    "check when it is on, the fuel card's answer, the odometer typed with its photo), arrive / leave a stop, finish (the odometer " +
+    "with its photo, fuel with an optional receipt photo). Each action may carry ONE position the browser took at that moment " +
+    "(none = saved without). No tracking: the office sees the actions' times and the stops joined by straight lines. A retry " +
+    "with the same client_id answers the first outcome. Personal.",
+  readOnly: false,
+  input: z.object({
+    task_id: zId,
+    client_id: zId.describe("Made by the page for each action: a retry never doubles it"),
+    action: z.enum(["start", "arrive", "leave", "finish"]),
+    stop_id: zId.optional().describe("arrive, leave"),
+    position: z.object({
+      lat: z.number().min(-90).max(90),
+      lng: z.number().min(-180).max(180),
+      accuracy_m: z.number().min(0).max(100_000).optional(),
+    }).optional(),
+    odometer_km: z.number().int().min(0).max(9_999_999).optional().describe("start, finish"),
+    odometer_photo_id: zId.optional().describe("start, finish: an odometer photo (kind odometer) the page uploaded"),
+    check: z.object({
+      result: z.enum(["ok", "problem"]),
+      category: z.enum(REPORT_CATEGORIES).optional(),
+      note: zText(500).optional(),
+      photos: z.array(zId).max(MAX_PROBLEM_PHOTOS).optional(),
+      sides: z.array(z.object({ photo_id: zId, side: z.enum(SIDES) })).max(4).optional(),
+    }).optional().describe("start, when the vehicle check is on"),
+    fuel_answer: z.enum(["enough", "fill_on_way"]).optional().describe("start, when the fuel card asks"),
+    fuel: z.object({
+      litres: z.number().positive().max(500),
+      lkr: z.number().min(0).max(1_000_000).optional(),
+      receipt_photo_id: zId.optional(),
+    }).optional().describe("finish, optional"),
+  }),
+  async run(args, { db, now, actor }) {
+    const me = actor.employeeId;
+    if (!me) throw new ToolError("This is personal: it needs a signed-in person.");
+    const repeat = unwrapMaybe(
+      await db.from("web_trip_actions").select("answer, employee_id").eq("client_id", args.client_id).maybeSingle(),
+      "web trip action",
+    );
+    if (repeat) {
+      if (repeat.employee_id !== me) throw new ToolError("Not one of your trips.");
+      return { result: repeat.answer as Record<string, unknown>, summary: `web trip ${args.action} (again)` };
+    }
+    const t = unwrapMaybe(await db.from("tasks").select("*").eq("id", args.task_id).maybeSingle(), "task");
+    if (!t || t.employee_id !== me) throw new ToolError("Not one of your trips.");
+    if (t.driven_by !== "self") throw new ToolError("Only a trip you drive yourself can be driven here.");
+    const settings = await loadSettings(db);
+    const refused = webRefusal(t, settings, await canDriveOf(db, me));
+    if (refused) throw new ToolError(refused);
+    const at = now.toISOString();
+    const pos = args.position;
+    let answer: Record<string, unknown>;
+    let stopId: string | null = null;
+
+    if (args.action === "start") {
+      if (t.status !== "assigned") throw new ToolError("This trip is already on its way.");
+      const window = tripWindow(t.start_at, now);
+      if (!window.open) throw new ToolError(`This trip can start from ${window.opens_at}.`);
+      if (args.odometer_km == null || !args.odometer_photo_id) throw new ToolError("Take the odometer photo and type the reading.");
+      const last = await lastReading(db, t.vehicle_id!);
+      const odoWrong = odometerProblem(args.odometer_km, last);
+      if (odoWrong) throw new ToolError(odoWrong);
+      await ownPhotos(db, me, [args.odometer_photo_id], "odometer");
+      const check = args.check;
+      if (settings.vehicle_check) {
+        if (!check) throw new ToolError("Answer the vehicle check first.");
+        const problem = check.result === "problem";
+        if (problem && !check.category) throw new ToolError("Pick what the problem is.");
+        if (problem && (check.photos ?? []).length < MIN_PROBLEM_PHOTOS) throw new ToolError("Add at least one photo of the problem.");
+        if (!problem && check.photos?.length) throw new ToolError("Photos of a problem go with result problem.");
+        await ownPhotos(db, me, check.photos ?? [], "vehicle_report");
+        await ownPhotos(db, me, (check.sides ?? []).map((x) => x.photo_id), "vehicle_check");
+        const checkId = args.client_id;
+        unwrap(
+          await db.from("vehicle_checks").insert({
+            id: checkId,
+            vehicle_id: t.vehicle_id!,
+            employee_id: me,
+            task_id: t.id,
+            checked_at: at,
+            result: check.result,
+            odometer_km: args.odometer_km,
+            how: "trip",
+            channel: "web",
+          }),
+          "vehicle check",
+        );
+        for (const x of check.sides ?? []) {
+          unwrap(await db.from("photos").update({ vehicle_check_id: checkId, side: x.side }).eq("id", x.photo_id), "photos");
+        }
+        if (problem) {
+          const report = unwrap(
+            await db.from("vehicle_reports").insert({
+              vehicle_id: t.vehicle_id!,
+              employee_id: me,
+              task_id: t.id,
+              category: check.category!,
+              note: check.note ?? null,
+              check_id: checkId,
+            }).select("id").single(),
+            "vehicle report",
+          );
+          unwrap(await db.from("photos").update({ vehicle_report_id: report.id }).in("id", check.photos ?? []), "photos");
+        }
+      }
+      const started = unwrap(
+        await db.from("tasks").update({
+          status: "in_progress",
+          started_at: at,
+          start_odometer_km: args.odometer_km,
+          driven_in: "web",
+          ...(args.fuel_answer && { fuel_answer: args.fuel_answer, fuel_answer_at: at }),
+        }).eq("id", t.id).eq("status", "assigned").select("id"),
+        "task",
+      );
+      if (!started.length) throw new ToolError("This trip is already on its way.");
+      const log = unwrap(
+        await db.from("odometer_logs").insert({
+          vehicle_id: t.vehicle_id!,
+          employee_id: me,
+          task_id: t.id,
+          reading_km: args.odometer_km,
+          kind: "task_start",
+          logged_at: at,
+          entry: "web",
+          photo_id: args.odometer_photo_id,
+        }).select("id").single(),
+        "odometer",
+      );
+      unwrap(await db.from("photos").update({ odometer_log_id: log.id }).eq("id", args.odometer_photo_id), "photos");
+      answer = { task_id: t.id, status: "in_progress", driven_in: "web", next: `On the way · left ${colomboTime(now)}` };
+    } else if (args.action === "arrive" || args.action === "leave") {
+      if (t.status !== "in_progress") throw new ToolError("Start the trip first.");
+      if (!args.stop_id) throw new ToolError("Which stop?");
+      const stop = unwrapMaybe(
+        await db.from("task_stops").select("id, task_id, place_name, status, lat, lng, arrived_at").eq("id", args.stop_id).maybeSingle(),
+        "stop",
+      );
+      if (!stop || stop.task_id !== t.id || stop.status === "removed") throw new ToolError("Not a stop of this trip.");
+      stopId = stop.id;
+      if (args.action === "arrive") {
+        if (stop.status !== "pending") throw new ToolError(`${stop.place_name ?? "This stop"}: already ${stop.status}.`);
+        const far = pos && stop.lat != null && stop.lng != null
+          ? Math.round(haversineKm(pos, { lat: stop.lat, lng: stop.lng }) * 1000)
+          : null;
+        const flag = !pos ? "no_gps" : stop.lat == null ? "no_pin" : far! <= WEB_ARRIVAL_M ? "ok" : "override";
+        unwrap(
+          await db.from("task_stops").update({
+            status: "arrived",
+            arrived_at: at,
+            arrival_flag: flag,
+            ...(far != null && { arrival_distance_m: far }),
+            ...(pos && { arrival_lat: pos.lat, arrival_lng: pos.lng, arrival_at: at, arrival_accuracy_m: pos.accuracy_m ?? null }),
+          }).eq("id", stop.id).eq("status", "pending"),
+          "stop",
+        );
+        answer = {
+          task_id: t.id,
+          status: "in_progress",
+          driven_in: "web",
+          stop: { id: stop.id, status: "arrived", at: colomboTime(now) },
+          next: `Arrived at ${stop.place_name ?? "the stop"}`,
+        };
+      } else {
+        if (stop.status !== "arrived") throw new ToolError(`${stop.place_name ?? "This stop"}: mark Arrived first.`);
+        unwrap(await db.from("task_stops").update({ status: "done", done_at: at }).eq("id", stop.id).eq("status", "arrived"), "stop");
+        answer = {
+          task_id: t.id,
+          status: "in_progress",
+          driven_in: "web",
+          stop: { id: stop.id, status: "done", at: colomboTime(now) },
+          next: `Done at ${stop.place_name ?? "the stop"}`,
+        };
+      }
+    } else {
+      if (t.status !== "in_progress") throw new ToolError("Start the trip first.");
+      if (args.odometer_km == null || !args.odometer_photo_id) throw new ToolError("Take the odometer photo and type the reading.");
+      const start = t.start_odometer_km ?? 0;
+      if (args.odometer_km < start) {
+        throw new ToolError(`The odometer now (${args.odometer_km} km) is under the start (${start} km). Check the number.`);
+      }
+      const tooFar = odometerProblem(args.odometer_km, start, "The odometer now");
+      if (tooFar) throw new ToolError(tooFar);
+      await ownPhotos(db, me, [args.odometer_photo_id], "odometer");
+      if (args.fuel?.receipt_photo_id) await ownPhotos(db, me, [args.fuel.receipt_photo_id], "fuel_receipt");
+      const log = unwrap(
+        await db.from("odometer_logs").insert({
+          vehicle_id: t.vehicle_id!,
+          employee_id: me,
+          task_id: t.id,
+          reading_km: args.odometer_km,
+          kind: "task_end",
+          logged_at: at,
+          entry: "web",
+          photo_id: args.odometer_photo_id,
+        }).select("id").single(),
+        "odometer",
+      );
+      unwrap(await db.from("photos").update({ odometer_log_id: log.id }).eq("id", args.odometer_photo_id), "photos");
+      if (args.fuel) {
+        const fuel = unwrap(
+          await db.from("fuel_logs").insert({
+            vehicle_id: t.vehicle_id!,
+            employee_id: me,
+            task_id: t.id,
+            litres: args.fuel.litres,
+            amount_cents: args.fuel.lkr != null ? Math.round(args.fuel.lkr * 100) : null,
+            odometer_km: args.odometer_km,
+            logged_at: at,
+            receipt_photo_id: args.fuel.receipt_photo_id ?? null,
+          }).select("id").single(),
+          "fuel",
+        );
+        if (args.fuel.receipt_photo_id) {
+          unwrap(await db.from("photos").update({ fuel_log_id: fuel.id }).eq("id", args.fuel.receipt_photo_id), "photos");
+        }
+      }
+      // The stops not reached: skipped, not visited (as the app's Save & finish does).
+      unwrap(
+        await db.from("task_stops").update({ status: "skipped", skip_reason: "not_visited" }).eq("task_id", t.id)
+          .in("status", ["pending", "arrived"]),
+        "stops",
+      );
+      unwrap(
+        await db.from("tasks").update({ status: "completed", completed_at: at, end_odometer_km: args.odometer_km })
+          .eq("id", t.id).eq("status", "in_progress"),
+        "task",
+      );
+      const km = args.odometer_km - start;
+      answer = { task_id: t.id, status: "completed", driven_in: "web", km, next: `Trip finished · ${km} km` };
+    }
+
+    unwrap(
+      await db.from("web_trip_actions").insert({
+        client_id: args.client_id,
+        task_id: t.id,
+        employee_id: me,
+        action: args.action,
+        stop_id: stopId,
+        at,
+        lat: pos?.lat ?? null,
+        lng: pos?.lng ?? null,
+        accuracy_m: pos?.accuracy_m ?? null,
+        answer: answer as Json,
+      }),
+      "web trip action",
+    );
+    return { result: answer, summary: `web trip ${args.action}: ${t.title}${pos ? "" : " (no position)"}` };
+  },
+});
 
 /** Round 4–7 (6): a registered passenger's view of a trip: the time, the stops as they go, the driver and the plate. */
 async function passengerView(db: Db, t: Task, now: Date) {
@@ -342,7 +663,7 @@ export const myTrip = tool({
     "driver with their phone, the plate, the live state). Or one of the person's own trips that nobody drives with the app (I'll drive myself, or Someone else): the trip " +
     "(day, leave time, back-by, the vehicle, the stops), where it is (to_check, on_the_way, finish, done, not_confirmed), the " +
     "check of the day, the readings and what can be done now: the vehicle check before setting off (it starts the trip from " +
-    "2 h before the planned start, on the trip's day) and \"Trip finished? Enter the odometer\". Personal.",
+    '2 h before the planned start, on the trip\'s day) and "Trip finished? Enter the odometer". Personal.',
   readOnly: true,
   input: z.object({ task_id: zId }),
   async run({ task_id }, { db, now, actor }) {
@@ -452,7 +773,7 @@ export const myTripCheck = tool({
     if (window.open) {
       // On its day from 2 h before: the check starts the trip, with the start reading logged against it (no km gap).
       const done = unwrap(
-        await db.from("tasks").update({ status: "in_progress", started_at: at, start_odometer_km: args.odometer_km })
+        await db.from("tasks").update({ status: "in_progress", started_at: at, start_odometer_km: args.odometer_km, driven_in: "office" })
           .eq("id", t.id).eq("status", "assigned").select("id"),
         "task",
       );
@@ -605,8 +926,13 @@ export const finishMyTrip = tool({
 });
 
 /** For my_trips: what a no-app trip on the person's account asks of them now (the row's button), or nothing. */
-export function noAppAction(t: Pick<Task, "driven_by" | "status" | "started_at" | "finish_flag" | "finish_ask_sent_at" | "start_at">, now: Date) {
+export function noAppAction(
+  t: Pick<Task, "driven_by" | "status" | "started_at" | "finish_flag" | "finish_ask_sent_at" | "start_at"> & { driven_in?: string | null },
+  now: Date,
+) {
   if (t.driven_by === "driver") return undefined;
+  // Round 50: a trip under way in the app or on /m/ asks nothing of My trips (it finishes where it started).
+  if (t.driven_in === "app" || t.driven_in === "web") return undefined;
   const state = noAppState(t);
   if (state === "to_check") return tripWindow(t.start_at, now).past ? "finish" : "check";
   if (state === "finish" || state === "not_confirmed") return state === "finish" ? "finish" : "confirm";

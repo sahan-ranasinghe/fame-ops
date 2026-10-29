@@ -169,6 +169,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   my_trip: ANY,
   my_trip_check: ANY,
   finish_my_trip: ANY,
+  web_trip_action: ANY,
   // Round 4–7 (6): the Passengers field's people search (no phone or e-mail); My trips for everyone (a passenger may hold
   // only view).
   find_people: ANY,

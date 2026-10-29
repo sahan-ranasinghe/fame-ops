@@ -4,7 +4,7 @@
 import { fuelText } from "../fuelCard.ts";
 import { z } from "zod";
 import { fetchAll, unwrap } from "../db.ts";
-import { findDriver, findVehicle, loadRefs } from "../fleet.ts";
+import { findDriverOrSelfDriver, findVehicle, loadRefs } from "../fleet.ts";
 import { centsToLkr } from "../format.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { loadSettings } from "../settings.ts";
@@ -39,7 +39,7 @@ export const listFuel = tool({
     const { from, to } = span ? { from: span.start, to: span.end } : monthRange(which);
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     const onlyVehicle = vehicle ? findVehicle(refs, vehicle) : null;
-    const onlyDriver = driver ? findDriver(refs, driver) : null;
+    const onlyDriver = driver ? findDriverOrSelfDriver(refs, driver) : null;
     const logs = await fetchAll((a, b) => {
       let q = db.from("fuel_logs").select("*").gte("logged_at", from).lt("logged_at", to).eq("demo", false);
       if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
