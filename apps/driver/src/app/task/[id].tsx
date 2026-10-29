@@ -73,6 +73,7 @@ import { arrivalCheck, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/d
 import { approvedBy, taskCalls } from '@/lib/contacts';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { canReportLate } from '@/lib/late';
+import { driverParts } from '@/lib/drivingMode';
 import { namesLine } from '@/lib/passengers';
 import { isMissed } from '@/lib/lists';
 import { colomboDate, colomboTime } from '@/lib/time';
@@ -333,6 +334,10 @@ export function TaskView({ id, design }: { id: string | undefined; design?: { he
             </Pressable>
           )}
           <TrackingNotice />
+          {/* Round 50 (§37.2): an office person's location is shared only during their trip, and the screen says so. */}
+          {app.officeDriver && sharing && (
+            <Txt variant="strong" size={14} color={colors.blue} testID="task-sharing-until">{t('driving.sharingUntil')}</Txt>
+          )}
           <GeofenceCard task={task} here={here} onSkip={setSkipping} />
           <SwapCard task={task} />
 
@@ -474,7 +479,7 @@ export function TaskView({ id, design }: { id: string | undefined; design?: { he
           {/* Hotfix 2 (K): who approved the task, with Call (the office when they have no number). */}
           {approvedText && <ApprovedLine text={approvedText} call={approved?.call ?? null} />}
           {/* Part 3b (H4): running late during the task (not on a trip the driver started). */}
-          {canReportLate(task) && <RunningLate task={task} />}
+          {driverParts(app.officeDriver).declineAndLate && canReportLate(task) && <RunningLate task={task} />}
           {lastOpen && <Notice tone="warn" text={t('complete.needsLastStop')} />}
           <Button
             kind="dark"

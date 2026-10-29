@@ -3964,5 +3964,28 @@
     "layerEvents": "Gaps and signal loss",
     "layerStopTimes": "Stop times",
     "cluster": "{n} markers · tap to zoom in"
+  },
+  "driving": {
+    "homeLine": "You have a trip to drive",
+    "homeLineRunning": "Your trip is under way",
+    "start": "Start driving",
+    "continue": "Continue driving",
+    "moreRow": "Driving",
+    "moreLine": "Your own trips on the driver screens",
+    "backToOffice": "Back to office",
+    "banner": "Driving mode",
+    "bannerLine": "Your own trips · location is shared only during a trip",
+    "sharingUntil": "Sharing location until this trip ends",
+    "noTrips": "No trips to drive",
+    "noTripsHint": "The trips you drive yourself appear here.",
+    "network": "No connection. Try again.",
+    "refused": "Driving mode is not on for you. Ask the fleet admin.",
+    "stillRunning": "Your trip goes on in Driving mode: the location is shared until it ends.",
+    "waitingToSend": "Your trip's data is still being sent.",
+    "signOutTrip": "Finish your trip in Driving mode before signing out.",
+    "signOutQueue": "Your trip's data is not sent yet. Connect to the internet, then sign out.",
+    "myTripTitle": "Drive with the app",
+    "myTripBody": "The vehicle check, the odometer photo, the stops and the fuel, as drivers do.",
+    "driverLink": "Driver? Sign in with your PIN"
   }
 }

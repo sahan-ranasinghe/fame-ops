@@ -146,7 +146,8 @@
     "test:breaker": "tsx scripts/test-breaker.ts",
     "test:trip-window": "tsx scripts/test-trip-window.ts",
     "test:proposed-change": "tsx scripts/test-proposed-change.ts",
-    "test:secret-fields": "tsx scripts/test-secret-fields.ts"
+    "test:secret-fields": "tsx scripts/test-secret-fields.ts",
+    "test:driving-mode": "tsx scripts/test-driving-mode.ts"
   },
   "private": true,
   "expo": {

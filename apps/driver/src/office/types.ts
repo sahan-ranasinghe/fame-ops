@@ -2327,6 +2327,10 @@ export interface Me {
   phone_required?: boolean;
   /** Round 3 (A5): the person's own driving licence, for the trips they drive themselves (My profile). */
   licence?: MyLicence;
+  /** Round 50 (§37.1): the person may drive their own trips with the app's driver screens (absent = no). */
+  can_drive?: boolean;
+  /** Round 50 (§37.1): the setting self_drive_mode (absent = on): off = no Driving mode anywhere. */
+  self_drive_mode?: boolean;
 }
 
 /** A person's driving licence on the trip's day (supabase/functions/_shared/fleet/licence.ts): on file, none, expired. */

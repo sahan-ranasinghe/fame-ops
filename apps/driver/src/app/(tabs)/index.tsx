@@ -34,6 +34,9 @@
 //     people · 197 km" with the call link (and ⋯: every call and WhatsApp in a sheet), the riders, the task's vehicle when
 //     it is not the one held, Accept / Start task / Running late / Can't do this task as before;
 //   - "Later today · N" and "Coming up" as list rows (components/TaskRows.tsx), "All today's tasks".
+// Round 50 (§37.4): an office person in Driving mode (their own trips only, lib/drivingMode.ts) has the Driving mode card
+// (components/DrivingCard.tsx: what it records, Back to office) where the duty tiles are, no duty notices, no Start a trip,
+// no Can't do this task / Running late / Can't make it (they booked the trip), and "No trips to drive" when there is none.
 
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -71,6 +74,8 @@ import { hasChanges, vehicleLine, vehicleWords } from '@/lib/taskPreview';
 import { colomboHour, colomboTime } from '@/lib/time';
 import { type Chip, contactWithoutCall, greetingKey, leaveChip, leaveFromWords, peopleWords, rowChipTone, todaySteps, tripKmText } from '@/lib/todayCard';
 import { isSelfTrip } from '@/lib/trips';
+import { driverParts } from '@/lib/drivingMode';
+import { DrivingCard } from '@/components/DrivingCard';
 import type { TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors, hoverStyle, setWebThemeColor } from '@/theme';
@@ -145,6 +150,8 @@ export default function TodayScreen() {
   const decline = next ? declineKey(next) : null;
   const chip = next ? leaveChip(t, next, now, (at) => dateLabel(at)) : null;
   const underWay = next?.status === 'in_progress';
+  // Round 50 (§37.4): what an office person's Driving mode leaves out (duty, Start a trip, Can't do this task, Running late).
+  const parts = driverParts(app.officeDriver);
 
   return (
     <View style={styles.page}>
@@ -163,11 +170,12 @@ export default function TodayScreen() {
         </View>
 
         <View style={styles.body}>
-          {/* Phase 7: the duty state and the vehicle (Start work / Finish work, Change vehicle, the vehicle check). */}
-          <DutyTiles />
+          {/* Phase 7: the duty state and the vehicle (Start work / Finish work, Change vehicle, the vehicle check). Round 50
+              (§37.4): an office person in Driving mode has no duty: the Driving mode card with Back to office instead. */}
+          {parts.duty ? <DutyTiles /> : <DrivingCard />}
 
           {app.offline && <Notice tone="warn" text={t('common.savedOffline')} />}
-          <DutyNotices />
+          {parts.duty && <DutyNotices />}
           {app.notice && (
             <Pressable accessibilityRole="button" onPress={app.clearNotice}>
               <Notice tone="info" text={t(app.notice)} />
@@ -288,21 +296,21 @@ export default function TodayScreen() {
                   />
                 )}
                 {/* Part 3b (H4): running late once accepted, before the start (under way it is on the task screen). */}
-                {next.status === 'assigned' && next.accepted_at && canReportLate(next) && <RunningLate task={next} />}
+                {parts.declineAndLate && next.status === 'assigned' && next.accepted_at && canReportLate(next) && <RunningLate task={next} />}
                 {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list). Once
                     accepted it reads "Can't make it" (H4). */}
-                {next.status === 'assigned' && !isSelfTrip(next) && decline && <Button kind="danger-text" label={t(decline)} onPress={() => setDeclining(next)} style={styles.decline} testID="today-decline" />}
+                {parts.declineAndLate && next.status === 'assigned' && !isSelfTrip(next) && decline && <Button kind="danger-text" label={t(decline)} onPress={() => setDeclining(next)} style={styles.decline} testID="today-decline" />}
               </View>
             </>
           ) : (
             <View style={[styles.nextCard, { alignItems: 'center', paddingVertical: 30, gap: 6 }]} testID="today-empty">
-              <Txt variant="heading" size={20}>{t('today.noTasks')}</Txt>
-              <Txt variant="muted" size={15} style={{ textAlign: 'center' }}>{t('today.noTasksHint')}</Txt>
+              <Txt variant="heading" size={20}>{t(parts.duty ? 'today.noTasks' : 'driving.noTrips')}</Txt>
+              <Txt variant="muted" size={15} style={{ textAlign: 'center' }}>{t(parts.duty ? 'today.noTasksHint' : 'driving.noTripsHint')}</Txt>
             </View>
           )}
 
           {/* Phase 7 §13: on duty with nothing under way, a trip of the driver's own (the main action when there is no task). */}
-          {app.sharing && !running && (
+          {parts.startTrip && app.sharing && !running && (
             <Button compact kind={next ? 'outline' : 'primary'} icon={Route} label={t('trip.start')} onPress={() => router.push('/start-trip')} testID="today-start-trip" />
           )}
 

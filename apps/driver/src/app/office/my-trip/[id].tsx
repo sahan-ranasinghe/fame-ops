@@ -14,6 +14,10 @@
 // (components/office/Passengers.tsx PassengerTripCard; the passenger notifications link here too).
 // Round 4–7, item 12 (the approved mockup 4 without the office's actions): the passenger's view as the status banner, the
 // driver card and the route stepper; the trip's own card has its stops on the stepper; the cards in the mockups' look.
+// Round 50 (§37.4): a trip the person drives themselves, for someone who can drive with the app (can_drive, self_drive_mode
+// on; the app, not a browser): "Drive with the app" with Start driving opens Driving mode on this trip in place of the
+// manual check and its Start the trip (the driver screens do the check, the odometer, the stops and the fuel); "Trip
+// already done? Enter the odometer" stays. Under way: Continue driving above the finish card (the finish stays).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
@@ -28,6 +32,7 @@ import { dateWords } from '@/lib/dateWords';
 import { colomboDate } from '@/lib/time';
 import { plateOfTrip, tripMode, windowWords } from '@/office/myTripLogic';
 import { useOffice, useTool } from '@/office/state';
+import { useCanDrive, useStartDriving } from '@/office/driving';
 import { isPassengerView } from '@/office/passengerView';
 import type { MyTrip, PassengerTrip } from '@/office/types';
 import { BackHeader, ListFailed, Screen, StickyActions } from '@/office/ui';
@@ -51,6 +56,12 @@ export default function MyTripScreen() {
     router.push({ pathname: `/office/my-trip/[id]/${name}`, params: { id, ...(result ? { result } : {}) } });
   const win = trip ? windowWords(trip, opens) : null;
   const checkedToday = trip?.check && trip.check.date === colomboDate();
+  // Round 50: Driving mode for this trip (the person drives it themselves and may drive with the app).
+  const canDrive = useCanDrive();
+  const driving = useStartDriving();
+  const appDrive = !!trip && canDrive && trip.driven_by === 'self';
+  const driveBefore = appDrive && mode === 'check';
+  const driveUnderWay = appDrive && mode === 'finish' && trip?.state === 'on_the_way';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -62,7 +73,15 @@ export default function MyTripScreen() {
         {trip && <TripCard trip={trip} />}
         {riding && <PassengerTripCard trip={riding} />}
 
-        {trip && mode === 'check' && trip.check_needed && (
+        {(driveBefore || driveUnderWay) && (
+          <View style={styles.card} testID="my-trip-drive">
+            <Txt variant="label" color={colors.muted}>{t('driving.myTripTitle').toUpperCase()}</Txt>
+            <Txt variant="body">{t('driving.myTripBody')}</Txt>
+            {win && driveBefore && <Txt variant="small" testID="my-trip-window">{t(win.key, win.vars)}</Txt>}
+            {driveUnderWay && <Button label={t('driving.continue')} busy={driving.busy} onPress={() => void driving.start(id)} style={{ minHeight: 60 }} testID="my-trip-continue-driving" />}
+          </View>
+        )}
+        {trip && mode === 'check' && trip.check_needed && !driveBefore && (
           <View style={styles.card} testID="my-trip-question">
             <Txt variant="label" color={colors.muted}>{t('office.myTrip.checkTitle').toUpperCase()}</Txt>
             <Txt variant="heading" size={22}>{t('office.myTrip.question', { plate })}</Txt>
@@ -72,7 +91,7 @@ export default function MyTripScreen() {
             {checkedToday && trip.check ? <Txt variant="small">{t(trip.check.result === 'problem' ? 'office.myTrip.checkedTodayProblem' : 'office.myTrip.checkedTodayOk', { time: trip.check.at })}</Txt> : null}
           </View>
         )}
-        {trip && mode === 'check' && !trip.check_needed && (
+        {trip && mode === 'check' && !trip.check_needed && !driveBefore && (
           <View style={styles.card} testID="my-trip-start">
             <Txt variant="label" color={colors.muted}>{t('office.myTrip.startTitle').toUpperCase()}</Txt>
             {win && <Txt variant="body" testID="my-trip-window">{t(win.key, win.vars)}</Txt>}
@@ -92,7 +111,12 @@ export default function MyTripScreen() {
         {trip && mode === 'cancelled' && <ListEmpty text={t('office.myTrip.cancelled')} />}
         {trip && mode === 'other' && <ListEmpty text={t('office.myTrip.nothing')} />}
       </Screen>
-      {trip && mode === 'check' && !trip.check_needed && (
+      {driveBefore && (
+        <StickyActions>
+          <Button label={t('driving.start')} busy={driving.busy} onPress={() => void driving.start(id)} style={{ minHeight: 60 }} testID="my-trip-start-driving" />
+        </StickyActions>
+      )}
+      {trip && mode === 'check' && !trip.check_needed && !driveBefore && (
         <StickyActions>
           <Button label={t('office.myTrip.startTrip')} onPress={() => step('check', 'odo')} disabled={!trip.window.open} style={{ minHeight: 60 }} testID="start-trip" />
           {!trip.window.open && <Txt variant="small" style={{ textAlign: 'center' }} testID="start-why">{t('office.myTrip.why.notYet', { when: opens })}</Txt>}

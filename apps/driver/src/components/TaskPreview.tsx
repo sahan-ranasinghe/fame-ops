@@ -37,6 +37,7 @@ import { Button, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { approvedBy, askedBy, phoneDisplay, taskCalls } from '@/lib/contacts';
 import { canReportLate, declineKey } from '@/lib/late';
+import { driverParts } from '@/lib/drivingMode';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { type ChangeField, hasChanges, planTotals, taskChanges, totalKmText, vehicleLine, vehicleWords } from '@/lib/taskPreview';
 import { isSelfTrip } from '@/lib/trips';
@@ -107,6 +108,8 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
   const accepted = task.accepted_at !== null;
   // "Can't make it" once accepted, "Can't do this task" before (H4).
   const decline = declineKey(task);
+  // Round 50 (§37.4): an office person booked the trip they drive: no Can't do this task, no Running late.
+  const parts = driverParts(app.officeDriver);
   const leave = leaveTime(task);
   const mark = (field: ChangeField) => changes.fields.includes(field);
   // "Back by 12:00" once the strings have it (preview.backBy); a changed end time is marked with it.
@@ -201,12 +204,12 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
         <CallButtons calls={calls} />
 
         {accepted && !selfTrip && <Txt variant="strong" color={colors.blue}>{t('task.accepted', { time: colomboTime(task.accepted_at ?? '') })}</Txt>}
-        {accepted && canReportLate(task) && <RunningLate task={task} />}
+        {parts.declineAndLate && accepted && canReportLate(task) && <RunningLate task={task} />}
         {/* Starting a task accepts it too: Start task stays here before Accept. */}
         {!accepted && <Button kind="outline" icon={Play} label={t('today.startTask')} disabled={otherRunning} onPress={start} />}
         {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list): a trip
             started by mistake is cancelled instead, before it starts. */}
-        {!isSelfTrip(task) && decline && <Button kind="danger-text" label={t(decline)} onPress={() => setDeclining(true)} />}
+        {parts.declineAndLate && !isSelfTrip(task) && decline && <Button kind="danger-text" label={t(decline)} onPress={() => setDeclining(true)} />}
         {selfTrip && (
           <Button
             kind="danger-text"

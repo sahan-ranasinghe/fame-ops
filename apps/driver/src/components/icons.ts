@@ -78,5 +78,7 @@ export { default as Radio } from 'lucide-react-native/icons/radio';
 export { default as RadioOff } from 'lucide-react-native/icons/radio-off';
 export { default as Road } from 'lucide-react-native/icons/road';
 export { default as ArrowRight } from 'lucide-react-native/icons/arrow-right';
+// Round 50: Driving mode's Back to office.
+export { default as ArrowLeft } from 'lucide-react-native/icons/arrow-left';
 // Sahan's removals (22 October 2026): a critical group's heading on Issues (warning a triangle, info a circle: above).
 export { default as OctagonAlert } from 'lucide-react-native/icons/octagon-alert';
