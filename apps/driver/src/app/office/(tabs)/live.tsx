@@ -350,6 +350,8 @@ function DriverRow({ d, selected, onPress, onDay }: { d: LiveDriver; selected: b
       <View style={{ flex: 1, gap: 2 }}>
         <View style={styles.name}>
           <Txt variant="strong" size={17} numberOfLines={1} style={{ flexShrink: 1 }}>{d.driver}</Txt>
+          {/* Round 50 (§37.3): an office person driving their own trip. */}
+          {d.self_drive ? <Pill text={t('office.chip.selfDrive')} tone="muted" size={13} /> : null}
         </View>
         <VehicleChipView chip={vehicleChip({ vehicle: d.vehicle ? { reg_no: d.vehicle, source: 'on_duty' } : null }, onDay)} />
         <Txt variant="muted" size={15} numberOfLines={2}>{rowLine(d, t)}</Txt>
@@ -429,6 +431,7 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, 
           <View style={styles.name}>
             <Txt variant="big" numberOfLines={1} style={{ flexShrink: 1 }}>{d.driver}</Txt>
             {d.vehicle ? <Plate regNo={d.vehicle} /> : null}
+            {d.self_drive ? <Pill text={t('office.chip.selfDrive')} tone="muted" size={13} /> : null}
           </View>
           <Pill text={t(`office.live.pill.${pill.key}`)} tone={pill.tone} />
         </View>
@@ -451,7 +454,8 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, 
               </Pressable>
             </View>
           )}
-          {route.route && (summary ? <Txt variant="strong" size={15}>{summary}</Txt> : <Txt variant="small">{t('office.live.routeNone')}</Txt>)}
+          {/* Round 50 (§37.5): a web trip has no live route; its actions are joined by straight dashed lines on the map. */}
+          {route.route && (summary ? <Txt variant="strong" size={15}>{summary}</Txt> : route.route.web?.length ? <Txt variant="strong" size={15} testID="live-web-line">{t('office.selfDrive.webLine')}</Txt> : <Txt variant="small">{t('office.live.routeNone')}</Txt>)}
           {route.route && summary && route.snapNote ? <Txt variant="small" testID="live-snap-note">{route.snapNote}</Txt> : null}
         </View>
       )}

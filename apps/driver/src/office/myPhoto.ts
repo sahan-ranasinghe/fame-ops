@@ -51,7 +51,7 @@ export async function pickMyPhoto(source: 'camera' | 'gallery'): Promise<MyPhoto
 export type SaveOutcome = 'ok' | 'failed' | 'network';
 
 /** The kinds of my own photos Office mode uploads (the photos table's kinds a person writes for themselves). */
-export type OwnPhotoKind = 'profile' | 'licence' | 'vehicle_report' | 'vehicle_check' | 'odometer';
+export type OwnPhotoKind = 'profile' | 'licence' | 'vehicle_report' | 'vehicle_check' | 'odometer' | 'fuel_receipt';
 
 /**
  * One of my own photos into my own folder of driver-photos (the own-folder insert policy allows it) through a signed
@@ -107,7 +107,8 @@ export async function saveMyLicencePhoto(side: LicenceSide, uri: string): Promis
 export const tripPhotoPath = (employeeId: string, id: string, now = new Date()): string =>
   `${employeeId}/${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Colombo' }).format(now)}/${id}.jpg`;
 
-export type TripPhotoKind = 'vehicle_report' | 'vehicle_check' | 'odometer';
+/** Round 50 (§37.5): fuel_receipt too, for the fuel at the finish of a trip driven on /m/. */
+export type TripPhotoKind = 'vehicle_report' | 'vehicle_check' | 'odometer' | 'fuel_receipt';
 
 /**
  * Round 4–7 (feature 4): a photo for my own no-app trip (a problem found by the vehicle check: vehicle_report; a side of

@@ -21,7 +21,7 @@ import { useMapScheme } from '@/lib/appTheme';
 import { clusterMarkers, clusterZoom } from '@/lib/cluster';
 import { endLine, gapLine } from '@/office/driversLogic';
 import { fitAllFrame, zoomStep } from '@/office/liveLogic';
-import { ESTIMATED_COLOR, HOLE_COLOR, stopPinAnchorY } from '@/office/liveRouteLogic';
+import { ESTIMATED_COLOR, HOLE_COLOR, stopPinAnchorY, WEB_TRIP_COLOR } from '@/office/liveRouteLogic';
 import { routeMarkerPoints, visibleGaps } from '@/office/routeMarks';
 import { useApp } from '@/state/app';
 import type { LiveLayerProps } from './DriversMap';
@@ -80,6 +80,8 @@ export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded,
   const runs = useMemo(() => (route?.runs ?? []).map((r, i) => ({ key: `run:${i}`, color: r.color, coords: r.points.map(at) })), [route]);
   const holes = useMemo(() => (route?.holes ?? []).map((h) => ({ key: `hole:${h.fromAt}`, coords: [at(h.from), at(h.to)] })), [route]);
   const estimated = useMemo(() => (route?.estimated ?? []).map((e) => ({ key: e.key, coords: e.points.map(at) })), [route]);
+  // Round 50 (§37.5): a web trip's actions joined by a straight dashed line (no live route).
+  const web = useMemo(() => (route?.web ?? []).map((w) => ({ key: w.key, coords: w.points.map(at) })), [route]);
   // The marker whose card is open (a stop's or a gap's key): its label shown, never clustered.
   const [openStop, setOpenStop] = useState<string | null>(null);
   useEffect(() => setOpenStop(null), [routeKey]);
@@ -155,6 +157,9 @@ export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded,
         ))}
         {estimated.map((e) => (
           <Polyline key={e.key} coordinates={e.coords} strokeColor={ESTIMATED_COLOR} strokeWidth={3.5} lineDashPattern={[4, 8]} lineCap="round" lineJoin="round" zIndex={2} />
+        ))}
+        {web.map((w) => (
+          <Polyline key={w.key} coordinates={w.coords} strokeColor={WEB_TRIP_COLOR} strokeWidth={3} lineDashPattern={[10, 8]} lineCap="round" zIndex={2} />
         ))}
         {runs.map((r) => (
           <Polyline key={r.key} coordinates={r.coords} strokeColor={r.color} strokeWidth={5} lineCap="round" lineJoin="round" zIndex={3} />

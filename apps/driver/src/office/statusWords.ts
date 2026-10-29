@@ -15,6 +15,7 @@
 // leave-by time is already in the past.", "Not available …" and "Running late …" and "Last seen …" (presence.ts), and the
 // best match's reason (availability.ts rankMatches: "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today").
 
+import { isSelfDriveTrip } from './webTripLogic';
 import { dateWords, relativeKey, type RelWords } from '../lib/dateWords';
 import { durationText } from '../lib/durations';
 import type { Tone } from './ui';
@@ -344,11 +345,22 @@ export function taskChip(column: BoardColumn, card: { status?: string; accepted?
  * 16:06". No app: "Nimali · Drives themselves · no app" (the status line says it) or, once the line says something else,
  * the small word after the name ("Nimali · Drives themselves · Done 11:40 · 42 km logged").
  */
-export function taskRowLine(t: T, c: { driver?: string; driven_by?: string; status?: string }): string {
-  const status = sentenceText(t, c.status);
+export function taskRowLine(t: T, c: { driver?: string; driven_by?: string; status?: string; self_drive?: boolean; driven_in?: string | null }): string {
   const noAppLine = ['office.line.noAppSelf', 'office.line.noAppOther'].includes(sentenceWords(c.status)?.key ?? '');
-  const word = c.driven_by === 'self' ? t('office.who.drivesThemselves') : c.driven_by === 'other' ? t('office.who.someoneElse') : '';
-  return [c.driver, noAppLine ? '' : word, status].filter(Boolean).join(' · ');
+  // Round 50 (§37.3): a self trip driven with the app or on the web says "Self-drive", never "Drives themselves · no app".
+  const selfDrive = c.driven_by === 'self' && isSelfDriveTrip(c);
+  const status = selfDrive && noAppLine ? '' : sentenceText(t, c.status);
+  const word = selfDrive ? t('office.chip.selfDrive') : c.driven_by === 'self' ? t('office.who.drivesThemselves') : c.driven_by === 'other' ? t('office.who.someoneElse') : '';
+  return [c.driver, noAppLine && !selfDrive ? '' : word, status].filter(Boolean).join(' · ');
+}
+
+/**
+ * Round 50 (§37.3): a task's status line in words, where the server's "Drives themselves · no app" on a self trip driven
+ * with the app or on the web reads "Self-drive" (the trip has an app behind it).
+ */
+export function taskLineText(t: T, c: { status_line?: string; driven_by?: string; self_drive?: boolean; driven_in?: string | null }): string {
+  if (c.driven_by === 'self' && isSelfDriveTrip(c) && sentenceWords(c.status_line)?.key === 'office.line.noAppSelf') return t('office.chip.selfDrive');
+  return sentenceText(t, c.status_line);
 }
 
 /** A chip's words ("Late 12 min"). */

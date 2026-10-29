@@ -2400,7 +2400,13 @@
       "plannerSuggestionsHint": "The leave time and each stop's stay are suggested in grey; a chosen time that misses an arrive-by gets a hint. Off: just the fields. A trip is never blocked.",
       "outOfReach": "Only an admin can change this account. Ask an admin.",
       "adminGives": "Only an admin can give this.",
-      "holdToGive": "You can only give permissions you hold yourself."
+      "holdToGive": "You can only give permissions you hold yourself.",
+      "canDriveTitle": "Driving",
+      "canDrive": "Can drive (self-drive trips in the app)",
+      "canDriveHintOn": "{name} drives their own trips with the driver screens, sharing location only during the trip.",
+      "canDriveHintOff": "{name}'s own trips use My trip's vehicle check and odometer, with no tracking.",
+      "canDriveHintUnset": "Not decided yet: it is switched on when a self-drive trip is made for {name}.",
+      "canDriveModeOff": "Driving mode is off for everyone (Quick settings)."
     },
     "permission": {
       "view": "View",
@@ -3694,6 +3700,85 @@
       "openBrowser": "Open in the browser",
       "gone": "This video is no longer open. Open it again from the fill.",
       "failed": "The video did not play. Try again, or open it in the browser."
+    },
+    "webTrip": {
+      "title": "Drive this trip",
+      "above": "In this browser",
+      "offerTitle": "Drive it from this browser",
+      "offer": "Drive this trip here",
+      "offerHint": "Start, each stop and Finish from this page, with the odometer photos.",
+      "noTracking": "Live tracking needs the Fame Fleet app. This page saves your position only when you press a button or slide.",
+      "inApp": "This trip is being driven in the Fame Fleet app.",
+      "closed": "This trip cannot be driven here.",
+      "doneLine": "Trip finished. Thank you.",
+      "back": "Back to the trip",
+      "startTitle": "Start the trip",
+      "startButton": "Start trip",
+      "checkTitle": "Vehicle check",
+      "fuelTitle": "Fuel",
+      "fuelEnough": "Enough fuel",
+      "fuelFill": "I'll fill on the way",
+      "odoTitle": "Odometer",
+      "odoPhoto": "Photograph the odometer",
+      "odoReading": "Reading (km)",
+      "stopOf": "Stop {n} of {total}",
+      "nextStop": "Next stop",
+      "atStop": "At this stop",
+      "finishTitle": "Finish the trip",
+      "finishButton": "Finish trip",
+      "finishNow": "Finish the trip now",
+      "finishNowHint": "Stops not reached are left as not visited.",
+      "fuelAdded": "Fuel added (optional)",
+      "receipt": "Receipt photo",
+      "noVideo": "Fuel video needs the Fame Fleet app.",
+      "kmSoFar": "{km} km this trip",
+      "startWas": "Start: {km} km",
+      "locating": "Getting your position…",
+      "noPosition": {
+        "denied": "Saved without your position: location is not allowed for this site.",
+        "unavailable": "Saved without your position: the browser could not find it.",
+        "timeout": "Saved without your position: it took too long.",
+        "unsupported": "Saved without your position: this browser cannot give it."
+      },
+      "why": {
+        "check": "Answer the vehicle check",
+        "fuel": "Answer the fuel question",
+        "odoPhoto": "Take the odometer photo",
+        "litresFirst": "Enter the litres first"
+      },
+      "done": {
+        "started": "Trip started",
+        "arrived": "Arrived at {place} · {time}",
+        "left": "Done at {place} · {time}",
+        "finished": "Trip finished · {km} km",
+        "finishedNoKm": "Trip finished"
+      },
+      "stop": {
+        "done": "Done {time}",
+        "arrived": "Arrived {time}",
+        "skipped": "Skipped",
+        "next": "Next",
+        "here": "Here now"
+      }
+    },
+    "selfDrive": {
+      "webTripAt": "Web trip · last seen at {stop} {time}",
+      "webTripSeen": "Web trip · last seen {time}",
+      "webTripNone": "Web trip · no position yet",
+      "webLine": "No live route · web trip",
+      "webLineNote": "Driven in a browser: only the positions of Start, each stop and Finish, joined by straight dashed lines. Not the road, and no km from them.",
+      "mark": {
+        "start": "Started · {time}",
+        "finish": "Finished · {time}",
+        "arrive": "Arrived · {time}",
+        "arriveAt": "Arrived · {stop} · {time}",
+        "leave": "Left · {time}",
+        "leaveAt": "Left · {stop} · {time}"
+      }
+    },
+    "settings": {
+      "selfDriveMode": "Driving mode for office people",
+      "selfDriveModeHint": "People who can drive use the driver screens for their own trips, sharing location only during the trip. Off: the vehicle check and the odometer on My trip."
     }
   },
   "patterns": {

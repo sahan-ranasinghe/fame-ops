@@ -16,9 +16,10 @@
 // driver card and the route stepper; the trip's own card has its stops on the stepper; the cards in the mockups' look.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { TripCard } from '@/components/office/MyTripParts';
+import { WebDriveOffer } from '@/components/office/WebDriveOffer';
 import { PassengerTripCard } from '@/components/office/Passengers';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
@@ -60,6 +61,8 @@ export default function MyTripScreen() {
         {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         <SavedNotice noticeKey={`myTrip:${id}`} />
         {trip && <TripCard trip={trip} />}
+        {/* Round 50 (§37.5): /m/ driver-lite, web only: "Drive this trip here" when my_trip allows it (WebDriveOffer). */}
+        {Platform.OS === 'web' && trip && <WebDriveOffer trip={trip} />}
         {riding && <PassengerTripCard trip={riding} />}
 
         {trip && mode === 'check' && trip.check_needed && (

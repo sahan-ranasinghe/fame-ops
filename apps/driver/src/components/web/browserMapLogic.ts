@@ -54,6 +54,8 @@ export const DASH = {
   hole: [8, 8],
   /** Live: the estimated roads. */
   estimated: [4, 8],
+  /** Round 50: a web trip's straight line between its actions (no live route). */
+  web: [10, 8],
 } as const satisfies Record<string, Dash>;
 
 /** MapLibre measures line-dasharray in line widths, never pixels. */

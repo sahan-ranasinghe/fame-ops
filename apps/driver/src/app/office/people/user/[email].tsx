@@ -13,7 +13,7 @@ import { ToggleRow } from '@/components/office/Controls';
 import { PermissionPicker, SecretCard } from '@/components/office/PeopleParts';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Field, Notice, Txt } from '@/components/ui';
-import { activePill, canChangeAccount, findUserRow, linkValidWords, permissionWords, phoneDisplay, updateUserInput, userFields, type UserFields, type UserProblem } from '@/office/peopleLogic';
+import { activePill, canChangeAccount, canDriveHintKey, canDriveInput, findUserRow, withCanDrive, linkValidWords, permissionWords, phoneDisplay, updateUserInput, userFields, type UserFields, type UserProblem } from '@/office/peopleLogic';
 import { normalisePermissions } from '@/office/permissions';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, OfficeUsers, SetPasswordLinkResult, UpdateOfficeUserResult } from '@/office/types';
@@ -54,6 +54,23 @@ export default function ManageOfficeUser() {
   const [switchError, setSwitchError] = useState<FleetError | null>(null);
   const [contactBusy, setContactBusy] = useState(false);
   const [contactError, setContactError] = useState<FleetError | null>(null);
+  const [driveBusy, setDriveBusy] = useState(false);
+  const [driveError, setDriveError] = useState<FleetError | null>(null);
+
+  // Round 50 (§37.1): Can drive (self-drive trips in the app), the users permission; a switch, saved at once.
+  async function setCanDrive(on: boolean) {
+    if (!u) return;
+    setDriveError(null);
+    setDriveBusy(true);
+    try {
+      await api.call<UpdateOfficeUserResult>('update_office_user', canDriveInput(email, on));
+      q.patch((x) => withCanDrive(x, email, on));
+    } catch (e) {
+      setDriveError(e as FleetError);
+    } finally {
+      setDriveBusy(false);
+    }
+  }
 
   // Round 1 (21 October 2026): the driver's Me lists only the people chosen here; a switch, saved at once.
   async function setContact(on: boolean) {
@@ -197,6 +214,14 @@ export default function ManageOfficeUser() {
                 : t(normalisePermissions(u.permissions).includes('approve') ? 'office.people.driverContactAdmin' : 'office.people.driverContactOffice', { name: u.name })}
               testID="driver-contact" />
             {contactError && <ErrorNotice error={contactError} onRetry={() => void setContact(u.driver_contact !== true)} onSignIn={() => void signOut()} />}
+          </Section>
+        )}
+        {u && u.active && canEdit && (
+          <Section title={t('office.people.canDriveTitle')}>
+            <ToggleRow label={t('office.people.canDrive')} value={u.can_drive === true} onChange={(on) => void setCanDrive(on)} disabled={driveBusy}
+              hint={[t(canDriveHintKey(u), { name: u.name }), me.self_drive_mode === false ? t('office.people.canDriveModeOff') : ''].filter(Boolean).join(' ')}
+              testID="can-drive" />
+            {driveError && <ErrorNotice error={driveError} onRetry={() => void setCanDrive(u.can_drive !== true)} onSignIn={() => void signOut()} />}
           </Section>
         )}
         {u && u.active && canLink && (

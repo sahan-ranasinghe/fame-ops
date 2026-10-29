@@ -36,6 +36,9 @@ export interface Me {
    * member's licence on file); web only (GET /me). state: on_file (a number or a photo, not expired), none, expired.
    */
   licence?: MyLicence;
+  /** Round 50 (§37.1): this person may drive their own trips in the app, and the setting self_drive_mode; web only (GET /me). */
+  can_drive?: boolean;
+  self_drive_mode?: boolean;
 }
 
 export interface MyLicence {

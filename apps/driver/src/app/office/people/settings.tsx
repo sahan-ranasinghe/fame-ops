@@ -153,6 +153,9 @@ export default function QuickSettings() {
               <Divider />
               {switchRow('planner_suggestions', t('office.people.plannerSuggestions'), t('office.people.plannerSuggestionsHint'))}
               <Divider />
+              {/* Round 50 (§37.1): Driving mode for office people who can drive (default on). */}
+              {switchRow('self_drive_mode', t('office.settings.selfDriveMode'), t('office.settings.selfDriveModeHint'))}
+              <Divider />
               <View style={{ gap: 8, paddingVertical: 10 }}>
                 <Txt variant="strong" size={17}>{t('office.people.personalTrips')}</Txt>
                 <Txt variant="small">{t('office.people.personalTripsHint')}</Txt>

@@ -7,6 +7,7 @@
 // drivers (watch_drivers every 30 s), Clock out and Move to vehicle (who may be clocked out or moved; the answers in
 // words), the card's speed and battery, and the map's fit-all frame and zoom steps.
 
+import { webTripSeenWords } from './webTripLogic';
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
 import { routeLayerOptions, type RouteLayers, routeLayersOf } from '../lib/mapLayout';
 import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
@@ -93,7 +94,7 @@ export function pillOf(d: DutyOf): { key: PillKey; tone: LiveTone } {
   return { key: duty === 'on_task' ? 'onTask' : duty === 'on_duty' ? 'free' : 'offDuty', tone: markerTone(duty) };
 }
 
-type LineOf = DutyOf & Pick<LiveDriver, 'eta_final' | 'late_min' | 'near' | 'last_position_at' | 'status_text'>;
+type LineOf = DutyOf & Pick<LiveDriver, 'eta_final' | 'late_min' | 'near' | 'last_position_at' | 'status_text'> & Partial<Pick<LiveDriver, 'web_trip' | 'last_seen'>>;
 
 /**
  * The line under the name, from the fields the server already formatted:
@@ -105,7 +106,12 @@ type LineOf = DutyOf & Pick<LiveDriver, 'eta_final' | 'late_min' | 'near' | 'las
 export function rowLine(d: LineOf, t: Words): string {
   const duty = dutyOf(d);
   const parts: string[] = [];
-  if (duty === 'on_task') {
+  // Round 50 (§37.3): a trip driven on the web has no live state: "Web trip · last seen at <stop> HH:MM" instead.
+  const web = webTripSeenWords(d);
+  if (web) {
+    parts.push(d.task || t('office.live.onTask'));
+    parts.push(t(web.key, web.vars));
+  } else if (duty === 'on_task') {
     parts.push(d.task || t('office.live.onTask'));
     if (d.late_min && d.late_min > 0) parts.push(t('office.live.late', { min: d.late_min }));
     if (d.eta_final) parts.push(t('office.live.about', { time: d.eta_final }));
