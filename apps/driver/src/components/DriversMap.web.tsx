@@ -19,7 +19,7 @@ import { clusterMarkers, clusterZoom } from '@/lib/cluster';
 import type { MapPackage } from '@/lib/mapEngine';
 import { endLine, gapLine } from '@/office/driversLogic';
 import { fitAllFrame, type MapCommand } from '@/office/liveLogic';
-import { creditWithOrs, ESTIMATED_COLOR, HOLE_COLOR, type LiveLayers, NO_LAYERS, STOP_PIN } from '@/office/liveRouteLogic';
+import { creditWithOrs, ESTIMATED_COLOR, HOLE_COLOR, type LiveLayers, NO_LAYERS, STOP_PIN, WEB_TRIP_COLOR } from '@/office/liveRouteLogic';
 import { routeMarkerPoints, visibleGaps } from '@/office/routeMarks';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -108,6 +108,8 @@ export function DriversMap({ markers, fit, focus, onPressMarker, mapPackage, lay
   const holes = useMemo(() => (route?.holes ?? []).map((h) => ({ points: [h.from, h.to], color: HOLE_COLOR, width: 3, dash: DASH.hole })), [route]);
   const estimated = useMemo(() => (route?.estimated ?? []).map((e) => ({ points: e.points, color: ESTIMATED_COLOR, width: 3.5, dash: DASH.estimated })), [route]);
   const runs = useMemo(() => (route?.runs ?? []).map((r) => ({ points: r.points, color: r.color, width: 5 })), [route]);
+  // Round 50 (§37.5): a web trip's actions joined by a straight dashed line (no live route).
+  const web = useMemo(() => (route?.web ?? []).map((w) => ({ points: w.points, color: WEB_TRIP_COLOR, width: 3, dash: DASH.web })), [route]);
 
   if (mount.status === 'unavailable') {
     return <UnavailableCard body={t('office.live.mapUnavailableBody')} onRetry={() => dispatch({ type: 'retry' })} testID="drivers-map-unavailable" />;
@@ -131,6 +133,7 @@ export function DriversMap({ markers, fit, focus, onPressMarker, mapPackage, lay
         <MapLines group="live-trail-holes" z={1} lines={trailHoles} />
         <MapLines group="live-route-holes" z={2} lines={holes} />
         <MapLines group="live-route-estimated" z={2} lines={estimated} />
+        <MapLines group="live-route-web" z={2} lines={web} />
         <MapLines group="live-route" z={3} lines={runs} />
         {ends && single.has('start') && (
           <MapMarker at={ends.start} anchor="center" z={5}>

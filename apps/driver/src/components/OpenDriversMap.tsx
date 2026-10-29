@@ -21,7 +21,7 @@ import { freeMapStyle, useMapScheme } from '@/lib/appTheme';
 import { clusterMarkers, clusterZoom } from '@/lib/cluster';
 import { endLine, gapLine } from '@/office/driversLogic';
 import { fitAllFrame, zoomStep } from '@/office/liveLogic';
-import { ESTIMATED_COLOR, HOLE_COLOR, type HoleLine, STOP_PIN } from '@/office/liveRouteLogic';
+import { ESTIMATED_COLOR, HOLE_COLOR, type HoleLine, STOP_PIN, WEB_TRIP_COLOR } from '@/office/liveRouteLogic';
 import { routeMarkerPoints, visibleGaps } from '@/office/routeMarks';
 import { useApp } from '@/state/app';
 import type { LiveLayerProps } from './DriversMap';
@@ -113,6 +113,11 @@ export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, o
     type: 'FeatureCollection',
     features: (route?.estimated ?? []).map((e) => line(e.points, { color: ESTIMATED_COLOR })),
   }), [route]);
+  // Round 50 (§37.5): a web trip's actions joined by a straight dashed line (no live route).
+  const webData = useMemo((): GeoJSON.FeatureCollection => ({
+    type: 'FeatureCollection',
+    features: (route?.web ?? []).map((w) => line(w.points, { color: WEB_TRIP_COLOR })),
+  }), [route]);
   // The marker whose card is open (a stop's or a gap's key): its label shown, never clustered.
   const [openStop, setOpenStop] = useState<string | null>(null);
   useEffect(() => setOpenStop(null), [routeKey]);
@@ -191,6 +196,10 @@ export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, o
         <GeoJSONSource id="live-route-estimated" data={estimatedData}>
           <Layer id="live-route-estimated-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
             paint={{ 'line-color': ESTIMATED_COLOR, 'line-width': 3.5, 'line-dasharray': [1, 2] }} />
+        </GeoJSONSource>
+        <GeoJSONSource id="live-route-web" data={webData}>
+          <Layer id="live-route-web-line" type="line" layout={{ 'line-cap': 'round' }}
+            paint={{ 'line-color': WEB_TRIP_COLOR, 'line-width': 3, 'line-dasharray': [2.5, 2] }} />
         </GeoJSONSource>
         <GeoJSONSource id="live-route" data={runData}>
           <Layer id="live-route-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}

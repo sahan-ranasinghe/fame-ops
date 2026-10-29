@@ -31,6 +31,7 @@ import { NeedsDriverList } from "./NeedsDriverList";
 import { TripTags } from "./TripPurpose";
 import { WaitingApprovalColumn } from "./WaitingApprovalColumn";
 import { duration } from "@fleet/durations";
+import { isSelfDriveTrip, selfDriveLine } from "../data/webTrip";
 
 const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
@@ -53,10 +54,10 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
       <LateReportLine late={t.late_report} testId="card-late-report" />
       {/* Round 3: the driver-first card: the photo, the name, the vehicle chip under it ("Drives themselves" / "Someone else" on a trip with no app). */}
       <span className="who">
-        <DriverLine name={t.driver} photo={t.driver_photo_url} drivenBy={t.driven_by} vehicle={vehicleChipWords(t.vehicle, { text: t.vehicle_text })}
+        <DriverLine name={t.driver} photo={t.driver_photo_url} drivenBy={t.driven_by} selfDrive={isSelfDriveTrip(t)} vehicle={vehicleChipWords(t.vehicle, { text: t.vehicle_text })}
           extra={t.vehicle ? <VehicleThumb src={t.vehicle_thumb_url} /> : undefined} />
       </span>
-      <span className={`status ${statusTone(col, t.status)}`}>{t.status || ""}</span>
+      <span className={`status ${statusTone(col, t.status)}`}>{selfDriveLine(t.status, t) || ""}</span>
       {/* Hotfix 2 (K): who sent it to the driver. */}
       {t.approved_by && <span className="muted small" data-testid="card-approved-by">{decidedText("approved", t.approved_by)}</span>}
       {/* Round 48 (item 1): a change proposed by someone without approve, waiting for the fleet admin. */}

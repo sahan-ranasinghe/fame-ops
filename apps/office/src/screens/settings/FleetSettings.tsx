@@ -83,7 +83,7 @@ export function sectionSummary(key: FleetSection, d: SettingsResult): string {
     case "dispatch":
       return `Pickup ${s.dwell_min?.pickup ?? d.defaults.dwell_min?.pickup ?? "—"} min · accept within ${s.accept_within_min ?? FALLBACK.accept_within_min} min · buffer ${s.buffer_min} min · suggestions ${onOff(s.planner_suggestions !== false)} · features ${FEATURES.filter(([k]) => featureOn(s, k)).length} of ${FEATURES.length} on`;
     case "tasks":
-      return `Approval ${onOff(s.tasks_need_approval !== false)} · vehicle on the day ${onOff(s.vehicle_on_the_day === true)} · self-drive ${onOff(s.self_drive_allowed !== false)}`;
+      return `Approval ${onOff(s.tasks_need_approval !== false)} · vehicle on the day ${onOff(s.vehicle_on_the_day === true)} · self-drive ${onOff(s.self_drive_allowed !== false)} · Driving mode ${onOff(s.self_drive_mode !== false)}`;
     case "day":
       return `Nudge ${s.shift_start ?? "08:00"} · clock-out ${(s.duty_cutoff ?? "21:00") || "none"} · personal trips ${personalTripsValue(s.driver_personal_trips, d.defaults.driver_personal_trips).replace("_", " ")}`;
     case "fuel":
@@ -423,6 +423,19 @@ export function FleetSettings({ section }: { section?: FleetSection } = {}) {
             <label className="row" style={{ padding: 0, cursor: "pointer" }}>
               <input type="checkbox" checked={draft.self_drive_allowed !== false} disabled={busy !== null} onChange={(e) => { setDraft({ ...draft, self_drive_allowed: e.target.checked }); void save("self_drive_allowed", e.target.checked); }} />
               <span className="grow"><span className="name">Self-drive bookings allowed</span><span className="sub" style={{ display: "block" }}>{data.about.self_drive_allowed}</span></span>
+            </label>
+            {/* Round 50 (§37.1): Driving mode for office people who can drive (default on); saved at once, put back when it fails. */}
+            <label className="row" style={{ padding: 0, cursor: "pointer" }} data-testid="self-drive-mode">
+              <input type="checkbox" checked={draft.self_drive_mode !== false} disabled={busy !== null} aria-label="Driving mode for office people"
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setDraft({ ...draft, self_drive_mode: on });
+                  void save("self_drive_mode", on).then((ok) => { if (!ok) setDraft((d) => (d ? { ...d, self_drive_mode: !on } : d)); });
+                }} />
+              <span className="grow">
+                <span className="name">Driving mode for office people</span>
+                <span className="sub" style={{ display: "block" }}>{data.about.self_drive_mode ?? "People who can drive (Users → Can drive) use the driver screens in the app for their own trips, sharing location only during the trip. Off: the vehicle check and the odometer on My trip, with no tracking."}</span>
+              </span>
             </label>
           </div>
         )}

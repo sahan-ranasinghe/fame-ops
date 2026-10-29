@@ -63,6 +63,7 @@ import { pendingChangeTarget } from "./approvalLogic";
 import { countWithNames, ridersLine } from "./passengersLogic";
 import { featureOn } from "./switchLogic";
 import { liveForTask } from "./overviewLinks";
+import { isSelfDriveTrip, WEB_LINE_TEXT } from "../data/webTrip";
 
 /** Round 4–7 (5): "Fuel: Enough fuel · 07:42" with the estimate under it; before the start the estimate alone. */
 function FuelCardLine({ card, started }: { card: NonNullable<TaskDetailData["task"]["fuel_card"]>; started: boolean }) {
@@ -229,7 +230,7 @@ export function TaskDetail() {
             <dd>
               {/* Round 3: the driver-first card (the vehicle chip under the name); a trip with no app says who drives instead of a state. */}
               {t.driver
-                ? <DriverLine name={t.driver} photo={t.driver_photo_url} drivenBy={t.driven_by} vehicle={vehicleChipWords(plateOf(t.vehicle), { text: t.vehicle_text })} />
+                ? <DriverLine name={t.driver} photo={t.driver_photo_url} drivenBy={t.driven_by} selfDrive={isSelfDriveTrip(t)} vehicle={vehicleChipWords(plateOf(t.vehicle), { text: t.vehicle_text })} />
                 : "—"}
               {/* Hotfix 2 (F): Call and WhatsApp the driver (someone else: their own number), for people who may see drivers' numbers. */}
               {t.driver_phone && <div style={{ marginTop: 6 }}><ContactButtons phone={t.driver_phone} label={t.driven_by === "other" && t.driver ? `Call ${firstName(t.driver)}` : "Call driver"} testId="call-driver" /></div>}
@@ -659,7 +660,11 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
   const layout = useRouteLayout(true);
   if (!started) return null;
   const noGps = route ? noGpsLine(route.gaps) : null;
-  const line = route && !route.note
+  // Round 50 (§37.5): a trip driven on the web has no GPS line: its actions joined by straight dashed lines, said so.
+  const webOnly = !!route && route.points.length === 0 && (route.web?.length ?? 0) > 0;
+  const line = webOnly
+    ? WEB_LINE_TEXT
+    : route && !route.note
     ? joinDots([`GPS ${num(route.km)} km`, `driving ${minutesText(route.drivingMinutes)}`, `stopped ${minutesText(route.stoppedMinutes)}`, route.stopsCount ? `${route.stopsCount} stop${route.stopsCount > 1 ? "s" : ""} of 10 min or more` : "no stops of 10 min or more"])
     : route?.note;
   return (
@@ -668,7 +673,7 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
       <div className="card card-b stack" data-testid="task-route">
         {busy && !route && <Loading>Loading the route…</Loading>}
         {err && <Notice tone="bad">{err}</Notice>}
-        {route && route.points.length > 0 && (
+        {route && (route.points.length > 0 || webOnly) && (
           <RouteMapPane
             layout={layout}
             strip={<RouteLegend route={route} snap={snap} onSnap={(raw) => setSnap(!raw)} busy={busy} events={events} extra={<FilterBar filters={[LAYERS_DEF]} values={layers.values} onChange={layers.apply} />} />}

@@ -30,6 +30,8 @@ export interface MapInfoInput {
   kmNote?: string | null;
   /** The server's sentence about the estimated roads (estimated_note). */
   estimatedNote?: string | null;
+  /** Round 50 (§37.5): a web trip's straight dashed line is drawn ("No live route · web trip"). */
+  webTrip?: boolean;
 }
 
 export interface MapInfo {
@@ -48,6 +50,7 @@ export function mapInfo(input: MapInfoInput, t: Words): MapInfo {
     ...SPEED_BANDS.map((b: SpeedBand): LegendEntry => ({ key: b, mark: 'line', color: BAND_COLORS[b], text: t(`office.drivers.route.legend.${b}`) })),
     { key: 'gap', mark: 'dashed', color: BAND_COLORS.gap, text: t('office.drivers.route.legend.gap') },
     ...(input.estimated ? [{ key: 'estimated', mark: 'dashed' as const, color: BAND_COLORS.estimated, text: t('office.drivers.route.legend.estimated') }] : []),
+    ...(input.webTrip ? [{ key: 'web', mark: 'dashed' as const, color: BAND_COLORS.web, text: t('office.selfDrive.webLine') }] : []),
     { key: 'stop', mark: 'dot', color: MARK_COLORS.dot, text: t('dayRoute.legendStop') },
     { key: 'event', mark: 'gap', color: MARK_COLORS.gap, text: t('dayRoute.legendGap') },
     { key: 'cluster', mark: 'cluster', color: MARK_COLORS.cluster, text: t('dayRoute.legendCluster') },
@@ -55,6 +58,7 @@ export function mapInfo(input: MapInfoInput, t: Words): MapInfo {
   const notes: string[] = [];
   if (input.estimated) notes.push(t('dayRoute.estimatedNote', { n: input.estimatedGaps }));
   if (input.estimatedNote) notes.push(input.estimatedNote);
+  if (input.webTrip) notes.push(t('office.selfDrive.webLineNote'));
   if (input.kmNote) notes.push(input.kmNote);
   const credits = [input.googleMap ? 'Google Maps' : OSM_CREDIT, ...(input.estimated ? [`${ORS_CREDIT} · map data © OpenStreetMap contributors`] : [])];
   return { legend, notes, credits };

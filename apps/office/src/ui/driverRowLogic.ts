@@ -51,9 +51,12 @@ export function vehicleChipWords(
   return { text: o.onTheDay ? VEHICLE_ON_THE_DAY : NO_VEHICLE_YET };
 }
 
-/** Round 3: the small word that takes the duty state's place on a trip with no app ("Drives themselves", "Someone else"). */
-export function drivenByWord(by: DrivenBy | string | null | undefined): string | null {
-  if (by === "self") return "Drives themselves";
+/**
+ * Round 3: the small word that takes the duty state's place on a trip with no app ("Drives themselves", "Someone else").
+ * Round 50 (§37.3): a self trip driven with the app or on the web says "Self-drive" (`selfDrive`, data/webTrip.ts).
+ */
+export function drivenByWord(by: DrivenBy | string | null | undefined, selfDrive = false): string | null {
+  if (by === "self") return selfDrive ? "Self-drive" : "Drives themselves";
   if (by === "other") return "Someone else";
   return null;
 }

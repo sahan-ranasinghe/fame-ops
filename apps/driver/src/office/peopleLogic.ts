@@ -394,14 +394,29 @@ export function userFields(u: OfficeUser, email: string): UserFields {
   return { name: u.name, email, phone: u.phone_display ?? (u.phone ? phoneDisplay(u.phone) : ''), permissions: normalisePermissions(u.permissions) };
 }
 
+// ---- Round 50 (§37.1): Can drive (self-drive trips in the app) ----
+
+/** The switch's line under it: on, off (an admin took it away), or never decided (on by itself with a self-drive trip). */
+export function canDriveHintKey(u: Pick<OfficeUser, 'can_drive'>): string {
+  return u.can_drive === true ? 'office.people.canDriveHintOn' : u.can_drive === false ? 'office.people.canDriveHintOff' : 'office.people.canDriveHintUnset';
+}
+
+/** update_office_user's input for the switch: only the e-mail and can_drive. */
+export const canDriveInput = (email: string, on: boolean): { email: string; can_drive: boolean } => ({ email, can_drive: on });
+
+/** The user row after the server's answer (its can_drive when it gave one, else what was asked). */
+export function withCanDrive(list: OfficeUsers, email: string, on: boolean): OfficeUsers {
+  return { ...list, users: list.users.map((y) => ((y.email ?? '').toLowerCase() === email.toLowerCase() ? { ...y, can_drive: on } : y)) };
+}
+
 // ---- Quick settings (design 19's card as a page) ----
 
 /** Round 4–7 (phase8-plan.md §33): the five feature switches, on by default (absent = on). */
 export const FEATURE_KEYS = ['vehicle_check', 'trip_close_prompt', 'fuel_card', 'passengers', 'holder_contact'] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
-export type SwitchKey = 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions' | FeatureKey;
+export type SwitchKey = 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions' | 'self_drive_mode' | FeatureKey;
 
-export type QuickKey = 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions' | 'driver_personal_trips' | 'duty_cutoff' | 'accept_within_min' | 'accept_before_leave_min' | 'office_phone' | FeatureKey;
+export type QuickKey = 'tasks_need_approval' | 'vehicle_on_the_day' | 'planner_suggestions' | 'self_drive_mode' | 'driver_personal_trips' | 'duty_cutoff' | 'accept_within_min' | 'accept_before_leave_min' | 'office_phone' | FeatureKey;
 export type SettingKind = 'switch' | 'choice' | 'time' | 'minutes' | 'phone';
 
 export interface QuickRow {
@@ -414,6 +429,8 @@ export const QUICK_SETTINGS: readonly QuickRow[] = [
   { key: 'tasks_need_approval', kind: 'switch' },
   { key: 'vehicle_on_the_day', kind: 'switch' },
   { key: 'planner_suggestions', kind: 'switch' },
+  // Round 50 (§37.1): Driving mode for office people (default on).
+  { key: 'self_drive_mode', kind: 'switch' },
   { key: 'driver_personal_trips', kind: 'choice' },
   { key: 'duty_cutoff', kind: 'time' },
   { key: 'accept_within_min', kind: 'minutes' },

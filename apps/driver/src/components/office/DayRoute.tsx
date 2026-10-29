@@ -37,6 +37,7 @@ import { canPlay, cursorAt, gapWindowsOf, playbackPath, routeOf } from '@/office
 import { snapControl, snapNoteKey, snapView } from '@/office/snapLogic';
 import { type LegendEntry, mapInfo } from '@/office/routeInfo';
 import { visibleGaps } from '@/office/routeMarks';
+import { hasWebTrip, webMarks } from '@/office/webTripLogic';
 import type { DriverRoute, FleetError } from '@/office/types';
 import { ListFailed } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -74,7 +75,11 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
   const points = useMemo(() => (shown ? routePoints(shown) : []), [shown]);
   const lines = useMemo(() => (shown ? routeLines(shown) : []), [shown]);
   // Each stop with its words (the pin's card, and its name for a screen reader).
-  const stops = useMemo(() => (data ? stopMarks(data).map((s) => ({ ...s, label: stopLine(s, t) })) : []), [data, t]);
+  // Round 50 (§37.5): a web trip's actions (Start, each stop, Finish) are dots too, each with its words; no GPS stop among them.
+  const stops = useMemo(() => (data
+    ? [...stopMarks(data).map((s) => ({ ...s, label: stopLine(s, t) })), ...webMarks(data.web_points).map((w) => ({ key: w.key, lat: w.lat, lng: w.lng, time: w.time, to: w.time, minutes: 0, near: null, label: t(w.words.key, w.words.vars) }))]
+    : []), [data, t]);
+  const webTrip = hasWebTrip(data);
   // Round 48: the route's ends and its gap markers (the timeline's no-GPS and no-app rows).
   const ends = useMemo(() => routeEnds(points), [points]);
   const gaps = useMemo(() => (data ? gapMarks(data, points) : []), [data, points]);
@@ -119,7 +124,7 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
   const googleFailed = useSyncExternalStore(mapSession.subscribe, mapSession.googleFailed, mapSession.googleFailed);
   const engine = engineFor(GOOGLE_MAP_BUILD, mapPackage ?? settings.map_package, googleFailed);
   const estimated = lines.filter((l) => l.band === 'estimated').length;
-  const info = useMemo(() => mapInfo({ googleMap: engine === 'google', estimated: estimated > 0, estimatedGaps: estimated, kmNote: data?.km_note, estimatedNote: data?.estimated_note }, t), [engine, estimated, data?.km_note, data?.estimated_note, t]);
+  const info = useMemo(() => mapInfo({ googleMap: engine === 'google', estimated: estimated > 0, estimatedGaps: estimated, kmNote: data?.km_note, estimatedNote: data?.estimated_note, webTrip }, t), [engine, estimated, data?.km_note, data?.estimated_note, webTrip, t]);
 
   // The playback (Live's rules, office/liveRouteLogic.ts): the path in time order along the line drawn (the roads when
   // snapped, as on the site), the gaps, the marker at the clock.
@@ -160,6 +165,8 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
       </View>
       {/* Round 48 item 5: which line the map draws ("Snapped to roads · km from the odometer", "GPS line"…), always in view with the chip. */}
       {snapUi.note && points.length > 0 && <Txt variant="small" size={12} style={styles.snapNote} testID="snap-note">{t(snapNoteKey(snapUi.note))}</Txt>}
+      {/* Round 50 (§37.5): a trip driven on the web has no live route: the actions joined by straight dashed lines, said so. */}
+      {webTrip && <Txt variant="strong" size={13} style={styles.snapNote} testID="web-trip-line">{t('office.selfDrive.webLine')}</Txt>}
       {canPlay(path) && <View style={styles.bar}><PlaybackBar playback={playback} cursor={marker} /></View>}
       <ScrollView
         style={{ flex: 1 }}
@@ -200,7 +207,7 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
         )}
         {!data && !error && <SkeletonRows rows={2} lines={1} />}
         {error && <ListFailed stale={!!data} error={error} onRetry={onRetry} onSignIn={onSignIn} />}
-        {data && points.length === 0 && <ListEmpty text={emptyText} />}
+        {data && points.length === 0 && !webTrip && <ListEmpty text={emptyText} />}
         {children}
       </ScrollView>
 

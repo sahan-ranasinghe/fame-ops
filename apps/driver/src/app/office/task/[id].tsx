@@ -48,6 +48,7 @@ import { mapHeight } from '@/lib/mapLayout';
 import { type BannerIcon, lateMinutes, type TaskAction, taskActions, taskBanner } from '@/office/detailBanner';
 import { holderTitle, reachOf, windowWords } from '@/office/holderLogic';
 import { TaskDriverCard } from '@/components/office/DriverRows';
+import { isSelfDriveTrip } from '@/office/webTripLogic';
 import { TaskAsksLink } from '@/components/office/HolderParts';
 import { TaskCheckLines } from '@/components/office/VehicleChecks';
 import { PassengerRows } from '@/components/office/Passengers';
@@ -69,7 +70,7 @@ import { allowedActions, approvedParts, CANCEL_TEXT, cancelInput, dispatchParts,
 import type { FleetError, FuelCard, LiveDrivers, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { BackHeader, ErrorNotice, ListFailed, Pill, Row, Screen, Section, StickyActions } from '@/office/ui';
-import { sentenceText } from '@/office/statusWords';
+import { sentenceText, taskLineText } from '@/office/statusWords';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { dateWords, shortWhen } from '@/lib/dateWords';
@@ -293,10 +294,10 @@ export default function TaskDetailScreen() {
             >
               <Txt variant="body" size={14} color={TINT[banner.tone].sub} testID="task-banner-line">
                 {banner.title === 'onTheWay'
-                  ? ([task.eta?.next ? t('office.ui3.arrivesAbout', { time: task.eta.next }) : '', task.eta?.final ? t('office.task.backAbout', { time: task.eta.final }) : ''].filter(Boolean).join(' · ') || sentenceText(t, task.status_line) || t('office.task.onTheWayNow'))
+                  ? ([task.eta?.next ? t('office.ui3.arrivesAbout', { time: task.eta.next }) : '', task.eta?.final ? t('office.task.backAbout', { time: task.eta.final }) : ''].filter(Boolean).join(' · ') || taskLineText(t, task) || t('office.task.onTheWayNow'))
                   : banner.title === 'needsDriver' && task.needs_driver ? (task.needs_driver.reason === 'declined' ? t('office.task.declinedWhy', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '' }) : t('office.task.notAccepted', { name: task.driver ?? '' }))
                   : task.status === 'cancelled' && task.cancelled_reason ? t('office.task.cancelledWhy', { why: task.cancelled_reason })
-                  : sentenceText(t, task.status_line) || task.start}
+                  : taskLineText(t, task) || task.start}
               </Txt>
               {task.status === 'in_progress' && <Txt variant="strong" size={14} color={colors.blue}>{t('office.home.liveMap')}</Txt>}
             </StatusBanner>
@@ -324,6 +325,7 @@ export default function TaskDetailScreen() {
                 name={task.driver}
                 photo={task.driver_photo_url}
                 drivenBy={task.driven_by}
+                selfDrive={isSelfDriveTrip(task)}
                 plate={task.vehicle ? plateOf(task.vehicle) : undefined}
                 vehicleText={task.vehicle_text}
                 details={[task.vehicle?.split(' · ').slice(1).join(' · '), task.start_odometer_km != null ? t('office.task.startOdo', { km: task.start_odometer_km.toLocaleString('en-US') }) : ''].filter(Boolean).join(' · ')}

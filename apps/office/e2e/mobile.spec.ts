@@ -363,3 +363,115 @@ for (const lang of ["en", "si"] as const) {
     }
   });
 }
+
+/** A tool as an office person through office-api with their own session (a self trip is made by its own person). */
+async function asPerson<T>(email: string, password: string, name: string, args: Record<string, unknown>): Promise<T> {
+  const auth = await fetch(`${API}/auth/v1/token?grant_type=password`, {
+    method: "POST", headers: { "content-type": "application/json", apikey: ANON }, body: JSON.stringify({ email, password }),
+  });
+  const { access_token } = (await auth.json()) as { access_token?: string };
+  if (!access_token) throw new Error(`sign-in failed: ${auth.status}`);
+  const res = await fetch(`${API}/functions/v1/office-api/tools/${name}`, {
+    method: "POST", headers: { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${access_token}` }, body: JSON.stringify(args),
+  });
+  if (!res.ok) throw new Error(`${name}: ${res.status} ${await res.text()}`);
+  return (await res.json()) as T;
+}
+
+/** A 1 × 1 PNG: the odometer's "photo" from the phone's photos (the shared PhotoPick's Choose from photos). */
+const PIXEL = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+
+/** Drags a slide's thumb to the end of its track (the shared SlideToConfirm completes at 90 % or more). */
+async function slide(page: Page, testId: string): Promise<void> {
+  const track = shown(page.getByTestId(testId));
+  await expect(track).toBeVisible();
+  const box = (await track.boundingBox())!;
+  const thumb = (await shown(page.getByTestId(`${testId}-thumb`)).boundingBox())!;
+  const y = thumb.y + thumb.height / 2;
+  await page.mouse.move(thumb.x + thumb.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 4, y, { steps: 12 });
+  await page.mouse.up();
+}
+
+/** Choose from photos with the file the browser's chooser gets. */
+async function choosePhoto(page: Page, within: Locator): Promise<void> {
+  const chooser = page.waitForEvent("filechooser");
+  await shown(within.getByRole("button", { name: "Choose from photos" })).click();
+  await (await chooser).setFiles({ name: "odometer.png", mimeType: "image/png", buffer: PIXEL });
+}
+
+test("Round 50: Users → Can drive on /m/, then a self trip driven in the browser (driver-lite): Start with the check and the odometer, Arrived and Done, Finish; one position per action, no live tracking", async ({ page, context }) => {
+  // The self-driver: an office person who books and drives their own trip (approve, so the task is made at once).
+  const email = `selfdriver.${stamp}@fame.test`;
+  const password = await officeUser(`Self Driver ${stamp}`, email, ["view", "request", "approve", "assign_tasks"]);
+  const plate = `WP SD-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 2000 });
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date());
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", hourCycle: "h23" }).format(new Date()));
+  const start = `${String(Math.min(hour + 1, 22)).padStart(2, "0")}:00`;
+  const task = await asPerson<{ task_id: string }>(email, password, "create_task", {
+    title: `Web trip ${stamp}`, date: day, start_time: start, driven_by: "self", vehicle: plate, pickup: "Head office", dropoff: "Galle",
+  });
+
+  // An admin on /m/: People → the self-driver's page → Can drive (self-drive trips in the app), saved at once.
+  // (approve too: an account holding approve is changed only by someone who holds it: accountGuards.ts)
+  await signInMobile(page, "users", ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"]);
+  await page.goto(`/m/office/people/user/${encodeURIComponent(email)}`);
+  const can = shown(page.getByTestId("can-drive"));
+  await expect(can).toContainText("Can drive (self-drive trips in the app)");
+  await can.getByRole("switch").click();
+  await expect(can.getByRole("switch")).toBeChecked();
+  expect((await tool<{ users: { email: string; can_drive?: boolean }[] }>("list_office_users", { search: email })).users.find((u) => u.email === email)?.can_drive).toBe(true);
+
+  // The self-driver on /m/ in a browser that gives a position when asked (one, per action).
+  await context.clearCookies();
+  await page.evaluate(() => window.localStorage.clear());
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 6.9271, longitude: 79.8612, accuracy: 15 });
+  await page.goto("/m/");
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(tab(page, "More")).toBeVisible();
+
+  // My trip offers "Drive this trip here" in the browser; the page says live tracking needs the app.
+  await page.goto(`/m/office/my-trip/${task.task_id}`);
+  await shown(page.getByTestId("web-drive-offer")).getByRole("button", { name: "Drive this trip here" }).click();
+  await expect(page).toHaveURL(new RegExp(`/m/office/my-trip/${task.task_id}/drive`));
+  await expect(shown(page.getByText(/Live tracking needs the Fame Fleet app/)).first()).toBeVisible();
+
+  // Start: the check (when the switch asks it), the fuel card (when it asks), the odometer photo and the reading.
+  const startWhy = shown(page.getByTestId("web-start-why"));
+  if (await shown(page.getByTestId("web-check")).count()) await shown(page.getByRole("radio", { name: /No, all good/ })).click();
+  if (await shown(page.getByTestId("web-fuel-card")).count()) await shown(page.getByRole("radio", { name: /Enough fuel/ })).click();
+  await expect(startWhy).toHaveText("Take the odometer photo");
+  await choosePhoto(page, shown(page.getByTestId("web-odometer-start")));
+  await shown(page.getByTestId("web-odometer")).fill("2015");
+  await expect(page.getByTestId("web-start-why")).toHaveCount(0);
+  await shown(page.getByRole("button", { name: "Start trip", exact: true })).click();
+  await expect(page.getByText("Trip started")).toBeVisible();
+
+  // Each stop: Arrived, then Done, each a slide (dragged with the mouse: the shared SlideToConfirm's responder runs on the
+  // web), each with one position.
+  for (const place of ["Head office", "Galle"]) {
+    await slide(page, "web-slide-arrive");
+    await expect(page.getByText(new RegExp(`Arrived at ${place}`))).toBeVisible();
+    await slide(page, "web-slide-leave");
+    await expect(page.getByText(new RegExp(`Done at ${place}`))).toBeVisible();
+  }
+
+  // Finish: the odometer photo and the reading (the km as typed); the fuel under More details says no video.
+  await choosePhoto(page, shown(page.getByTestId("web-finish")));
+  await shown(page.getByTestId("web-odometer-end")).fill("2057");
+  await expect(shown(page.getByTestId("web-km"))).toContainText("42 km this trip");
+  await shown(page.getByRole("button", { name: "More details" })).click();
+  await expect(shown(page.getByTestId("web-no-video"))).toHaveText("Fuel video needs the Fame Fleet app.");
+  await shown(page.getByRole("button", { name: "Finish trip", exact: true })).click();
+  await expect(shown(page.getByTestId("web-trip-done"))).toContainText("Trip finished · 42 km");
+
+  // The office's view: driver_route draws the actions joined by straight dashed lines (web_points), never a GPS line.
+  const route = await tool<{ web_trip?: boolean; web_points?: { action: string }[]; recorded_points: number }>("driver_route", { task_id: task.task_id });
+  expect(route.web_trip).toBe(true);
+  expect(route.web_points?.map((p) => p.action)).toEqual(["start", "arrive", "leave", "arrive", "leave", "finish"]);
+});

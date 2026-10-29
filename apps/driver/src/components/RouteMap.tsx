@@ -98,7 +98,7 @@ export function PlaybackPin({ marker, turn }: { marker: PlaybackMarker; turn: bo
 
 /** The line's width by what it is: the day's line 5, standing and the dashed legs 3. */
 export function lineWidth(l: Pick<RouteLine, 'band'>): number {
-  return l.band === 'standing' || l.band === 'gap' || l.band === 'estimated' ? 3 : 5;
+  return l.band === 'standing' || l.band === 'gap' || l.band === 'estimated' || l.band === 'web' ? 3 : 5;
 }
 
 /** The engines' defaults for the Round 48 parts, so an older caller (no ends, no layers) draws as before. */

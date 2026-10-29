@@ -50,6 +50,11 @@ export interface MapRoute {
   cursor?: { lat: number; lng: number; label: string; estimated?: boolean; heading?: number | null } | null;
   /** Gaps of over 300 m and 60 s drawn as the likely road (openrouteservice), dashed; never km (Part 5b). No label drawn (§21). */
   estimated?: { points: { lat: number; lng: number }[]; label?: string }[];
+  /**
+   * Round 50 (§37.5): a trip driven on the web: its actions' positions joined by straight dashed lines in ink ("No live
+   * route · web trip"); never a GPS line, never km. The route's own points may be empty then.
+   */
+  web?: { points: { lat: number; lng: number }[]; label: string } | null;
 }
 
 /** What a gap was (Phase 7, §21): the app not running, no GPS signal, or recorded but uploaded late. */

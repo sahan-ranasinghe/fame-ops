@@ -196,6 +196,9 @@ export interface BoardCard {
   driven_by?: DrivenBy;
   vehicle?: string;
   status?: string;
+  /** Round 50 (§37.3): a self trip driven with the app (Self-drive), and where it was started (app | web | office). */
+  self_drive?: true;
+  driven_in?: DrivenIn;
   eta_next?: string;
   eta_final?: string;
   late_min?: number;
@@ -665,6 +668,9 @@ export interface TaskDetail {
     driver?: string;
     /** Round 3: self / other (no app); absent = a driver. For other, driver_phone and driver_links are theirs. */
     driven_by?: DrivenBy;
+    /** Round 50 (§37.3): a self trip driven with the app (Self-drive), and where it was started (app | web | office). */
+    self_drive?: true;
+    driven_in?: DrivenIn;
     vehicle?: string;
     /** Phase 7 (§5, §6). */
     driver_photo_url?: string;
@@ -1386,6 +1392,8 @@ export interface FleetSettings {
   rush_hour: { factor: number; centre: { lat: number; lng: number }; radius_km: number; bands: { days: number[]; from: string; to: string }[] };
   /** Off = every booking needs a driver (Part 7). */
   self_drive_allowed?: boolean;
+  /** Round 50 (§37.1): Driving mode for office people who drive themselves (default on); off = the manual My trip flow. */
+  self_drive_mode?: boolean;
   /** Phase 7 (§33): a task made by someone without approve waits for an approver (default on). */
   tasks_need_approval?: boolean;
   /** The driver app's shift nudge: HH:MM on these days (0 = Sunday … 6 = Saturday). */
@@ -1532,6 +1540,11 @@ export interface LiveDriver extends StatusFields {
   task_id?: string;
   /** Phase 7 (§19): "declined the 09:00 task" or "hasn't accepted the 09:00 task". */
   task_note?: string;
+  /** Round 50 (§37.3): an office person driving their own trip (Self-drive); a trip driven on the web (/m/): never the Live
+   * state, `last_seen` the last action's time and stop instead ("Web trip · last seen at Kurunegala site 10:42"). */
+  self_drive?: true;
+  web_trip?: true;
+  last_seen?: { at: string; stop?: string };
 }
 
 export type DutyState = "on_task" | "on_duty" | "off_duty";
@@ -1650,6 +1663,9 @@ export interface DriverRoute {
   outlier_points?: number;
   heartbeats?: number;
   note?: string;
+  /** Round 50 (§37.5): a trip driven on the web: one position per action, never a GPS line (no km from them). */
+  web_trip?: true;
+  web_points?: WebPoint[];
 }
 
 // ---- Phase 4: vehicles, drivers, mileage, maintenance, accounts ----
@@ -1782,6 +1798,8 @@ export interface OfficeUser {
   since?: string;
   /** Only for the people who make keys (users); a Coordinator's answer has none (Round 2b). */
   connector_keys?: OfficeKey[];
+  /** Round 50 (§37.1): may drive their own trips in the app (true granted, false taken away, absent never decided). */
+  can_drive?: boolean;
 }
 
 export interface OfficeUsers extends Paged {
@@ -2467,6 +2485,76 @@ export interface MyTrip {
   check_id?: string;
   started_now?: boolean;
   next?: string;
+  /** Round 50 (§37.5): the trip driven in a browser (/m/ driver-lite), when my_trip offers it. */
+  web?: MyTripWeb;
+}
+
+// ---- Round 50 (29 October 2026, §37.5): /m/ driver-lite (the same shapes in apps/office and apps/driver) ----
+
+/** Where a trip was started: the app's driver screens, a browser (/m/), or the manual office path (my_trip_check). */
+export type DrivenIn = "app" | "web" | "office";
+
+export type WebTripActionKind = "start" | "arrive" | "leave" | "finish";
+
+export interface MyTripWebStop {
+  id: string;
+  n: number;
+  type: "pickup" | "drop" | "visit";
+  place: string;
+  status: "pending" | "arrived" | "done" | "skipped";
+  /** HH:MM */
+  arrived_at?: string;
+  done_at?: string;
+}
+
+/** my_trip's `web`: whether a browser may drive the trip, and where it stands. */
+export interface MyTripWeb {
+  /** self_drive_mode on, driven_by self, own trip, assigned or in progress, not started in the app or the office path. */
+  allowed: boolean;
+  why?: string;
+  started: boolean;
+  driven_in?: DrivenIn;
+  check_needed: boolean;
+  fuel_card?: { estimate_text?: string; asked: boolean };
+  last_km?: number;
+  stops: MyTripWebStop[];
+}
+
+/** web_trip_action's input (any office permission; the person's own self trip only). */
+export type WebTripActionInput = {
+  task_id: string;
+  /** One per action: a repeat answers the same (never doubles). */
+  client_id: string;
+  action: WebTripActionKind;
+  stop_id?: string;
+  /** Absent = saved with no position. */
+  position?: { lat: number; lng: number; accuracy_m?: number };
+  odometer_km?: number;
+  odometer_photo_id?: string;
+  check?: { result: "ok" | "problem"; category?: string; note?: string; photos?: string[]; sides?: { photo_id: string; side: "front" | "back" | "left" | "right" }[] };
+  fuel_answer?: "enough" | "fill_on_way";
+  fuel?: { litres: number; lkr?: number; receipt_photo_id?: string };
+};
+
+export interface WebTripActionResult {
+  task_id: string;
+  status: "in_progress" | "completed";
+  driven_in: "web";
+  stop?: { id: string; status: "arrived" | "done"; at: string };
+  km?: number;
+  next: string;
+}
+
+/** One action of a web trip with the position the browser gave at that moment (driver_route's web_points). */
+export interface WebPoint {
+  /** ISO time, and "HH:MM" (Colombo). */
+  at: string;
+  time: string;
+  lat: number;
+  lng: number;
+  action: WebTripActionKind;
+  /** The stop's place for arrive / leave. */
+  stop?: string;
 }
 
 // ---- Round 4–7, feature 5 (22 October 2026): the fuel card ----

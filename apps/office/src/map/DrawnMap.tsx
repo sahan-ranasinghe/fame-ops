@@ -155,13 +155,13 @@ export default function DrawnMap({
   const pts = useMemo(() => {
     if (view) return view;
     const all: [number, number][] = markers.map((m) => [m.lng, m.lat]);
-    if (route) all.push(...route.points.map((p): [number, number] => [p.lng, p.lat]));
+    if (route) all.push(...route.points.map((p): [number, number] => [p.lng, p.lat]), ...(route.web?.points ?? []).map((p): [number, number] => [p.lng, p.lat]));
     for (const t of trails) all.push(...t.points.map((p): [number, number] => [p.lng, p.lat]));
     all.push(...drawnPlan.pins.map((p): [number, number] => [p.lng, p.lat]));
     return all;
     // On the route's points, not the route: during playback only the cursor changes every frame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [markers, route?.points, trails, view, drawnPlan]);
+  }, [markers, route?.points, route?.web, trails, view, drawnPlan]);
   const { pr, sx, sy, x0, y1 } = useMemo(() => projection(pts, zoom), [pts, zoom]);
   const prRef = useRef(pr);
   prRef.current = pr;
@@ -232,6 +232,10 @@ export default function DrawnMap({
           const [x, y] = pr(g.lng, g.lat);
           return <circle key={"u" + g.id} className="under-dot" data-testid="under-dot" cx={x.toFixed(1)} cy={y.toFixed(1)} r="7" fill="var(--surface)" stroke="var(--ink)" strokeWidth="2.5" pointerEvents="none" />;
         })}
+        {/* Round 50 (§37.5): a web trip's actions joined by straight dashed lines in ink (no live route; never a GPS line). */}
+        {route?.web && route.web.points.length > 1 && (
+          <polyline data-testid="web-trip-line" points={line(route.web.points)} fill="none" stroke="var(--ink)" strokeWidth="3" strokeDasharray="10 8" strokeLinecap="round" opacity=".8" />
+        )}
         {route && route.points.length > 0 && (
           <g data-testid="drawn-route">
             {route.bySpeed

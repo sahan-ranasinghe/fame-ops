@@ -13,13 +13,14 @@
 // under 20, blue 20–60, dark blue over 60 km/h) so the two screens read the same. Pure: no React, no native module;
 // the words come through `t`, so both languages read the same fields.
 
+import { webLinePoints, webMarks, webPointsInOrder } from './webTripLogic';
 import { boundsOf, type Frame, frameOf, kmText, type LatLng, ORS_CREDIT } from '../components/taskMapLogic';
 import { durationText } from '../lib/durations';
 import { NO_ROUTE_LAYERS, type RouteLayers } from '../lib/mapLayout';
 import { distanceM } from '../lib/track';
 import type { Words } from './liveLogic';
 import { type EndMarks, endsOf, type GapMark, gapMarksOf } from './routeMarks';
-import type { DriverRoute, GapKind, LiveDriver, SegmentKind } from './types';
+import type { DriverRoute, GapKind, LiveDriver, SegmentKind, WebPoint } from './types';
 
 // ---- The tool ---------------------------------------------------------------------------------------------------------
 
@@ -102,6 +103,8 @@ export interface Route {
   stoppedMinutes?: number;
   stopsCount?: number;
   note?: string;
+  /** Round 50 (§37.5): a trip driven on the web: its actions' positions (no GPS line; never km). */
+  web?: WebPoint[];
 }
 
 const num = (v: unknown): number | null => {
@@ -169,6 +172,7 @@ export function routeOf(username: string, p: DriverRoute): Route {
     stoppedMinutes: p.stopped_minutes,
     stopsCount: p.stops_count,
     note: p.note,
+    ...(p.web_points?.length ? { web: webPointsInOrder(p.web_points) } : {}),
   };
 }
 
@@ -234,6 +238,8 @@ export function speedBand(kmh: number): SpeedBand {
 export const BAND_COLORS: Record<SpeedBand, string> = { standing: '#8d9096', slow: '#f2a900', mid: '#1e4fa0', fast: '#0f2d66' };
 export const HOLE_COLOR = '#8d9096';
 export const ESTIMATED_COLOR = '#5d646c';
+/** Round 50 (§37.5): a web trip's straight dashed line (ink: "No live route · web trip"; driversLogic BAND_COLORS.web). */
+export const WEB_TRIP_COLOR = '#15181c';
 
 /** Over 2 minutes between two line points at different places: a hole, drawn dashed (the shared route module's rule). */
 export const HOLE_MINUTES = 2;
@@ -333,6 +339,8 @@ export interface RouteDrawing {
   gaps: GapMark[];
   /** The frame around the line and the estimated roads. */
   frame: Frame;
+  /** Round 50 (§37.5): a web trip's straight dashed line ("No live route · web trip"); empty for a GPS route. */
+  web: { key: string; points: LatLng[] }[];
 }
 
 /**
@@ -341,6 +349,23 @@ export interface RouteDrawing {
  * Null with no route or no point.
  */
 export function drawingOf(route: Route | null, t: Words): RouteDrawing | null {
+  const webLine = route ? webLinePoints(route.web) : [];
+  const webStops: StopMark[] = route ? webMarks(route.web).map((w) => ({ key: w.key, lat: w.lat, lng: w.lng, from: w.time, to: w.time, minutes: 0, near: null, label: t(w.words.key, w.words.vars) })) : [];
+  if (route && route.points.length === 0 && webStops.length > 0) {
+    // Round 50: a trip driven on the web: no runs, no holes, no playback; the actions and the straight dashed line.
+    return {
+      key: `${route.username}:${route.date}:web`,
+      username: route.username,
+      runs: [],
+      holes: [],
+      estimated: [],
+      stops: webStops,
+      ends: null,
+      gaps: [],
+      frame: frameOf(webStops),
+      web: webLine.length >= 2 ? [{ key: `web:${webLine.length}`, points: webLine }] : [],
+    };
+  }
   if (!route || route.points.length === 0) return null;
   const est = route.estimated.filter((e) => e.points.length > 1);
   const estKeys = new Set(est.map(holeKey));
@@ -352,10 +377,11 @@ export function drawingOf(route: Route | null, t: Words): RouteDrawing | null {
     runs: runsOf(route.points, breaks),
     holes,
     estimated: est.map((e, i) => ({ key: `est:${i}:${e.fromAt}`, points: e.points })),
-    stops: route.stops.map((s, i) => ({ key: `stop:${i}:${s.from}`, lat: s.lat, lng: s.lng, from: s.from, to: s.to, minutes: s.minutes, near: s.near, label: stopLabel(s, t) })),
     ends: endsOf(route.points, clockS),
     gaps: gapMarksOf(gapSources(route), route.points, clockS),
-    frame: frameOf([...route.points, ...est.flatMap((e) => e.points)]),
+    frame: frameOf([...route.points, ...est.flatMap((e) => e.points), ...webLine]),
+    stops: [...route.stops.map((st, i) => ({ key: `stop:${i}:${st.from}`, lat: st.lat, lng: st.lng, from: st.from, to: st.to, minutes: st.minutes, near: st.near, label: stopLabel(st, t) })), ...webStops],
+    web: webLine.length >= 2 ? [{ key: `web:${webLine.length}`, points: webLine }] : [],
   };
 }
 

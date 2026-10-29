@@ -6,6 +6,7 @@
 // 10 minutes as circles with their times, the frame around it all and the frame of one timeline row. Pure: no React, no
 // native module; the words come through `t`.
 
+import { webLinePoints } from './webTripLogic';
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
 import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
 import { durationText } from '../lib/durations';
@@ -223,14 +224,18 @@ export function unavailabilityInput(f: UnavailabilityForm): { ok: true; input: R
 export type SpeedBand = 'standing' | 'slow' | 'mid' | 'fast';
 export const SPEED_BANDS: readonly SpeedBand[] = ['standing', 'slow', 'mid', 'fast'];
 
-/** The line's colour by speed: grey standing, amber under 20, blue 20–60, dark blue over 60 km/h; dashed grey for a hole, slate for an estimated road. */
-export const BAND_COLORS: Record<SpeedBand | 'gap' | 'estimated', string> = {
+/**
+ * The line's colour by speed: grey standing, amber under 20, blue 20–60, dark blue over 60 km/h; dashed grey for a hole,
+ * slate for an estimated road; Round 50: dashed ink for a web trip's straight line (no live route).
+ */
+export const BAND_COLORS: Record<SpeedBand | 'gap' | 'estimated' | 'web', string> = {
   standing: '#8d9096',
   slow: '#f2a900',
   mid: '#1e4fa0',
   fast: '#0f2d66',
   gap: '#8d9096',
   estimated: '#5d646c',
+  web: '#15181c',
 };
 
 /** Standing under 3 km/h (GPS jitter while parked), slow under 20, 20–60, over 60; an unknown speed is drawn as 20–60. */
@@ -275,7 +280,7 @@ export function routePoints(route: Pick<DriverRoute, 'route' | 'date'>): RoutePo
 
 export interface RouteLine {
   key: string;
-  band: SpeedBand | 'gap' | 'estimated';
+  band: SpeedBand | 'gap' | 'estimated' | 'web';
   points: LatLng[];
   dashed: boolean;
 }
@@ -315,9 +320,19 @@ export function estimatedLines(route: Pick<DriverRoute, 'estimated'>): RouteLine
   });
 }
 
-/** Every line the map draws: the estimated roads under the day's line. */
-export function routeLines(route: Pick<DriverRoute, 'route' | 'date' | 'estimated'>): RouteLine[] {
-  return [...estimatedLines(route), ...speedLines(routePoints(route))];
+/**
+ * Round 50 (§37.5): a trip driven on the web has no GPS line: its actions' positions (Start, each stop, Finish) joined by
+ * ONE straight dashed line (Google Maps' straight line where no route is known), labelled "No live route · web trip" by
+ * the screen. Never km.
+ */
+export function webTripLines(route: Pick<DriverRoute, 'web_points'>): RouteLine[] {
+  const points = webLinePoints(route.web_points);
+  return points.length >= 2 ? [{ key: `web:${points.length}`, band: 'web', points, dashed: true }] : [];
+}
+
+/** Every line the map draws: the estimated roads under the day's line; a web trip's straight dashed line (Round 50). */
+export function routeLines(route: Pick<DriverRoute, 'route' | 'date' | 'estimated' | 'web_points'>): RouteLine[] {
+  return [...estimatedLines(route), ...webTripLines(route), ...speedLines(routePoints(route))];
 }
 
 export interface StopMark extends LatLng {

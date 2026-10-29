@@ -191,6 +191,9 @@ export default function MapLibreMap({
       m.addLayer({ id: "holes-line", type: "line", source: "holes", paint: { "line-color": canvas.hole, "line-width": 3, "line-dasharray": [2, 2] }, layout: { "line-cap": "round" } });
       m.addSource("estimated", { type: "geojson", data: empty() });
       m.addLayer({ id: "estimated-line", type: "line", source: "estimated", paint: { "line-color": estimatedColor(scheme), "line-width": 3.5, "line-dasharray": [1, 2] }, layout: { "line-cap": "round", "line-join": "round" } });
+      // Round 50 (§37.5): a web trip's actions joined by straight dashed lines in ink (no live route; never a GPS line).
+      m.addSource("web-trip", { type: "geojson", data: empty() });
+      m.addLayer({ id: "web-trip-line", type: "line", source: "web-trip", paint: { "line-color": canvas.ink, "line-width": 3, "line-opacity": 0.8, "line-dasharray": [2.5, 2] }, layout: { "line-cap": "round" } });
       // Round 48 (z-order): the stops' dots, a circle layer added BEFORE the route line so the line draws over them (the
       // HTML button of each dot sits above, transparent, with the hit area and the card: domMarks.underLine).
       m.addSource("marks", { type: "geojson", data: empty() });
@@ -307,12 +310,21 @@ export default function MapLibreMap({
         geometry: { type: "LineString", coordinates: e.points.map((p): [number, number] => [p.lng, p.lat]) },
       })),
     });
+    const webSrc = m.getSource("web-trip") as maplibregl.GeoJSONSource | undefined;
+    const webPoints = route?.web?.points ?? [];
+    webSrc?.setData({
+      type: "FeatureCollection",
+      features: webPoints.length > 1 ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: webPoints.map((p): [number, number] => [p.lng, p.lat]) } }] : [],
+    });
     stopEls.current.forEach((s) => s.remove());
     stopEls.current = [];
     if (!route || !route.points.length) {
       src.setData({ type: "FeatureCollection", features: [] });
       holeSrc.setData({ type: "FeatureCollection", features: [] });
-      fittedRoute.current = "";
+      // A day with only a web trip: fitted once to its actions.
+      const webKey = webPoints.length ? `web:${webPoints[0].lat},${webPoints[0].lng}` : "";
+      if (webKey && fittedRoute.current !== webKey) fitTo(m, webPoints.map((p): [number, number] => [p.lng, p.lat]));
+      fittedRoute.current = webKey;
       return;
     }
     const coords = route.points.map(lngLat);
@@ -337,7 +349,7 @@ export default function MapLibreMap({
     // Not on `route` itself: during playback only the cursor changes every frame and the line's arrays stay the same
     // objects, so the line and the stops are redrawn only when they change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route?.points, route?.holes, route?.estimated, route?.stops, route?.bySpeed, ready]);
+  }, [route?.points, route?.holes, route?.estimated, route?.web, route?.stops, route?.bySpeed, ready]);
 
   // The playback marker: hollow while it crosses a gap, turned to the path (§22).
   useEffect(() => {

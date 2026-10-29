@@ -166,10 +166,12 @@ export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSi
  * who drives it themselves: their photo with "Drives themselves". Someone not in Fame Fleet: their initials, their name
  * with "Someone else", and their Call / WhatsApp. No duty state for a trip with no app (there is no app to say it).
  */
-export function TaskDriverCard({ name, photo, drivenBy, plate, vehicleText, details, call, whatsapp, emptyName }: {
+export function TaskDriverCard({ name, photo, drivenBy, selfDrive = false, plate, vehicleText, details, call, whatsapp, emptyName }: {
   name?: string;
   photo?: string;
   drivenBy?: DrivenBy;
+  /** Round 50 (§37.3): a self trip driven with the app or on the web: "Self-drive" instead of "Drives themselves". */
+  selfDrive?: boolean;
   plate?: string;
   /** "Vehicle: on the day", "Any van" while no plate is set. */
   vehicleText?: string;
@@ -181,7 +183,7 @@ export function TaskDriverCard({ name, photo, drivenBy, plate, vehicleText, deta
   emptyName: string;
 }) {
   const { t } = useApp();
-  const word = drivenByKey(drivenBy);
+  const word = drivenBy === 'self' && selfDrive ? 'office.chip.selfDrive' : drivenByKey(drivenBy);
   // Round 4–7, item 12 (the approved mockup 4): the avatar, the name with who drives, the plate chip with the model on one
   // line, and Call (blue) and WhatsApp (green) as round buttons.
   return (
