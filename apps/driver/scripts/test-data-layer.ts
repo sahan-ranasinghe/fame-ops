@@ -692,7 +692,7 @@ async function main() {
   }
   const onDay = await taskWithout(`On the day ${run}`, 'driver_day', null);
   const anyVan = await taskWithout(`Any van ${run}`, 'any_type', 'van');
-  const tasksE = await api.fetchTasks(clientE, since);
+  const tasksE = await api.fetchTasks(clientE, since, { employeeId: e.row.id, selfOnly: false });
   const onDayRow = tasksE.find((t) => t.id === onDay);
   check(onDayRow?.vehicle_id === null && onDayRow.vehicle_mode === 'driver_day' && tasksE.find((t) => t.id === anyVan)?.vehicle_type_wanted === 'van',
     'the app reads a task with no vehicle: driver_day, and any_type with its type', onDayRow);
@@ -739,7 +739,7 @@ async function main() {
   console.log('\n== The other driver ==');
   const clientB = driverClient({ value: true });
   await api.signIn(clientB, b.username, b.pin);
-  const tasksB = await api.fetchTasks(clientB, since);
+  const tasksB = await api.fetchTasks(clientB, since, { employeeId: b.row.id, selfOnly: false });
   const seenByB = await Promise.all([
     clientB.from('location_points').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
     clientB.from('photos').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
@@ -747,6 +747,9 @@ async function main() {
     clientB.storage.from('driver-photos').list(`${a.row.id}/${day}`),
   ]);
   check(tasksB.every((t) => t.employee_id === b.row.id) && tasksB.some((t) => t.id === taskOfB) && tasksB.some((t) => t.id === task7), 'driver B sees only their own tasks, including the one given to B', tasksB.map((t) => t.title));
+  // Round 50: fetchTasks now filters employee_id itself; RLS alone (a query with no filter) must still give B only B's tasks.
+  const rawB = must(await clientB.from('tasks').select('id, employee_id'), 'tasks with no filter');
+  check(rawB.length > 0 && rawB.every((t) => t.employee_id === b.row.id), 'RLS alone (no employee filter in the query): driver B reads only their own tasks', rawB.length);
   check(seenByB[0].count === 0 && seenByB[1].count === 0 && seenByB[2].count === 0 && (seenByB[3].data ?? []).length === 0, 'driver B sees none of driver A\'s points, photos, readings or files');
 
   await admin.from('employees').update({ active: false }).eq('id', a.row.id);
