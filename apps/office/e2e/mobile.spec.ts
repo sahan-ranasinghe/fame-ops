@@ -364,6 +364,42 @@ for (const lang of ["en", "si"] as const) {
   });
 }
 
+// Fix B (29 October 2026): From / To / Add stop, Uber's and PickMe's route form (docs/phase8-plan.md §38.2). The Where step
+// in Sinhala (the longest words) on a 390 px phone: From, To and + Add stop on screen, nothing wider than the screen, with a
+// stop added and with a row's ⋯ Options open.
+test("the Where step in Sinhala at 390 px: From, To and + Add stop, no horizontal overflow", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => window.localStorage.setItem("language", JSON.stringify("si")));
+  const email = `where.si.${stamp}@fame.test`;
+  const password = await officeUser("Mobile Where", email, ["view", "request"]);
+  await page.goto("/m/");
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole("button", { name: SI_SIGN_IN, exact: true }).click();
+  await expect(page).toHaveURL(/\/m\/office/);
+  await page.goto("/m/office/trip/where?mode=request");
+  const card = shown(page.getByTestId("route-card"));
+  await expect(card).toBeVisible();
+  // si.json office.trip.from, .to and .addStop (Sinhala has no capitals: the labels read as written).
+  await expect(card.getByText("සිට", { exact: true })).toBeVisible();
+  await expect(card.getByText("දක්වා", { exact: true })).toBeVisible();
+  await expect(card.getByText("නැවතුමක් එකතු කරන්න", { exact: true })).toBeVisible();
+  const width = () => page.evaluate(() => document.documentElement.scrollWidth);
+  await page.evaluate(() => document.fonts.ready);
+  expect(await width(), "the page's width with From and To").toBeLessThanOrEqual(390);
+  // + Add stop: a row between From and To.
+  await shown(page.getByTestId("add-stop")).click();
+  await expect(shown(page.getByTestId("stop-row-1"))).toBeVisible();
+  expect(await width(), "the page's width with a stop added").toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath("m-si-where-390.png") });
+  // A row's ⋯ Options (what happens there, the times, More details, Move up / down).
+  await shown(page.getByTestId("stop-options-0")).click();
+  await expect(shown(page.getByTestId("stop-options-sheet"))).toBeVisible();
+  await expect(shown(page.getByText("එහිදී සිදුවන්නේ", { exact: true }))).toBeVisible();
+  expect(await width(), "the page's width with the Options sheet open").toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath("m-si-where-options-390.png") });
+});
+
 /** A tool as an office person through office-api with their own session (a self trip is made by its own person). */
 async function asPerson<T>(email: string, password: string, name: string, args: Record<string, unknown>): Promise<T> {
   const auth = await fetch(`${API}/auth/v1/token?grant_type=password`, {
