@@ -1011,6 +1011,13 @@ e2e `office.spec.ts` "Round 49" (a preview HEAD and GET, a first open in a fresh
 the used link in English and Sinhala, an expired link, a replaced one, an old Supabase landing) and every e2e sign-in now
 through the new link (`e2e/links.ts`).
 
+**Deployed 29 October 2026 (Sahan's go after CI run 40820149117 passed: 49 passed, 1 flaky under CPU cut-offs).** The
+migration `20261029100000_round49_password_links` (the dry run listed only it), the site with /m/ (635e2bb8, the scan found
+nothing), then office-api and office-mcp (the site first: it still reads Supabase's old links; the old site would not read the
+new ones). Live check with the test office user R49 Link Test (switched on for it, off after): a WhatsApp-style HEAD and GET
+of a fresh link, two opens in fresh browsers (the form naming the account), Save with the eye → Overview, the activity log
+"Set their password through the link", and a third open → "This link can't be used" in English and Sinhala.
+
 ## 34. Round 48 (28 October 2026, branch `phase9-r48` from main `99dbab9`, worktree `~/projects/fame-ops-r47`)
 
 **State at the start (28 October):** main `99dbab9` pushed and green (CI 39782874213); Round 4–7 deployed on 22 October
