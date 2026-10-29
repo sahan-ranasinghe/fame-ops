@@ -972,6 +972,69 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 38. Round 51: three fixes (29 October 2026, branch `phase9-r51` from main `da6fd4b`, worktree `~/projects/fame-ops-r51`)
+
+Sahan's brief after Checkpoint 50. "Restyle, never rebuild: keep the planner, place search, drafts, per-person suggestions
+and every existing option."
+
+### 38.1 A: one password rule for office accounts
+
+| Where a password is set or typed | Before | Now |
+|---|---|---|
+| The set-password link page (`auth/LinkPassword.tsx`, English and Sinhala) | 12+ characters, at most 72 bytes | 6+, any characters and spaces, at most 72 bytes; "At least 6 characters. Longer is safer." under the field; the eye toggle kept |
+| The server's check of that page's save (`passwordLinks.ts` `passwordProblem`) | 12+ | 6+ (characters, not UTF-16 units), at most 72 bytes |
+| The old recovery page (`auth/SetPassword.tsx`, Supabase's links made before Round 49) | 12+ | 6+, at most 72 bytes, the same line |
+| Users → create / new link (site, Office mode, /m/) | no password typed: a set-password link | unchanged |
+| Office mode / /m/ sign-in (`app/login.tsx`) | Sign in waits for 6+ characters | unchanged (6 was already Auth's minimum: every existing password has 6+) |
+| Supabase Auth (`config.toml` and the real project) | minimum 6, no required kinds | unchanged: 6 is also the floor Supabase allows, and drivers' 6-digit PINs need it |
+
+72 bytes is Supabase Auth's limit (bcrypt), not ours: 72 English letters or numbers, 24 Sinhala letters (3 bytes each).
+Existing passwords keep working: the rule applies only when a password is set.
+
+### 38.2 B and C: the Where step as From / To / Add stop (Uber, PickMe, Google Maps)
+
+The rules are shared (`screens/stopsLogic.ts`, copied to Office mode; tests in `stopsLogic.test.ts`): From is the trip's
+start (the base place by default, changeable); the rows are the stops in order and the last row is To; + Add stop inserts a
+row between the last stop and To; no type picker on the form: To = the drop-off, the rows between = visits (`typeAt`),
+until chosen under ⋯ Options (People get in = pickup · people, People get out = drop · people, Visit · wait = visit, Goods =
+drop · goods, a pickup of goods stays a pickup); the server still gets pickup / visit / drop. A new trip opens with From +
+one To and "Then back to the office" on (one-way trips are supported: the switch turns it off). From's ⋯ Options: Leave
+from here (default, Sahan's choice 29 October) / People get in / Goods (= "Passengers get in here" and its what). On Next,
+Save draft and Send, rows with no place go silently once To has one (`tidyStops`); an empty To keeps Next disabled (the
+app) or names the row on Send (the site, which never disables its button) with the existing words. Old drafts, requests
+and tasks open without their empty rows, and a loaded type that is not its place's is kept (`openStops`).
+
+Behaviour changes (asked for): a new trip has 1 row, not 2; return to base on by default; a middle stop is a visit, so
+its default stay is the setting `dwell_min.visit` (60 min) where Add stop used to make a drop (5 min).
+
+**The inventory (C): every field and option of the Where step today, and its new place.** Nothing is removed.
+
+| Item | Site today | Office mode / /m/ today | New place (both) |
+|---|---|---|---|
+| Start from (search, base default, Google pair, My location in the app, "Use <base>") | field "Start from" | card with Change | the **From** row (search box on tap; "Use the office" kept) |
+| Passengers get in here (+ what gets in, note at start, time there) | checkbox + fields | switch + More details | From's **⋯ Options**: Leave from here / People get in / Goods; note and stay in the same sheet |
+| Stop place (our places, used before, the map, Google, pasted pin or link, per-person suggestions) | `LocationSearch` per row | `PlaceSearch` per row | each row's place field, unchanged component |
+| Stop type (Pickup / Drop-off / Visit) | select per row | chips per row | inferred by position; changed under the row's **⋯ Options** ("What happens there") |
+| What (People / Goods / Documents / Other) | under Details | chips per row | ⋯ Options: People and Goods through "What happens there"; Documents / Other under its More details |
+| Arrive by | per row | When step | ⋯ Options (the clock); the app's When step keeps its rows too (the plan's warnings live there) |
+| Stay (dwell: presets, custom, "usual here") | per row | When step | ⋯ Options (the duration sheet / DwellPicker); the app's When step keeps them too |
+| Pin typed by hand | Details | More details | ⋯ Options → More details |
+| Note for the driver | Details | More details | ⋯ Options → More details |
+| Move up / down | ↑ ↓ buttons | chevrons | **drag** by a handle; Move up / Move down kept in ⋯ Options (keyboard and screen readers) |
+| Remove | ✕ (not the last row) | ✕ (not the last row) | ✕ on each row but From; removing To makes the row before it To |
+| Add stop | at the end | at the end | **+ Add stop** under the line, inserts before To |
+| Stop label "Stop N · Type · place" | on each row | number only | a small line under each row's place ("Stop 2 · Visit"), so the inferred type shows |
+| Google note, no-pin warning (with the place-page link on the site) | under the row | under the row | under the row, unchanged |
+| Same as start · Tick it | under the first pickup | same | unchanged (moves the row into From's People get in) |
+| Return to office | checkbox | toggle | "Then back to the office", one line under To, a switch, on by default |
+| No expressway | checkbox | toggle | kept, under the return line |
+| Leave by, Back by / Free by, the plan (1.5 s), Plan now | same page | When / Review | unchanged |
+| Drafts (`useFormDraft` banner; the app's kv draft and resume) | | | unchanged; an old draft opens without its empty rows |
+| Change stops (`/tasks/:id/stops`; the app's mode stops) | own page, start read-only | the same Where step | the same From / To layout (the site's From stays read-only there; the reached stops keep their numbers) |
+| Approval pages' stops (RequestDecide, TripDecide, ChangeDecide) | read-only rows | n/a | the same From → stops → To line, read-only (RequestDecide keeps its stay per stop) |
+
+Proposed removals: none.
+
 ## 37. Round 50: office people who drive themselves get the driver flow (29 October 2026, branch `phase9-r50` from main `9398b64`)
 
 Patterns: Uber's one account with a mode switch (rider ↔ driver); Samsara / Motive's driver capability on any user; Zipcar /
