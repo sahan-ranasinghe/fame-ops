@@ -76,8 +76,10 @@ async function fillAndSend() {
   const leave = screen.getByLabelText("Leave by", { exact: true });
   fireEvent.change(leave, { target: { value: "09:30" } });
   fireEvent.blur(leave);
+  // Fix B: the form opens with From and one To; + Add stop puts Stop 1 before To (two stops, as before).
+  fireEvent.click(screen.getByRole("button", { name: "Add stop" }));
   fireEvent.change(screen.getByLabelText("Stop 1", { exact: true }), { target: { value: "Head office" } });
-  fireEvent.change(screen.getByLabelText("Stop 2", { exact: true }), { target: { value: "Galle" } });
+  fireEvent.change(screen.getByLabelText("To", { exact: true }), { target: { value: "Galle" } });
   chooseDriver("kamal.p");
   await tick();
   fireEvent.change(screen.getByLabelText("Vehicle", { exact: true }), { target: { value: "WP CAB-4521" } });

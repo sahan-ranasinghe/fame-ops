@@ -5,6 +5,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./offline";
 import { linkPath } from "./links";
+import { twoStops } from "./route";
 
 const MCP = (process.env.OFFICE_MCP_URL || "http://127.0.0.1:54321/functions/v1/office-mcp").replace(/\/$/, "");
 const KEY = process.env.OFFICE_MCP_KEY || "";
@@ -58,7 +59,7 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   // Round 4–7 (7): Timeline and Asks follow the Drivers board.
   await expect(more.getByRole("link")).toHaveText(["Task history", "My trips", /^Issues\d*$/, "Drivers board", "Timeline", "Asks", "Vehicles", "Drivers", "Places", "Maintenance", "Mileage", "Fuel", "Duty log", "Projects"]);
 
-  // The big action opens its page; Assign a task is a page of its own, its stops rows numbered within their type.
+  // The big action opens its page; Assign a task is a page of its own, its stops on the route card (Fix B: From / To / Add stop).
   await tabs(page).filter({ hasText: "Home" }).click();
   await expect(big).toBeVisible();
   const toRequests = /^Requests to approve/.test((await big.textContent()) ?? "");
@@ -72,23 +73,34 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   await expect(page).toHaveURL(/\/tasks\/new$/);
   await expect(page.getByRole("heading", { name: "Assign a task" })).toBeVisible();
   const rows = page.getByTestId("stop-row");
+  // Fix B (29 October 2026): a new trip is From (the start) and one To; the rows are named by their place in the order
+  // (Phase 7, §11), the type following the row's place: To is the drop-off, a row added before it a visit.
+  await expect(page.getByLabel("From", { exact: true })).toBeVisible();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.nth(0)).toContainText("Stop 1 · Drop");
+  await page.getByRole("button", { name: "Add stop" }).click();
   await expect(rows).toHaveCount(2);
-  // Stops are named by their place in the order (Phase 7, §11): "Stop 2 · Drop · …".
-  await expect(rows.nth(0)).toContainText("Stop 1 · Pickup");
+  await expect(rows.nth(0)).toContainText("Stop 1 · Visit");
   await expect(rows.nth(1)).toContainText("Stop 2 · Drop");
   await page.getByRole("button", { name: "Add stop" }).click();
   await expect(rows.nth(2)).toContainText("Stop 3 · Drop");
-  // Changing one row's type never changes another's.
-  await rows.nth(1).getByLabel("Stop 2: type").selectOption("visit");
+  // Changing one row's type (its ⋯ Options, a bottom sheet on a phone) never changes another's.
+  await rows.nth(0).getByRole("button", { name: "Options for Stop 1" }).click();
+  const options = page.getByTestId("stop-options");
+  await options.getByRole("button", { name: "People get in" }).click();
+  // Every row's options have its stay (21 October 2026: the Stay field, Google Calendar's duration) and its own arrive-by.
+  await expect(options.getByTestId("dwell-picker").getByText("Stay", { exact: true })).toBeVisible();
+  await expect(options.getByLabel("Arrive by")).toBeVisible();
+  await options.getByRole("button", { name: "Done" }).click();
+  await expect(options).toHaveCount(0);
   await expect(rows.nth(0)).toContainText("Stop 1 · Pickup");
   await expect(rows.nth(1)).toContainText("Stop 2 · Visit");
   await expect(rows.nth(2)).toContainText("Stop 3 · Drop");
-  // Every row shows its stay (21 October 2026: the Stay field, Google Calendar's duration).
-  await expect(rows.nth(1).getByTestId("dwell-picker").getByText("Stay", { exact: true })).toBeVisible();
-  // Every row has its own arrive-by field.
-  await expect(rows.nth(2).getByLabel("Arrive by")).toBeVisible();
-  // The plan says what is missing, in words that say what to do.
+  // ✕ takes the empty row out; the plan says what is missing, in words that say what to do.
+  await page.getByRole("button", { name: "Remove Stop 2" }).click();
+  await expect(rows).toHaveCount(2);
   await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await page.getByLabel("To", { exact: true }).fill("Galle");
   await expect(page.getByTestId("plan-reasons")).toContainText("Add a leave-by time, or an arrive-by time on a stop");
   // The primary button is sticky above the tab bar (its box sits within the viewport while the page scrolls).
   const save = page.getByRole("button", { name: "Assign & send" });
@@ -166,8 +178,7 @@ test("a requester on a phone: four tabs, New request as the big action, the requ
   await page.getByTestId("time-type-minute").fill("00");
   await page.getByTestId("time-sheet").getByRole("button", { name: "Done" }).click();
   await expect(page.getByTestId("time-sheet")).toHaveCount(0);
-  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
-  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+  await twoStops(page, "Head office", "Galle");
   await page.getByRole("button", { name: "Save request" }).click();
   await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
   await expect(page).toHaveURL(/\/requests$/);

@@ -1,9 +1,9 @@
 // The trip editor (Phase 7, §34): the trip part of Assign a task as one piece
 // for Assign a task, New request and Change the request. The leave-by time with
 // its departure check (typed, or the plan's as a grey suggestion; checked at once
-// against the arrive-by times and the back-by time, §17, §20), Start from with
-// "Passengers get in here" and Tick it, the stops (type, what, place, arrive-by,
-// the time at each stop), Return to office and No expressway, the back-by time
+// against the arrive-by times and the back-by time, §17, §20), the route card
+// (Fix B: From with its ⋯ Options and Tick it, the stops with theirs, To, + Add
+// stop, Then back to the office and No expressway), the back-by time
 // ("Vehicle free by" on a task), and the plan as a timeline with the time at
 // each stop beside its map (Google's road line under the google package). The
 // plan is plan_task, 1.5 s after the last edit (no Plan now); the
@@ -23,6 +23,7 @@ import { StopsRows } from "./StopsEditor";
 import { dwellText, tickStart } from "./stopsLogic";
 import { type Base, type TripFields, tripOffset } from "./tripLogic";
 import { TripDayPicker } from "../ui/DayPicker";
+import { SwitchLine } from "../ui/basics";
 
 export interface Trip {
   f: TripFields;
@@ -145,22 +146,25 @@ export function BackByField({ trip, id, label = "Back by" }: { trip: Trip; id: s
   );
 }
 
-/** Start from, the stops, Return to office and No expressway (the inside of a card). `prefix` names the fields' ids. */
+/**
+ * The route card (Fix B, 29 October 2026: From / To / Add stop, Uber's and Google Maps' route form): From (the start with
+ * its ⋯ Options), the stops and To on one line, + Add stop, then "Then back to the office" (a switch, on for a new trip)
+ * and No expressway. `prefix` names the fields' ids.
+ */
 export function TripRoute({ trip, prefix }: { trip: Trip; prefix: string }) {
   const { f, update, base, preview, check, lateKey } = trip;
   return (
-    <>
-      <StartFrom id={`${prefix}-start`} value={f} base={base} stay={trip.stay} onChange={(patch) => update((x) => ({ ...x, ...patch }))} />
-      <span className="lab">Stops</span>
-      <StopsRows list={f.stops} onChange={(stops) => update((x) => ({ ...x, stops }))} offset={trip.offset}
-        fallbacks={trip.suggestions ? dwellFallbacks(f.stops, preview?.stops, trip.dwellSetting) : undefined}
-        start={startPoint(f, base)} startIsStop={f.startPax} onTickStart={trip.onTickStart}
-        note={(s) => (s.key === lateKey ? <DepartureNote check={check} onUse={trip.setLeave} onMove={trip.moveArriveBy} testId="departure-check-stop" /> : null)} />
-      <div className="grid2">
-        <span className="check"><input type="checkbox" id={`${prefix}-return`} checked={f.returnToBase} onChange={(e) => update((x) => ({ ...x, returnToBase: e.target.checked }))} /> <label htmlFor={`${prefix}-return`}>Return to office</label></span>
-        <span className="check"><input type="checkbox" id={`${prefix}-noexp`} checked={f.avoidExpressway} onChange={(e) => update((x) => ({ ...x, avoidExpressway: e.target.checked }))} /> <label htmlFor={`${prefix}-noexp`}>No expressway</label></span>
-      </div>
-    </>
+    <StopsRows list={f.stops} onChange={(stops) => update((x) => ({ ...x, stops }))} offset={trip.offset}
+      fallbacks={trip.suggestions ? dwellFallbacks(f.stops, preview?.stops, trip.dwellSetting) : undefined}
+      start={startPoint(f, base)} startIsStop={f.startPax} onTickStart={trip.onTickStart}
+      note={(s) => (s.key === lateKey ? <DepartureNote check={check} onUse={trip.setLeave} onMove={trip.moveArriveBy} testId="departure-check-stop" /> : null)}
+      from={<StartFrom id={`${prefix}-start`} value={f} base={base} stay={trip.stay} onChange={(patch) => update((x) => ({ ...x, ...patch }))} />}
+      after={(
+        <>
+          <SwitchLine title="Then back to the office" on={f.returnToBase} onChange={(on) => update((x) => ({ ...x, returnToBase: on }))} testId="return-to-base" />
+          <span className="check"><input type="checkbox" id={`${prefix}-noexp`} checked={f.avoidExpressway} onChange={(e) => update((x) => ({ ...x, avoidExpressway: e.target.checked }))} /> <label htmlFor={`${prefix}-noexp`}>No expressway</label></span>
+        </>
+      )} />
   );
 }
 

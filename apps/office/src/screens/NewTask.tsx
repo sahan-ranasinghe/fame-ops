@@ -1,7 +1,8 @@
-// Assign a task, as a page (/tasks/new): Start from (the base place by
-// default, "Passengers get in here" makes it Stop 1), the stops as rows (type,
-// place, arrive-by and the time at each stop; named by their place in the
-// order), Return to office and No expressway, the date and the leave-by time
+// Assign a task, as a page (/tasks/new): the route card (Fix B, 29 October
+// 2026: From / To / Add stop; From is the base place by default and People get
+// in under its ⋯ Options makes it Stop 1; each stop's ⋯ Options hold what
+// happens there, the stay, the arrive-by, what, pin and note), Then back to the
+// office and No expressway, the date and the leave-by time
 // (typed, or the plan's as a grey suggestion, checked at once against the arrive-by
 // times), the plan as a timeline with the exact reason when there is none
 // (1.5 s after the last edit) and the overlaps as cards, then the
@@ -41,7 +42,7 @@ import { availabilityArgs, driverVehicle, floorTo5, planEndOf, vehicleWindowWord
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
 import { basePlace, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
-import { defaultStops, firstStopOf } from "./stopsLogic";
+import { defaultStops, firstStopOf, openStops, tidyStops } from "./stopsLogic";
 import { BackByField, LeaveByField, TripPlanCard, TripRoute, useTrip } from "./TripEditor";
 import { isChoice, knownDef, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 import { TripDayPicker } from "../ui/DayPicker";
@@ -67,10 +68,11 @@ export function NewTask() {
   const date = isDate(params.get("date")) ? params.get("date")! : today();
   // Part 3b (H3): Assign on a driver's Yes opens this page with ?driver= and the trip's ?time= (the fresh form takes
   // them; a draft is still offered and, resumed, wins).
+  // Fix B: a draft put back opens without its empty rows (openStops).
   const [state, setState, draft] = useFormDraft<Form>("task-new", null, () => ({
     f: { ...emptyAssign(date), driver: linkedDriver(params), leaveBy: linkedTime(params) },
     rows: [],
-  }));
+  }), true, (x) => ({ ...x, f: { ...x.f, stops: openStops(x.f.stops) } }));
   const { f, rows } = state;
   const setF = (patch: Partial<AssignFields> | ((x: AssignFields) => AssignFields)) =>
     setState((s) => ({ ...s, f: typeof patch === "function" ? patch(s.f) : { ...s.f, ...patch } }));
@@ -146,8 +148,11 @@ export function NewTask() {
     ev.preventDefault();
     // The driver's vehicle: known (Who's available, else the driver list), known to be none, or not known yet (the server decides).
     const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
+    // Fix B: the rows with no place go once To has one (tidyStops); the form shows what is sent.
+    const stops = tidyStops(f.stops);
+    if (stops !== f.stops) setF((x) => ({ ...x, stops }));
     // "on the day" is named when it is the default (Hotfix 2, J): never held up for a vehicle.
-    const v = validateAssign({ ...f, who, vehicle: noApp ? f.vehicle : vehicleArg(f.vehicle, dflt), ...(riding ? {} : { riders: undefined }) }, rows, me.name, { defaultVehicle: known, base });
+    const v = validateAssign({ ...f, stops, who, vehicle: noApp ? f.vehicle : vehicleArg(f.vehicle, dflt), ...(riding ? {} : { riders: undefined }) }, rows, me.name, { defaultVehicle: known, base });
     if ("error" in v) {
       setMsg({ tone: "bad", text: v.error });
       return;

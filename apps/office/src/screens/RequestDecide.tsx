@@ -52,6 +52,7 @@ import { RequestDetailCard } from "./RequestDetailCard";
 import { useRequest } from "./RequestDetail";
 import { decisionInput, dwellChanges, redecideInput } from "./requestLogic";
 import { DecideBanner, RequestStatusPill, VehicleGroups, VehicleOption } from "./requestParts";
+import { RouteLine } from "./StopsEditor";
 import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
 import { TripDecide } from "./TripDecide";
 import { ChangeDecide } from "./ChangeDecide";
@@ -414,15 +415,11 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
         {!custodianDrives && !noAppDrives && <AvailabilityPanel args={availArgs} askFor={{ request: id }} picked={driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />}
         <div className="card card-b form" data-testid="decide-stops">
           <div className="section-t" style={{ marginBottom: 2 }}>Stops</div>
-          <p className="muted small" style={{ margin: 0 }}>Start from {base ? base.name : "the base place"} (the base place). Passengers get in at Stop 1.</p>
-          <div className="stop-card" data-testid="stop-row">
-            <b data-testid="stop-label">Stop 1 · Pickup · {rows[0].place}</b>
-            <DwellPicker id="rq-from-dwell" value={fromDwell} onChange={(v) => set("fromDwell", v)} fallback={fallbacks.get("from") ?? null} />
-          </div>
-          <div className="stop-card" data-testid="stop-row">
-            <b data-testid="stop-label">Stop 2 · Drop · {rows[1].place}</b>
-            <DwellPicker id="rq-to-dwell" value={toDwell} onChange={(v) => set("toDwell", v)} fallback={fallbacks.get("to") ?? null} />
-          </div>
+          {/* Fix B (29 October 2026): the same From → stops → To line as the forms, read only; each stop keeps its stay here. */}
+          <RouteLine from={`${base ? base.name : "The base place"} (the base place)`} rowTestId="stop-row" stops={[
+            { key: "from", label: `Stop 1 · Pickup · ${rows[0].place}`, extra: <><span className="route-cap">Passengers get in at Stop 1.</span><DwellPicker id="rq-from-dwell" value={fromDwell} onChange={(v) => set("fromDwell", v)} fallback={fallbacks.get("from") ?? null} /></> },
+            { key: "to", label: `Stop 2 · Drop · ${rows[1].place}`, extra: <DwellPicker id="rq-to-dwell" value={toDwell} onChange={(v) => set("toDwell", v)} fallback={fallbacks.get("to") ?? null} /> },
+          ]} />
           {(f.fromDwell !== undefined || f.toDwell !== undefined) && dwellChanges({ fromDwell, toDwell }, fields) && (
             <p className="hint" style={{ margin: 0 }}>The new times are saved on the request when you approve.</p>
           )}

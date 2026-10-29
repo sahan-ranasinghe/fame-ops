@@ -2,8 +2,8 @@
 // behalf of" names the person it is for when that is someone else (Phase 6).
 // The trip is the trip editor of Assign a task, for everyone (Phase 7, §34):
 // the day, the leave-by time (typed, or planned from the stops' arrive-by
-// times), back by, Start from with "Passengers get in here", the stops with
-// their times there, and the plan with its map. Requesters never see a driver,
+// times), back by, the route card (Fix B: From / To / Add stop, each row's
+// ⋯ Options), and the plan with its map. Requesters never see a driver,
 // a vehicle or who is available. For someone who books, the "Assign now"
 // section: the driver first and the vehicle they bring (or one picked from the
 // free vehicles for that day and time in four groups), who's available with
@@ -40,7 +40,7 @@ import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPa
 import { basePlace, useFleetSettings, VehicleChoiceRadios, vehicleOnTheDay } from "./dispatchParts";
 import { bookInput, emptyRequest, suggestInput, type RequestFields, validateNewRequest, whoOf, withPlannedEnd } from "./requestLogic";
 import { type AgainState, VehicleGroups } from "./requestParts";
-import { firstStopOf } from "./stopsLogic";
+import { firstStopOf, openStops, tidyStops } from "./stopsLogic";
 import { TripEditor, useTrip } from "./TripEditor";
 import { tripPlanInput } from "./tripLogic";
 import { isChoice, knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
@@ -69,7 +69,9 @@ export function NewRequest() {
   // Phase 7 (§4): an approver may give the phone of a requester without an account (Tell requester).
   const approver = can(me, "approve");
   // The draft's key changed with the trip (§34): an older draft (From and To) is not offered.
-  const [f, setF, draft] = useFormDraft<Form>("request-trip-new", null, () => ({ ...(again ?? emptyRequest(today())), vehicle: "", pickedDriver: "" }));
+  // Fix B: a draft put back opens without its empty rows (openStops).
+  const [f, setF, draft] = useFormDraft<Form>("request-trip-new", null, () => ({ ...(again ?? emptyRequest(today())), vehicle: "", pickedDriver: "" }), true,
+    (x) => ({ ...x, stops: openStops(x.stops) }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [booked, setBooked] = useState<Booked | null>(null);
@@ -117,9 +119,16 @@ export function NewRequest() {
   const pickDriver = (username: string) => setF((x) => ({ ...x, pickedDriver: username }));
   const takeSuggestion = (username: string) => setF((x) => ({ ...x, pickedDriver: username, vehicle: "" }));
 
+  /** Fix B: on Send and Book now the rows with no place go once To has one (tidyStops); the form shows what is sent. */
+  function tidied(): Form {
+    const stops = tidyStops(fields.stops);
+    if (stops !== f.stops) setF((x) => ({ ...x, stops }));
+    return { ...fields, stops };
+  }
+
   async function submit(ev: FormEvent) {
     ev.preventDefault();
-    const v = validateNewRequest(fields, base);
+    const v = validateNewRequest(tidied(), base);
     if ("error" in v) {
       setErr(v.error);
       return;
@@ -140,7 +149,7 @@ export function NewRequest() {
 
   async function book() {
     const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
-    const v = bookInput(fields, { vehicle: noApp ? vehicle : vehicleArg(f.vehicle, dflt), driver: noApp ? "" : f.pickedDriver, defaultVehicle: known }, base);
+    const v = bookInput(tidied(), { vehicle: noApp ? vehicle : vehicleArg(f.vehicle, dflt), driver: noApp ? "" : f.pickedDriver, defaultVehicle: known }, base);
     if ("error" in v) {
       setErr(v.error);
       return;
