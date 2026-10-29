@@ -978,6 +978,16 @@ Patterns: Uber's one account with a mode switch (rider ↔ driver); Samsara / Mo
 Turo's trip flow for whoever drives. Runtime 1.4.0-gmaps (the app part is JavaScript only). Two read-only audits first (the
 server's driver paths, the app's driver screens and mode decisions): their tables are §37.8 and §37.9.
 
+**Deployed 29 October 2026 (Sahan's chained go after Checkpoint 50; decisions: automatic Can drive, but the backfill skips
+switched-off accounts; the wording as built; the narrower driver-api).** The migration `20261030100000_round50_self_drive`
+(the dry run listed only it); the functions one at a time after a first `functions deploy` of all six timed out on Supabase's
+API with nothing changed (status page: no incident): office-api v43, then office-mcp v47 with `--use-api` (two plain uploads
+of its 2.9 MB bundle failed with TransportError; `--use-api` bundles on Supabase's side), driver-api v15, read-odometer v10,
+push-task v14, fleet-jobs v24, all with `--use-api`; `list_office_users` through the connector then answered `can_drive` (the
+backfill gave it to the active requester, not to the switched-off R49 test account). The site with /m/ (59d5b71e; the scan found
+nothing, every /m/ file served as itself). The EAS update "Driving mode for self-drivers" (runtime 1.4.0-gmaps): its ID is in
+the next round's notes.
+
 ### 37.1 The model (the contract for the server and the three clients)
 
 - **`employees.can_drive`** (boolean, null = never decided). true = the capability; false = an admin took it away. Granted
