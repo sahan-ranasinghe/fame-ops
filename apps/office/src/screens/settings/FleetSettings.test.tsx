@@ -86,6 +86,16 @@ describe("FleetSettings", () => {
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
+  it("Round 50: Driving mode for office people sits with the bookings (on by default), saved at once", async () => {
+    const transport = new Settings();
+    await mount(transport, "tasks");
+    const box = within(screen.getByTestId("self-drive-mode")).getByRole<HTMLInputElement>("checkbox");
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    await waitFor(() => expect(transport.saves).toEqual([{ key: "self_drive_mode", value: false }]));
+    await waitFor(() => expect(within(screen.getByTestId("self-drive-mode")).getByRole<HTMLInputElement>("checkbox").checked).toBe(false));
+  });
+
   it("a section's page has only its own cards", async () => {
     await mount(new Settings(), "office");
     expect(screen.getByTestId("office-phone-settings")).toBeTruthy();

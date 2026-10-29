@@ -252,11 +252,17 @@ export default function GoogleMap({
     routeParts.current.lines.forEach((l) => l.setMap(null));
     routeParts.current.marks.forEach((x) => x.setMap(null));
     routeParts.current = { lines: [], marks: [] };
+    // Round 50 (§37.5): a web trip's actions joined by straight dashed lines in ink (no live route; never a GPS line).
+    const webPoints = route?.web?.points ?? [];
+    const webLine = webPoints.length > 1 ? [dashed(maps, m, webPoints, canvas.ink, 3, 2, "12px")] : [];
     if (!route || !route.points.length) {
-      fittedRoute.current = "";
+      routeParts.current = { lines: webLine, marks: [] };
+      const webKey = webPoints.length ? `web:${webPoints[0].lat},${webPoints[0].lng}` : "";
+      if (webKey && fittedRoute.current !== webKey) fitTo(m, maps, webPoints);
+      fittedRoute.current = webKey;
       return;
     }
-    const lines: google.maps.Polyline[] = [];
+    const lines: google.maps.Polyline[] = [...webLine];
     const marks: HtmlMarker[] = [];
     for (const r of runs(route.points, !!route.bySpeed, speedColors(scheme))) {
       lines.push(new maps.Polyline({ map: m, path: r.path, strokeColor: r.color, strokeWeight: r.poor ? 2.5 : 5, strokeOpacity: r.poor ? 0.45 : 0.9, clickable: false }));
@@ -284,7 +290,7 @@ export default function GoogleMap({
     }
     // Not on `route` itself: during playback only the cursor changes every frame (the line's arrays stay the same).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route?.points, route?.holes, route?.estimated, route?.stops, route?.bySpeed, maps]);
+  }, [route?.points, route?.holes, route?.estimated, route?.web, route?.stops, route?.bySpeed, maps]);
 
   // The playback marker: hollow while it crosses a gap, turned to the path (§22).
   useEffect(() => {

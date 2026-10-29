@@ -64,6 +64,9 @@ function SwatchMark({ kind }: { kind: Swatch }) {
       return <i className="dashed" />;
     case "estimated":
       return <i style={{ background: `repeating-linear-gradient(90deg, ${estimatedColor(scheme)} 0 3px, transparent 3px 8px)` }} />;
+    case "web":
+      // Round 50: a web trip's straight line, dashed ink (no live route).
+      return <i style={{ background: "repeating-linear-gradient(90deg, var(--ink) 0 5px, transparent 5px 9px)" }} />;
     case "dot":
       // A stop is a small dot on the map (Round 48): the legend draws the same dot (the pin's icon was its look before).
       return <i className="dot" />;
@@ -90,7 +93,7 @@ export function RouteLegend({ route, snap, onSnap, busy, events, extra }: {
   return (
     <div className="legend compact" aria-label="Legend" data-testid="route-legend">
       {legendItems(route).map((it) => (
-        <span key={it.key} data-testid={it.key === "dot" ? "legend-stop" : it.key === "estimated" ? "legend-estimated" : undefined}><SwatchMark kind={it.key} />{it.text}</span>
+        <span key={it.key} data-testid={it.key === "dot" ? "legend-stop" : it.key === "estimated" ? "legend-estimated" : it.key === "web" ? "legend-web" : undefined}><SwatchMark kind={it.key} />{it.text}</span>
       ))}
       {credits.map((c) => <span key={c} className="credit" data-testid="estimated-legend">{c}</span>)}
       {(snapUi.toggle || snapUi.note) && (

@@ -38,13 +38,15 @@ import {
   onMap,
   positionOf,
   recordedAtOf,
-  statusLine,
+  liveStatusText,
+  liveToneOf,
   statusTone,
 } from "../data/live";
 import { megabytes } from "./fuelLogic";
 import { moveMode } from "./moveLogic";
 import { insertPoint, mapRouteOf, mergeRoute, type Route, routeOf, trailOf } from "../data/route";
 import { useWatchDrivers } from "../data/watchDrivers";
+import { SELF_DRIVE, webTripSeen } from "../data/webTrip";
 import type { DriverRoute, LiveDriver } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { joinDots, num, plateOf } from "../lib/format";
@@ -206,7 +208,9 @@ export function Live() {
     const pos = onMap(x) ? positionOf(x) : null;
     if (!pos) return [];
     const at = recordedAtOf(x);
-    return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, sub: x.last_position_time ? `position ${x.last_position_time}` : undefined, title: x.driver, lat: pos.lat, lng: pos.lng, tone: statusTone(x.status, x.state), selected: x.username === sel?.username, heading: x.heading ?? null, at: at ? Date.parse(at) : null }];
+    // Round 50 (§37.3): a web trip is never Live: amber, with the last action's time under the plate.
+    const web = webTripSeen(x);
+    return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, sub: web ? (x.last_seen?.at ? `web trip · ${x.last_seen.at}` : "web trip") : x.last_position_time ? `position ${x.last_position_time}` : undefined, title: x.driver, lat: pos.lat, lng: pos.lng, tone: web ? "warn" : statusTone(x.status, x.state), selected: x.username === sel?.username, heading: x.heading ?? null, at: at ? Date.parse(at) : null }];
   }), [all, sel?.username]);
   const shownRoute = route && route.username === sel?.username ? route : null;
   const mapRoute = useMemo<MapRoute | null>(() => mapRouteOf(shownRoute, null, shownSnap), [shownRoute, shownSnap]);
@@ -269,7 +273,7 @@ export function Live() {
                 <span className={`dot ${liveTone(x)}`} />
                 <Avatar name={x.driver} src={x.photo_url} small />
                 <span className="grow">
-                  <span className="name">{x.driver}</span>
+                  <span className="name">{x.driver}{x.self_drive && <> <span className="pill muted" data-testid="self-drive">{SELF_DRIVE}</span></>}</span>
                   <span className="duty-lines">
                     <DutyChip x={x} />
                     {/* Round 3: the vehicle as a chip under the name (the plate held since HH:MM, else none yet). */}
@@ -281,7 +285,7 @@ export function Live() {
                   {x.app_stops_text && <span className="small" style={{ display: "block" }}><span className="app-stops">{x.app_stops_text}</span>{x.phone && <span className="muted"> · {x.phone}</span>}</span>}
                   <Presence x={x} />
                 </span>
-                {working && <span className={`age status ${liveTone(x)}`}>{statusLine(x).replace(/^Live · /, "")}</span>}
+                {working && <span className={`age status ${liveToneOf(x)}`} data-testid="live-status">{liveStatusText(x).replace(/^Live · /, "")}</span>}
               </button>
             );
           }) : <Empty>{all.length ? "Nobody in this group right now." : "No active driver yet."}</Empty>)}
@@ -377,10 +381,10 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded
       <div className="row" style={{ padding: 0 }}>
         <Avatar name={x.driver} src={x.photo_url} large />
         <div className="grow">
-          <div className="name" style={{ fontSize: 20 }}>{routes ? <Link to={`/drivers/${x.username}`}>{x.driver}</Link> : x.driver}</div>
+          <div className="name" style={{ fontSize: 20 }}>{routes ? <Link to={`/drivers/${x.username}`}>{x.driver}</Link> : x.driver}{x.self_drive && <> <span className="pill muted" data-testid="self-drive">{SELF_DRIVE}</span></>}</div>
           <div className="sub">{x.vehicle && <VehicleThumb src={x.vehicle_thumb_url} />}{joinDots([x.vehicle && (x.vehicle_since ? `${x.vehicle} · since ${x.vehicle_since}` : x.vehicle), x.task, x.going_to && "to " + x.going_to])}</div>
         </div>
-        {working && <Pill tone={liveTone(x)}>{statusLine(x)}</Pill>}
+        {working && <Pill tone={liveToneOf(x)}>{liveStatusText(x)}</Pill>}
       </div>
       <div className="duty-lines" style={{ marginTop: 12 }}>
         <DutyChip x={x} />

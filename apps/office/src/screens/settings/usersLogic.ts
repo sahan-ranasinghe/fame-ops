@@ -83,3 +83,17 @@ export function updateInput(
   if (Object.keys(input).length === 1) return { nothing: true };
   return { input };
 }
+
+/**
+ * Round 50 (§37.1): the line under "Can drive (self-drive trips in the app)": on (Driving mode, location only during the
+ * trip), taken away (My trip's check and odometer, no tracking), or never decided (switched on by itself when a self-drive
+ * trip is made for them); with the setting self_drive_mode off, that it is off for everyone.
+ */
+export function canDriveHint(u: { name: string; can_drive?: boolean }, selfDriveMode?: boolean): string {
+  const line = u.can_drive === true
+    ? `${u.name} drives their own trips with the driver screens, sharing location only during the trip.`
+    : u.can_drive === false
+      ? `${u.name}'s own trips use My trip's vehicle check and odometer, with no tracking.`
+      : `Not decided yet: it is switched on when a self-drive trip is made for ${u.name}.`;
+  return selfDriveMode === false ? `${line} Driving mode is off for everyone (Settings → Fleet → Tasks and bookings).` : line;
+}

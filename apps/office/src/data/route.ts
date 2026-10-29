@@ -12,7 +12,8 @@ import { distanceM } from "@fleet/track";
 import { joinDots } from "../lib/format";
 import type { MapRoute, RoutePoint as MapPoint } from "../map/types";
 import type { PointRow } from "./realtime";
-import type { DriverRoute, GapKind, SegmentKind } from "./types";
+import type { DriverRoute, GapKind, SegmentKind, WebPoint } from "./types";
+import { WEB_LINE_TEXT, webLinePoints, webPointsInOrder } from "./webTrip";
 import { duration } from "@fleet/durations";
 
 export { positionAt, speedClass };
@@ -70,6 +71,8 @@ export interface LateView {
 export interface Route {
   username: string;
   date: string;
+  /** Round 50 (§37.5): a trip driven on the web: its actions' positions in time order (no GPS line; never km). */
+  web?: WebPoint[];
   km?: number;
   /** Points recorded (raw). */
   count: number;
@@ -143,6 +146,7 @@ export function routeOf(username: string, p: DriverRoute): Route {
     stops, gaps: p.gaps ?? [], holes, late, lineEndAt: points.length ? points[points.length - 1].at : null, timeline,
     drivingMinutes: p.driving_minutes, stoppedMinutes: p.stopped_minutes, stopsCount: p.stops_count,
     note: p.note, task: p.task, window: p.window,
+    ...(p.web_points?.length ? { web: webPointsInOrder(p.web_points) } : {}),
   };
 }
 
@@ -269,7 +273,11 @@ export type Cursor = NonNullable<MapRoute["cursor"]>;
  * into it, so the line's arrays stay the same objects frame after frame.
  */
 export function mapRouteOf(route: Route | null, cursor?: Cursor | null, snap = false): MapRoute | null {
-  if (!route || !route.points.length) return null;
+  // Round 50 (§37.5): a web trip's actions joined by ONE straight dashed line (Google Maps' straight line where no route
+  // is known), labelled "No live route · web trip"; a day with only a web trip is that line alone.
+  const webLine = webLinePoints(route?.web);
+  const web = webLine.length ? { points: webLine, label: WEB_LINE_TEXT } : null;
+  if (!route || !route.points.length) return web ? { points: [], web, cursor: null } : null;
   const line = drawnLine(route, snap);
   // A gap with an estimated road line (Part 5b) is drawn dashed along the road: its straight step and its straight hole go.
   const est = route.estimated ?? [];
@@ -286,6 +294,7 @@ export function mapRouteOf(route: Route | null, cursor?: Cursor | null, snap = f
       const hole = holeLabel.get(`${e.fromAt}|${e.toAt}`);
       return { points: e.points, label: [hole, `estimated${e.km != null ? ` · ${e.km} km road` : ""}`].filter(Boolean).join(" · ") };
     }),
+    web,
     cursor: cursor ?? null,
   };
 }

@@ -52,7 +52,7 @@ export function daySummary(route: Route | null): DaySummary | null {
  * state main's timeline had). A day kept as a summary only (older than the points) is not empty: its numbers are shown.
  */
 export function dayIsEmpty(route: Route | null): boolean {
-  return !!route && route.count === 0 && route.points.length === 0 && route.km == null && !route.first;
+  return !!route && route.count === 0 && route.points.length === 0 && route.km == null && !route.first && !route.web?.length;
 }
 
 /** A stop's card (Google Maps' visit): "Stopped near Kurunegala · 06:56–07:15 · 19 min"; with no town, "Stopped · …". */

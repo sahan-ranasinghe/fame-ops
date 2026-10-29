@@ -16,7 +16,7 @@ import { DraftBanner } from "../../ui/DraftBanner";
 import { PageTop, useAfterSave } from "../../ui/Page";
 import { useToast } from "../../ui/Toast";
 import { PermissionChips, PermissionPicker, Secret } from "./userParts";
-import { updateInput, type UserFields } from "./usersLogic";
+import { canDriveHint, updateInput, type UserFields } from "./usersLogic";
 import { whenText } from "../../lib/when";
 
 export function UserManage() {
@@ -60,6 +60,14 @@ export function UserManage() {
     await run(async () => {
       const r = await transport.call<UpdateOfficeUserResult>("update_office_user", { email, driver_contact: on });
       setU({ ...u!, driver_contact: r.updated.driver_contact === true });
+    });
+  }
+
+  // Round 50 (§37.1): Can drive (self-drive trips in the app), the users permission; a switch, saved at once.
+  async function setCanDrive(on: boolean) {
+    await run(async () => {
+      await transport.call<UpdateOfficeUserResult>("update_office_user", { email, can_drive: on });
+      setU({ ...u!, can_drive: on });
     });
   }
 
@@ -187,6 +195,17 @@ export function UserManage() {
                     ? `Drivers see ${u.name} on the app's Me with Call and WhatsApp, as ${normalisePermissions(u.permissions).includes("approve") ? "Fleet admin" : "Office"}.`
                     : "Add a mobile number first."}
                 </span>
+              </span>
+            </label>
+          </div>
+        )}
+        {me.tools.includes("update_office_user") && u.active && (
+          <div className="card card-b" style={{ display: "grid", gap: 8 }} data-testid="can-drive-card">
+            <label className="row" style={{ padding: 0, cursor: "pointer" }}>
+              <input type="checkbox" role="switch" checked={u.can_drive === true} disabled={busy} onChange={(e) => void setCanDrive(e.target.checked)} data-testid="can-drive" />
+              <span className="grow">
+                <span className="name">Can drive (self-drive trips in the app)</span>
+                <span className="sub" style={{ display: "block" }}>{canDriveHint(u, me.self_drive_mode)}</span>
               </span>
             </label>
           </div>

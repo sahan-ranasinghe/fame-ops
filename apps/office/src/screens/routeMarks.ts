@@ -8,6 +8,7 @@ import { drawnLine, type Route } from "../data/route";
 import type { GapMarker } from "../map/types";
 import { stopPins } from "./dayLogic";
 import { gapMarkers, gapsOf, type GapRow } from "./gapsLogic";
+import { webMarkText, webPointsInOrder } from "../data/webTrip";
 
 /** "08:01" from a point's time in ms. */
 const clock = (at: number) => colomboClock(new Date(at).toISOString());
@@ -37,7 +38,15 @@ export interface RouteMarks {
 /** All of a route's marks for a page. */
 export function routeMarks(route: Route | null, snap = false, latest = false): RouteMarks {
   const rows = gapsOf(route, snap);
-  return { rows, all: [...endPins(route, snap, latest), ...stopPins(route), ...gapMarkers(rows)] };
+  return { rows, all: [...endPins(route, snap, latest), ...stopPins(route), ...webMarks(route), ...gapMarkers(rows)] };
+}
+
+/**
+ * Round 50 (§37.5): a web trip's actions as dots with their words ("Started · 08:12", "Arrived · Kurunegala site ·
+ * 10:42"), the same card, hover and tap as a stop's.
+ */
+export function webMarks(route: Route | null): GapMarker[] {
+  return webPointsInOrder(route?.web).map((p, i) => ({ id: `web:${i}`, kind: "stop", lat: p.lat, lng: p.lng, text: webMarkText(p) }));
 }
 
 /** What a tap on a mark zooms the map to: a gap's own positions (its row's focus), a pin's or a stop's one point. */

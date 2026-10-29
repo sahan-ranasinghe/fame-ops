@@ -6,8 +6,9 @@
 // estimated line); the map's own corner keeps Google's logo and terms, or "© OpenStreetMap contributors · OpenFreeMap".
 // Pure: RouteInfo.tsx draws these.
 import { ORS_CREDIT, type Route, snapControl } from "../data/route";
+import { WEB_LINE_NOTE, WEB_LINE_TEXT } from "../data/webTrip";
 
-export type Swatch = "stopped" | "slow" | "normal" | "fast" | "thin" | "dashed" | "estimated" | "dot" | "pin";
+export type Swatch = "stopped" | "slow" | "normal" | "fast" | "thin" | "dashed" | "estimated" | "web" | "dot" | "pin";
 
 export interface LegendItem {
   key: Swatch;
@@ -26,6 +27,8 @@ export function legendItems(route: Route | null): LegendItem[] {
     { key: "dot", text: "Stop" },
   ];
   if (route?.estimated?.length) out.push({ key: "estimated", text: "Estimated" });
+  // Round 50 (§37.5): a web trip's straight dashed line.
+  if (route?.web?.length) out.push({ key: "web", text: WEB_LINE_TEXT });
   return out;
 }
 
@@ -75,6 +78,7 @@ export function infoSections(route: Route | null, snap: boolean, opts: { map?: M
   if (est) gaps.push(est + ".");
   if (route?.estimatedNote) gaps.push(route.estimatedNote + ".");
   out.push({ title: "Gaps", lines: gaps });
+  if (route?.web?.length) out.push({ title: WEB_LINE_TEXT, lines: [WEB_LINE_NOTE] });
   const line: string[] = [];
   const snapUi = snapControl(route, snap);
   if (snapUi.note) line.push(snapUi.note + ".");

@@ -31,10 +31,12 @@ export function VehicleChip({ chip, testId = "vehicle-chip" }: { chip: VehicleCh
  * The driver card on one line: the photo (initials until there is one), the name, then the small word of a trip with no
  * app ("Drives themselves", "Someone else") or the status, and the vehicle chip. Spans only.
  */
-export function DriverLine({ name, photo, drivenBy, status, vehicle, extra, testId = "driver-line" }: {
+export function DriverLine({ name, photo, drivenBy, selfDrive = false, status, vehicle, extra, testId = "driver-line" }: {
   name?: string | null;
   photo?: string | null;
   drivenBy?: Exclude<DrivenBy, "driver">;
+  /** Round 50 (§37.3): a self trip driven with the app or on the web: "Self-drive" instead of "Drives themselves". */
+  selfDrive?: boolean;
   /** The status in a word when the place has one (On duty, On a task). */
   status?: ReactNode;
   vehicle?: VehicleChipWords | null;
@@ -42,7 +44,7 @@ export function DriverLine({ name, photo, drivenBy, status, vehicle, extra, test
   extra?: ReactNode;
   testId?: string;
 }) {
-  const word = drivenByWord(drivenBy);
+  const word = drivenByWord(drivenBy, selfDrive);
   return (
     <span className="dline" data-testid={testId}>
       <Avatar name={name} src={drivenBy === "other" ? undefined : photo} small />

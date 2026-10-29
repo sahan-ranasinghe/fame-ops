@@ -133,6 +133,11 @@ describe("the task page (Round 3: who drives, a missed task)", () => {
     expect(screen.getByTestId("driver-line").querySelector("[data-testid=driven-by]")?.textContent).toBe("Drives themselves");
   });
 
+  it("Round 50: a self trip driven with the app or on the web says Self-drive, not Drives themselves", async () => {
+    await mount({ ...base, task: { ...base.task, status: "in_progress", driven_by: "self", self_drive: true, driven_in: "web", driver: "Sahan Ranasinghe", status_line: "Drives themselves · no app" } }, dispatcher);
+    expect(screen.getByTestId("driver-line").querySelector("[data-testid=driven-by]")?.textContent).toBe("Self-drive");
+  });
+
   it("a missed task: the pill in red; its leave-by in its own row (the Status row that repeated the pill is gone)", async () => {
     await mount({ ...base, task: { ...base.task, status: "missed", status_line: "Missed · not started (leave by 08:00)", leave_by: "2026-10-16 08:00", leave_by_source: "plan" } }, approver);
     const pill = screen.getByText("Missed");

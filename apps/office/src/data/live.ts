@@ -5,6 +5,7 @@
 // rule) are kept for the published Teams artifact. Phase 7: every active
 // driver is listed with a duty (on a task, on duty, off duty); the signal
 // states only matter for drivers on duty.
+import { webTripSeen } from "./webTrip";
 import { colomboClock, colomboClockS, driverStatus, statusText } from "@fleet/status";
 import { hhmm, joinDots, latLng, type Tone } from "../lib/format";
 import type { DriverStatus, DutyState, LiveDriver, ShareState, Signal } from "./types";
@@ -196,6 +197,12 @@ export function dutyLine(d: Pick<LiveDriver, "duty" | "duty_text" | "duty_since"
 
 /** The dot and the pill of a card: the signal's colour while on duty, grey off duty (off duty is not a problem). */
 export const liveTone = (d: LiveDriver): Tone => (dutyOf(d) === "off_duty" ? "muted" : statusTone(d.status, d.state));
+
+/** Round 50 (§37.3): Live's status words for a card: a web trip's "Web trip · last seen at …", else the status line. */
+export const liveStatusText = (x: LiveDriver): string => webTripSeen(x) ?? statusLine(x);
+
+/** Round 50: Live's tone for a card: a web trip is never Live (grey), else as before. */
+export const liveToneOf = (x: LiveDriver): Tone => (x.web_trip ? "muted" : liveTone(x));
 
 /** No signal or Location off while on duty (the Problems chip). */
 export function hasProblem(d: LiveDriver): boolean {
