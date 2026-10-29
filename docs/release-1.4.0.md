@@ -129,6 +129,16 @@ The app and /m/ are light on purpose for now (a proper dark theme is a later ite
   runtime's last update until they install 1.4.0; updates published after the build target 1.4.0 only (as at 1.3.0).
 - **Store:** the `store` profile (.aab) is built from the same commit only when Sahan asks for a store release.
 
+## Built
+
+**29 October 2026 (Sahan's go).** notify-office deployed first (the `-2` channels only for phones that registered
+them; 1.3.0 phones keep their pair). EAS build `4e0e0eba-d542-4d41-956c-08e2936c901f` (profile `drivers`, commit `9398b64`,
+finished 09:37 UTC): version 1.4.0, **versionCode 3**, runtime **`1.4.0-gmaps`**; the APK
+https://expo.dev/artifacts/eas/SMzCo0z0jpR6aqcelesUWfTp_woAq047Yqx1Bh4Tqfo.apk (77.2 MB). Checked: arm64-v8a and
+armeabi-v7a for all 28 native libraries, every one stored uncompressed and 16 KB aligned; the eight notification sounds kept
+by name (plus the two in-app ones); RECORD_AUDIO not in the final manifest. Main fast-forwarded to `9398b64` (CI run
+40847466388 passed); the site and /m/ from the same commit (136d0051). Round 50 and later publish to `1.4.0-gmaps`.
+
 ## The build, when Sahan says go
 
 1. Count this month's builds (`eas build:list`) and say how many are left.

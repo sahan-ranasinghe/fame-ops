@@ -988,6 +988,14 @@ before (their channels, their tools). **Round 50 and later publish to runtime `1
 get is published from a commit whose app.json says 1.3.0 (as the 1.1.0 phones got theirs from d63c838), never from main.
 So: build from `release-1.4.0`, install the pilot phones, then fast-forward main.
 
+**Built 29 October 2026 (Sahan's go).** notify-office deployed first (the `-2` channels only for phones that registered
+them; 1.3.0 phones keep their pair). EAS build `4e0e0eba-d542-4d41-956c-08e2936c901f` (profile `drivers`, commit `9398b64`,
+finished 09:37 UTC): version 1.4.0, **versionCode 3**, runtime **`1.4.0-gmaps`**; the APK
+https://expo.dev/artifacts/eas/SMzCo0z0jpR6aqcelesUWfTp_woAq047Yqx1Bh4Tqfo.apk (77.2 MB). Checked: arm64-v8a and
+armeabi-v7a for all 28 native libraries, every one stored uncompressed and 16 KB aligned; the eight notification sounds kept
+by name (plus the two in-app ones); RECORD_AUDIO not in the final manifest. Main fast-forwarded to `9398b64` (CI run
+40847466388 passed); the site and /m/ from the same commit (136d0051). Round 50 and later publish to `1.4.0-gmaps`.
+
 ## 35. Round 49: set-password links survive being opened (29 October 2026, branch `r49-password-links` from main `c3103a3`)
 
 **What broke.** Shashen Herath (created 28 October 18:06) could not set his password; a second link followed at 18:10.
