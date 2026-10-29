@@ -865,6 +865,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Round 4–7: my checks of today (after a fresh sign-in too); none read = the phone's copy stays.
         api.fetchMyChecks(supabase, startOfColomboDay(colomboDate())).catch(() => null),
       ]);
+      // Round 50: the driver state went while this was read (Back to office dropped it, or a sign-out): nothing comes back.
+      if (!meRef.current) return;
       if (!row) {
         // No row: the office switched this account off, or the request went without a session because an expired token
         // could not be refreshed (no connection to Auth; lib/session.ts). Only the first signs the driver out.
@@ -1277,11 +1279,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [saveMe, setDrivingView, checkTrackingNow, refresh]);
 
   /** The driver state goes, the sign-in stays (Office mode is the same account). Only with nothing running or waiting. */
+  const dropping = useRef(false);
   const dropDriving = useCallback(async () => {
-    if (getSharing()) await stopTripSharing();
-    await unregisterTrackingCheck();
-    await disarmShiftNudge();
-    forgetEverything({ keepPermissions: true });
+    // Once at a time (Back to office and the effect below may both ask).
+    if (dropping.current) return;
+    dropping.current = true;
+    try {
+      if (getSharing()) await stopTripSharing();
+      await unregisterTrackingCheck();
+      await disarmShiftNudge();
+      forgetEverything({ keepPermissions: true });
+    } finally {
+      dropping.current = false;
+    }
   }, [stopTripSharing, forgetEverything]);
 
   const leaveDriving = useCallback(async (): Promise<'keep' | 'drop'> => {

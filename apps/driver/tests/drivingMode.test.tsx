@@ -62,6 +62,7 @@ import MeScreen from '@/app/(tabs)/me';
 import OfficeHomeDesign from '@/design/OfficeHome';
 import { hideSnackbar } from '@/components/patterns/Snackbar';
 import { setOfficeMe } from '@/office/store';
+import type { Me } from '@/office/types';
 
 const page = (name: string) => () => <Text>{`page ${name}`}</Text>;
 const routes = {
@@ -189,7 +190,7 @@ describe('Me in Driving mode', () => {
 });
 
 describe('Office mode\'s Home: Start driving', () => {
-  const officeMe = (over: Record<string, unknown>) => ({ name: 'Sahan Ranasinghe', email: 's@fame.lk', role: 'fleet_admin', permissions: ['view', 'approve', 'assign_tasks'], tools: [], ...over });
+  const officeMe = (over: Record<string, unknown>) => ({ name: 'Sahan Ranasinghe', email: 's@fame.lk', role: 'fleet_admin', permissions: ['view', 'approve', 'assign_tasks'], tools: [], ...over }) as unknown as Me;
   const trip = { id: 't-self-1', title: 'Site visit · Kandy', status: 'assigned', start_at: '2026-10-29T05:00:00Z', leave_by: '2026-10-29T05:00:00Z', employee_id: 'e-1', driven_by: 'self' };
   function useOfficeApp() {
     mockOfficeApp = { ...require('./fakeOffice').mockUseApp(), loadDriveTrips: mockLoadTrips, enterDriving: mockEnter };
