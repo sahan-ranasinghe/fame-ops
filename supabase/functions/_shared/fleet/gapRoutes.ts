@@ -10,9 +10,12 @@
 // budget (ORS_DAILY_BUDGET of openrouteservice's 2,000 a day); at most 25 new gaps per route
 // asked, and the 40 a minute shared with the road times. Over a cap, without a key or on an
 // error, the gap stays a straight dashed line and the answer says why.
+// Round 49: a gap with no road near one of its ends (a poor fix off the road: openrouteservice's 2010, or 2009 no
+// route) is an answer, not an error: counted as a call made, cached 30 days as an empty line (geometry []) so no view
+// asks again, and drawn straight with its own note. Before, each view asked again and counted two errors.
 
 import type { Db } from "./db.ts";
-import { ORS_GEOJSON_URLS, orsFetch } from "./orsHosts.ts";
+import { ORS_GEOJSON_URLS, ORS_NO_ROUTE_CODES, orsErrorCode, orsFetch } from "./orsHosts.ts";
 import type { Jump } from "./route.ts";
 import { simplifyKeep } from "./route.ts";
 import { bump, callsToday, ORS_DAILY_BUDGET, orsMinute, TIMEOUT_MS } from "./routing.ts";
@@ -25,6 +28,8 @@ export const GAP_SIMPLIFY_M = 8;
 export const GAP_MAX_POINTS = 400;
 /** The counter could not be read: no call is made (fail closed). */
 export const COUNTER_NOTE = "Estimated lines paused: the call counter could not be read; the gaps are straight";
+/** Gaps whose end has no road nearby (a poor GPS fix): known from the cache or the answer, never asked again for 30 days. */
+export const NO_ROAD_NOTE = "Some gaps have no road near a GPS point (a poor fix): they are straight";
 
 export interface EstimatedLine {
   from: number;
@@ -90,14 +95,17 @@ export async function estimatedLines(
   const since = new Date(now.getTime() - GAP_CACHE_DAYS * 86400000).toISOString();
   const lines: EstimatedLine[] = [];
   const misses: Jump[] = [];
+  let noRoad = 0;
   for (const j of jumps) {
     const k = gapKey(j);
     const { data } = await db.from("route_gap_lines").select("geometry, km").match(k).gte("fetched_at", since).maybeSingle();
     if (data && Array.isArray(data.geometry)) {
-      lines.push({ from: j.from, to: j.to, points: data.geometry as [number, number][], km: data.km, cached: true });
+      // An empty line = openrouteservice said no road is near one end: straight, and not asked again.
+      if (data.geometry.length === 0) noRoad += 1;
+      else lines.push({ from: j.from, to: j.to, points: data.geometry as [number, number][], km: data.km, cached: true });
     } else misses.push(j);
   }
-  if (misses.length === 0) return { lines };
+  if (misses.length === 0) return { lines, ...(noRoad ? { note: NO_ROAD_NOTE } : {}) };
   const key = Deno.env.get("ORS_KEY");
   if (!key) return { lines, note: "Estimated lines need the openrouteservice key: the other gaps are straight" };
   let note: string | undefined;
@@ -141,7 +149,17 @@ export async function estimatedLines(
         () => bump(db, GAP_PROVIDER, false),
       );
       const json = await res.json();
-      if (!res.ok) throw new Error(`ors ${res.status}`);
+      const code = orsErrorCode(json);
+      if (!res.ok && code !== null && ORS_NO_ROUTE_CODES.has(code)) {
+        // No road near one end: openrouteservice's real answer. Counted as made, kept as an empty line for 30 days.
+        await bump(db, GAP_PROVIDER, true);
+        await db.from("route_gap_lines").upsert({ ...gapKey(j), geometry: [], km: null, provider: "ors", fetched_at: now.toISOString() }, {
+          onConflict: "from_lat,from_lng,to_lat,to_lng",
+        }).then(() => undefined, () => undefined);
+        noRoad += 1;
+        continue;
+      }
+      if (!res.ok) throw new Error(`ors ${res.status}${code !== null ? ` (${code})` : ""}`);
       const g = gapGeometry(json);
       await bump(db, GAP_PROVIDER, true);
       await db.from("route_gap_lines").upsert({
@@ -160,5 +178,5 @@ export async function estimatedLines(
       note = "openrouteservice did not answer for some gaps: they are straight";
     }
   }
-  return { lines: lines.sort((a, b) => a.from - b.from), note };
+  return { lines: lines.sort((a, b) => a.from - b.from), note: note ?? (noRoad ? NO_ROAD_NOTE : undefined) };
 }

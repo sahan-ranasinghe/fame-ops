@@ -2,7 +2,16 @@
 // gap, the daily cap inside the directions budget, no key. A fake database and a fake fetch.
 import { assert, assertEquals } from "@std/assert";
 import type { Db } from "./db.ts";
-import { COUNTER_NOTE, estimatedLines, type Fetcher, GAP_NEW_PER_ROUTE, gapGeometry, gapKey, gapRequestBody } from "./gapRoutes.ts";
+import {
+  COUNTER_NOTE,
+  estimatedLines,
+  type Fetcher,
+  GAP_NEW_PER_ROUTE,
+  gapGeometry,
+  gapKey,
+  gapRequestBody,
+  NO_ROAD_NOTE,
+} from "./gapRoutes.ts";
 import { buildRoute, type Jump, jumpsOf, type LinePoint } from "./route.ts";
 
 const NOW = new Date("2026-10-16T04:30:00Z");
@@ -189,5 +198,44 @@ Deno.test("Round 48: the new host's 404 is a request too: counted as failed, the
     const r = await estimatedLines(db, { ors_gap_daily_cap: 300 }, [jump(0)], NOW, fetchFn as unknown as Fetcher);
     assertEquals([r.lines.length, urls.length, counts.ors_gap], [1, 2, 2]);
     assert(urls[0].includes("api.heigit.org") && urls[1].includes("api.openrouteservice.org"));
+  });
+});
+
+Deno.test("Round 49: a gap with no road near an end (openrouteservice 2010): one request, counted as made (not an error), kept 30 days, never asked again", async () => {
+  await withKey("KEY", async () => {
+    const { db, cache } = fakeDb();
+    const oks: boolean[] = [];
+    const rpc = (db as unknown as { rpc: (n: string, a: { p_provider: "ors" | "ors_gap"; p_ok: boolean }) => Promise<unknown> }).rpc;
+    (db as unknown as { rpc: unknown }).rpc = (n: string, a: { p_provider: "ors" | "ors_gap"; p_ok: boolean }) => {
+      oks.push(a.p_ok);
+      return rpc(n, a);
+    };
+    const urls: string[] = [];
+    const fetchFn = (url: string) => {
+      urls.push(url);
+      return Promise.resolve(
+        Response.json({ error: { code: 2010, message: "Could not find routable point within a radius of 350.0 meters" } }, { status: 404 }),
+      );
+    };
+    const first = await estimatedLines(db, { ors_gap_daily_cap: 300 }, [jump(0), jump(1)], NOW, fetchFn as unknown as Fetcher);
+    assertEquals([first.lines.length, urls.length, first.note], [0, 2, NO_ROAD_NOTE], "one request per gap, on the new host only");
+    assertEquals(oks, [true, true], "counted as calls made, not as errors");
+    assertEquals([...cache.values()].map((c) => c.geometry), [[], []], "kept as empty lines");
+    const again = await estimatedLines(db, { ors_gap_daily_cap: 300 }, [jump(0), jump(1)], NOW, fetchFn as unknown as Fetcher);
+    assertEquals(
+      [again.lines.length, urls.length, again.note],
+      [0, 2, NO_ROAD_NOTE],
+      "the next view asks nothing: straight, with the note",
+    );
+  });
+});
+
+Deno.test("Round 49: a real failure (a 500) is still an error and is not cached", async () => {
+  await withKey("KEY", async () => {
+    const { db, cache, counts } = fakeDb();
+    const fetchFn = () => Promise.resolve(Response.json({ error: { code: 2099, message: "Unknown internal error" } }, { status: 500 }));
+    const r = await estimatedLines(db, { ors_gap_daily_cap: 300 }, [jump(0)], NOW, fetchFn as unknown as Fetcher);
+    assertEquals([r.lines.length, cache.size, counts.ors_gap], [0, 0, 1]);
+    assertEquals(r.note, "openrouteservice did not answer for some gaps: they are straight");
   });
 });

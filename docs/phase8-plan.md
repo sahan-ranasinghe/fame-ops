@@ -1018,6 +1018,20 @@ new ones). Live check with the test office user R49 Link Test (switched on for i
 of a fresh link, two opens in fresh browsers (the form naming the account), Save with the eye → Overview, the activity log
 "Set their password through the link", and a third open → "This link can't be used" in English and Sinhala.
 
+### 35.1 The ors_gap errors (29 October 2026, branch `r49-ors-gap` from main `c0cc9c0`; not deployed)
+
+28 October: 6 calls, 6 errors (23 October: 102, 60). Reproduced on test.driver's 23 October route (44 gaps, 42 cached
+lines; the 2 missing ones cost 4 calls and 4 errors today): both share one poor fix (7.302749, 80.141455, 100 m accuracy)
+about 1.2 km off the road, with only a footpath within 350 m (OpenStreetMap's Overpass). openrouteservice answers that
+with HTTP 404 and its own error 2010 ("Could not find routable point within a radius of 350.0 meters"); `orsFetch` took
+every 404 for "the path moved" and asked the old host too (two requests, two errors per gap), and a failure is not cached,
+so every view of the day asked again. Fix: `orsFetch` returns openrouteservice's own JSON error as the answer (the old host
+only for a gateway's 404); a gap with no road (2010) or no route (2009) is a call made (not an error), kept 30 days as an
+empty line in `route_gap_lines` (no migration) and drawn straight with "Some gaps have no road near a GPS point (a poor
+fix): they are straight". Tests: orsHosts_test, gapRoutes_test (one request per gap, counted ok, cached, the next view asks
+nothing; a 500 still an error and not cached). Deploy: office-api, office-mcp, driver-api, fleet-jobs (routing.ts's road
+times use orsFetch too).
+
 ## 34. Round 48 (28 October 2026, branch `phase9-r48` from main `99dbab9`, worktree `~/projects/fame-ops-r47`)
 
 **State at the start (28 October):** main `99dbab9` pushed and green (CI 39782874213); Round 4–7 deployed on 22 October
