@@ -104,7 +104,8 @@ export default function MyTripScreen() {
           <Button kind="outline" label={t('office.myTrip.alreadyDone')} onPress={() => step('finish')} style={{ minHeight: 52 }} testID="already-done" />
         )}
 
-        {trip && (mode === 'finish' || mode === 'confirm') && (
+        {/* Round 50: a trip started in the app or on the web finishes there (the server answers can.finish false). */}
+        {trip && (mode === 'finish' || mode === 'confirm') && trip.can.finish && (
           <View style={styles.card} testID="my-trip-finish-card">
             <Txt variant="label" color={colors.muted}>{t(mode === 'confirm' ? 'office.myTrip.confirmTitle' : 'office.myTrip.finishTitle').toUpperCase()}</Txt>
             <Txt variant="body">{t(mode === 'confirm' ? 'office.myTrip.confirmWhy' : trip.state === 'on_the_way' ? 'office.myTrip.finishOnTheWay' : 'office.myTrip.finishWhy')}</Txt>
@@ -125,7 +126,7 @@ export default function MyTripScreen() {
           {!trip.window.open && <Txt variant="small" style={{ textAlign: 'center' }} testID="start-why">{t('office.myTrip.why.notYet', { when: opens })}</Txt>}
         </StickyActions>
       )}
-      {trip && (mode === 'finish' || mode === 'confirm') && (
+      {trip && (mode === 'finish' || mode === 'confirm') && trip.can.finish && (
         <StickyActions>
           <Button label={t(mode === 'confirm' ? 'office.myTrip.action.confirm' : 'office.myTrip.finishCta')} onPress={() => step('finish')} style={{ minHeight: 60 }} testID="finish-open" />
         </StickyActions>

@@ -120,7 +120,7 @@ export const ALL_TOOLS = [
   // Round 2b: who changed what and when (Settings → Activity log).
   "activity_log",
   // Round 4–7 (4): the vehicle checks; a no-app trip's own page, check and close.
-  "vehicle_checks", "my_trip", "my_trip_check", "finish_my_trip",
+  "vehicle_checks", "my_trip", "my_trip_check", "finish_my_trip", "web_trip_action",
   // Round 4–7 (6): people for the Passengers field.
   "find_people",
   // Round 4–7 (7): someone else has that driver or vehicle.
