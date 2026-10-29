@@ -13,7 +13,7 @@ import { ToggleRow } from '@/components/office/Controls';
 import { PermissionPicker, SecretCard } from '@/components/office/PeopleParts';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Field, Notice, Txt } from '@/components/ui';
-import { activePill, canChangeAccount, findUserRow, permissionWords, phoneDisplay, updateUserInput, userFields, type UserFields, type UserProblem } from '@/office/peopleLogic';
+import { activePill, canChangeAccount, findUserRow, linkValidWords, permissionWords, phoneDisplay, updateUserInput, userFields, type UserFields, type UserProblem } from '@/office/peopleLogic';
 import { normalisePermissions } from '@/office/permissions';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, OfficeUsers, SetPasswordLinkResult, UpdateOfficeUserResult } from '@/office/types';
@@ -153,7 +153,7 @@ export default function ManageOfficeUser() {
           <SecretCard
             title={t('office.people.linkTitle')}
             value={secret.set_password_link}
-            hint={t('office.people.linkValid', { for: secret.link_valid_for ?? '1 hour', name: secret.name })}
+            hint={t('office.people.linkValid', { for: linkValidWords(t, secret.link_valid_for), name: secret.name })}
             shareText={t('office.people.shareText', { name: secret.name, link: secret.set_password_link })}
             shareLabel={t('office.people.share')}
           />

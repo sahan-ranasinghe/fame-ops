@@ -110,3 +110,67 @@ Deno.test("a 404 after sign-in charges the address like a refusal; the public pr
   for (let i = 0; i < 60; i++) assertEquals((await pub("192.0.2.1")).status, 500);
   assertEquals((await pub("192.0.2.1")).status, 429);
 });
+
+Deno.test("Round 49: the set-password link's public routes: opening checks and never uses; only the save uses; no session asked", async () => {
+  const calls: string[] = [];
+  const t = { now: 0 };
+  const limits: Limits = {
+    general: new TokenBuckets({ capacity: 120 }, () => t.now),
+    paid: new TokenBuckets({ capacity: 30 }, () => t.now),
+    unauth: new TokenBuckets({ capacity: 20 }, () => t.now),
+    pub: new TokenBuckets({ capacity: 60 }, () => t.now),
+  };
+  let asked = 0;
+  const handle = createHandler({
+    db: {} as Db,
+    resolvePerson: () => {
+      asked += 1;
+      return Promise.resolve({ ok: false, status: 401, error: "not_signed_in" });
+    },
+    mfaRoles: [],
+    allowedOrigins: () => ["https://fame-fleet.pages.dev"],
+    limits,
+    passwordLinks: {
+      check: (_db, token) => {
+        calls.push(`check ${token}`);
+        return Promise.resolve(token === "good" ? { state: "valid", name: "Shashen", email: "s@x.test" } : { state: "used" });
+      },
+      use: (_db, token, password) => {
+        calls.push(`use ${token}`);
+        if (token === "used") return Promise.resolve({ ok: false, state: "used" });
+        if (password === "short") return Promise.resolve({ ok: false, error: "too_short", message: "Use at least 12 characters." });
+        if (password === "weak password!") return Promise.resolve({ ok: false, error: "refused", message: "Password is too weak" });
+        return Promise.resolve({ ok: true, email: "s@x.test" });
+      },
+    },
+  });
+  const send = (path: string, body: unknown, ip = "198.51.100.7") =>
+    handle(
+      new Request(`https://x.test/functions/v1/office-api/public/${path}`, {
+        method: "POST",
+        headers: { "x-real-ip": ip, "content-type": "application/json" },
+        body: typeof body === "string" ? body : JSON.stringify(body),
+      }),
+    );
+  // Opened three times (a preview, the person, a second tap): three checks, nothing used.
+  for (let i = 0; i < 3; i++) {
+    const res = await send("password-link", { token: "good" });
+    assertEquals(res.status, 200);
+    assertEquals(res.headers.get("cache-control"), "no-store");
+    assertEquals(await res.json(), { state: "valid", name: "Shashen", email: "s@x.test" });
+  }
+  assertEquals(calls, ["check good", "check good", "check good"]);
+  assertEquals(await (await send("password-link", { token: "old" })).json(), { state: "used" });
+  // The save: 200 with the e-mail (the page signs in with it); 409 with the state; 400 the rule; 422 Auth's refusal.
+  const ok = await send("password-link/set", { token: "good", password: "A long sentence here" });
+  assertEquals([ok.status, await ok.json()], [200, { ok: true, email: "s@x.test" }]);
+  const used = await send("password-link/set", { token: "used", password: "A long sentence here" });
+  assertEquals([used.status, await used.json()], [409, { ok: false, state: "used" }]);
+  assertEquals((await send("password-link/set", { token: "good", password: "short" })).status, 400);
+  assertEquals((await send("password-link/set", { token: "good", password: "weak password!" })).status, 422);
+  assertEquals((await send("password-link", "not json")).status, 400);
+  assertEquals(asked, 0, "no session is asked for: these answers are public");
+  // 60 a minute per address, shared with the privacy page.
+  for (let i = 0; i < 60; i++) await send("password-link", { token: "x" }, "192.0.2.50");
+  assertEquals((await send("password-link", { token: "x" }, "192.0.2.50")).status, 429);
+});

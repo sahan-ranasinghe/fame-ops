@@ -107,7 +107,7 @@ export function UserManage() {
   }
   const newLink = () => run(async () => {
     const r = await transport.call<SetPasswordLinkResult>("reset_office_password", { email });
-    setSecret({ label: "Set-password link", value: r.set_password_link, hint: `Valid for ${r.link_valid_for ?? "1 hour"}. Send it to ${u!.name} only.` });
+    setSecret({ label: "Set-password link", value: r.set_password_link, hint: `Valid for ${r.link_valid_for ?? "7 days"}, until the password is saved; any older link of theirs stops working. Send it to ${u!.name} only.` });
   });
   const newKey = () => run(async () => {
     const input: Record<string, unknown> = { email };
@@ -194,7 +194,7 @@ export function UserManage() {
         {u.active && (
           <div className="card card-b" style={{ display: "grid", gap: 12 }}>
             <h2>Sign-in</h2>
-            <p className="muted small" style={{ margin: 0 }}>Forgot the password, or the first link expired: make a new one-time set-password link.</p>
+            <p className="muted small" style={{ margin: 0 }}>Forgot the password, or the first link expired: make a new set-password link.</p>
             <div><button type="button" className="btn" disabled={busy} onClick={() => void newLink()}>New set-password link</button></div>
           </div>
         )}

@@ -6,6 +6,10 @@
 //   GET  /office-api/tools              the tools with their input schemas (for the forms)
 //   GET  /office-api/public/privacy     no session (the public privacy page, /privacy): { email?, phone? } from the settings
 //                                       privacy_email and office_phone, nothing else; 60 a minute per address
+//   POST /office-api/public/password-link       no session (Round 49, the set-password page): { token } → { state, name?, email? };
+//                                               opening a link never uses it
+//   POST /office-api/public/password-link/set   no session: { token, password } → 200 { ok, email } · 409 { state } (the link
+//                                               can no longer be used) · 400 / 422 { error, message }; the only call that uses a link
 //   POST /office-api/tools/<name>       body = the tool's arguments; 200 { result } exactly as the connector returns it
 //                                       400 { error: "bad_input", issues } · 403 { error } · 404 · 409 { error } (the tool said no)
 //                                       429 { error: "rate_limited", message } (handler.ts: the limits) · 500 { error }

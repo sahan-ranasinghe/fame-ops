@@ -1,11 +1,13 @@
 // Office accounts and personal connector keys (admin only).
 //
 // Nobody types a password in a chat: create_office_user creates the Auth
-// user without one and returns a one-time set-password link
-// (auth.admin.generateLink, type "recovery") that the admin sends by
+// user without one and returns a set-password link that the admin sends by
 // WhatsApp. The person opens it on the web app's /set-password page and
 // chooses their own password. reset_office_password returns a fresh link.
 // Supabase's own e-mail is not used (it only reaches project team members).
+// Round 49: the links are our own (passwordLinks.ts; Google Workspace's invite pattern): opened any number of times,
+// used only by the password save, 7 days, ended by a newer link. Supabase's recovery links were used up by WhatsApp's
+// preview.
 //
 // create_office_key gives a person their own connector URL for Claude, so
 // the audit log carries their name and their role applies in Claude too.
@@ -22,17 +24,12 @@ import { logChanges, logPhoneChange, storedPhone } from "../phones.ts";
 import { realDate, tool, zDate, zPaging, zSearch, zText } from "../tool.ts";
 import { pageOf, pageWindow } from "../paging.ts";
 import { driverPhotoLinks } from "../media.ts";
+import { issuePasswordLink, LINK_VALID_FOR, type LinkKind } from "../passwordLinks.ts";
 
 const zEmail = z.string().trim().toLowerCase().email().max(160);
 const zOfficeRole = z.enum(["admin", "fleet_admin", "office", "coordinator", "staff", "viewer"]);
 const zPermissions = z.array(z.enum(PERMISSIONS as [string, ...string[]])).max(PERMISSIONS.length)
   .describe("Any of: view, request, approve, assign_tasks, vehicles, issues, users, office_users");
-const LINK_HOURS = 1;
-
-/** The web app's address for set-password links: the first origin of OFFICE_WEB_URL (office-api allows every listed origin for CORS). */
-function webUrl(): string {
-  return (Deno.env.get("OFFICE_WEB_URL") ?? "").split(",")[0].trim().replace(/\/$/, "");
-}
 
 async function officeUser(db: Db, email: string) {
   const row = unwrapMaybe(
@@ -76,16 +73,9 @@ const targetOf = (row: { id: string; permissions: unknown; role: string; active:
   active: row.active,
 });
 
-/** A one-time link that lets the person set their password (valid about an hour). */
-async function setPasswordLink(db: Db, email: string): Promise<string> {
-  const base = webUrl();
-  const { data, error } = await db.auth.admin.generateLink({
-    type: "recovery",
-    email,
-    ...(base ? { options: { redirectTo: `${base}/set-password` } } : {}),
-  });
-  if (error || !data.properties?.action_link) throw new Error(`set-password link: ${error?.message ?? "no link"}`);
-  return data.properties.action_link;
+/** A set-password link for the person (Round 49: passwordLinks.ts): valid 7 days, used only by the password save. */
+async function setPasswordLink(db: Db, employeeId: string, kind: LinkKind, actor: { name: string }): Promise<string> {
+  return (await issuePasswordLink(db, { employeeId, kind, by: actor.name })).link;
 }
 
 function keyUrl(key: string): string {
@@ -165,8 +155,8 @@ export const listOfficeUsers = tool({
 export const createOfficeUser = tool({
   name: "create_office_user",
   title: "Create an office user",
-  description: "Creates a sign-in for the web app for an office person (not a driver) and returns a one-time set-password link to send " +
-    "by WhatsApp. No password is chosen here. Give the permissions (view, request, approve, assign_tasks, vehicles, issues, users) " +
+  description: "Creates a sign-in for the web app for an office person (not a driver) and returns a set-password link to send " +
+    "by WhatsApp (valid 7 days, until the password is saved). No password is chosen here. Give the permissions (view, request, approve, assign_tasks, vehicles, issues, users) " +
     "or a role as a shorthand: admin = everything, fleet_admin = everything but users, office = view + request + assign_tasks, " +
     "staff = view + request, viewer = view.",
   readOnly: false,
@@ -203,14 +193,14 @@ export const createOfficeUser = tool({
       }).select("id").single(),
       "office user",
     );
-    const link = await setPasswordLink(db, email);
+    const link = await setPasswordLink(db, row.id, "new_account", actor);
     return {
       result: {
         created: { name, email, role: label, permissions: perms, code: employeeCode, id: row.id },
         set_password_link: link,
-        link_valid_for: `${LINK_HOURS} hour`,
-        next:
-          "Send the link by WhatsApp. The person opens it, chooses a password (12+ characters) and signs in. They can turn on 2-step sign-in in Settings.",
+        link_valid_for: LINK_VALID_FOR,
+        next: "Send the link by WhatsApp. The person opens it, chooses a password (12+ characters) and signs in. Opening it " +
+          "(or WhatsApp's preview) does not use it up: it works until the password is saved, for 7 days. They can turn on 2-step sign-in in Settings.",
       },
       summary: `created office user ${email} (${label}: ${perms.join(", ") || "no permissions"})`,
     };
@@ -274,16 +264,17 @@ export const resetOfficePassword = tool({
   name: "reset_office_password",
   title: "Set-password link for an office user",
   description:
-    "Returns a fresh one-time set-password link for an office user (forgot the password, or the old link expired). Send it by WhatsApp.",
+    "Returns a fresh set-password link for an office user (forgot the password, or the old link expired). Send it by WhatsApp. " +
+    "It works for 7 days until the password is saved; any older link of theirs stops working.",
   readOnly: false,
   input: z.object({ email: zEmail }),
   async run({ email }, { db, actor }) {
     const user = await officeUser(db, email);
     await guard(db, actor, { kind: "password_link", target: targetOf(user) });
     if (!user.active) throw new ToolError(`${user.name} is switched off. Use set_office_user_active first.`);
-    const link = await setPasswordLink(db, email);
+    const link = await setPasswordLink(db, user.id, "reset", actor);
     return {
-      result: { name: user.name, email, set_password_link: link, link_valid_for: `${LINK_HOURS} hour` },
+      result: { name: user.name, email, set_password_link: link, link_valid_for: LINK_VALID_FOR },
       summary: `set-password link for ${email}`,
     };
   },

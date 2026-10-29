@@ -12,7 +12,7 @@ import {
   isPin, isTime, latestDriverPhoneChange, licenceOf, licencePhotos, licenceTone, LIMIT, longDate, minutesValue, officePhoneValue, permissionWords, PERSONAL_TRIPS,
   personalTripsValue, phoneDisplay, phoneE164, presetOf, canChangeAccount, givablePermissions, profileFields, profilePatch, QUICK_SETTINGS, randomPin, regularVehicleOf, samePhone, seesPrivate, selfLockout,
   settingInput, switchValue, togglePermission, updateDriverInput, updateUserInput, USERNAME_RULE, userFields, userLine, usersArgs, validateNewDriver, validateNewUser,
-  viewLocked, whenText, withSetting, type Words,
+  viewLocked, whenText, withSetting, type Words, linkValidWords,
 } from '../src/office/peopleLogic';
 import type { Driver, DriverProfile, DriversList, FleetSettings, OfficeUser, OfficeUsers } from '../src/office/types';
 
@@ -314,6 +314,23 @@ console.log('\n== The strings (office.people in en.json and si.json; the sidecar
   check(missing.length === 0, `every key the code uses (${literal.length}) is in the sidecar`, missing);
   const unused = Object.keys(en).filter((k) => !used.has(k));
   check(unused.length === 0, 'no key in the sidecar that nothing uses', unused);
+}
+
+console.log('\nRound 49: how long a set-password link works, in both languages');
+{
+  const lang = (f: string) => JSON.parse(readFileSync(join(SRC, 'i18n', f), 'utf8')) as { office: { people: Record<string, string> } };
+  for (const [code, words] of [['en', lang('en.json')], ['si', lang('si.json')]] as const) {
+    const t = (k: string, v: Record<string, string | number> = {}) =>
+      (words.office.people[k.replace('office.people.', '')] ?? k).replace(/\{(\w+)\}/g, (_, n: string) => String(v[n] ?? ''));
+    const hint = t('office.people.linkValid', { for: linkValidWords(t, '7 days'), name: 'Shashen' });
+    check(code === 'en' ? hint.startsWith('Valid for 7 days, until the password is saved.') : hint.startsWith('මුරපදය සුරකින තෙක් දින 7 ක් වලංගුයි.'),
+      `${code}: "7 days" from the server in the person's words`, hint);
+    check(linkValidWords(t, undefined) === t('office.people.linkDays', { n: '7' }) && linkValidWords(t, '1 hour') === '1 hour',
+      `${code}: no answer = the 7 days; other words as sent`);
+  }
+  for (const screen of ['app/office/people/user-new.tsx', 'app/office/people/user/[email].tsx']) {
+    check(read(screen).includes('linkValidWords(t, ') && !read(screen).includes("?? '1 hour'"), `${screen}: the link's days in words, no "1 hour" left`);
+  }
 }
 
 console.log(failures === 0 ? '\nAll people checks passed.' : `\n${failures} people check(s) FAILED.`);

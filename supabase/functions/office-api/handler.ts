@@ -6,7 +6,8 @@
 //             an address guessing tokens costs Auth at most 20 checks a minute
 //   general   120 a minute per person (POST /tools/<name> and POST /errors, as before)
 //   paid      30 a minute per person for the tools that can make a Google, openrouteservice or Gemini call
-//   public    60 a minute per address on GET /public/privacy (the only answer without a session)
+//   public    60 a minute per address on the answers without a session: GET /public/privacy and (Round 49) the
+//             set-password link's POST /public/password-link and POST /public/password-link/set
 // Over any of them: 429 { error: "rate_limited", code, message: "Too many requests · try again in a minute" }.
 
 import { z } from "zod";
@@ -14,6 +15,7 @@ import { APP_ERROR_INPUT, saveAppError } from "../_shared/fleet/appErrors.ts";
 import { driverPhotoLinks, photoLinksById } from "../_shared/fleet/media.ts";
 import { licenceState } from "../_shared/fleet/licence.ts";
 import { colomboDate } from "../_shared/fleet/time.ts";
+import { checkPasswordLink, usePasswordLink } from "../_shared/fleet/passwordLinks.ts";
 import {
   clientIp,
   GENERAL_PER_MINUTE,
@@ -71,6 +73,8 @@ export interface HandlerDeps {
   limits?: Limits;
   runTool?: typeof runTool;
   loadSettings?: typeof loadSettings;
+  /** Round 49: the set-password link's check and save (passwordLinks.ts); tests pass fakes. */
+  passwordLinks?: { check: typeof checkPasswordLink; use: typeof usePasswordLink };
 }
 
 function corsHeaders(origin: string | null, allowed: string[]): Record<string, string> {
@@ -93,6 +97,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
   const limits = deps.limits ?? defaultLimits();
   const run = deps.runTool ?? runTool;
   const settings = deps.loadSettings ?? loadSettings;
+  const links = deps.passwordLinks ?? { check: checkPasswordLink, use: usePasswordLink };
 
   return async (request: Request): Promise<Response> => {
     const cors = corsHeaders(request.headers.get("origin"), deps.allowedOrigins());
@@ -118,6 +123,29 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
       } catch (e) {
         console.error(`office-api: privacy contact: ${e instanceof Error ? e.message : String(e)}`);
         return json(500, { error: "settings_failed" }, cors);
+      }
+    }
+    // Round 49: the set-password page, before anyone is signed in (passwordLinks.ts). Opening the page asks the link's
+    // state (never uses it); Save password is the only call that uses it. 409 = the link can no longer be used (its state);
+    // 400 = the password breaks the rule; 422 = Auth refused the password (the link is given back).
+    if (request.method === "POST" && (path === "/public/password-link" || path === "/public/password-link/set")) {
+      if (!limits.pub.take(from)) return rateLimitedResponse(cors);
+      const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+      if (!body || typeof body !== "object") return json(400, { error: "bad_input" }, cors);
+      const noStore = (status: number, answer: unknown) =>
+        new Response(JSON.stringify(answer), {
+          status,
+          headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+        });
+      try {
+        if (path === "/public/password-link") return noStore(200, await links.check(db, body.token));
+        const used = await links.use(db, body.token, body.password);
+        if (used.ok) return noStore(200, used);
+        if ("state" in used) return noStore(409, used);
+        return noStore(used.error === "refused" ? 422 : 400, used);
+      } catch (e) {
+        console.error(`office-api: set-password link: ${e instanceof Error ? e.message : String(e)}`);
+        return json(500, { error: "link_failed" }, cors);
       }
     }
     // An address refused 20 times this minute is answered here, before Supabase Auth is asked (Round 48).

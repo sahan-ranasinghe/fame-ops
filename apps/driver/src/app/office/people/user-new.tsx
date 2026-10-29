@@ -10,7 +10,7 @@ import { View } from 'react-native';
 import { useLeaveGuard } from '@/components/navigation';
 import { PermissionPicker, SecretCard } from '@/components/office/PeopleParts';
 import { Button, Field, Notice, Txt } from '@/components/ui';
-import { emptyUser, permissionWords, type UserFields, type UserProblem, validateNewUser } from '@/office/peopleLogic';
+import { emptyUser, linkValidWords, permissionWords, type UserFields, type UserProblem, validateNewUser } from '@/office/peopleLogic';
 import { useOffice } from '@/office/state';
 import type { CreateOfficeUserResult, FleetError } from '@/office/types';
 import { BackHeader, ErrorNotice, Screen, StickyActions } from '@/office/ui';
@@ -58,7 +58,7 @@ export default function OfficeUserNew() {
           <SecretCard
             title={t('office.people.linkTitle')}
             value={done.set_password_link}
-            hint={t('office.people.linkValid', { for: done.link_valid_for ?? '1 hour', name: done.created.name })}
+            hint={t('office.people.linkValid', { for: linkValidWords(t, done.link_valid_for), name: done.created.name })}
             shareText={t('office.people.shareText', { name: done.created.name, link: done.set_password_link })}
             shareLabel={t('office.people.share')}
           />

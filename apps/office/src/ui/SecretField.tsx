@@ -20,11 +20,13 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "style"> & {
   kind?: SecretKind;
   /** The wrapper's style (the field sits in a flex row in some forms). */
   style?: CSSProperties;
+  /** The eye's words in another language (Round 49: the set-password link's page has English and Sinhala). */
+  words?: { show: string; hide: string };
 };
 
-export function SecretField({ kind = "password", style, ...input }: Props) {
+export function SecretField({ kind = "password", style, words: own, ...input }: Props) {
   const [shown, setShown] = useState(false);
-  const words = SECRET_WORDS[kind];
+  const words = own ?? SECRET_WORDS[kind];
   return (
     <div className="secret" style={style}>
       <input {...input} type={shown ? "text" : "password"} />

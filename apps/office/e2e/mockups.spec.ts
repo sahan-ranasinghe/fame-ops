@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { expect, test } from "./offline";
+import { linkPath } from "./links";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const OUT = join(HERE, "..", "mockups-report");
@@ -230,9 +231,7 @@ test("the website at a desktop's width: the Overview, a task on the way, a reque
 
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Mockups for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -283,9 +282,7 @@ test("the website's driver page with a day's route, at a desktop's and at a phon
 
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Mockups day for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);

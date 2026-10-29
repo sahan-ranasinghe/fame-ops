@@ -4,6 +4,7 @@
 // refresh. Runs under the "phone" Playwright project only.
 import type { Page } from "@playwright/test";
 import { expect, test } from "./offline";
+import { linkPath } from "./links";
 
 const MCP = (process.env.OFFICE_MCP_URL || "http://127.0.0.1:54321/functions/v1/office-mcp").replace(/\/$/, "");
 const KEY = process.env.OFFICE_MCP_KEY || "";
@@ -26,9 +27,7 @@ async function tool<T>(name: string, args: Record<string, unknown>): Promise<T> 
 /** Makes an office user through the connector and signs them in through the set-password link. */
 async function signIn(page: Page, name: string, email: string, permissions: string[]): Promise<void> {
   const user = await tool<{ set_password_link: string }>("create_office_user", { name, email, permissions });
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Phone test ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);

@@ -6,6 +6,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { fakeGoogleMapsScript } from "./fakeGoogleMaps";
 import { expect, test } from "./offline";
+import { setPasswordByLink } from "./links";
 
 const MCP = (process.env.OFFICE_MCP_URL || "http://127.0.0.1:54321/functions/v1/office-mcp").replace(/\/$/, "");
 const KEY = process.env.OFFICE_MCP_KEY || "";
@@ -30,15 +31,8 @@ async function tool<T>(name: string, args: Record<string, unknown>): Promise<T> 
 /** An office user with a password, set through their set-password link's session (as the site's /set-password does). */
 async function officeUser(name: string, email: string, permissions: string[]): Promise<string> {
   const user = await tool<{ set_password_link: string }>("create_office_user", { name, email, permissions });
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const hash = new URLSearchParams((verify.headers.get("location") ?? "").split("#")[1] ?? "");
   const password = `Mobile test ${stamp}!`;
-  const res = await fetch(`${API}/auth/v1/user`, {
-    method: "PUT",
-    headers: { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${hash.get("access_token")}` },
-    body: JSON.stringify({ password }),
-  });
-  if (!res.ok) throw new Error(`set password failed: ${res.status}`);
+  await setPasswordByLink(user.set_password_link, password);
   return password;
 }
 

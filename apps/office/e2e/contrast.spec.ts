@@ -7,10 +7,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./offline";
+import { linkPath, setPasswordByLink } from "./links";
 
 const MCP = (process.env.OFFICE_MCP_URL || "http://127.0.0.1:54321/functions/v1/office-mcp").replace(/\/$/, "");
 const KEY = process.env.OFFICE_MCP_KEY || "";
-const API = (process.env.API_URL || "http://127.0.0.1:54321").replace(/\/$/, "");
 const ANON = process.env.ANON_KEY || "";
 const stamp = Date.now().toString(36);
 
@@ -88,9 +88,7 @@ test("every main screen of the site: readable light and dark (desktop and phone 
   // Signed in through the set-password link, with every permission (every screen and every button shows).
   const email = `contrast.${tag}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: `Contrast ${tag}`, email, permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"] });
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Contrast for ${tag}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -188,15 +186,8 @@ test("the mobile website /m/: light only (a forced dark mode leaves it alone) an
   // The office user's password, set through the set-password link's session (mobile.spec.ts officeUser).
   const email = `contrast.${tag}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: `Contrast ${tag}`, email, permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues"] });
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const hash = new URLSearchParams((verify.headers.get("location") ?? "").split("#")[1] ?? "");
   const password = `Contrast for ${tag}!`;
-  const set = await fetch(`${API}/auth/v1/user`, {
-    method: "PUT",
-    headers: { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${hash.get("access_token")}` },
-    body: JSON.stringify({ password }),
-  });
-  expect(set.ok, `set password: ${set.status}`).toBe(true);
+  await setPasswordByLink(user.set_password_link, password);
 
   // Light on purpose: the page says "only light" (meta and CSS), so the browser keeps it light when the phone is dark.
   await page.emulateMedia({ colorScheme: "dark" });

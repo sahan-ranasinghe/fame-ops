@@ -515,6 +515,19 @@ isOneToOne: false
                   }
                   Relationships: [
                   ]
+                },"password_links": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"employee_id": string,"expires_at": string,"id": string,"kind": string,"opened_at": string | null,"password_fingerprint": string,"replaced_at": string | null,"token_hash": string,"used_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"employee_id": string,"expires_at": string,"id"?: string,"kind": string,"opened_at"?: string | null,"password_fingerprint": string,"replaced_at"?: string | null,"token_hash": string,"used_at"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"employee_id"?: string,"expires_at"?: string,"id"?: string,"kind"?: string,"opened_at"?: string | null,"password_fingerprint"?: string,"replaced_at"?: string | null,"token_hash"?: string,"used_at"?: string | null
+                  }
+                  Relationships: [
+                  ]
                 },"roads_day_calls": {
                   Row: {
                     "calls": number,"day": string,"employee_id": string,"refused": number,"updated_at": string
@@ -1865,6 +1878,15 @@ isOneToOne: false
                            },
 "roads_trip_take":
 { Args: { "p_cap": number,"p_employee": string }; Returns: Json
+                           },
+"password_link_issue":
+{ Args: { "p_by": string,"p_days": number,"p_employee": string,"p_kind": string,"p_token_hash": string }; Returns: Json
+                           },
+"password_link_check":
+{ Args: { "p_claim": boolean,"p_token_hash": string }; Returns: Json
+                           },
+"password_link_release":
+{ Args: { "p_link": string }; Returns: undefined
                            },
 "odometer_take":
 { Args: { "p_day_cap": number,"p_mode": string,"p_scope": string }; Returns: Json

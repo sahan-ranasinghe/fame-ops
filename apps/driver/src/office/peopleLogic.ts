@@ -520,3 +520,13 @@ export function canChangeAccount(me: { email?: string; permissions: readonly str
 export function givablePermissions(perms: readonly string[]): string[] {
   return perms.includes('users') ? [...new Set([...perms, 'office_users'])] : perms.filter((p) => !managed(p));
 }
+
+/**
+ * Round 49: how long a set-password link works, in the person's words: the server sends link_valid_for "7 days" (the
+ * links last 7 days, until the password is saved; passwordLinks.ts); other words come through as they are.
+ */
+export function linkValidWords(t: (key: string, values?: Record<string, string | number>) => string, value: string | undefined): string {
+  const v = value ?? '7 days';
+  const days = /^(\d+) days?$/.exec(v);
+  return days ? t('office.people.linkDays', { n: days[1] }) : v;
+}

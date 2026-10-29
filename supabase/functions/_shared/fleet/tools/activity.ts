@@ -26,6 +26,8 @@ const DRIVER_EVENTS: Record<string, string> = {
   // now is run_retention, a tool of its own).
   driver_vehicle_check: "Driver checked a vehicle",
   retention: "Data retention removed old data",
+  // Round 49: a person's own save on the set-password page (office-api's public route, passwordLinks.ts).
+  set_password_by_link: "Set their password through the link",
 };
 
 /**

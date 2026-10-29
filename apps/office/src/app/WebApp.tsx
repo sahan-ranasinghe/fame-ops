@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "../auth/AuthProvider";
+import { LinkPassword } from "../auth/LinkPassword";
+import { isLinkLanding } from "../auth/linkWords";
 import { Blocked } from "../auth/Blocked";
 import { SecondStep } from "../auth/SecondStep";
 import { SetPassword } from "../auth/SetPassword";
@@ -99,6 +101,9 @@ export const isPrivacyPath = (path: string) => path.replace(/\/+$/, "") === "/pr
 
 export function WebApp() {
   if (isPrivacyPath(window.location.pathname)) return <Privacy />;
+  // Round 49: a set-password link opens its own page before the sign-in gate (auth/LinkPassword.tsx); Supabase's old
+  // recovery landings (type=recovery) still go through AuthProvider's set_password step.
+  if (isLinkLanding(window.location.pathname, window.location.hash)) return <LinkPassword />;
   return (
     <AuthProvider>
       <Gate />

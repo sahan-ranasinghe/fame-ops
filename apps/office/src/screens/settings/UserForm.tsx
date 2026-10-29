@@ -43,7 +43,7 @@ export function UserForm() {
       <section className="view" data-testid="user-created">
         <PageTop title="Account created" sub={<>{done.created.name} · <PermissionChips permissions={done.created.permissions} /></>} backTo="/settings/users" />
         <div className="page-form">
-          <Secret label="Set-password link" value={done.set_password_link} hint={`Valid for ${done.link_valid_for ?? "1 hour"}. The person opens it, chooses a password and signs in. Never share it in a group chat.`} />
+          <Secret label="Set-password link" value={done.set_password_link} hint={`Valid for ${done.link_valid_for ?? "7 days"}, until the password is saved: opening it (or WhatsApp's preview) does not use it up. The person opens it, chooses a password and signs in. Never share it in a group chat.`} />
           <div><Link className="btn dark" to="/settings/users" replace>Done</Link></div>
         </div>
       </section>

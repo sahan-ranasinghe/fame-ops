@@ -19,6 +19,7 @@ import base64
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -427,7 +428,7 @@ check(st["ors_autocomplete_daily_cap"] == 2500 and st["ors_autocomplete_per_minu
 print("\n== 1b. Office accounts and permissions ==")
 REQ_EMAIL = f"requester.{uuid.uuid4().hex[:6]}@fame.test"
 cu = tool("create_office_user", {"name": "Test Requester", "email": REQ_EMAIL, "permissions": ["request"]})
-check(cu["created"]["permissions"] == ["view", "request"] and cu["created"]["role"] == "staff" and cu["set_password_link"].startswith("http"),
+check(cu["created"]["permissions"] == ["view", "request"] and cu["created"]["role"] == "staff" and "/set-password#k=" in cu["set_password_link"],
       "create_office_user with permissions ['request']: the role label is derived (staff), a set-password link comes back", json.dumps(cu["created"]))
 cv = tool("create_office_user", {"name": "Test Viewer", "email": f"viewer.{uuid.uuid4().hex[:6]}@fame.test", "role": "viewer"})
 check(cv["created"]["permissions"] == ["view"], "create_office_user with a role only: the role's permissions", json.dumps(cv["created"]))
@@ -2848,12 +2849,32 @@ if CHANNEL == "api":
     print("\n== 8. Roles: a staff member on office-api ==")
     staff_email = f"staff.{uuid.uuid4().hex[:6]}@fame.test"
     created = tool("create_office_user", {"name": "Test Staff", "email": staff_email, "permissions": ["request"]})
-    check(created["created"]["role"] == "staff" and created["set_password_link"].startswith("http") and "token" in created["set_password_link"],
-          "create_office_user returns a one-time set-password link (no password typed anywhere)", str(created)[:200])
-    # The person would open the link; the test sets the password through the admin API instead.
+    link = created["set_password_link"]
+    check(created["created"]["role"] == "staff" and link.startswith("http") and re.search(r"/set-password#k=[A-Za-z0-9_-]{43}$", link)
+          and created.get("link_valid_for") == "7 days",
+          "create_office_user returns a set-password link, valid 7 days (no password typed anywhere)", str(created)[:200])
+    # Round 49: the person opens the link (any number of times: nothing is used) and saves a password (the only use).
     staff_uid = psql(f"select auth_user_id from employees where email = '{staff_email}'")
+    link_token = link.split("#k=")[1]
+    pub = {"Content-Type": "application/json"}
+    opened = [http("POST", f"{API}/functions/v1/office-api/public/password-link", pub, {"token": link_token}) for _ in range(3)]
+    check(all(c == 200 and b.get("state") == "valid" and b.get("email") == staff_email for c, b in opened),
+          "the link opened three times (a preview, the person, a second tap): valid each time", str(opened[-1])[:200])
+    check(psql(f"select count(*) from password_links where token_hash = encode(sha256(convert_to('{link_token}', 'UTF8')), 'hex') and used_at is null") == "1",
+          "only the token's SHA-256 is stored, and opening it used nothing")
+    code, short = http("POST", f"{API}/functions/v1/office-api/public/password-link/set", pub, {"token": link_token, "password": "too short"})
+    check(code == 400 and short.get("error") == "too_short", "a password under 12 characters: 400, the link kept", f"{code} {short}")
     staff_pw = "St4ff-" + uuid.uuid4().hex[:10]
-    code, _ = http("PUT", f"{API}/auth/v1/admin/users/{staff_uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": staff_pw})
+    code, saved = http("POST", f"{API}/functions/v1/office-api/public/password-link/set", pub, {"token": link_token, "password": staff_pw})
+    check(code == 200 and saved.get("email") == staff_email, "Save password through the link: 200 with the e-mail", f"{code} {saved}")
+    code, again = http("POST", f"{API}/functions/v1/office-api/public/password-link/set", pub, {"token": link_token, "password": staff_pw + "x"})
+    _, reopened = http("POST", f"{API}/functions/v1/office-api/public/password-link", pub, {"token": link_token})
+    check(code == 409 and again.get("state") == "used" and reopened == {"state": "used"},
+          "the link after the save: used, both to a second save (409) and to an open (no name, no e-mail)", f"{code} {again} {reopened}")
+    code, unknown = http("POST", f"{API}/functions/v1/office-api/public/password-link", pub, {"token": "x" * 43})
+    check(code == 200 and unknown == {"state": "unknown"}, "a token never issued: unknown", f"{code} {unknown}")
+    check(psql("select count(*) from office_audit where tool = 'set_password_by_link' and actor_name = 'Test Staff' and result_summary = 'password set' "
+               f"and args_summary not like '%{staff_pw}%'") == "1", "the save is in the activity log in the person's name, without the password")
     staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["view", "request"]

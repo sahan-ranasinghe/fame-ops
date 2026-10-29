@@ -395,9 +395,11 @@
   Menus are filtered by `me.tools`; the server is the guard.
 - Web sign-in (`src/auth`): e-mail + password → (2-step on for this person? the code page,
   `mfa.getAuthenticatorAssuranceLevel` says nextLevel aal2) → `GET /me` → ready. A
-  `create_office_user` link lands with a recovery session → `/set-password`
-  (`PASSWORD_RECOVERY`, or `type=recovery` in the hash) → `updateUser({ password })` →
-  straight to Overview. 2-step sign-in is OPTIONAL for every role (decided 12 Oct 2026):
+  `create_office_user` / `reset_office_password` link (Round 49, `docs/phase8-plan.md` §35) is
+  `<site>/set-password#k=<token>`: `auth/LinkPassword.tsx` (before the sign-in gate, English and Sinhala) asks office-api's
+  public `POST /public/password-link` (opening never uses it), Save posts `/public/password-link/set` (the only use; 7 days;
+  a newer link or a password set another way ends it), then signs in → straight to Overview. Supabase's recovery links
+  (used up by any GET, e.g. WhatsApp's preview) are no longer made; their old landings (`type=recovery`) still work. 2-step sign-in is OPTIONAL for every role (decided 12 Oct 2026):
   the Settings page (web only, lazy) turns it on or off (`TotpEnrol`: QR + secret + one
   code). If office-api answers 403 `mfa_required` (secret `REQUIRE_MFA_ROLES` set), the
   second-step page makes the person set it up first. Office passwords: 12+ characters

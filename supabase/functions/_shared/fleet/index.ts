@@ -53,9 +53,9 @@ import {
   listRequests,
   myTrips,
   redecideRequest,
+  requestEditGuard,
   reviewing,
   suggestVehicles,
-  requestEditGuard,
   updateRequest,
 } from "./tools/requests.ts";
 import { issueHistory, listIssues, updateIssue, updateIssues } from "./tools/issues.ts";
@@ -331,7 +331,7 @@ export const INSTRUCTIONS = [
   "driver's day stays as a summary: driver_route answers it), heartbeats and usage counters; business records are never " +
   "removed. retention_preview counts what would go; run_retention runs it now.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
-  "Office accounts (users permission): create_office_user returns a one-time set-password link to send by WhatsApp; never ask for or type a password. " +
+  "Office accounts (users permission): create_office_user returns a set-password link to send by WhatsApp (valid 7 days; opening it does not use it, only the password save does; a newer link ends the older one); never ask for or type a password. " +
   "Each office person has permissions (view, request, approve, assign_tasks, vehicles, issues, users); update_office_user changes them.",
 ].join("\n");
 

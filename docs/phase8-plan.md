@@ -972,6 +972,45 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 35. Round 49: set-password links survive being opened (29 October 2026, branch `r49-password-links` from main `c3103a3`)
+
+**What broke.** Shashen Herath (created 28 October 18:06) could not set his password; a second link followed at 18:10.
+Reproduced on the live site the next morning with a test office user (R49 Link Test, view only, switched off after):
+a link opened straight in a fresh browser worked (the form, the eye, Save, Overview, and sign-in again), but the same kind
+of link fetched once the way WhatsApp's preview fetches it (a GET with WhatsApp's user agent) was used up, and the person
+landed on `/set-password#error=access_denied&error_code=otp_expired`, which the site ignored: a plain Sign in page with no
+word of why. **Cause in one line: the links were Supabase's own one-hour recovery links, which any GET uses up, and
+WhatsApp's link preview made that GET before the person tapped it.** The eye toggle did not cause it: the site with the eye
+went live about 18:55, after both links.
+
+**The rule now (Google Workspace's and Slack's invite pattern).** `_shared/fleet/passwordLinks.ts`, migration
+`20261029100000_round49_password_links`, office-api's two public routes, the site's `auth/LinkPassword.tsx`:
+1. A link is `<site>/set-password#k=<token>` (32 random bytes; only the SHA-256 is stored in `password_links`, service role
+   only). The token is after the '#', so loading the page sends it to no server; a preview reads only the page's HTML.
+   Opening it any number of times only asks its state (`POST /public/password-link`, notes `opened_at` the first time).
+   Valid 7 days.
+2. Only a successful Save uses it (`POST /public/password-link/set`: the rule (12+ characters, at most 72 bytes), then the
+   link claimed in one locked step (`password_link_check(hash, true)`), then Auth's admin API sets the password; Auth's
+   refusal gives the link back). It also dies when a newer link is made for the person (`replaced_at`), when the password
+   was set another way since (each link keeps a fingerprint of the account's password hash; nothing is added to the auth
+   schema), or when the account is switched off.
+3. The page: valid → the form (with the eye) naming the account, then it signs the person in and opens the app; anything
+   else (used, replaced, expired, password set, switched off, no token, or one of Supabase's old used links) → "This link
+   has expired or was already used. Ask the fleet admin for a new one." with Sign in. English and Sinhala with a switch
+   (the site is English; this page is the first a new person sees); the choice is remembered on the browser. Another link
+   pasted into the same tab reloads the page. The save is in the activity log ("Set their password through the link").
+4. The other link kinds: drivers have no links (an admin types a new PIN: `reset_pin`); a personal connector key's URL is
+   not consumed by opening (it works until revoked). Neither changes.
+5. The tools: `create_office_user` and `reset_office_password` answer `link_valid_for: "7 days"` (the shape unchanged);
+   the site's and Office mode's hints say it works until the password is saved (Office mode: "දින 7" in Sinhala).
+
+Tests: pgTAP `round49_password_links.test.sql`; Deno `passwordLinks_test.ts`, office-api `handler_test.ts`; the connector
+suite's section 8 (api channel: opened three times, only the hash stored, short password 400, Save 200, then used 409, an
+unknown token, the activity row without the password); Vitest `auth/LinkPassword.test.tsx`; the app's `test:people`; the
+e2e `office.spec.ts` "Round 49" (a preview HEAD and GET, a first open in a fresh browser, a second open, Save → Overview,
+the used link in English and Sinhala, an expired link, a replaced one, an old Supabase landing) and every e2e sign-in now
+through the new link (`e2e/links.ts`).
+
 ## 34. Round 48 (28 October 2026, branch `phase9-r48` from main `99dbab9`, worktree `~/projects/fame-ops-r47`)
 
 **State at the start (28 October):** main `99dbab9` pushed and green (CI 39782874213); Round 4–7 deployed on 22 October

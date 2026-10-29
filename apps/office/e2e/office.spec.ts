@@ -10,6 +10,7 @@
 //   API_URL, ANON_KEY  the local stack (scripts/test-office-local.sh sets them)
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./offline";
+import { linkPath } from "./links";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { totp } from "./totp";
@@ -186,6 +187,80 @@ async function spaGo(page: import("@playwright/test").Page, path: string): Promi
   await page.waitForURL((u) => `${u.pathname}${u.search}` === path);
 }
 
+test("Round 49: a set-password link survives a preview and a second open; only Save uses it; used, expired and replaced links say so", async ({ page, browser }) => {
+  // The new person's link, as the admin sends it by WhatsApp: the site's /set-password with the token after the '#'.
+  const email = `e2e.link.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string; link_valid_for: string; created: { id: string } }>(
+    "create_office_user",
+    { name: "E2E Link Person", email, permissions: ["view"] },
+  );
+  expect(user.set_password_link).toMatch(/\/set-password#k=[A-Za-z0-9_-]{43}$/);
+  expect(user.link_valid_for).toBe("7 days");
+  const dead = "This link has expired or was already used. Ask the fleet admin for a new one.";
+
+  // 1. WhatsApp's preview fetches the address before the person taps it (a HEAD and a GET, the bot's own user agent):
+  //    the page's HTML comes back and nothing is used.
+  for (const method of ["HEAD", "GET"]) {
+    const preview = await page.request.fetch(linkPath(user.set_password_link), { method, headers: { "user-agent": "WhatsApp/2.23.20.0 A" } });
+    expect(preview.status()).toBe(200);
+  }
+
+  // 2. The person opens it in a fresh browser: the form, for them. They close it without saving.
+  const first = await browser.newContext();
+  const firstPage = await first.newPage();
+  await firstPage.goto(linkPath(user.set_password_link));
+  await expect(firstPage.getByRole("heading", { name: "Choose a password" })).toBeVisible();
+  await expect(firstPage.getByTestId("link-for")).toHaveText(`For E2E Link Person · ${email}`);
+  await first.close();
+
+  // 3. A second open: still the form. The eye shows the password; Save uses the link and signs the person in.
+  await page.goto(linkPath(user.set_password_link));
+  await expect(page.getByTestId("link-for")).toBeVisible();
+  const password = `Link sentence ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByRole("button", { name: "Show password" }).first().click();
+  await expect(page.getByLabel("New password")).toHaveAttribute("type", "text");
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // 4. The link after the password was set, in another fresh browser: the friendly sentence, in English and Sinhala.
+  const later = await browser.newContext();
+  const laterPage = await later.newPage();
+  await laterPage.goto(linkPath(user.set_password_link));
+  await expect(laterPage.getByRole("heading", { name: "This link can't be used" })).toBeVisible();
+  await expect(laterPage.getByTestId("link-dead")).toContainText(dead);
+  await laterPage.getByRole("tab", { name: "සිංහල" }).click();
+  await expect(laterPage.getByTestId("link-dead")).toContainText("මෙම සබැඳිය කල් ඉකුත් වී හෝ දැනටමත් භාවිත කර ඇත.");
+  await laterPage.getByRole("tab", { name: "English" }).click();
+
+  // 5. An expired link: a new one made and 7 days passed (backdated on the local stack).
+  const expired = await tool<{ set_password_link: string }>("reset_office_password", { email });
+  const backdate = await fetch(`${API}/rest/v1/password_links?employee_id=eq.${user.created.id}&used_at=is.null&replaced_at=is.null`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+      apikey: process.env.SERVICE_ROLE_KEY ?? "",
+      authorization: `Bearer ${process.env.SERVICE_ROLE_KEY ?? ""}`,
+    },
+    body: JSON.stringify({ expires_at: new Date(Date.now() - 60_000).toISOString() }),
+  });
+  expect(backdate.status, "backdate the link (service role, local stack)").toBe(204);
+  await laterPage.goto(linkPath(expired.set_password_link));
+  await expect(laterPage.getByTestId("link-dead")).toContainText(dead);
+
+  // 6. A newer link ends the older one; the newer one opens the form. Supabase's old used links get the sentence too.
+  const older = await tool<{ set_password_link: string }>("reset_office_password", { email });
+  const newer = await tool<{ set_password_link: string }>("reset_office_password", { email });
+  await laterPage.goto(linkPath(older.set_password_link));
+  await expect(laterPage.getByTestId("link-dead")).toContainText(dead);
+  await laterPage.goto(linkPath(newer.set_password_link));
+  await expect(laterPage.getByTestId("link-for")).toBeVisible();
+  await laterPage.goto("/set-password#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired");
+  await expect(laterPage.getByTestId("link-dead")).toContainText(dead);
+  await later.close();
+});
+
 test("an office user sets a password, runs the fleet pages, watches a driver live, turns on 2-step, and signs in again with the code", async ({ page }) => {
   // Set up through the connector, as the admin would in Claude.
   const email = `e2e.${stamp}@fame.test`;
@@ -199,10 +274,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   // 1. The set-password link opens the app with a recovery session. 12 characters at least.
   // The link's redirect lands on the Site URL (port 5173); the test's own server is on 5174, so
   // the recovery tokens are taken from the redirect and handed to the app directly.
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  expect(landing).toContain("#access_token=");
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   await expect(page.getByRole("heading", { name: "Choose a password" })).toBeVisible();
   await page.getByLabel("New password").fill("short one");
   await page.getByLabel("Again").fill("short one");
@@ -473,9 +545,7 @@ test("a driver's day in the office (Phase 7): on duty on Live, moved to another 
   const vehicles = await app.get<{ id: string; reg_no: string }[]>(`vehicles?select=id,reg_no&reg_no=eq.${encodeURIComponent(plateA)}`);
   expect(await app.post("duty_sessions", { id: randomUUID(), employee_id: me.id, vehicle_id: vehicles[0].id, device_info: { brand: "OPPO", model: "CPH2119" } })).toBe(201);
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Duty desk for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -542,9 +612,7 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   );
   expect(user.created.permissions).toEqual(["view", "request"]);
   expect(user.created.role).toBe("staff");
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Requester for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -600,9 +668,7 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
 test("a dispatcher (view + assign tasks) gets the tasks board, not mileage or the requests queue; a form keeps a draft when the page is left", async ({ page }) => {
   const email = `e2e.dispatch.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Dispatcher", email, permissions: ["view", "request", "assign_tasks"] });
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Dispatcher for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -666,9 +732,7 @@ test("a driver accepts one task and declines another; the office gives it to a f
   expect(await app.post("rpc/accept_task", { p_task_id: t1.task_id, p_at: new Date().toISOString() })).toBe(200);
   expect(await app.post("rpc/decline_task", { p_task_id: t2.task_id, p_reason: "vehicle_problem", p_note: "Flat tyre" })).toBe(200);
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Dispatcher two for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -750,9 +814,7 @@ test("a task that needs a driver can't be missed; the decide page fills the vehi
   const app = await driverRest(d1.username, d1.pin);
   expect(await app.post("rpc/decline_task", { p_task_id: t.task_id, p_reason: "unwell", p_note: "Fever" })).toBe(200);
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Needs a driver for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -834,9 +896,7 @@ for (const scheme of ["light", "dark"] as const) {
     };
     await wander(true);
 
-    const verify = await fetch(user.set_password_link, { redirect: "manual" });
-    const landing = verify.headers.get("location") ?? "";
-    await page.goto("/" + landing.slice(landing.indexOf("#")));
+    await page.goto(linkPath(user.set_password_link));
     const password = `Twins desk for ${tag}!`;
     await page.getByLabel("New password").fill(password);
     await page.getByLabel("Again").fill(password);
@@ -986,9 +1046,7 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   });
   expect(sync.status).toBe(200);
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Fleet admin for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -1067,9 +1125,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   // Three days ahead (Colombo), so nothing else of the suite shares the day.
   const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(Date.now() + 3 * 864e5));
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Booker for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -1154,13 +1210,8 @@ test("a requester changes an approved booking; the approver sees who is availabl
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 9, current_odometer_km: 300 });
   // Four days ahead (Colombo), so nothing else of the suite shares the day.
   const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(Date.now() + 4 * 864e5));
-  const landingOf = async (link: string) => {
-    const verify = await fetch(link, { redirect: "manual" });
-    const landing = verify.headers.get("location") ?? "";
-    return "/" + landing.slice(landing.indexOf("#"));
-  };
   const setPassword = async (link: string, password: string) => {
-    await page.goto(await landingOf(link));
+    await page.goto(linkPath(link));
     await page.getByLabel("New password").fill(password);
     await page.getByLabel("Again").fill(password);
     await page.getByRole("button", { name: "Save password" }).click();
@@ -1285,9 +1336,7 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   expect(await app.tusUpload("fuel-videos", piece2, mp4, "video/mp4")).toBe(204);
   expect(await app.patch(`fuel_logs?id=eq.${twoId}`, { video_status: "uploaded", video_uploaded_at: new Date().toISOString() })).toBe(200);
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Fuel admin ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -1375,9 +1424,7 @@ test("the location search box: sites by id with their badges, a pasted pin saved
     { operator: "dialog", site_id: bare, name: `Bare Site ${stamp}`, district: "Matale" },
   ] });
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Sites for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -1541,9 +1588,7 @@ test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps 
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Maps", email, permissions: ["view", "assign_tasks"] });
   const driver = { name: `E2E Mapper ${stamp}`, code: `E2M-${stamp}`, username: `e2m.${stamp}`, pin: "864201", phone: "0771234500" };
   await tool("create_driver", driver);
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Maps for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -1622,9 +1667,7 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   await tool("update_vehicle", { reg_no: plate, regular_driver: driver.username });
   const day = new Date(Date.now() + 5.5 * 3600000 + 86400000).toISOString().slice(0, 10); // tomorrow in Colombo
   const signIn = async (p: import("@playwright/test").Page, link: string, password: string) => {
-    const verify = await fetch(link, { redirect: "manual" });
-    const landing = verify.headers.get("location") ?? "";
-    await p.goto("/" + landing.slice(landing.indexOf("#")));
+    await p.goto(linkPath(link));
     await p.getByLabel("New password").fill(password);
     await p.getByLabel("Again").fill(password);
     await p.getByRole("button", { name: "Save password" }).click();
@@ -1714,9 +1757,7 @@ test("Phase 7, Part 4: a trip a driver started is tagged and switched to persona
   expect(made.status).toBe(201);
   expect(made.body.trip.title).toBe(`Trip · ${place}`);
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   await page.getByLabel("New password").fill(`Trips desk for ${stamp}!`);
   await page.getByLabel("Again").fill(`Trips desk for ${stamp}!`);
   await page.getByRole("button", { name: "Save password" }).click();
@@ -1777,9 +1818,7 @@ test("Part 6: the privacy contact e-mail in Fleet settings; the public /privacy 
     const user = await tool<{ set_password_link: string }>("create_office_user", {
       name: "E2E Privacy Admin", email: `e2e.privacy.${stamp}@fame.test`, permissions: ["view", "users"],
     });
-    const verify = await fetch(user.set_password_link, { redirect: "manual" });
-    const landing = verify.headers.get("location") ?? "";
-    await page.goto("/" + landing.slice(landing.indexOf("#")));
+    await page.goto(linkPath(user.set_password_link));
     await page.getByLabel("New password").fill(`Privacy desk ${stamp}!`);
     await page.getByLabel("Again").fill(`Privacy desk ${stamp}!`);
     await page.getByRole("button", { name: "Save password" }).click();
@@ -1825,9 +1864,7 @@ test("a vehicle's documents: upload with its expiry, view, replace, remove with 
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Docs Desk", email: `e2e.docs.${stamp}@fame.test`, permissions: ["view", "vehicles"] });
   const plate = `WP EDC-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota Axio", vehicle_type: "car", seats: 4 });
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   await page.getByLabel("New password").fill(`Docs desk for ${stamp}!`);
   await page.getByLabel("Again").fill(`Docs desk for ${stamp}!`);
   await page.getByRole("button", { name: "Save password" }).click();
@@ -1873,9 +1910,7 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   await tool("update_vehicle", { reg_no: plate, regular_driver: driver.username });
   const day = new Date(Date.now() + 5.5 * 3600000 + 86400000).toISOString().slice(0, 10); // tomorrow in Colombo
   const signIn = async (p: import("@playwright/test").Page, link: string, password: string) => {
-    const verify = await fetch(link, { redirect: "manual" });
-    const landing = verify.headers.get("location") ?? "";
-    await p.goto("/" + landing.slice(landing.indexOf("#")));
+    await p.goto(linkPath(link));
     await p.getByLabel("New password").fill(password);
     await p.getByLabel("Again").fill(password);
     await p.getByRole("button", { name: "Save password" }).click();
@@ -1991,9 +2026,7 @@ test("Hotfix 3 (L7): with 100 open issues and 50 waiting requests the Overview f
     // An approver with their number (Hotfix 2's banner asks for it once; it is not the Overview's).
     sql(`update employees set phone = '+94771234567' where email = 'e2e.l7.${stamp}@fame.test'`);
     const signIn = async (p: import("@playwright/test").Page) => {
-      const verify = await fetch(user.set_password_link, { redirect: "manual" });
-      const landing = verify.headers.get("location") ?? "";
-      await p.goto("/" + landing.slice(landing.indexOf("#")));
+      await p.goto(linkPath(user.set_password_link));
       await p.getByLabel("New password").fill(`L7 approver ${stamp}!`);
       await p.getByLabel("Again").fill(`L7 approver ${stamp}!`);
       await p.getByRole("button", { name: "Save password" }).click();
@@ -2070,9 +2103,7 @@ test("Part 3b: the Drivers board and its week view, a question answered live, th
   await tool("create_driver", driver);
   const email = `e2e.3b.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E 3b Admin", email, role: "admin" });
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   await page.getByLabel("New password").fill(`Part 3b admin ${stamp}!`);
   await page.getByLabel("Again").fill(`Part 3b admin ${stamp}!`);
   await page.getByRole("button", { name: "Save password" }).click();
@@ -2144,9 +2175,7 @@ test("screenshots of the site (desktop): Overview, Assign a task (Where, the clo
   test.setTimeout(180_000);
   const email = `e2e.shots.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Shots", email, permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"] });
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Shots for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -2208,9 +2237,7 @@ test("Round 2: the task page follows the driver live: Arrived at a stop shows wi
   expect(await app.post("rpc/accept_task", { p_task_id: t.task_id, p_at: new Date().toISOString() })).toBe(200);
   expect(await app.patch(`tasks?id=eq.${t.task_id}`, { status: "in_progress", started_at: new Date().toISOString(), start_odometer_km: 1000 })).toBe(200);
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Progress for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
@@ -2263,9 +2290,7 @@ test("a height-only resize, and a full-page picture, never reload or remount the
   expect(await app.post("rpc/accept_task", { p_task_id: t.task_id, p_at: new Date().toISOString() })).toBe(200);
   expect(await app.patch(`tasks?id=eq.${t.task_id}`, { status: "in_progress", started_at: new Date().toISOString(), start_odometer_km: 1000 })).toBe(200);
 
-  const verify = await fetch(user.set_password_link, { redirect: "manual" });
-  const landing = verify.headers.get("location") ?? "";
-  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.goto(linkPath(user.set_password_link));
   const password = `Resize for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
