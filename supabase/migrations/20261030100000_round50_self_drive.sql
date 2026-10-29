@@ -168,8 +168,9 @@ create trigger tasks_self_drive_defaults
 select set_config('fleet.quiet', 'on', true);
 update public.tasks set accepted_at = coalesce(created_at, now())
  where driven_by = 'self' and accepted_at is null and status in ('assigned', 'in_progress');
+-- (Sahan, Checkpoint 50: a switched-off account is skipped.)
 update public.employees e set can_drive = true
- where e.can_drive is null and e.role <> 'driver'
+ where e.can_drive is null and e.role <> 'driver' and e.active
    and exists (select 1 from public.tasks t
                where t.employee_id = e.id and t.driven_by = 'self'
                  and not exists (select 1 from public.vehicle_requests r where r.id = t.request_id and r.driven_by = 'custodian'));
