@@ -7,7 +7,8 @@ const base = { id: "p-base", name: "Head office" };
 /** A trip with its rows' places ("" leaves a row empty) and the other fields. */
 function trip(places: string[], patch: Partial<TripFields> = {}): TripFields {
   const types = ["pickup", "drop", "drop", "visit"] as const;
-  return { ...emptyTrip("2026-10-20"), stops: places.map((p, i) => ({ ...newStop(types[i] ?? "drop"), place: p })), ...patch };
+  // Return to base off unless a test turns it on (a new trip has it on since Fix B: tested below).
+  return { ...emptyTrip("2026-10-20"), returnToBase: false, stops: places.map((p, i) => ({ ...newStop(types[i] ?? "drop"), place: p })), ...patch };
 }
 
 describe("the trip editor's calls (Phase 7, §34)", () => {

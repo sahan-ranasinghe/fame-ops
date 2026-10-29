@@ -8,6 +8,11 @@ import {
   megabytes, phoneChange, PROFILE_PX, saveDocInput, squareCrop, THUMB_PX, VEHICLE_PX,
 } from "./mediaLogic";
 import { editFields, emptyRequest, updateRequestInput, validateNewRequest } from "./requestLogic";
+import { newStop } from "./stopsLogic";
+
+// The forms as they opened before Fix B (two rows, no return to the office): these tests are about other rules. A new form
+// (From and one To, back to the office) is tested in stopsLogic.test.ts.
+const oldRequest = (d: string) => ({ ...emptyRequest(d), stops: [newStop("pickup"), newStop("drop")], returnToBase: false });
 
 describe("the canvas sizes", () => {
   it("crops the centred square of a wide or tall photo and draws it at 512 × 512", () => {
@@ -137,7 +142,7 @@ describe("the requester's phone (§4)", () => {
   });
 
   it("goes with a new request when an approver gives it, and with a change only when it differs", () => {
-    const f = { ...emptyRequest("2026-10-20"), leaveBy: "08:00", stops: [{ ...emptyRequest("2026-10-20").stops[0], place: "Head office" }, { ...emptyRequest("2026-10-20").stops[1], place: "Matara" }] };
+    const f = { ...oldRequest("2026-10-20"), leaveBy: "08:00", stops: [{ ...oldRequest("2026-10-20").stops[0], place: "Head office" }, { ...oldRequest("2026-10-20").stops[1], place: "Matara" }] };
     const v = validateNewRequest({ ...f, requesterPhone: " 077 123 4567 " });
     expect("input" in v && v.input.requester_phone).toBe("077 123 4567");
     const plain = validateNewRequest(f);

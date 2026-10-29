@@ -8,7 +8,7 @@
 // plan_task / create_request / book_vehicle / update_request arguments they
 // become (the connector contract). The trip editor (TripEditor.tsx) shows it.
 import type { RequestEditFields } from "../types";
-import { defaultStops, draftsFromStops, hasDeadline, newStop, type StartFields, startInput, type StopDraft, stopsInput, type What } from "./stopsLogic";
+import { defaultStops, draftsFromStops, hasDeadline, newStop, openStops, type StartFields, startInput, type StopDraft, stopsInput, type What } from "./stopsLogic";
 
 export interface TripFields extends StartFields {
   date: string;
@@ -25,7 +25,7 @@ export interface TripFields extends StartFields {
 export type Base = { id: string; name: string } | null;
 
 export const emptyTrip = (date: string): TripFields => ({
-  date, leaveBy: "", stops: defaultStops(), start: "", startPax: false, returnToBase: false, avoidExpressway: false, end: "",
+  date, leaveBy: "", stops: defaultStops(), start: "", startPax: false, returnToBase: true, avoidExpressway: false, end: "",
 });
 
 /** The stops before the rows: the start is Stop 1 when passengers get in there. */
@@ -98,10 +98,11 @@ export function tripFromRequest(fields: RequestEditFields | undefined, startStop
       // A pin with no place behind it was given (typed, or a map pick): it goes back in the pin field.
       pin: !s.place_id && !s.google_place_id && s.lat != null && s.lng != null ? "given" : undefined,
     })))
-    : [
+    // Fix B: an empty From or To of an older request is left out (openStops); the pickup keeps its type.
+    : openStops([
       { ...newStop("pickup"), place: f?.route_from ?? "", dwell: f?.from_dwell_min == null ? "" : String(f.from_dwell_min) },
       { ...newStop("drop"), place: f?.route_to ?? "", dwell: f?.to_dwell_min == null ? "" : String(f.to_dwell_min) },
-    ];
+    ]);
   const st = f?.start;
   const google = !st?.place_id && !!st?.google_place_id;
   const pax = !!st?.passengers;

@@ -1,16 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { assignOutcome, driverWhatsApp, emptyAssign, planInput, validateAssign } from "./assignLogic";
 import { bookInput, decisionInput, emptyRequest, type RequestFields, suggestInput, timelineSteps, validateNewRequest, diffLines, editFields, redecideInput, updateRequestInput } from "./requestLogic";
+import { newStop } from "./stopsLogic";
+
+// The forms as they opened before Fix B (two rows, no return to the office): these tests are about other rules. A new form
+// (From and one To, back to the office) is tested in stopsLogic.test.ts.
+const oldAssign = (d: string) => ({ ...emptyAssign(d), stops: [newStop("pickup"), newStop("drop")], returnToBase: false });
+const oldRequest = (d: string) => ({ ...emptyRequest(d), stops: [newStop("pickup"), newStop("drop")], returnToBase: false });
 
 /** A request with its stops' places (a pickup, then a drop; "" leaves a row empty) and the other fields. */
 function request(date: string, places: [string, string], patch: Partial<RequestFields> = {}): RequestFields {
-  const r = { ...emptyRequest(date), ...patch };
+  const r = { ...oldRequest(date), ...patch };
   r.stops = r.stops.map((s, i) => ({ ...s, place: places[i] ?? "" }));
   return r;
 }
 
 function filledAssign() {
-  const f = { ...emptyAssign("2026-10-12"), title: "Team drop · Matara", leaveBy: "06:30", driver: "kasun.s", vehicle: "WP CAB-4521" };
+  const f = { ...oldAssign("2026-10-12"), title: "Team drop · Matara", leaveBy: "06:30", driver: "kasun.s", vehicle: "WP CAB-4521" };
   f.stops[0].place = "Head office";
   f.stops[1].place = "Matara site";
   return f;
@@ -18,8 +24,8 @@ function filledAssign() {
 
 describe("Assign a task", () => {
   it("names what is missing", () => {
-    expect(validateAssign(emptyAssign("2026-10-12"), [])).toEqual({ error: "Add the task, a driver, a vehicle." });
-    const noStops = { ...emptyAssign("2026-10-12"), title: "T", driver: "d", vehicle: "v" };
+    expect(validateAssign(oldAssign("2026-10-12"), [])).toEqual({ error: "Add the task, a driver, a vehicle." });
+    const noStops = { ...oldAssign("2026-10-12"), title: "T", driver: "d", vehicle: "v" };
     expect(validateAssign(noStops, [])).toEqual({ error: "Add at least one stop." });
     const noTime = filledAssign();
     noTime.leaveBy = "";
@@ -56,7 +62,7 @@ describe("Assign a task", () => {
     expect(planInput({ ...mine, driver: "kasun.s", vehicle: "WP CAB-4521" })).not.toHaveProperty("driver");
   });
   it("the plan preview needs a date, valid stops and a leave time or a deadline", () => {
-    expect(planInput(emptyAssign("2026-10-12"))).toBeNull();
+    expect(planInput(oldAssign("2026-10-12"))).toBeNull();
     const f = filledAssign();
     expect(planInput(f)).toEqual({ date: "2026-10-12", stops: [{ type: "pickup", place: "Head office" }, { type: "drop", place: "Matara site" }], leave_by: "06:30", driver: "kasun.s", vehicle: "WP CAB-4521" });
     f.leaveBy = "";
@@ -91,8 +97,8 @@ describe("Assign a task", () => {
 
 describe("Vehicle requests", () => {
   it("needs the day, a stop, and a leave-by time or an arrive-by time on a stop", () => {
-    expect(validateNewRequest(emptyRequest(""))).toEqual({ error: "Add the day." });
-    expect(validateNewRequest(emptyRequest("2026-10-12"))).toEqual({ error: "Add at least one stop." });
+    expect(validateNewRequest(oldRequest(""))).toEqual({ error: "Add the day." });
+    expect(validateNewRequest(oldRequest("2026-10-12"))).toEqual({ error: "Add at least one stop." });
     expect(validateNewRequest(request("2026-10-12", ["", "Matara"]))).toEqual({ error: "Add a leave-by time, or an arrive-by time on a stop so it can be planned." });
   });
   it("builds the create_request arguments with the trip, in the asker's own name, with who it is for when that is someone else", () => {
@@ -128,7 +134,7 @@ describe("Vehicle requests (Part 6: custodians and one-step booking)", () => {
     expect(validateNewRequest({ ...f, who: undefined })).toEqual({ input: { ...trip, need_type: "car", pax: 2 } });
   });
   it("looks for free vehicles once the day and the leave time (typed, or the plan's) are known", () => {
-    expect(suggestInput(emptyRequest("2026-10-17"), "")).toBeNull();
+    expect(suggestInput(oldRequest("2026-10-17"), "")).toBeNull();
     expect(suggestInput(f, "09:00")).toEqual({ date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", pax: 2 });
   });
   it("books in one step with the trip: a driver, or (Round 3) the asker or someone else with a plate; the task is named after the last stop", () => {
@@ -185,7 +191,7 @@ describe("Driver first, the vehicle fills itself (Phase 7, §3)", () => {
     expect(bookInput(f, { vehicle: "", driver: "kamal.p", defaultVehicle: null })).toEqual({ error: "Pick a vehicle: this driver holds none today and has no regular one." });
   });
   it("assigns a task with the driver alone when they bring a vehicle; the call names none", () => {
-    const a = { ...emptyAssign("2026-10-17"), title: "Team drop", leaveBy: "08:00", driver: "kamal.p" };
+    const a = { ...oldAssign("2026-10-17"), title: "Team drop", leaveBy: "08:00", driver: "kamal.p" };
     a.stops[0].place = "Head office";
     a.stops[1].place = "Kurunegala site";
     const v = validateAssign(a, [], undefined, { defaultVehicle: "WP CAB-4521" });
