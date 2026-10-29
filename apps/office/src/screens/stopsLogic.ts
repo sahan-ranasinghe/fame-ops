@@ -104,7 +104,11 @@ export function tidyStops(list: StopDraft[]): StopDraft[] {
  */
 export function openStops(list: StopDraft[]): StopDraft[] {
   const kept = list.filter(hasPlace);
-  if (!kept.length) return list.length ? [{ ...newStop("drop"), key: list[list.length - 1].key }] : [newStop("drop")];
+  // Nothing has a place: the last row stays as To (its arrive-by or note kept), the drop-off unless its type was chosen.
+  if (!kept.length) {
+    const last = list[list.length - 1];
+    return last ? [last.typeSet ? last : { ...last, type: "drop" }] : [newStop("drop")];
+  }
   return kept.map((s, i) => ({ ...s, typeSet: s.typeSet ?? s.type !== typeAt(i, kept.length) }));
 }
 
