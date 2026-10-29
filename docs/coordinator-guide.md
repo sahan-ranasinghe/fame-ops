@@ -12,7 +12,7 @@ website's names; the phone has the same screens under its tabs and **More**.
 ## 1. Sign in
 
 1. An Admin creates your account and sends you a one-time link by WhatsApp.
-2. Open the link, choose a password of at least 12 characters, and save it. You land on **Overview**.
+2. Open the link, choose a password of at least 6 characters (longer is safer), and save it. You land on **Overview**.
 3. Next time: open the website, type your e-mail and password, and sign in.
 4. Your name is at the bottom of the left menu. Click it for **My profile**, **Settings** and **Sign out**. On a phone,
    these are at the top of **More**.

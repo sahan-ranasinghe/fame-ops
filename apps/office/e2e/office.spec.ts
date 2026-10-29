@@ -271,15 +271,15 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   // Round 4–7 (5): the fuel type, which the edit form below needs before it saves.
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000, fuel_type: "diesel" });
 
-  // 1. The set-password link opens the app with a recovery session. 12 characters at least.
+  // 1. The set-password link opens the app with a recovery session. 6 characters at least.
   // The link's redirect lands on the Site URL (port 5173); the test's own server is on 5174, so
   // the recovery tokens are taken from the redirect and handed to the app directly.
   await page.goto(linkPath(user.set_password_link));
   await expect(page.getByRole("heading", { name: "Choose a password" })).toBeVisible();
-  await page.getByLabel("New password").fill("short one");
-  await page.getByLabel("Again").fill("short one");
+  await page.getByLabel("New password").fill("abc12");
+  await page.getByLabel("Again").fill("abc12");
   await page.getByRole("button", { name: "Save password" }).click();
-  await expect(page.getByText("Use at least 12 characters.")).toBeVisible();
+  await expect(page.getByText("Use at least 6 characters.")).toBeVisible();
   const password = `Sentence for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);

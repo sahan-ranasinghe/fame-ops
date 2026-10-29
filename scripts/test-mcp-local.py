@@ -2862,8 +2862,8 @@ if CHANNEL == "api":
           "the link opened three times (a preview, the person, a second tap): valid each time", str(opened[-1])[:200])
     check(psql(f"select count(*) from password_links where token_hash = encode(sha256(convert_to('{link_token}', 'UTF8')), 'hex') and used_at is null") == "1",
           "only the token's SHA-256 is stored, and opening it used nothing")
-    code, short = http("POST", f"{API}/functions/v1/office-api/public/password-link/set", pub, {"token": link_token, "password": "too short"})
-    check(code == 400 and short.get("error") == "too_short", "a password under 12 characters: 400, the link kept", f"{code} {short}")
+    code, short = http("POST", f"{API}/functions/v1/office-api/public/password-link/set", pub, {"token": link_token, "password": "abc12"})
+    check(code == 400 and short.get("error") == "too_short", "a password under 6 characters: 400, the link kept", f"{code} {short}")
     staff_pw = "St4ff-" + uuid.uuid4().hex[:10]
     code, saved = http("POST", f"{API}/functions/v1/office-api/public/password-link/set", pub, {"token": link_token, "password": staff_pw})
     check(code == 200 and saved.get("email") == staff_email, "Save password through the link: 200 with the e-mail", f"{code} {saved}")

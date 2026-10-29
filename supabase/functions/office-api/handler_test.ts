@@ -138,7 +138,7 @@ Deno.test("Round 49: the set-password link's public routes: opening checks and n
       use: (_db, token, password) => {
         calls.push(`use ${token}`);
         if (token === "used") return Promise.resolve({ ok: false, state: "used" });
-        if (password === "short") return Promise.resolve({ ok: false, error: "too_short", message: "Use at least 12 characters." });
+        if (password === "short") return Promise.resolve({ ok: false, error: "too_short", message: "Use at least 6 characters." });
         if (password === "weak password!") return Promise.resolve({ ok: false, error: "refused", message: "Password is too weak" });
         return Promise.resolve({ ok: true, email: "s@x.test" });
       },

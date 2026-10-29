@@ -74,7 +74,7 @@ export default function SecurityCard() {
       </div>
       <div className="card card-b">
         <h2>Password</h2>
-        <p className="muted" style={{ margin: "6px 0 0" }}>Forgot it? An admin sends you a new set-password link. Office passwords have at least 12 characters.</p>
+        <p className="muted" style={{ margin: "6px 0 0" }}>Forgot it? An admin sends you a new set-password link. Office passwords have at least 6 characters; longer is safer.</p>
       </div>
     </>
   );

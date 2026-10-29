@@ -405,10 +405,11 @@
   (used up by any GET, e.g. WhatsApp's preview) are no longer made; their old landings (`type=recovery`) still work. 2-step sign-in is OPTIONAL for every role (decided 12 Oct 2026):
   the Settings page (web only, lazy) turns it on or off (`TotpEnrol`: QR + secret + one
   code). If office-api answers 403 `mfa_required` (secret `REQUIRE_MFA_ROLES` set), the
-  second-step page makes the person set it up first. Office passwords: 12+ characters
-  (`MIN_PASSWORD`, the set-password page only). Auth's own minimum password length stays 6
-  (dashboard and config.toml): drivers' 6-digit PINs are passwords in the same Auth project,
-  and `create_driver` / `reset_pin` fail with anything higher. Sign-out resets the
+  second-step page makes the person set it up first. Office passwords (29 October 2026): at
+  least 6 characters, any characters and spaces, no forced kinds, at most Auth's 72 bytes ("At least 6 characters. Longer
+  is safer."; `MIN_PASSWORD` in `auth/SetPassword.tsx` and `passwordLinks.ts`, counted as characters); existing passwords
+  keep working. Auth's own minimum password length is the same 6 (dashboard and config.toml), and must stay 6: drivers'
+  6-digit PINs are passwords in the same Auth project, and `create_driver` / `reset_pin` fail with anything higher. Sign-out resets the
   URL to `/`. Browser holds only the URL and the anon key (`.env.local`, gitignored;
   `.env.example` committed).
 - Live locations (`src/screens/Live.tsx`, Phase 3): the list, the map and the detail card

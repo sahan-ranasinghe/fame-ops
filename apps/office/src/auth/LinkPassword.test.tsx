@@ -71,10 +71,10 @@ describe("LinkPassword", () => {
     const openApp = vi.fn();
     render(<LinkPassword hash={HASH} api={api} signIn={signIn} openApp={openApp} />);
     await screen.findByTestId("link-for");
-    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "short one" } });
-    fireEvent.change(screen.getByLabelText("Again"), { target: { value: "short one" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "abc12" } });
+    fireEvent.change(screen.getByLabelText("Again"), { target: { value: "abc12" } });
     fireEvent.click(screen.getByRole("button", { name: "Save password" }));
-    expect(await screen.findByText("Use at least 12 characters.")).toBeTruthy();
+    expect(await screen.findByText("Use at least 6 characters.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "A long sentence here" } });
     fireEvent.change(screen.getByLabelText("Again"), { target: { value: "A long sentence heRe" } });
     fireEvent.click(screen.getByRole("button", { name: "Save password" }));

@@ -18,9 +18,12 @@ import type { Db } from "./db.ts";
 
 export const LINK_DAYS = 7;
 export const LINK_VALID_FOR = `${LINK_DAYS} days`;
-/** Office passwords: 12+ characters (the site's MIN_PASSWORD). Auth's own minimum stays 6 for drivers' PINs. */
-export const MIN_PASSWORD = 12;
-/** bcrypt reads 72 bytes; Auth refuses more. */
+/**
+ * Office passwords (Sahan, 29 October 2026): at least 6 characters, any characters and spaces, no forced kinds; the same
+ * as Auth's own minimum (drivers' 6-digit PINs live in the same project). Counted as characters, not UTF-16 units.
+ */
+export const MIN_PASSWORD = 6;
+/** bcrypt reads 72 bytes; Auth refuses more (72 English letters, 24 Sinhala ones: a Sinhala letter is 3 bytes). */
 export const MAX_PASSWORD_BYTES = 72;
 
 export type LinkState = "valid" | "used" | "replaced" | "expired" | "switched_off" | "password_set" | "unknown";
@@ -61,11 +64,11 @@ export function setPasswordUrl(base: string, token: string): string {
 
 /** The password rule the page shows, checked again here. */
 export function passwordProblem(password: unknown): { error: "too_short" | "too_long"; message: string } | null {
-  if (typeof password !== "string" || password.length < MIN_PASSWORD) {
+  if (typeof password !== "string" || Array.from(password).length < MIN_PASSWORD) {
     return { error: "too_short", message: `Use at least ${MIN_PASSWORD} characters.` };
   }
   if (new TextEncoder().encode(password).length > MAX_PASSWORD_BYTES) {
-    return { error: "too_long", message: `Use at most ${MAX_PASSWORD_BYTES} characters.` };
+    return { error: "too_long", message: "Too long: use at most 72 English letters or numbers (a Sinhala letter counts as 3)." };
   }
   return null;
 }

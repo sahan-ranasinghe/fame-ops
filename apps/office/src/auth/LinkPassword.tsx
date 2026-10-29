@@ -9,12 +9,11 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Notice } from "../ui/basics";
 import { SecretField } from "../ui/SecretField";
 import { AuthPage } from "./AuthPage";
+import { MAX_PASSWORD_BYTES, MIN_PASSWORD, passwordLength } from "./SetPassword";
 import { type LinkLang, linkToken, linkWord, type LinkWord, startLang } from "./linkWords";
 import { apiBase, supabase } from "./supabase";
 
 const LANG_KEY = "fame.linkLang";
-const MIN = 12;
-const MAX_BYTES = 72;
 
 type Checked = { state: "valid"; name: string; email: string } | { state: string };
 
@@ -118,8 +117,8 @@ export function LinkPassword({
   async function submit(ev: FormEvent) {
     ev.preventDefault();
     if (!token || phase.at !== "form") return;
-    if (p1.length < MIN) return setError({ word: "tooShort" });
-    if (new TextEncoder().encode(p1).length > MAX_BYTES) return setError({ word: "tooLong" });
+    if (passwordLength(p1) < MIN_PASSWORD) return setError({ word: "tooShort" });
+    if (new TextEncoder().encode(p1).length > MAX_PASSWORD_BYTES) return setError({ word: "tooLong" });
     if (p1 !== p2) return setError({ word: "differ" });
     setError(null);
     setBusy(true);

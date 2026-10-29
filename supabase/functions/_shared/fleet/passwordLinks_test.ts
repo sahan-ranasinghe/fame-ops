@@ -88,7 +88,7 @@ Deno.test("opening: a malformed token is unknown without asking the database; a 
 
 Deno.test("the save: the rule first, then the claim, then Auth; audited without the password", async () => {
   const short = fakeDb();
-  assertEquals((await usePasswordLink(short.db, newLinkToken(), "too short")).ok, false);
+  assertEquals((await usePasswordLink(short.db, newLinkToken(), "abc12")).ok, false);
   assertEquals(short.calls.length, 0, "a short password never touches the link");
   assertEquals(passwordProblem("x".repeat(73))?.error, "too_long");
   assertEquals(passwordProblem("A sentence of twelve"), null);
@@ -102,6 +102,18 @@ Deno.test("the save: the rule first, then the claim, then Auth; audited without 
   assertEquals(audits[0].tool, "set_password_by_link");
   assertEquals(audits[0].actor_name, "Shashen Herath");
   assert(!JSON.stringify(audits).includes("A long sentence here"), "the password is never in the audit row");
+});
+
+Deno.test("the office password rule (Sahan, 29 October 2026): 6 characters at least, any characters, up to Auth's 72 bytes", () => {
+  assertEquals(passwordProblem("abc12")?.error, "too_short");
+  assertEquals(passwordProblem("abc123"), null, "6 is enough");
+  assertEquals(passwordProblem("a b c!"), null, "spaces and symbols count, no forced kinds");
+  assertEquals(passwordProblem("aaaaaa"), null, "letters only is allowed");
+  assertEquals(passwordProblem("x".repeat(64)), null, "no maximum below 64");
+  assertEquals(passwordProblem("x".repeat(72)), null);
+  assertEquals(passwordProblem("මුරපදය"), null, "Sinhala counts letters, not UTF-16 units (6 code points)");
+  assertEquals(passwordProblem("අආඇ")?.error, "too_short");
+  assertEquals(passwordProblem("අ".repeat(25))?.error, "too_long", "25 Sinhala letters are 75 bytes");
 });
 
 Deno.test("a used, replaced or expired link: the state, Auth never asked; Auth's refusal gives the link back", async () => {
