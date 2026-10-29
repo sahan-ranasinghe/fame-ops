@@ -203,7 +203,7 @@ function warningWords(s: string): Words | null {
     const min = minutesOf(m[1]);
     return min === null ? null : { key: 'office.warn.longDay', vars: { dur: { key: '', vars: { minutes: min } } } };
   }
-  if ((m = s.match(/^Same as the start: Stop 1 \((.+)\) is a pickup where the trip starts\. Tick "Passengers get in here" instead/))) return { key: 'office.warn.sameAsStart', vars: { place: m[1] } };
+  if ((m = s.match(/^Same as the start: Stop 1 \((.+)\) is a pickup where the trip starts\. (?:Tick "Passengers get in here"|Choose "People get in" for the start \(From\)) instead/))) return { key: 'office.warn.sameAsStart', vars: { place: m[1] } };
   // A conflict card (fleet.ts card): "WP CAB-4521 is on task Team drop 08:00–11:00 for Dilini (driver Kamal)".
   if ((m = s.match(new RegExp(`^(.+?) is on task (.+) (${TIME}–${TIME}|from ${TIME})(?: for (\\S+))?(?: \\(driver (\\S+)\\))?$`)))) {
     const window = windowWords(m[3]);

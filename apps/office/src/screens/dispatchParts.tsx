@@ -12,7 +12,7 @@ import type { Picked } from "../ui/locationLogic";
 import type { DefaultVehicle } from "./availabilityLogic";
 import { type DepartureCheck, usedLeave } from "./departureLogic";
 import { StartOptions } from "./StopsEditor";
-import { type StartFields, startRoleOf } from "./stopsLogic";
+import type { StartFields } from "./stopsLogic";
 import { type FeatureKey, featureOn, switchesOff } from "./switchLogic";
 import { ANY_TYPES, anyValue, isChoice, ON_THE_DAY, ON_THE_DAY_LABEL } from "./vehicleChoiceLogic";
 
@@ -209,10 +209,18 @@ export function StartFrom({ id, value, base, onChange, google = true, stay, note
         <StartOptions id={id} value={value} onChange={onChange} name={name} />
       </div>
       {value.startPax
-        ? <span className="route-cap" data-testid="start-stop">Stop 1 · Pickup · {name || "the start"} · {startRoleOf(value) === "goods" ? "goods get in" : "people get in"} · {stay ?? "the place’s usual time there"}. The next stop is Stop 2.</span>
+        ? <span className="route-cap" data-testid="start-stop">Stop 1 · Pickup · {name || "the start"} · {startWhatWords(value.startWhat)} · {stay ?? "the place’s usual time there"}. The next stop is Stop 2.</span>
         : <span className="route-cap">{note ?? "Leave from here"}</span>}
     </div>
   );
+}
+
+/** What gets in at the start, in the From line ("people get in", "goods get in", "documents picked up here"). */
+export function startWhatWords(what: string | undefined): string {
+  if (what === "goods") return "goods get in";
+  if (what === "documents") return "documents picked up here";
+  if (what === "other") return "a pickup here";
+  return "people get in";
 }
 
 /** Where the start is, for the same-as-start check: the picked place or pin, else the base place. */

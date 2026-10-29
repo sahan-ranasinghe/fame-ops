@@ -203,7 +203,7 @@ export const createOfficeUser = tool({
         created: { name, email, role: label, permissions: perms, code: employeeCode, id: row.id },
         set_password_link: link,
         link_valid_for: LINK_VALID_FOR,
-        next: "Send the link by WhatsApp. The person opens it, chooses a password (12+ characters) and signs in. Opening it " +
+        next: "Send the link by WhatsApp. The person opens it, chooses a password (at least 6 characters) and signs in. Opening it " +
           "(or WhatsApp's preview) does not use it up: it works until the password is saved, for 7 days. They can turn on 2-step sign-in in Settings.",
       },
       summary: `created office user ${email} (${label}: ${perms.join(", ") || "no permissions"})`,

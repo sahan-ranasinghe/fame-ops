@@ -985,7 +985,7 @@ export async function prepareTask(db: Db, settings: Settings, now: Date, args: {
     notes.push(
       `Same as the start: Stop 1 (${
         stops[0].place_name
-      }) is a pickup where the trip starts. Tick "Passengers get in here" instead (start.passengers: true).`,
+      }) is a pickup where the trip starts. Choose "People get in" for the start (From) instead (start.passengers: true).`,
     );
   }
   const hasDeadline = stops.some((s) => s.arrive_by);
@@ -1563,7 +1563,7 @@ export const updateTaskStops = tool({
       notes.push("Passengers get in at the start only on a task not under way: the stops were saved without it.");
     } else if (start && kept.length === 0 && stops[0]?.type === "pickup" && samePlace(start, stops[0])) {
       notes.push(
-        `Same as the start: Stop 1 (${stops[0].place_name}) is a pickup where the trip starts. Tick "Passengers get in here" instead.`,
+        `Same as the start: Stop 1 (${stops[0].place_name}) is a pickup where the trip starts. Choose "People get in" for the start (From) instead.`,
       );
     }
 

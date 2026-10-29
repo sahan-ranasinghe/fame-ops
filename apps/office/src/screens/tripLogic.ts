@@ -97,8 +97,8 @@ export function tripFromRequest(fields: RequestEditFields | undefined, startStop
     })))
     // Fix B: an empty From or To of an older request is left out (openStops); the pickup keeps its type.
     : openStops([
-      { ...newStop("pickup"), place: f?.route_from ?? "", dwell: f?.from_dwell_min == null ? "" : String(f.from_dwell_min) },
-      { ...newStop("drop"), place: f?.route_to ?? "", dwell: f?.to_dwell_min == null ? "" : String(f.to_dwell_min) },
+      { ...newStop("pickup"), place: f?.route_from ?? "", dwell: f?.from_dwell_min == null ? "" : String(f.from_dwell_min), typeSet: true },
+      { ...newStop("drop"), place: f?.route_to ?? "", dwell: f?.to_dwell_min == null ? "" : String(f.to_dwell_min), typeSet: true },
     ]);
   const st = f?.start;
   const google = !st?.place_id && !!st?.google_place_id;

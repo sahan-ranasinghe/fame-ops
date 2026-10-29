@@ -227,7 +227,8 @@ console.log('\nThe server\'s sentences on a Sinhala screen');
     check(s !== server && !/[A-Za-z]{2,}/.test(strip(s, keep)) && keep.every((k) => s.includes(k)), `Sinhala, the values as they are: "${server}"`, s);
     check(!/[෦-෯]/.test(s), `Latin digits: "${server}"`);
   }
-  check(sentenceText(en, 'Same as the start: Stop 1 (Head office) is a pickup where the trip starts. Tick "Passengers get in here" instead (start.passengers: true).') === 'Same as the start: Stop 1 (Head office) is a pickup where the trip starts. Tick "Passengers get in here" instead.', 'the start note without its code name (start.passengers)');
+  check(sentenceText(en, 'Same as the start: Stop 1 (Head office) is a pickup where the trip starts. Tick "Passengers get in here" instead (start.passengers: true).') === 'Same as the start: Stop 1 (Head office) is a pickup where the trip starts. Choose "People get in" on From instead.', 'the start note without its code name (start.passengers); the old server sentence in today\'s words (Fix B)');
+  check(sentenceText(en, 'Same as the start: Stop 1 (Head office) is a pickup where the trip starts. Choose "People get in" for the start (From) instead (start.passengers: true).') === 'Same as the start: Stop 1 (Head office) is a pickup where the trip starts. Choose "People get in" on From instead.', 'Fix B: the server\'s new sentence, the same key · the start note without its code name (start.passengers)');
   for (const unknown of ['The vehicle is in the garage', 'Something new from the server.', 'Kamal is not available then · a new kind of reason', 'On duty · free 08:00–12:00 · something else', 'WP CAB-4521 is booked tomorrow (x).']) {
     check(sentenceText(si, unknown) === unknown, `unknown: as the server said it: "${unknown}"`);
   }

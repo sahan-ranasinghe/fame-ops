@@ -236,11 +236,26 @@ describe("From / To / Add stop (Fix B, 29 October 2026)", () => {
   it("an old draft or request with an empty stop opens without it; a loaded type is kept", () => {
     const old = [{ ...newStop("pickup"), place: "" }, at("Galle")];
     expect(named(openStops(old))).toEqual(["drop:Galle"]);
-    const typed = openStops([at("Office", "pickup"), at("Galle")]);
-    expect(typed.map((s) => [s.type, !!s.typeSet])).toEqual([["pickup", true], ["drop", false]]);
+    // Rows of an older draft (no typeSet): their types were picked on the form, so they stay.
+    const typed = openStops([{ ...at("Office", "pickup"), typeSet: undefined }, { ...at("Galle"), typeSet: undefined }]);
+    expect(typed.map((s) => [s.type, !!s.typeSet])).toEqual([["pickup", true], ["drop", true]]);
+    // The reviewer's case: a Fix B draft left with To empty; resumed, the last stop becomes the drop-off.
+    const left = [at("A", "visit"), at("B", "visit"), newStop("drop")];
+    expect(named(openStops(left))).toEqual(["visit:A", "drop:B"]);
+    expect(stopsInput(openStops(left))).toEqual({ stops: [{ type: "visit", place: "A" }, { type: "drop", place: "B" }] });
+    // A task's stops keep their types on a move (Change stops): no silent drop → visit.
+    const loaded = draftsFromStops([{ type: "drop", what: "people", place: "A" }, { type: "drop", what: "people", place: "B" }]);
+    expect(named(moveStopTo(loaded, 1, 0))).toEqual(["drop:B", "drop:A"]);
+    // An all-empty To keeps its arrive-by and is the drop-off.
+    expect(openStops([{ ...newStop("pickup"), arriveBy: "10:00" }]).map((s) => [s.type, s.arriveBy])).toEqual([["drop", "10:00"]]);
     expect(openStops([newStop("pickup"), newStop("drop")]).map((s) => s.type)).toEqual(["drop"]);
     expect(named(draftsFromStops([{ type: "pickup", place: "" }, { type: "visit", place: "Kandy" }]))).toEqual(["visit:Kandy"]);
     expect(draftsFromStops([{ type: "visit", place: "Kandy" }])[0].typeSet).toBe(true); // a visit as the last stop stays a visit
+  });
+
+  it("Tick it re-types the rows left: a ticked To makes the stop before it the drop-off", () => {
+    const list = [at("Kandy", "visit"), withRole(at("Head office"), "in")];
+    expect(named(tickStart(list, 1).list)).toEqual(["drop:Kandy"]);
   });
 
   it("From's Options: Leave from here, People get in, Goods", () => {

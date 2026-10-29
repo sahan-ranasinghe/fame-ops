@@ -1033,7 +1033,39 @@ its default stay is the setting `dwell_min.visit` (60 min) where Add stop used t
 | Change stops (`/tasks/:id/stops`; the app's mode stops) | own page, start read-only | the same Where step | the same From / To layout (the site's From stays read-only there; the reached stops keep their numbers) |
 | Approval pages' stops (RequestDecide, TripDecide, ChangeDecide) | read-only rows | n/a | the same From → stops → To line, read-only (RequestDecide keeps its stay per stop) |
 
-Proposed removals: none.
+Proposed removals: none. (Office mode's keys no screen says any more, kept until you say: `office.trip.startFrom`,
+`stops`, `passengersHere`, `returnToBase`, `what`.)
+
+### 38.3 As built, and the fresh review
+
+Site (`StopsEditor.tsx` StopsRows / StopRow / StopOptions / StartOptions / RouteLine, `dispatchParts.tsx` StartFrom as the
+From row, `TripEditor.tsx` TripRoute with "Then back to the office" and No expressway, `drafts.ts` useFormDraft's
+`restore`, `RequestTrip.tsx` TripRouteLine on TripDecide, the request page and ChangeDecide; `RequestDecide.tsx` keeps its
+stay per stop): ⋯ Options is a popover on a desktop and a sheet on a phone; drag is HTML5 drag-and-drop on the handle, with
+Move up / Move down in Options (phone browsers have no HTML5 drag). Office mode / /m/ (`where.tsx`, the new
+`components/office/StopOptions.tsx` with the app's Sheet, `lib/patterns/dragLogic.ts`; the drag on the handle through the
+touch responder, as SlideToConfirm does; `draftLogic.ts` openedDraft for a resumed draft): 16 new keys in English and
+Sinhala. The When step keeps its arrive-by and stay rows (the plan's warnings live there). Tests: `routeCard.test.tsx` (14),
+`whereRoute.test.tsx` (12), `stopsLogic.test.ts` (11 for Fix B), the 390 px Sinhala check in `e2e/mobile.spec.ts`; the
+older tests that filled the second default row fill + Add stop and To (each change listed in the commits; no assertion
+removed).
+
+The fresh reviewer's findings and what was done:
+1. A Fix B draft left with To empty, resumed, could send visit, visit (no drop-off): a row added in the form now carries
+   `typeSet: false` and follows its place when the draft opens. Fixed, with the reviewer's case as a test.
+2. Moving a task's or a request's stops could change their types (drop → visit): a loaded type is now kept on a move
+   (`draftsFromStops`, the older From/To requests, an older draft). Fixed, tested.
+3. `create_office_user`'s `next` still said 12+: now "at least 6 characters". Fixed.
+4. Next / Save remove a row that has an arrive-by or a note but no place: kept as the brief says ("any row without a place
+   is removed silently"); your call if such a row should be named instead.
+5. The server's same-as-start warning and the app's sentence still named "Passengers get in here": now 'Choose "People get
+   in" for the start (From)'; the app reads both the old and the new sentence (the old server until the deploy). Fixed.
+6. Tick it on To left the row before it a visit: the rows are re-typed. Fixed, tested.
+7. The read-only From line said "passengers" for goods, and lost the start's own times: it now says what gets in and shows
+   the times. Fixed.
+8. (Unconfirmed) an old From/To request with an empty To on Approve: checked, RequestDecide fills "To be confirmed"; no change.
+9. Drag on a real phone (Android's scroll view) and in phone browsers is untested: Move up / Move down in Options always work.
+10. On the request and approval pages the route line sits above the plan's timeline, so the stops show twice: noted.
 
 ## 37. Round 50: office people who drive themselves get the driver flow (29 October 2026, branch `phase9-r50` from main `9398b64`)
 

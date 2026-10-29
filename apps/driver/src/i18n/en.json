@@ -3151,7 +3151,7 @@
       "noPin": "{place}: no map pin, so its leg counts as 0 minutes. Save the place with a pin, or type a town name.",
       "notReachable": "Leaving now, the earliest arrival at Stop {n} is {time} UTC; the deadline cannot be met with the buffer.",
       "longDay": "A long day: {dur} from leaving to the end.",
-      "sameAsStart": "Same as the start: Stop 1 ({place}) is a pickup where the trip starts. Tick \"Passengers get in here\" instead.",
+      "sameAsStart": "Same as the start: Stop 1 ({place}) is a pickup where the trip starts. Choose \"People get in\" on From instead.",
       "onTask": "{who} is on task {title} {window}",
       "onTaskFor": "{who} is on task {title} {window} for {name}",
       "onTaskDriver": "{who} is on task {title} {window} (driver {driver})",

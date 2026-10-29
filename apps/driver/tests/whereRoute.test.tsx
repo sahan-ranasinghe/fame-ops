@@ -249,9 +249,10 @@ describe('Where: From / To / Add stop', () => {
 
   it('a resumed draft opens without its empty rows and keeps a chosen type; the Google note and the no-pin warning stay', async () => {
     const d = newDraft('request');
-    const g: StopDraft = { ...newStop('pickup'), place: 'Google place', googlePlaceId: 'g1', picked: true };
-    const empty: StopDraft = newStop('visit');
-    const nopin: StopDraft = { ...newStop('drop'), place: 'Old site', placeId: 'p9', placePinned: false, picked: true };
+    // A draft saved before Fix B: its rows carry no typeSet (their types were picked on the old form, so they stay).
+    const g: StopDraft = { ...newStop('pickup'), typeSet: undefined, place: 'Google place', googlePlaceId: 'g1', picked: true };
+    const empty: StopDraft = { ...newStop('visit'), typeSet: undefined };
+    const nopin: StopDraft = { ...newStop('drop'), typeSet: undefined, place: 'Old site', placeId: 'p9', placePinned: false, picked: true };
     setDraft({ ...d, fields: { ...d.fields, stops: [g, empty, nopin] } });
     await open();
     expect(rows()).toHaveLength(2);

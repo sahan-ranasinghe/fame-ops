@@ -11,6 +11,7 @@ import { useQuery } from "../data/useQuery";
 import { cap, joinDots } from "../lib/format";
 import { Notice } from "../ui/basics";
 import { PlanWithMap } from "./PlanMap";
+import { startWhatWords } from "./dispatchParts";
 import { RouteLine } from "./StopsEditor";
 import { tripKey } from "./requestLogic";
 
@@ -37,11 +38,18 @@ export function useTripLine(q: RequestCard | undefined): RequestTrip | undefined
  * `times` (no plan stored) each stop shows the time planned there and its arrive-by, as the stops list did.
  */
 export function TripRouteLine({ trip, times = false }: { trip: RequestTrip; times?: boolean }) {
-  const atStart = trip.stops.some((s) => s.is_start);
+  const startStop = trip.stops.find((s) => s.is_start);
+  const atStart = !!startStop;
   const rows = trip.stops.filter((s) => !s.is_start);
   const offset = atStart ? 1 : 0;
   return (
-    <RouteLine from={joinDots([trip.start?.name ?? "The base place", atStart ? "passengers get in here (Stop 1)" : ""])} offset={offset}
+    <RouteLine from={joinDots([
+      trip.start?.name ?? "The base place",
+      startStop ? `${startWhatWords(startStop.what)} (Stop 1)` : "",
+      // The start stop's own times, as the stops list showed them (no plan stored).
+      times && startStop?.planned_arrive ? `arrive ${startStop.planned_arrive}` : "",
+      times && startStop?.arrive_by ? `by ${startStop.arrive_by}` : "",
+    ])} offset={offset}
       back={trip.return_to_base} noExpressway={trip.avoid_expressway} rowTestId={times ? "trip-stop" : "route-stop"}
       stops={rows.map((s, i) => ({
         key: `${s.seq}-${i}`,

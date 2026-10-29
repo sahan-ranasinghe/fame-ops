@@ -1829,7 +1829,7 @@ check(pv["stops"][0].get("is_start") is True and pv["stops"][0]["label"] == "Sto
 pv = tool("plan_task", {"date": day(5), "leave_by": "08:00", "start": {"place": "Head office"},
                         "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kurunegala tower site"}]})
 check(any(w.startswith("Same as the start: Stop 1 (Head office, Colombo 05) is a pickup") for w in pv["warnings"]),
-      "a first pickup at the start without the tick: the warning says to tick 'Passengers get in here'", json.dumps(pv["warnings"]))
+      "a first pickup at the start without the tick: the warning says to choose People get in for the start (From)", json.dumps(pv["warnings"]))
 
 # The vehicle fills itself (§3): the driver's regular vehicle, then the one held today; another one is recorded.
 tool("update_vehicle", {"reg_no": "WP P7-1002", "regular_driver": "saman.k"})
