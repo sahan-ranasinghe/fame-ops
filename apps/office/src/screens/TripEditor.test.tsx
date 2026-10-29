@@ -78,9 +78,17 @@ describe("the trip editor", () => {
   const planned = { timeout: 4000 };
   it("has Assign's trip fields, plans with plan_task by itself, and shows the plan's leave time as a grey suggestion (never filled in)", async () => {
     const transport = await mount(galle());
-    for (const label of ["Day", "Leave by", "Back by", "Start from", "Passengers get in here", "Return to office", "No expressway", "Arrive by"]) {
+    // Fix B: Start from is From, Return to office is "Then back to the office"; Passengers get in here is From's ⋯ Options'
+    // People get in, and a stop's arrive-by is in its ⋯ Options.
+    for (const label of ["Day", "Leave by", "Back by", "From", "Then back to the office", "No expressway"]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
+    fireEvent.click(screen.getByRole("button", { name: "Options for From" }));
+    expect(screen.getByRole("button", { name: "People get in" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    fireEvent.click(screen.getByRole("button", { name: "Options for To" }));
+    expect(screen.getByLabelText("Arrive by")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.getAllByTestId("stop-row")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Plan now" })).toBeNull();
     await waitFor(() => expect(leaveField().placeholder).toBe("07:24 · suggested"), planned);
