@@ -237,7 +237,10 @@ create policy driver_heartbeats_insert_own on public.driver_heartbeats
     and (exists (select 1 from public.employees e where e.id = employee_id and e.role = 'driver')
          or public.self_trip_covers(employee_id, at)));
 
-/** A session's end is never in the future (a phone clock running ahead cannot keep one "open" by closing it later). */
+/**
+ * An office person's session never ends in the future (a phone clock running ahead, or a hand-made close, cannot keep one
+ * "open" by closing it later); never before it started either. A driver's sessions are as before.
+ */
 create or replace function public.duty_sessions_end_not_ahead()
 returns trigger
 language plpgsql
@@ -245,8 +248,9 @@ security definer
 set search_path = ''
 as $$
 begin
-  if new.ended_at is not null and new.ended_at > now() then
-    new.ended_at := now();
+  if new.ended_at is not null and new.ended_at > now()
+     and not exists (select 1 from public.employees e where e.id = new.employee_id and e.role = 'driver') then
+    new.ended_at := greatest(now(), new.started_at);
   end if;
   return new;
 end;

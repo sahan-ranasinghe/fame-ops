@@ -100,10 +100,15 @@ select ok((select to_at is not null from public.vehicle_assignments where employ
   'and the vehicle is released with it');
 select is((select count(*) from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000050a1'), 0::bigint,
   'their last position is not kept after the trip');
--- A session closed with an end in the future is closed now.
-insert into public.duty_sessions (id, employee_id, started_at) values ('60000000-0000-0000-0000-0000000050a2', '10000000-0000-0000-0000-0000000050c1', now() - interval '1 hour');
+-- An office person's session closed with an end in the future is closed now; a driver's is as before.
+insert into public.duty_sessions (id, employee_id, started_at) values
+  ('60000000-0000-0000-0000-0000000050a2', '10000000-0000-0000-0000-0000000050a1', now() - interval '1 hour'),
+  ('60000000-0000-0000-0000-0000000050a3', '10000000-0000-0000-0000-0000000050c1', now() + interval '1 second');
 update public.duty_sessions set ended_at = now() + interval '1 day', end_reason = 'driver' where id = '60000000-0000-0000-0000-0000000050a2';
-select ok((select ended_at <= now() from public.duty_sessions where id = '60000000-0000-0000-0000-0000000050a2'), 'a session''s end is never in the future');
+select ok((select ended_at <= now() from public.duty_sessions where id = '60000000-0000-0000-0000-0000000050a2'), 'an office person''s session never ends in the future');
+update public.duty_sessions set ended_at = now() + interval '3 seconds', end_reason = 'auto' where id = '60000000-0000-0000-0000-0000000050a3';
+select ok((select ended_at > now() from public.duty_sessions where id = '60000000-0000-0000-0000-0000000050a3'),
+  'a driver''s session registered after the fact keeps its times (the phone''s points a moment ahead)');
 -- Someone else's trip of theirs started by a hand-made write does not count as driven in the app.
 insert into public.tasks (id, title, employee_id, vehicle_id, start_at, created_by, driven_by, driver_name) values
   ('50000000-0000-0000-0000-0000000050f2', 'Booked for a visitor', '10000000-0000-0000-0000-0000000050a1', '20000000-0000-0000-0000-0000000050a1', now(), 'Self Driver', 'other', 'Visitor');
