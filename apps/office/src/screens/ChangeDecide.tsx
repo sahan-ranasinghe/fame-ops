@@ -16,6 +16,7 @@ import { StatusBanner } from "../ui/patterns";
 import { useToast } from "../ui/Toast";
 import { DecidedBy, refreshRequest, ReviewingLine, useReviewing } from "./approvers";
 import { ChangesList, LateNotice, RequestStatusPill } from "./requestParts";
+import { TripRouteLine } from "./RequestTrip";
 
 export function ChangeDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: RequestCard) => void }) {
   const { me, store, transport } = useFleet();
@@ -91,6 +92,8 @@ export function ChangeDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ
           {(q.proposed?.vehicle || q.proposed?.vehicle_text) && <div><dt>Vehicle would be</dt><dd>{q.proposed.vehicle ?? q.proposed.vehicle_text}</dd></div>}
           {q.decline_reason && <div style={{ gridColumn: "1/-1" }}><dt>Declined because</dt><dd>{q.decline_reason}</dd></div>}
         </dl>
+        {/* Fix B (29 October 2026): the task's stops on the same From → stops → To line as the forms, read only. */}
+        {q.trip && <div style={{ marginTop: 12 }}><TripRouteLine trip={q.trip} /></div>}
         <div style={{ marginTop: 12 }}><DecidedBy q={q} /></div>
         <ReviewingLine list={q.reviewing} block />
         {taskId && canOpenTask(me) && (

@@ -375,6 +375,29 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .stop-card .stop-h .acts .btn { width: 40px; height: 40px; padding: 0 }
 .stop-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr); gap: 10px }
 @media (max-width: 480px) { .stop-grid { grid-template-columns: minmax(0, 1fr) } .split-detail { position: static; max-height: none } }
+/* Fix B (29 October 2026): From / To / Add stop, Uber's and Google Maps' route form. One line joins From, the stops and To;
+   a ring for From, the stop's number for a stop, a filled square for To; the handle drags a row (Move up / down in ⋯ Options). */
+.route-card { display: grid; gap: 10px }
+.route-line { position: relative; list-style: none; margin: 0; padding: 0 0 0 34px; display: grid; gap: 14px }
+.route-line::before { content: ""; position: absolute; left: 11px; top: 14px; bottom: 14px; width: 2px; background: var(--line-strong) }
+.route-row { position: relative; display: grid; gap: 4px; min-width: 0 }
+.route-row::before { content: attr(data-mark); position: absolute; left: -34px; top: 22px; width: 22px; height: 22px; border-radius: 11px; display: grid; place-items: center; font: 600 11px var(--font-mono); background: var(--ink); color: var(--surface) }
+.route-row[data-kind="from"]::before { content: ""; background: var(--surface); box-shadow: inset 0 0 0 3px var(--ink) }
+.route-row[data-kind="to"]::before { content: ""; border-radius: 4px; width: 18px; height: 18px; left: -32px; top: 24px; background: var(--ink) }
+.route-card.is-read .route-row::before { top: 2px }
+.route-card.is-read .route-row[data-kind="to"]::before { top: 4px }
+.route-row.is-over { outline: 2px dashed var(--live); outline-offset: 4px; border-radius: 8px }
+.route-lab { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted) }
+.route-field { display: flex; align-items: center; gap: 6px; min-width: 0 }
+.route-field > .grow { flex: 1 1 0; min-width: 0 }
+.route-field .icon-btn { width: 40px; height: 40px; padding: 0; flex: none }
+.route-grip { flex: none; width: 24px; height: 40px; display: grid; align-content: center; justify-items: center; gap: 3px; cursor: grab; color: var(--muted) }
+.route-grip i { display: block; width: 14px; height: 2px; border-radius: 1px; background: currentColor }
+.route-cap { font-size: 13px; color: var(--muted) }
+.route-sum { justify-self: start; font-size: 13px; text-align: left }
+.route-start { display: grid; gap: 4px; min-width: 0 }
+.route-add { padding-left: 34px }
+.route-after { display: grid; gap: 8px }
 @media (max-width: 768px) {
   .sticky-acts { position: sticky; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 20; background: var(--bg); padding: 10px 0; margin-top: 8px }
   .sticky-acts .btn.primary, .sticky-acts .btn.dark { flex: 1 1 100% }

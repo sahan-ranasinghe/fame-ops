@@ -1,6 +1,8 @@
-// Edit a task's stops (/tasks/:id/stops): the pending stops as rows (named by
-// their place among the stops still on the task, with the time at each stop),
-// "Passengers get in here" at the start, the leave-by time checked at once
+// Edit a task's stops (/tasks/:id/stops): the route card (Fix B, 29 October
+// 2026: From / To / Add stop): From is the task's start, read only, with its
+// ⋯ Options (People get in there) while the task is not under way; the pending
+// stops as rows (named by their place among the stops still on the task: the
+// reached stops keep their numbers), each with its ⋯ Options; the leave-by time checked at once
 // against the arrive-by times, the plan as a timeline as they change, Save →
 // update_task_stops with the loaded plan version (a stale one is refused with
 // "changed since you loaded it").
@@ -10,7 +12,7 @@ import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { flashWarnings } from "../data/flash";
 import type { UpdateStopsResult } from "../data/types";
-import { hhmm, today } from "../lib/format";
+import { hhmm, joinDots, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { changeOutcome } from "./approvalLogic";
 import type { FleetError } from "../transport/types";
@@ -23,9 +25,8 @@ import { checkDeparture, departurePlan } from "./departureLogic";
 import { DepartureNote, useFleetSettings, usePlanPreview } from "./dispatchParts";
 import { dwellFallbacks, planReasons, rowStopNumbers } from "./planLogic";
 import { PlanWithMap } from "./PlanMap";
-import { StopsRows } from "./StopsEditor";
-import { DwellPicker } from "./DwellPicker";
-import { draftsFromStops, dwellText, type StartFields, startExtras, type StopDraft, stopsInput, tickStart, WHAT_LABEL } from "./stopsLogic";
+import { StartOptions, StopsRows } from "./StopsEditor";
+import { draftsFromStops, dwellText, openStops, type StartFields, startExtras, type StopDraft, stopsInput, tickStart, tidyStops } from "./stopsLogic";
 import { useBoardQuery, useTask } from "./TaskDetail";
 
 interface StopsForm extends Pick<StartFields, "startWhat" | "startNote" | "startDwell"> {
@@ -46,7 +47,8 @@ export function TaskStops() {
   const { p, err } = useTask(taskId);
   const back = `/tasks/${taskId}${useBoardQuery()}`;
   const settings = useFleetSettings();
-  const [form, setForm, draft] = useFormDraft<StopsForm | null>("task-stops.v2", taskId, null);
+  // Fix B: a draft put back opens without its empty rows (openStops; the task's stops already do, draftsFromStops).
+  const [form, setForm, draft] = useFormDraft<StopsForm | null>("task-stops.v2", taskId, null, true, (x) => (x ? { ...x, list: openStops(x.list) } : x));
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const version = useRef<number>(0);
@@ -119,7 +121,10 @@ export function TaskStops() {
 
   async function save() {
     if (!form) return;
-    const v = stopsInput(form.list, offset);
+    // Fix B: the rows with no place go once To has one (tidyStops); the form shows what is sent.
+    const list = tidyStops(form.list);
+    if (list !== form.list) setForm((x) => (x ? { ...x, list } : x));
+    const v = stopsInput(list, offset);
     if ("error" in v) {
       setMsg(v.error);
       return;
@@ -171,43 +176,12 @@ export function TaskStops() {
       <div className="page-form">
         <div className="card card-b form">
           {!running && (
-            <div className="grid2">
-              <div className="field">
-                <span className="lab">Start from</span>
-                <span>{t.start_place ?? "The base place"}</span>
-                <span className="check">
-                  <input type="checkbox" id="ts-start-pax" checked={form.startPax} onChange={(e) => set({ startPax: e.target.checked })} />{" "}
-                  <label htmlFor="ts-start-pax">Passengers get in here</label>
-                </span>
-                {form.startPax && (
-                  <>
-                    <span className="hint" data-testid="start-stop">
-                      Stop 1 · Pickup · {t.start_place ?? "the start"}{startStop?.dwell_min != null ? ` · ${dwellText(startStop.dwell_min)} there` : ""}. The next stop is Stop 2.
-                    </span>
-                    <div className="grid2">
-                      <div className="field">
-                        <label htmlFor="ts-start-what">What gets in</label>
-                        <select id="ts-start-what" value={form.startWhat ?? ""} onChange={(e) => set({ startWhat: e.target.value as StartFields["startWhat"] })}>
-                          <option value="">People</option>
-                          {Object.entries(WHAT_LABEL).filter(([k]) => k !== "people").map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                        </select>
-                      </div>
-                      <div className="field">
-                        <label htmlFor="ts-start-note">Note at the start</label>
-                        <input id="ts-start-note" maxLength={300} value={form.startNote ?? ""} onChange={(e) => set({ startNote: e.target.value })} />
-                      </div>
-                    </div>
-                    <DwellPicker id="ts-start-dwell" value={form.startDwell ?? ""} fallback={null} onChange={(text) => set({ startDwell: text })} />
-                  </>
-                )}
-              </div>
-              <div className="field">
-                <label htmlFor="ts-leave">Leave by</label>
-                <TimeField id="ts-leave" value={form.leaveBy} onCommit={(leaveBy) => set({ leaveBy })} suggested={suggestedLeave} />
-                {check
-                  ? <DepartureNote check={check} onUse={(time) => set({ leaveBy: time })} onMove={(n, time) => moveArriveBy(n, time)} />
-                  : <span className="hint">{suggestedLeave ? `Suggested ${suggestedLeave} from the stops’ arrive-by times. Change it if you like.` : "Empty: planned from the stops’ arrive-by times."}</span>}
-              </div>
+            <div className="field">
+              <label htmlFor="ts-leave">Leave by</label>
+              <TimeField id="ts-leave" value={form.leaveBy} onCommit={(leaveBy) => set({ leaveBy })} suggested={suggestedLeave} />
+              {check
+                ? <DepartureNote check={check} onUse={(time) => set({ leaveBy: time })} onMove={(n, time) => moveArriveBy(n, time)} />
+                : <span className="hint">{suggestedLeave ? `Suggested ${suggestedLeave} from the stops’ arrive-by times. Change it if you like.` : "Empty: planned from the stops’ arrive-by times."}</span>}
             </div>
           )}
           <StopsRows list={form.list} onChange={(list) => set({ list })} idPrefix="ts" offset={offset}
@@ -217,7 +191,27 @@ export function TaskStops() {
               const r = tickStart(form.list, i);
               set({ list: r.list, startPax: true, ...r.carried });
             }}
-            note={(s) => (s.key === lateKey ? <DepartureNote check={check} onUse={(time) => set({ leaveBy: time })} onMove={moveArriveBy} testId="departure-check-stop" /> : null)} />
+            note={(s) => (s.key === lateKey ? <DepartureNote check={check} onUse={(time) => set({ leaveBy: time })} onMove={moveArriveBy} testId="departure-check-stop" /> : null)}
+            from={(
+              // From is the task's start, read only here (it is changed on the task's edit page); People get in there under ⋯ Options.
+              <div className="route-start" data-testid="start-from">
+                <span className="route-lab">From</span>
+                <div className="route-field">
+                  <span className="grow">{t.start_place ?? "The base place"}</span>
+                  {!running && <StartOptions id="ts-start" value={form} onChange={(patch) => set(patch as Partial<StopsForm>)} name={t.start_place ?? ""} />}
+                </div>
+                {startPax
+                  ? (
+                    <span className="route-cap" data-testid="start-stop">
+                      Stop 1 · Pickup · {t.start_place ?? "the start"}{startStop?.dwell_min != null ? ` · ${dwellText(startStop.dwell_min)} there` : ""}. The next stop is Stop 2.
+                    </span>
+                  )
+                  : <span className="route-cap">{running ? (reached ? `Under way · ${reached} stop${reached > 1 ? "s" : ""} reached` : "Under way") : "Leave from here"}</span>}
+              </div>
+            )}
+            after={t.return_to_base || t.avoid_expressway
+              ? <p className="muted small" style={{ margin: 0 }} data-testid="route-after">{joinDots([t.return_to_base ? "Then back to the office" : "", t.avoid_expressway ? "No expressway" : ""])}</p>
+              : undefined} />
         </div>
         <div className="card card-b form" data-testid="plan-card">
           <div className="row" style={{ padding: 0 }}>

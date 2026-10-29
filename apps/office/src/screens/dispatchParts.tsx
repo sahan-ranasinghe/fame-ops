@@ -11,8 +11,8 @@ import { LocationSearch } from "../ui/LocationSearch";
 import type { Picked } from "../ui/locationLogic";
 import type { DefaultVehicle } from "./availabilityLogic";
 import { type DepartureCheck, usedLeave } from "./departureLogic";
-import { DwellPicker } from "./DwellPicker";
-import { type StartFields, WHAT_LABEL } from "./stopsLogic";
+import { StartOptions } from "./StopsEditor";
+import { type StartFields, startRoleOf } from "./stopsLogic";
 import { type FeatureKey, featureOn, switchesOff } from "./switchLogic";
 import { ANY_TYPES, anyValue, isChoice, ON_THE_DAY, ON_THE_DAY_LABEL } from "./vehicleChoiceLogic";
 
@@ -179,8 +179,10 @@ export function DepartureNote({ check, onUse, onMove, onMoveBack, backLabel = "b
 }
 
 /**
- * Start from: the location search box, the base place while it is empty (Settings → Fleet; the server takes the
- * same), and "Passengers get in here": the start becomes Stop 1, a pickup, and the next stop is Stop 2.
+ * From (Fix B, 29 October 2026: From / To / Add stop, Uber's and Google Maps' route form; it was "Start from"): the
+ * location search box, the base place while it is empty (Settings → Fleet; the server takes the same), and its ⋯ Options:
+ * Leave from here / People get in / Goods ("Passengers get in here": the start becomes Stop 1, a pickup, and the next
+ * stop is Stop 2), with what gets in, the note at the start and its stay. The first row of the route card (StopsRows).
  */
 export function StartFrom({ id, value, base, onChange, google = true, stay, note }: {
   id: string;
@@ -196,37 +198,19 @@ export function StartFrom({ id, value, base, onChange, google = true, stay, note
   const empty = !value.start.trim() && !value.startPlaceId && !value.startGooglePlaceId;
   const name = empty ? base?.name ?? "" : value.start.trim();
   return (
-    <div className="field" data-testid="start-from">
-      <label htmlFor={id}>Start from</label>
-      <LocationSearch id={id} value={value.start} placeholder={base ? `${base.name} · the base place` : "The base place (Settings → Fleet)"} google={google}
-        onText={(text) => onChange({ start: text, startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined })}
-        onPick={(p: Picked) => onChange({ start: p.name, startPlaceId: p.placeId, startGooglePlaceId: p.googlePlaceId, startLat: p.lat, startLng: p.lng })} />
-      <span className="check">
-        <input type="checkbox" id={`${id}-pax`} checked={value.startPax} onChange={(e) => onChange({ startPax: e.target.checked })} />{" "}
-        <label htmlFor={`${id}-pax`}>Passengers get in here</label>
-      </span>
+    <div className="route-start" data-testid="start-from">
+      <label className="route-lab" htmlFor={id}>From</label>
+      <div className="route-field">
+        <div className="grow">
+          <LocationSearch id={id} value={value.start} placeholder={base ? `${base.name} · the base place` : "The base place (Settings → Fleet)"} google={google}
+            onText={(text) => onChange({ start: text, startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined })}
+            onPick={(p: Picked) => onChange({ start: p.name, startPlaceId: p.placeId, startGooglePlaceId: p.googlePlaceId, startLat: p.lat, startLng: p.lng })} />
+        </div>
+        <StartOptions id={id} value={value} onChange={onChange} name={name} />
+      </div>
       {value.startPax
-        ? (
-          <>
-            <span className="hint" data-testid="start-stop">Stop 1 · Pickup · {name || "the start"} · {stay ?? "the place’s usual time there"}. The next stop is Stop 2.</span>
-            {/* The start stop's own fields (Tick it moves them here from the pickup). */}
-            <div className="grid2">
-              <div className="field">
-                <label htmlFor={`${id}-what`}>What gets in</label>
-                <select id={`${id}-what`} value={value.startWhat ?? ""} onChange={(e) => onChange({ startWhat: e.target.value as StartFields["startWhat"] })}>
-                  <option value="">People</option>
-                  {Object.entries(WHAT_LABEL).filter(([k]) => k !== "people").map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor={`${id}-note`}>Note at the start</label>
-                <input id={`${id}-note`} maxLength={300} value={value.startNote ?? ""} onChange={(e) => onChange({ startNote: e.target.value })} />
-              </div>
-            </div>
-            <DwellPicker id={`${id}-dwell`} value={value.startDwell ?? ""} fallback={null} onChange={(text) => onChange({ startDwell: text })} />
-          </>
-        )
-        : note ? <span className="hint">{note}</span> : null}
+        ? <span className="route-cap" data-testid="start-stop">Stop 1 · Pickup · {name || "the start"} · {startRoleOf(value) === "goods" ? "goods get in" : "people get in"} · {stay ?? "the place’s usual time there"}. The next stop is Stop 2.</span>
+        : <span className="route-cap">{note ?? "Leave from here"}</span>}
     </div>
   );
 }

@@ -34,6 +34,7 @@ import { useRequest } from "./RequestDetail";
 import { editFields, type RequestFields, updateRequestInput, whoOf } from "./requestLogic";
 import { TripEditor, useTrip } from "./TripEditor";
 import { RequestStatusPill } from "./requestParts";
+import { openStops, tidyStops } from "./stopsLogic";
 import { tripPlanInput } from "./tripLogic";
 
 export function RequestEdit() {
@@ -41,7 +42,8 @@ export function RequestEdit() {
   const { me } = useFleet();
   const { q, err } = useRequest(id);
   // The draft's key changed with the trip (§34): an older draft (From and To) is not offered.
-  const [f, setF, draft] = useFormDraft<RequestFields | null>("request-trip-edit", id, null);
+  // Fix B: a draft put back opens without its empty rows (openStops); the loaded request already does (tripFromRequest).
+  const [f, setF, draft] = useFormDraft<RequestFields | null>("request-trip-edit", id, null, true, (x) => (x ? { ...x, stops: openStops(x.stops) } : x));
 
   // The form starts from the request once it is loaded (a draft resumed later replaces it).
   useEffect(() => {
@@ -90,8 +92,12 @@ function EditForm({ id, q, f, setF, draft }: {
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
+    // Fix B: the rows with no place go once To has one (tidyStops); the form shows what is sent.
+    const stops = tidyStops(f.stops);
+    if (stops !== f.stops) setF((x) => (x ? { ...x, stops } : x));
+    const sent = { ...f, stops };
     // The passengers switch off: the names are left as they are.
-    const v = updateRequestInput(id, q.version ?? 0, riding ? f : { ...f, riders: undefined }, was, base);
+    const v = updateRequestInput(id, q.version ?? 0, riding ? sent : { ...sent, riders: undefined }, was, base);
     if ("error" in v) {
       setMsg(v.error);
       return;

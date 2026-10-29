@@ -130,9 +130,10 @@ export interface DraftControls<T = unknown> {
  * The form's state with its draft: `[value, setValue, draft]`. A change after
  * the first render is saved 300 ms later (and at once when the page is hidden);
  * an earlier draft is offered through `draft.saved` until resumed or discarded,
- * or until the person starts typing afresh (then the new text replaces it).
+ * or until the person starts typing afresh (then the new text replaces it). `restore` tidies a draft as it is put back
+ * (Fix B, 29 October 2026: a trip's stops through openStops, so an old draft opens without its empty rows).
  */
-export function useFormDraft<T>(form: string, record: string | null, initial: T | (() => T), enabled = true): [T, Dispatch<SetStateAction<T>>, DraftControls<T>] {
+export function useFormDraft<T>(form: string, record: string | null, initial: T | (() => T), enabled = true, restore?: (state: T) => T): [T, Dispatch<SetStateAction<T>>, DraftControls<T>] {
   const { me } = useFleet();
   const key = draftKey(me.email ?? "artifact", form, record);
   const known = useDraftKeepDays();
@@ -156,6 +157,8 @@ export function useFormDraft<T>(form: string, record: string | null, initial: T 
   const cleared = useRef(false);
   const valueRef = useRef(value);
   valueRef.current = value;
+  const restoreRef = useRef(restore);
+  restoreRef.current = restore;
   // The value the last run of the save effect saw: only a new value counts as a
   // change (React's StrictMode runs every effect twice on mount with the same value).
   const seen = useRef(value);
@@ -191,7 +194,7 @@ export function useFormDraft<T>(form: string, record: string | null, initial: T 
     const d = readDraft<T>(key);
     if (d && draftFresh(d.at, keepDays)) {
       cleared.current = false;
-      setValue(d.state);
+      setValue(restoreRef.current ? restoreRef.current(d.state) : d.state);
     }
     setSaved(null);
   }, [key, keepDays]);
