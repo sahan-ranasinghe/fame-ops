@@ -61,7 +61,7 @@ console.log('\nTyping never chooses a place (the box locked after one letter: Ho
   const typedAgain = { ...picked, ...typedPatch('Salawa s') };
   check(placeBoxState(typedAgain, false) === 'field' && typedAgain.place === 'Salawa s', 'typing after Change: the field, the new text kept');
   check(placeBoxState({ ...stop, place: 'sal' }, false) === 'field', 'leaving and returning with "sal" typed: the field with the text, not a fake place');
-  check(draftsFromStops([{ type: 'drop', place: 'Kandy', place_id: 'p2' }])[0].picked === true && draftsFromStops([{ type: 'drop', place: 'Kandy town' }])[0].picked === true && draftsFromStops([{ type: 'drop' }])[0].picked === false, 'a stop loaded from the server (a request, a task) is a picked one; an empty one is not');
+  check(draftsFromStops([{ type: 'drop', place: 'Kandy', place_id: 'p2' }])[0].picked === true && draftsFromStops([{ type: 'drop', place: 'Kandy town' }])[0].picked === true && !draftsFromStops([{ type: 'drop' }])[0].picked, 'a stop loaded from the server (a request, a task) is a picked one; an empty one is not');
 }
 
 console.log('\nThe suggestions and the badges');

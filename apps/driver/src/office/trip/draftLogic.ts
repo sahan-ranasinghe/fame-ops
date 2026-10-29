@@ -10,6 +10,7 @@ import { addDays, colomboDate } from '@/lib/time';
 import type { RequestCard } from '../types';
 import { type AssignFields, emptyAssign, type ProjectRow } from './assignLogic';
 import { editFields, type RequestFields } from './requestLogic';
+import { openStops } from './stopsLogic';
 import type { TripFields } from './tripLogic';
 import type { WhoDrivesValue } from './whoDrivesLogic';
 import { whoOfDraft } from './whoWords';
@@ -98,6 +99,15 @@ export function requestAgainDraft(q: Pick<RequestCard, 'id' | 'fields' | 'note' 
 export function requestFieldsOf(d: Pick<TripDraft, 'fields' | 'req'>): RequestFields {
   const { title: _t, buffer: _b, driver: _d, vehicle: _v, cname: _cn, cphone: _cp, notes: _n, whatsapp: _w, ...trip } = d.fields;
   return { ...(trip as TripFields & { pax: string }), behalf: d.req.behalf, project: d.req.project, need: d.req.need, tools: d.req.tools, note: d.req.note, who: whoOfDraft(d.req), requesterPhone: d.req.requesterPhone };
+}
+
+/**
+ * Fix B (29 October 2026): a draft opened again (resumed on the Where step, or read back from the phone) comes without its
+ * empty rows, and a row whose type is not its place's keeps it (openStops, the shared rule). Doing it twice changes nothing.
+ */
+export function openedDraft(d: TripDraft): TripDraft {
+  if (!Array.isArray(d.fields?.stops)) return d;
+  return { ...d, fields: { ...d.fields, stops: openStops(d.fields.stops) } };
 }
 
 /** A draft worth asking about when a flow starts again: something typed, less than a day old. */

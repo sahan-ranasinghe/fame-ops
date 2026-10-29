@@ -9,7 +9,7 @@ import { useSyncExternalStore } from 'react';
 
 import { getJson, remove, setJson } from '@/lib/kv';
 import { getOfficeMe } from '../store';
-import type { TripDraft } from './draftLogic';
+import { openedDraft, type TripDraft } from './draftLogic';
 import {
   DRAFT_DAYS_KEY, DRAFT_INDEX_KEY, draftExpired, draftKeyFor, keepDaysFrom, LAST_EMAIL_KEY, LEGACY_DRAFT_KEY, legacyDropAtSignIn, legacyGoesTo, nextIndex,
   personOf,
@@ -56,7 +56,8 @@ function load(person: string): TripDraft | null {
     writeIndex(person, null);
     return null;
   }
-  return d;
+  // Fix B: a draft read back from the phone (an older one may have empty rows) opens without them.
+  return d ? openedDraft(d) : d;
 }
 
 /**

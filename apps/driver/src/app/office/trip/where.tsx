@@ -6,33 +6,38 @@
 // request: the copied draft (office/trip/draftLogic.ts requestAgainDraft: everything but the day, which is tomorrow) is put
 // in place by the button; a link straight here reads the request first. No "Resume draft?" for it.
 
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
+// Fix B (29 October 2026): From / To / Add stop, Uber's and PickMe's route form (docs/phase8-plan.md §38.2). One route
+// card: From (the start: the base place by default, Change, Use <base>, ⋯ Options: Leave from here / People get in /
+// Goods), the rows on one line, the last row To; each row its place (the same search box), "Stop 2 · Visit" under it (the
+// type follows the row's place until chosen), ⋯ Options (components/office/StopOptions.tsx: what happens there, Arrive by,
+// Stay, More details, Move up / down) and ✕; a middle row moves by its drag handle. + Add stop inserts before To; "Then
+// back to the office" (on for a new trip) and No expressway under it. Next and Save draft drop the rows with no place once
+// To has one (tidyStops); a draft opened again comes without its empty rows (openedDraft).
 
-import { ChevronDown, ChevronUp, X } from '@/components/icons';
-import { Chips, MoreDetails, ToggleRow } from '@/components/office/Controls';
-import { ChoiceChip } from '@/components/patterns/Select';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, type GestureResponderEvent, Platform, Pressable, StyleSheet, View } from 'react-native';
+
+import { Ellipsis, GripVertical, Plus, X } from '@/components/icons';
+import { ToggleRow } from '@/components/office/Controls';
+import { StartOptionsSheet, startSummary, stopCaption, StopOptionsSheet } from '@/components/office/StopOptions';
 import { PlaceSearch, type Picked } from '@/components/office/PlaceSearch';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
-import { Field, Mono, Txt } from '@/components/ui';
+import { Mono, Txt } from '@/components/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { dropIndex, dragOffset, type RowBox } from '@/lib/patterns/dragLogic';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
-import { draftWorthKeeping, getDraft, newDraft, requestAgainDraft, setDraft, setDraftKeepDays, type TripMode, updateDraft, useTripDraft, withDriver } from '@/office/trip/draft';
+import { draftWorthKeeping, getDraft, newDraft, openedDraft, requestAgainDraft, setDraft, setDraftKeepDays, type TripMode, updateDraft, useTripDraft, withDriver } from '@/office/trip/draft';
 import { pinText, placeBoxState, typedPatch } from '@/office/trip/locationLogic';
 import { editFields } from '@/office/trip/requestLogic';
-import { moveStop, newStop, pickupAtStart, type StopDraft, stopsInput, type StopType, tickStart, type What } from '@/office/trip/stopsLogic';
+import { addStop, moveStopTo, pickupAtStart, removeStop, type StopDraft, stopsInput, tickStart, tidyStops, typeDwell } from '@/office/trip/stopsLogic';
 import { reasonText } from '@/office/trip/words';
-import { DurationField } from '@/components/patterns/DurationField';
 import type { RequestsList, SettingsResult, TaskDetail } from '@/office/types';
 import { draftsFromStops } from '@/office/trip/stopsLogic';
 import { ErrorNotice, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
-
-const TYPES: StopType[] = ['pickup', 'drop', 'visit'];
-const WHATS: Exclude<What, ''>[] = ['people', 'goods', 'documents', 'other'];
 
 export default function TripWhere() {
   // O3 row 7: Assign a task for a driver (from their page): ?driver=<username>&name=<name> picks them on a fresh draft.
@@ -48,6 +53,11 @@ export default function TripWhere() {
   useEffect(() => setDraftKeepDays(settings.data?.settings.retention?.drafts_days), [settings.data]);
   const [editing, setEditing] = useState<string | null>(null); // the stop key whose search is open, or 'start'
   const [asked, setAsked] = useState(false);
+  // Fix B: the row whose ⋯ Options is open (its key), From's Options, the drag under way and the rows as laid out.
+  const [options, setOptions] = useState<string | null>(null);
+  const [startOptions, setStartOptions] = useState(false);
+  const [drag, setDrag] = useState<{ key: string; from: number; dy: number } | null>(null);
+  const boxes = useRef(new Map<string, RowBox>());
   // edit: the request as list_requests answers it now.
   const req = useTool<RequestsList>('list_requests', { status: 'all', id: id ?? '', limit: 1 }, { enabled: mode === 'edit' && !!id });
   // stops: the task as task_detail answers it now (the pending stops become the rows; the reached ones keep their numbers).
@@ -63,11 +73,13 @@ export default function TripWhere() {
     if (mode === 'edit' || mode === 'stops') return; // loaded below from the request or the task
     if (mode === 'request' && again) return; // Request again: the copy is in place, or read below
     if (current && current.mode === mode && draftWorthKeeping(current)) {
+      setDraft(openedDraft(current)); // Fix B: a draft opened again comes without its empty rows (Discard starts afresh)
       Alert.alert(t('office.trip.resumeTitle'), t('office.trip.resumeBody', { time: colomboTime(current.at) }), [
         { text: t('office.trip.discard'), style: 'destructive', onPress: () => setDraft(fresh(mode)) },
         { text: t('office.trip.resume') },
       ]);
     } else if (!current || current.mode !== mode || (mode === 'task' && forDriver && current.fields.driver !== forDriver && !draftWorthKeeping(current))) setDraft(fresh(mode));
+    else if (current) setDraft(openedDraft(current));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, asked, t]);
   useEffect(() => {
@@ -161,131 +173,220 @@ export default function TripWhere() {
   // The start is picked (a result, My location, a pin) or the base place; typed text alone keeps the box a field.
   const startPicked = !f.start.trim() || !!(f.startPlaceId || f.startGooglePlaceId || (f.startLat !== undefined && f.startLng !== undefined));
   const setF = (patch: Partial<typeof f>) => updateDraft((x) => ({ ...x, fields: { ...x.fields, ...patch } }));
-  // A first pickup at the start (the same place): "Same as the start · Tick it" moves it into "Passengers get in here".
+  // A first pickup at the start (the same place): "Same as the start · Tick it" moves it into From's "People get in".
   const atStart = pickupAtStart(f.stops, startName ? { name: startName, lat: f.startLat, lng: f.startLng } : null, f.startPax);
   const tickIt = (i: number) => {
     const tk = tickStart(f.stops, i);
     setF({ stops: tk.list, startPax: true, ...tk.carried });
   };
-  const check = stopsInput(f.stops, f.startPax ? 1 : 0);
+  // The rows are numbered after the start stop and the stops already reached (mode stops).
+  const offset = (f.startPax ? 1 : 0) + (d.reached ?? 0);
+  // Fix B: the check reads the rows as Next sends them (tidyStops: rows with no place go once To has one); an empty To
+  // keeps Next disabled with the row named ("Stop 3 needs a place.").
+  const check = stopsInput(tidyStops(f.stops), offset);
   const problem = 'error' in check ? reasonText(t, check.error) : null;
   const above = d.mode === 'task' ? t('office.trip.assignAbove', { n: 1 }) : d.mode === 'edit' ? t('office.trip.editAbove') : d.mode === 'stops' ? t('office.trip.stopsAbove') : t('office.trip.newAbove', { n: 1 });
+  const leave = () => (router.canGoBack() ? router.back() : router.replace('/office'));
+  const tidy = () => updateDraft((x) => ({ ...x, fields: { ...x.fields, stops: tidyStops(x.fields.stops) } }));
+  const settingsNow = settings.data?.settings;
+  const suggestedStay = (s: StopDraft) => (settingsNow?.planner_suggestions !== false ? typeDwell(s.type, settingsNow?.dwell_min) : undefined);
+  // The drag (by a row's handle): where the row would land, shown as a line on that row; let go = moveStopTo.
+  const laidOut = () => f.stops.map((s) => boxes.current.get(s.key));
+  const target = drag ? dropIndex(drag.from, drag.dy, laidOut()) : -1;
+  const drop = (from: number, dy: number | null) => {
+    setDrag(null);
+    if (dy === null) return;
+    const to = dropIndex(from, dy, laidOut());
+    if (to !== from) setStops(moveStopTo(f.stops, from, to));
+  };
+  const optIndex = options ? f.stops.findIndex((s) => s.key === options) : -1;
+  const optStop = optIndex >= 0 ? f.stops[optIndex] : null;
+  const summary = startSummary(t, f);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <TripHeader step="where" mode={d.mode} above={above} onBack={() => (router.canGoBack() ? router.back() : router.replace('/office'))} onSaveDraft={() => router.canGoBack() ? router.back() : router.replace('/office')} />
+      <TripHeader step="where" mode={d.mode} above={above} onBack={leave} onSaveDraft={() => { tidy(); leave(); }} />
       <Screen bottom={16}>
-        {/* Start from */}
-        <View style={styles.card}>
-          <Txt variant="label" color={colors.muted}>{t('office.trip.startFrom').toUpperCase()}</Txt>
-          {editing === 'start' || (f.start.trim() && !startPicked) ? (
-            <PlaceSearch value={f.start} placeholder={t('office.trip.searchPlace')} onText={(text) => updateDraft((x) => ({ ...x, fields: { ...x.fields, start: text, startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined } }))} onPick={pickStart} myLocation autoFocus={editing === 'start'} editing={editing === 'start'} forRequest={d.forRequest} />
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={[styles.mark, { backgroundColor: colors.amber }]}><Mono size={14} bold>S</Mono></View>
-              <View style={{ flex: 1 }}>
-                <Txt variant="strong">{startName || t('office.trip.noBase')}</Txt>
-                {!f.start.trim() && base?.address ? <Txt variant="small">{base.address}</Txt> : null}
-              </View>
-              <Pressable accessibilityRole="button" onPress={() => setEditing('start')} hitSlop={8} style={{ minHeight: 44, justifyContent: 'center' }}>
-                <Txt variant="strong" size={16} color={colors.blue}>{t('office.trip.change')}</Txt>
-              </Pressable>
+        {/* Fix B: one route card. From (the start), the rows on one line, the last row To; + Add stop under the line. */}
+        <View style={styles.card} testID="route-card">
+          <View style={styles.row} testID="from-row">
+            <View style={styles.rail}>
+              <View style={[styles.mark, { backgroundColor: colors.amber }]}><Mono size={12} bold>S</Mono></View>
+              <View style={styles.line} />
             </View>
-          )}
-          {(editing === 'start' || !startPicked) && f.start.trim() ? (
-            <Pressable accessibilityRole="button" onPress={() => { updateDraft((x) => ({ ...x, fields: { ...x.fields, start: '', startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined } })); setEditing(null); }} style={{ minHeight: 44, justifyContent: 'center' }}>
-              <Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.useBase', { name: base?.name ?? '' })}</Txt>
-            </Pressable>
-          ) : null}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 }}>
-            <Txt variant="body">{t('office.trip.passengersHere')}</Txt>
-            <Switch value={f.startPax} onValueChange={(v) => updateDraft((x) => ({ ...x, fields: { ...x.fields, startPax: v } }))} trackColor={{ true: colors.blue, false: colors.line }} thumbColor="#ffffff" />
-          </View>
-          {f.startPax && (
-            // The start stop's own fields (the site's StartFrom: what gets in, a note, the minutes there), optional.
-            <MoreDetails filled={!!(f.startWhat || (f.startNote ?? '').trim() || (f.startDwell ?? '').trim())} testID="start-details">
-              <View style={{ gap: 6 }}>
-                <Txt variant="strong" size={16}>{t('office.trip.whatGetsIn')}</Txt>
-                <Chips<What> options={WHATS.map((w) => ({ key: w, label: t(`office.trip.what_${w}`) }))} value={f.startWhat ?? ''} onChange={(w) => setF({ startWhat: f.startWhat === w ? '' : w })} small />
+            <View style={[styles.body, styles.bodyGap]}>
+              <View style={styles.head}>
+                <Txt variant="label" color={colors.muted} style={{ flex: 1 }}>{t('office.trip.from').toUpperCase()}</Txt>
+                <OptionsButton label={t('office.trip.options')} onPress={() => setStartOptions(true)} testID="from-options" />
               </View>
-              <Field label={t('office.trip.noteAtStart')} value={f.startNote ?? ''} onChangeText={(startNote) => setF({ startNote })} maxLength={300} />
-              <DurationField label={t('office.trip.timeAtStart')} value={f.startDwell ?? ''} onCommit={(startDwell) => setF({ startDwell })} testID="start-stay" />
-            </MoreDetails>
-          )}
-        </View>
-
-        {/* Stops */}
-        <View style={styles.card}>
-          <Txt variant="label" color={colors.muted}>{t('office.trip.stops').toUpperCase()}</Txt>
-          {f.stops.map((s, i) => {
-            // Typing never chooses a place: the box stays a field until a pick (Hotfix O2-H1).
-            const box = placeBoxState(s, editing === s.key);
-            const open = box === 'field';
-            return (
-              <View key={s.key} style={{ gap: 10, paddingTop: i > 0 ? 12 : 0, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: colors.line }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={styles.mark}><Mono size={14} bold color="#ffffff">{String(i + 1 + (f.startPax ? 1 : 0) + (d.reached ?? 0))}</Mono></View>
+              {editing === 'start' || (f.start.trim() && !startPicked) ? (
+                <PlaceSearch value={f.start} placeholder={t('office.trip.searchPlace')} onText={(text) => updateDraft((x) => ({ ...x, fields: { ...x.fields, start: text, startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined } }))} onPick={pickStart} myLocation autoFocus={editing === 'start'} editing={editing === 'start'} forRequest={d.forRequest} />
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    {box === 'picked' ? <Txt variant="strong" numberOfLines={2}>{s.place}</Txt> : <Txt variant="muted">{s.place.trim() ? t('office.trip.typing', { text: s.place.trim() }) : t('office.trip.stopNoPlace')}</Txt>}
-                    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                      {TYPES.map((type) => (
-                        <ChoiceChip key={type} small label={t(`office.trip.type_${type}`)} selected={s.type === type} onPress={() => patchStop(s.key, { type })} />
-                      ))}
-                    </View>
+                    <Txt variant="strong" testID="from-name">{startName || t('office.trip.noBase')}</Txt>
+                    {!f.start.trim() && base?.address ? <Txt variant="small">{base.address}</Txt> : null}
                   </View>
-                  <View style={{ gap: 4 }}>
-                    <Pressable accessibilityRole="button" accessibilityLabel={t('office.trip.moveUp')} disabled={i === 0} onPress={() => setStops(moveStop(f.stops, i, -1))} style={[styles.iconBtn, i === 0 && { opacity: 0.3 }]}><ChevronUp size={20} color={colors.ink} /></Pressable>
-                    <Pressable accessibilityRole="button" accessibilityLabel={t('office.trip.moveDown')} disabled={i === f.stops.length - 1} onPress={() => setStops(moveStop(f.stops, i, 1))} style={[styles.iconBtn, i === f.stops.length - 1 && { opacity: 0.3 }]}><ChevronDown size={20} color={colors.ink} /></Pressable>
-                  </View>
-                  <Pressable accessibilityRole="button" accessibilityLabel={t('office.trip.removeStop')} disabled={f.stops.length === 1} onPress={() => setStops(f.stops.filter((x) => x.key !== s.key))} style={[styles.iconBtn, f.stops.length === 1 && { opacity: 0.3 }]}><X size={22} color={colors.ink} /></Pressable>
-                </View>
-                {s.placeId && s.placePinned === false && <Txt variant="small" color={colors.red}>{t('office.trip.noPinWarning', { place: s.place })}</Txt>}
-                {s.googlePlaceId && <Txt variant="small">{t('office.trip.googleStop')}</Txt>}
-                {open ? (
-                  <PlaceSearch value={s.place} placeholder={t('office.trip.searchPlace')} onText={(text) => patchStop(s.key, typedPatch(text))} onPick={(p) => pickFor(s.key, p)} editing={editing === s.key} autoFocus={editing === s.key} forRequest={d.forRequest} />
-                ) : (
-                  <Pressable accessibilityRole="button" onPress={() => setEditing(s.key)} hitSlop={8} style={{ minHeight: 40, justifyContent: 'center' }}>
-                    <Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.changePlace')}</Txt>
+                  <Pressable accessibilityRole="button" onPress={() => setEditing('start')} hitSlop={8} style={{ minHeight: 44, justifyContent: 'center' }} testID="from-change">
+                    <Txt variant="strong" size={16} color={colors.blue}>{t('office.trip.change')}</Txt>
                   </Pressable>
-                )}
-                {i === atStart && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} testID="same-as-start">
-                    <Txt variant="small" color={colors.amberText} style={{ flex: 1 }}>{t('office.trip.sameAsStart')}</Txt>
-                    <Pressable accessibilityRole="button" onPress={() => tickIt(i)} style={styles.chip}><Txt variant="strong" size={14}>{t('office.trip.tickIt')}</Txt></Pressable>
-                  </View>
-                )}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                  <Txt variant="small">{t('office.trip.what')}</Txt>
-                  {WHATS.map((w) => (
-                    <ChoiceChip key={w} small label={t(`office.trip.what_${w}`)} selected={s.what === w} onPress={() => patchStop(s.key, { what: s.what === w ? '' : w })} />
-                  ))}
                 </View>
-                {/* The site's "Details": a pin typed by hand (a pasted one in the search box also works) and the note for the driver. */}
-                <MoreDetails filled={!!(s.pin.trim() || s.note.trim())} testID={`stop-details-${i}`}>
-                  <Field label={t('office.trip.pinTyped')} mono value={s.pin} onChangeText={(pin) => patchStop(s.key, { pin, lat: undefined, lng: undefined })} placeholder={t('office.trip.pinPlaceholder')} keyboardType="numbers-and-punctuation" />
-                  <Field label={t('office.trip.stopNote')} value={s.note} onChangeText={(note) => patchStop(s.key, { note })} maxLength={300} />
-                </MoreDetails>
-              </View>
-            );
-          })}
-          <Pressable accessibilityRole="button" onPress={() => { const n = newStop(f.stops.length || f.startPax ? 'drop' : 'pickup'); setStops([...f.stops, n]); setEditing(n.key); }} style={styles.addStop}>
-            <Txt variant="strong">{`+ ${t('office.trip.addStop')}`}</Txt>
+              )}
+              {(editing === 'start' || !startPicked) && f.start.trim() ? (
+                <Pressable accessibilityRole="button" onPress={() => { updateDraft((x) => ({ ...x, fields: { ...x.fields, start: '', startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined } })); setEditing(null); }} style={{ minHeight: 44, justifyContent: 'center' }}>
+                  <Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.useBase', { name: base?.name ?? '' })}</Txt>
+                </Pressable>
+              ) : null}
+              {summary ? <Txt variant="small" testID="from-summary">{summary}</Txt> : null}
+            </View>
+          </View>
+
+          <View testID="stop-rows">
+            {f.stops.map((s, i) => {
+              const isTo = i === f.stops.length - 1;
+              // Typing never chooses a place: the box stays a field until a pick (Hotfix O2-H1).
+              const box = placeBoxState(s, editing === s.key);
+              const open = box === 'field';
+              const lifted = drag?.key === s.key;
+              const lineAt = drag && !lifted && target === i ? (target < drag.from ? 'top' : 'bottom') : null;
+              return (
+                <View
+                  key={s.key}
+                  onLayout={(e) => { boxes.current.set(s.key, { y: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height }); }}
+                  style={[styles.row, lifted && drag ? [styles.lifted, { transform: [{ translateY: dragOffset(drag.from, drag.dy, laidOut()) }] }] : null]}
+                  testID={`stop-row-${i}`}
+                >
+                  {lineAt ? <View pointerEvents="none" style={[styles.dropLine, lineAt === 'top' ? { top: -2 } : { bottom: -2 }]} testID="drop-line" /> : null}
+                  <View style={styles.rail}>
+                    <View style={styles.mark}><Mono size={12} bold color="#ffffff">{String(i + 1 + offset)}</Mono></View>
+                    {!isTo ? <View style={styles.line} /> : null}
+                  </View>
+                  <View style={[styles.body, !isTo && styles.bodyGap]}>
+                    <View style={styles.head}>
+                      {!isTo ? <DragHandle label={t('office.trip.dragToMove')} onMove={(dy) => setDrag({ key: s.key, from: i, dy })} onDrop={(dy) => drop(i, dy)} testID={`stop-drag-${i}`} /> : null}
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        {isTo ? <Txt variant="label" color={colors.muted}>{t('office.trip.to').toUpperCase()}</Txt> : null}
+                        <Txt variant="small" testID={`stop-caption-${i}`}>{stopCaption(t, s, i + 1 + offset)}</Txt>
+                      </View>
+                      <OptionsButton label={t('office.trip.options')} onPress={() => setOptions(s.key)} testID={`stop-options-${i}`} />
+                      {!isTo || f.stops.length > 1 ? (
+                        <Pressable accessibilityRole="button" accessibilityLabel={t('office.trip.removeStop')} onPress={() => setStops(removeStop(f.stops, i))} hitSlop={4} style={styles.iconBtn} testID={`stop-remove-${i}`}>
+                          <X size={20} color={colors.ink} />
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    {box === 'picked' ? <Txt variant="strong" numberOfLines={2}>{s.place}</Txt> : null}
+                    {open ? (
+                      <PlaceSearch value={s.place} placeholder={t('office.trip.searchPlace')} onText={(text) => patchStop(s.key, typedPatch(text))} onPick={(p) => pickFor(s.key, p)} editing={editing === s.key} autoFocus={editing === s.key} forRequest={d.forRequest} />
+                    ) : (
+                      <Pressable accessibilityRole="button" onPress={() => setEditing(s.key)} hitSlop={8} style={{ minHeight: 40, justifyContent: 'center', alignSelf: 'flex-start' }}>
+                        <Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.changePlace')}</Txt>
+                      </Pressable>
+                    )}
+                    {s.placeId && s.placePinned === false && <Txt variant="small" color={colors.red}>{t('office.trip.noPinWarning', { place: s.place })}</Txt>}
+                    {s.googlePlaceId && <Txt variant="small">{t('office.trip.googleStop')}</Txt>}
+                    {i === atStart && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} testID="same-as-start">
+                        <Txt variant="small" color={colors.amberText} style={{ flex: 1 }}>{t('office.trip.sameAsStart')}</Txt>
+                        <Pressable accessibilityRole="button" onPress={() => tickIt(i)} style={styles.chip}><Txt variant="strong" size={14}>{t('office.trip.tickIt')}</Txt></Pressable>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          <Pressable accessibilityRole="button" onPress={() => { const a = addStop(f.stops); setStops(a.list); setEditing(a.key); }} style={styles.addStop} testID="add-stop">
+            <View style={styles.rail}><Plus size={20} color={colors.blue} strokeWidth={2.6} /></View>
+            <Txt variant="strong" size={16} color={colors.blue} style={{ flex: 1, paddingLeft: 10 }}>{t('office.trip.addStop')}</Txt>
           </Pressable>
-        </View>
-        <View style={styles.card}>
-          <ToggleRow label={t('office.trip.returnToBase')} value={f.returnToBase} onChange={(returnToBase) => setF({ returnToBase })} testID="return-toggle" />
+          <View style={styles.divider} />
+          <ToggleRow label={t('office.trip.backToOffice')} value={f.returnToBase} onChange={(returnToBase) => setF({ returnToBase })} testID="return-toggle" />
           <ToggleRow label={t('office.trip.noExpressway')} value={f.avoidExpressway} onChange={(avoidExpressway) => setF({ avoidExpressway })} testID="expressway-toggle" />
         </View>
       </Screen>
-      <TripFooter label={t('office.trip.nextWhen')} onPress={() => { updateDraft((x) => ({ ...x, step: 'when' })); router.push('/office/trip/when'); }} disabled={!!problem} problem={problem} />
+      <TripFooter label={t('office.trip.nextWhen')} onPress={() => { updateDraft((x) => ({ ...x, step: 'when', fields: { ...x.fields, stops: tidyStops(x.fields.stops) } })); router.push('/office/trip/when'); }} disabled={!!problem} problem={problem} />
+      <StopOptionsSheet
+        stop={optStop}
+        index={optIndex}
+        count={f.stops.length}
+        title={optStop ? t('office.trip.stopCaption', { n: optIndex + 1 + offset, type: t(`office.trip.type_${optStop.type}`) }) : ''}
+        suggestedMin={optStop ? suggestedStay(optStop) : undefined}
+        onChange={(next) => setStops(f.stops.map((x) => (x.key === next.key ? next : x)))}
+        onMove={(to) => setStops(moveStopTo(f.stops, optIndex, to))}
+        onClose={() => setOptions(null)}
+      />
+      <StartOptionsSheet visible={startOptions} f={f} setF={setF} onClose={() => setStartOptions(false)} />
     </View>
   );
 }
 
+/** ⋯ on a row: its Options sheet. */
+function OptionsButton({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={4} style={styles.iconBtn} testID={testID}>
+      <Ellipsis size={22} color={colors.ink} strokeWidth={2.4} />
+    </Pressable>
+  );
+}
+
+/**
+ * A row's drag handle (Google Maps' and Uber's ≡ on a route's stops): press it and drag. React Native's own touch
+ * responder (as SlideToConfirm), so the same handle runs on the phone and on the web (/m/); the list never takes the drag
+ * away half way, and Android's scroll view is told not to scroll while it runs (the grant answers true).
+ */
+function DragHandle({ label, onMove, onDrop, testID }: { label: string; onMove: (dy: number) => void; onDrop: (dy: number | null) => void; testID?: string }) {
+  const start = useRef<number | null>(null);
+  const y = (e: GestureResponderEvent) => e.nativeEvent.pageY ?? 0;
+  return (
+    <View
+      accessible
+      accessibilityLabel={label}
+      onStartShouldSetResponder={() => true}
+      onMoveShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => false}
+      onResponderGrant={(e) => {
+        start.current = y(e);
+        return true;
+      }}
+      onResponderMove={(e) => {
+        if (start.current !== null) onMove(y(e) - start.current);
+      }}
+      onResponderRelease={(e) => {
+        const from = start.current;
+        start.current = null;
+        onDrop(from === null ? null : y(e) - from);
+      }}
+      onResponderTerminate={() => {
+        start.current = null;
+        onDrop(null);
+      }}
+      style={[styles.handle, Platform.OS === 'web' ? (WEB_GRAB as object) : null]}
+      testID={testID}
+    >
+      <GripVertical size={20} color={colors.muted} />
+    </View>
+  );
+}
+
+/** The browser's own touch scrolling stays off the handle (else a phone browser scrolls the page instead of dragging). */
+const WEB_GRAB = { cursor: 'grab', touchAction: 'none' };
+
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
-  mark: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 0 },
+  row: { flexDirection: 'row', backgroundColor: colors.card },
+  lifted: { zIndex: 2, elevation: 4, borderRadius: 12, shadowColor: '#000000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  dropLine: { position: 'absolute', left: 0, right: 0, height: 3, borderRadius: 2, backgroundColor: colors.blue },
+  rail: { width: 28, alignItems: 'center' },
+  mark: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 9 },
+  line: { flex: 1, width: 2, minHeight: 12, backgroundColor: colors.rail, marginTop: 2 },
+  body: { flex: 1, minWidth: 0, paddingLeft: 10, gap: 6 },
+  bodyGap: { paddingBottom: 16 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44 },
+  handle: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -6 },
   chip: { minHeight: 36, paddingHorizontal: 12, borderRadius: 999, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
-  iconBtn: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  addStop: { minHeight: 56, borderRadius: 16, borderWidth: 2, borderStyle: 'dashed', borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  addStop: { flexDirection: 'row', alignItems: 'center', minHeight: 52 },
+  divider: { height: 1, backgroundColor: colors.divider, marginVertical: 8 },
 });

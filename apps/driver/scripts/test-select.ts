@@ -59,8 +59,10 @@ const uses: [string, RegExp, string][] = [
   ['components/patterns/TimeDial.tsx', /accessibilityState=\{\{ selected: mode === 'hour' \}\}[\s\S]*?mode === 'hour' && styles\.partOn/, 'The clock: the part being set (hour or minute) with the selection tint (21 October 2026: the clock replaced the time list)'],
   ['components/patterns/FilterBar.tsx', /<Checkbox key=\{o\.value\}[\s\S]*?<Radio key=\{o\.value\}[\s\S]*?<Radio key=\{o\.value\} checked=\{o\.value === sort\.value\}/, 'The Filter sheet\'s options and the sort list as the shared Checkbox / Radio'],
   ['components/patterns/DurationField.tsx', /<ChoiceChip key=\{min\}/, 'Stay at a stop: the sheet\'s presets as ChoiceChips (the When step\'s Stay field)'],
-  ['app/office/trip/where.tsx', /<ChoiceChip key=\{type\} small/, 'Where step: the stop type as ChoiceChips'],
-  ['app/office/trip/where.tsx', /<ChoiceChip key=\{w\} small/, 'Where step: people / goods / documents as ChoiceChips'],
+  // Fix B (29 October 2026): no type picker on the row; "What happens there" and what is carried in the row's ⋯ Options.
+  ['components/office/StopOptions.tsx', /<ChoiceChip key=\{r\} small label=\{t\(`office\.trip\.role_\$\{r\}`\)\} selected=\{roleOf\(s\) === r\}/, 'Where step: what happens there (the stop\'s type) as ChoiceChips in ⋯ Options'],
+  ['components/office/StopOptions.tsx', /<ChoiceChip key=\{w\} small/, 'Where step: people / goods / documents / other as ChoiceChips in ⋯ Options'],
+  ['components/office/StopOptions.tsx', /<ChoiceChip key=\{r\} small label=\{t\(START_ROLE_KEY\[r\]\)\} selected=\{role === r\}/, 'Where step: From\'s Leave from here / People get in / Goods as ChoiceChips'],
   ['app/office/task/[id]/time.tsx', /<ChoiceChip key=\{key\} selected=\{on\}/, 'Change the task: the day and vehicle chips'],
   ['app/office/task/[id]/time.tsx', /<ChoiceRow key=\{v\.reg_no\}/, 'Change the task: the vehicles as ChoiceRows'],
   ['app/office/task/[id]/swap.tsx', /<ChoiceRow key=\{r\.reg_no\} selected=\{on\}[\s\S]*?disabled=\{r\.disabled\}/, 'Swap vehicle: ChoiceRows, the ones that cannot go greyed'],

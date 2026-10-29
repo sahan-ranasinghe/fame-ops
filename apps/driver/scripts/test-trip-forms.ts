@@ -132,6 +132,8 @@ console.log('\nThe reviewer\'s findings, fixed');
 console.log('\nThe screens as text: every field reaches its input');
 {
   const where = read('app/office/trip/where.tsx');
+  // Fix B (29 October 2026): the start's and each stop's details are in their ⋯ Options sheets.
+  const options = read('components/office/StopOptions.tsx');
   const when = read('app/office/trip/when.tsx');
   const who = read('app/office/trip/who.tsx');
   const review = read('app/office/trip/review.tsx');
@@ -139,8 +141,9 @@ console.log('\nThe screens as text: every field reaches its input');
   const controls = read('components/office/Controls.tsx');
   const rows = read('components/office/DriverRows.tsx');
   check(controls.includes('export function Stepper') && controls.includes('export function MoreDetails') && controls.includes('export function ToggleRow') && controls.includes('export function Chips'), 'the shared controls: a stepper, More details, a toggle row, chips');
-  check(where.includes("setF({ startWhat: f.startWhat === w ? '' : w })") && where.includes('startNote') && where.includes('startDwell') && where.includes('testID="start-details"'), 'Where: what gets in, the note and the minutes at the start under More details');
-  check(where.includes("patchStop(s.key, { pin, lat: undefined, lng: undefined })") && where.includes("patchStop(s.key, { note })") && where.includes('testID={`stop-details-${i}`}'), 'Where: a stop\'s typed pin and note under More details');
+  check(options.includes("setF({ startWhat: f.startWhat === w ? '' : w })") && options.includes('startNote') && options.includes('startDwell') && options.includes('testID="start-details"') && options.includes('{f.startPax && (') && where.includes('<StartOptionsSheet visible={startOptions} f={f} setF={setF}'), 'Where: From\'s ⋯ Options: what gets in, the note and the minutes at the start once people or goods get in there');
+  check(options.includes("onChange({ ...s, pin, lat: undefined, lng: undefined })") && options.includes("onChange({ ...s, note })") && options.includes('<MoreDetails') && options.includes('testID="stop-details"') && options.includes("onChange({ ...s, arriveBy })") && options.includes("onChange({ ...s, dwell })") && options.includes('onChange(withRole(s, r))'), 'Where: a stop\'s ⋯ Options: what happens there, Arrive by, Stay, and under More details what is carried, the typed pin and the note');
+  check(where.includes('const check = stopsInput(tidyStops(f.stops), offset);') && where.includes("fields: { ...x.fields, stops: tidyStops(x.fields.stops) } })); router.push('/office/trip/when')") && where.includes('onSaveDraft={() => { tidy(); leave(); }}') && where.includes('setDraft(openedDraft(current))'), 'Where: Next and Save draft drop the rows with no place (tidyStops), Next waits while To has none; a resumed draft opens without its empty rows');
   check(where.includes('pickupAtStart(f.stops,') && where.includes('tickStart(f.stops, i)') && where.includes('testID="same-as-start"'), 'Where: "Same as the start · Tick it"');
   check(when.includes("'office.trip.freeBy' : 'office.trip.backBy'"), 'When: "Vehicle free by" on a task, "Back by" on a request');
   check(who.includes('<Stepper label={t(\'office.trip.passengers\')} value={f.pax}') && who.includes("setReq({ requesterPhone })") && who.includes("NEED_TYPES = ['car', 'van', 'double_cab', 'lorry', 'other']") && who.includes('maxLength={1000}'), 'Who (request): the passengers stepper, the requester\'s phone, the vehicle type with Other, a note of 1000');
@@ -183,13 +186,13 @@ console.log('\nStrings in both languages');
     }
     return typeof cur === 'string' ? cur : undefined;
   };
-  const code = ['app/office/trip/where.tsx', 'app/office/trip/when.tsx', 'app/office/trip/who.tsx', 'app/office/trip/review.tsx', 'app/office/task/[id]/time.tsx', 'components/office/Controls.tsx', 'components/office/DriverRows.tsx'].map(read).join('\n');
+  const code = ['app/office/trip/where.tsx', 'components/office/StopOptions.tsx', 'app/office/trip/when.tsx', 'app/office/trip/who.tsx', 'app/office/trip/review.tsx', 'app/office/task/[id]/time.tsx', 'components/office/Controls.tsx', 'components/office/DriverRows.tsx'].map(read).join('\n');
   const keys = Array.from(new Set(Array.from(code.matchAll(/'office\.(trip|task|common|request|ask)\.([A-Za-z_]+)'/g)).map((m) => `${m[1]}.${m[2]}`)));
   const missing = keys.filter((k) => get(en.office, k) === undefined || get(si.office, k) === undefined);
   check(keys.length > 80 && missing.length === 0, `every key the forms name exists in en and si (${keys.length})`, missing);
-  const families = [...['free_pool', 'free_assigned', 'busy', 'in_garage', 'all'].map((k) => `trip.group_${k}`), ...['pickup', 'drop', 'visit', 'stop', 'contact', 'open', 'newTask'].map((k) => `trip.wa_${k}`), ...['people', 'goods', 'documents', 'other'].map((k) => `trip.what_${k}`)];
+  const families = [...['free_pool', 'free_assigned', 'busy', 'in_garage', 'all'].map((k) => `trip.group_${k}`), ...['pickup', 'drop', 'visit', 'stop', 'contact', 'open', 'newTask'].map((k) => `trip.wa_${k}`), ...['people', 'goods', 'documents', 'other'].map((k) => `trip.what_${k}`), ...['in', 'out', 'visit', 'goods'].map((k) => `trip.role_${k}`), ...['pickup', 'drop', 'visit'].map((k) => `trip.type_${k}`)];
   const famMissing = families.filter((k) => get(en.office, k) === undefined || get(si.office, k) === undefined);
-  check(famMissing.length === 0, 'the run-time families (the groups, the WhatsApp words, what) exist in both languages', famMissing);
+  check(famMissing.length === 0, 'the run-time families (the groups, the WhatsApp words, what, the stops\' roles and types) exist in both languages', famMissing);
   const ph = (s: string) => (s.match(/\{[a-z]+\}/g) ?? []).sort().join(',');
   const badPh = [...keys, ...families].filter((k) => { const a = get(en.office, k); const b = get(si.office, k); return a && b && ph(a) !== ph(b); });
   check(badPh.length === 0, 'the same placeholders in both languages', badPh);
