@@ -11,6 +11,8 @@ import type { VideoCard, VideoMark } from './types';
 
 /** What the player shows: the fill's day and time, vehicle · driver, its video, and the piece to start with (0-based). */
 export interface PlayerFill {
+  /** Round 52: the fill's id (its "Delete…" on the player's page). */
+  id?: string;
   title: string;
   sub: string;
   video: VideoCard;

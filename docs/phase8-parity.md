@@ -822,3 +822,17 @@ The others:
 | Change, Give it a driver, Stops: "Waiting for the fleet admin's OK · the task is unchanged" and back | Give it a driver, Change time, the stops editor: the same snackbar and back | update_task / reassign_task / update_task_stops |
 | My trips: "Change · <task>" | My trips | my_trips |
 
+
+## Round 52: archive, delete and Recently deleted (30 October 2026, §40)
+
+| Site | Office mode / /m/ | Tool |
+|---|---|---|
+| A driver's page: Archive / Restore (trips from today on listed first, Archive anyway) | People → a driver: "Archive <name>…" / "Restore <name>", the trips sheet (each opens its task), Archive anyway | set_driver_active (confirm) |
+| A driver's, an office user's, a vehicle's page: Delete permanently (no history only; the name or plate typed) | the same pages' foot: Delete permanently, or "Has history (…): archive instead", or the account guard's sentence; the sheet with the name or plate typed | can_delete, delete_record |
+| A vehicle's page: Archive / Restore (trips first) | Vehicles → a vehicle: Archive this vehicle… / Restore this vehicle, the trips sheet; the form's Active chips kept | set_vehicle_active (confirm) |
+| A place's page: Archive (was Remove) / Restore, Delete permanently | More → Places → a place: Archive this place (same confirm), Restore, Delete permanently (one confirm) | remove_place, restore_place, can_delete, delete_record |
+| Filters: Show archived (drivers), Archived (returned) (vehicles), Archived (places) | the same Filter values, the new words | list_drivers, list_vehicles, list_places |
+| Projects (list, search, Show archived, Archive / Restore, Delete) | More → Projects (view or request; the actions by their tools) | list_projects, set_project_archived, can_delete, delete_record |
+| Rental companies (vehicles count, Show archived, Archive / Restore, Delete with no vehicle) | More → Rental companies (vehicles) | list_rental_companies, set_rental_company_archived, can_delete, delete_record |
+| Recently deleted (search, rows, Restore) | More → Recently deleted (users) | list_bin, restore_bin_item |
+| Wrong entries: Delete… on a task, a request, an issue, a fill, an odometer reading, a vehicle check | Delete… on the task page (the task, each odometer reading, fill and vehicle check), the request page, the issue page, the fill's player | delete_entry (preview, reason) |

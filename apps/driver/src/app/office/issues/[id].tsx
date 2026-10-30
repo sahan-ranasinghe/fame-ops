@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { ChevronRight, MessageCircle, Phone } from '@/components/icons';
+import { DeleteEntry } from '@/components/office/BinParts';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Sheet } from '@/components/patterns/Sheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
@@ -274,6 +275,8 @@ export default function IssueScreen() {
           </Section>
         )}
         {problem && <ErrorNotice error={problem.error} onRetry={() => void change(problem.action, problem.input)} onSignIn={() => void signOut()} />}
+        {/* Round 52 (§40): an issue opened by mistake (approve: delete_entry with a reason). Dismiss stays the normal way. */}
+        {i && <DeleteEntry kind="issue" id={i.id} testID="delete-issue" onDeleted={() => (router.canGoBack() ? router.back() : router.replace('/office/issues'))} />}
       </Screen>
       {i && actions.length > 0 && (
         <StickyActions>

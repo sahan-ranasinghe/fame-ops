@@ -2,13 +2,15 @@
 // the ids, the pin with Open in Maps, where it came from, how often stops used it in 90 days. Edit (update_place: the name,
 // address, district, depot; the vehicles permission). Remove (remove_place): when it is the base place or tasks today or
 // later use it, the page says why first (place_detail's in_use) and the second Remove sends confirm; a removed place has
-// Restore (restore_place). The rules: office/placesLogic.ts.
+// Restore (restore_place). Round 52 (§40): the words are Archive / Restore (the same tools and confirm); Delete permanently
+// (users, one confirm) for a place nothing ever used. The rules: office/placesLogic.ts.
 
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MapPin } from '@/components/icons';
+import { RecordDelete } from '@/components/office/BinParts';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Field, Mono, Notice, Txt } from '@/components/ui';
 import { type PlaceDetailAnswer, placeFields, type PlaceFields, type RemoveAnswer, updatePlaceInput } from '@/office/placesLogic';
@@ -26,6 +28,7 @@ export default function PlaceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useApp();
   const { api, me, signOut } = useOffice();
+  const router = useRouter();
   const q = useTool<PlaceDetailAnswer>('place_detail', { id });
   const p = q.data?.place ?? null;
   const removed = !!p?.removed;
@@ -166,6 +169,8 @@ export default function PlaceScreen() {
             )}
             {mayRestore && <Button label={t('office.places.restore')} busy={busy === 'restore'} onPress={restore} style={{ minHeight: 56 }} testID="place-restore" />}
             {error && <ErrorNotice error={error.error} onRetry={error.retry} onSignIn={() => void signOut()} />}
+            {/* Round 52: Delete permanently (users, one confirm) for a place no stop, start or request ever used. */}
+            {p.id ? <RecordDelete kind="place" refText={p.id} onDeleted={() => (router.canGoBack() ? router.back() : router.replace('/office/places'))} /> : null}
           </>
         )}
       </Screen>

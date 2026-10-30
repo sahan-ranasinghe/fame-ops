@@ -204,7 +204,7 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
       setVideoNote(t('office.reports.videoReload'));
       return;
     }
-    handToPlayer({ title: dateWords(t, e.at), sub: [e.vehicle, e.driver].filter(Boolean).join(' · '), video: e.video, start: startPiece(e.video, n) });
+    handToPlayer({ id: e.id, title: dateWords(t, e.at), sub: [e.vehicle, e.driver].filter(Boolean).join(' · '), video: e.video, start: startPiece(e.video, n) });
     router.push('/office/fuel-video');
   }
   useEffect(() => {

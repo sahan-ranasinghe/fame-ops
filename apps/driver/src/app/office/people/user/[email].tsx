@@ -2,13 +2,15 @@
 // list_office_users' search (one page). Name, phone and the permissions (the presets as quick picks, each permission
 // toggled; view locked while another needs it; a person cannot drop their own users permission) → update_office_user with
 // only what changed. "New set-password link" (reset_office_password) shows the link once with Share (WhatsApp); never
-// logged. Switch off / on with a confirmation (set_office_user_active). Every button exists only when me.tools has its
+// logged. Archive / Restore with a confirmation (set_office_user_active; Round 52's words); Delete permanently for an
+// account with no history (users; can_delete, the name typed to confirm). Every button exists only when me.tools has its
 // tool. The rules: office/peopleLogic.ts.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
+import { RecordDelete } from '@/components/office/BinParts';
 import { ToggleRow } from '@/components/office/Controls';
 import { PermissionPicker, SecretCard } from '@/components/office/PeopleParts';
 import { showSnackbar } from '@/components/patterns/Snackbar';
@@ -240,6 +242,9 @@ export default function ManageOfficeUser() {
             <Button kind="outline" label={t(u.active ? 'office.people.switchOffUser' : 'office.people.switchOnUser')} onPress={confirmSwitch} busy={switching} style={{ borderColor: u.active ? colors.red : colors.ink }} />
           </View>
         )}
+        {/* Round 52: Delete permanently (users), only for an account with no history; else why not (history, or the
+            account guards' sentence: yourself, the last admin). */}
+        {u && <RecordDelete kind="office_person" refText={email} onDeleted={() => (router.canGoBack() ? router.back() : router.replace('/office/people/users'))} />}
       </Screen>
     </View>
   );

@@ -83,7 +83,7 @@ export function homeChips(permissions: readonly string[]): HomeChip[] {
   return chips;
 }
 
-export type MoreItem = 'tasks' | 'task_history' | 'approve' | 'drivers' | 'timeline' | 'asks' | 'holder_asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'places' | 'maintenance' | 'people_drivers' | 'people_users' | 'settings' | 'activity' | 'retention';
+export type MoreItem = 'tasks' | 'task_history' | 'approve' | 'drivers' | 'timeline' | 'asks' | 'holder_asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'places' | 'maintenance' | 'projects' | 'rental_companies' | 'people_drivers' | 'people_users' | 'settings' | 'activity' | 'retention' | 'bin';
 
 /** What More lists under Work: the screens built so far that are not on the bar. */
 export function moreFor(permissions: readonly string[]): MoreItem[] {
@@ -112,6 +112,10 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     // are its second view with the issues permission.
     { key: 'maintenance', need: ['vehicles', 'issues'] },
     { key: 'places', need: ['vehicles'] },
+    // Round 52 (§40): Projects as the site (view or request; archive with vehicles, delete with users), the rental
+    // companies with vehicles (their archive's permission), Recently deleted with users (the admins).
+    { key: 'projects', need: ['view', 'request'] },
+    { key: 'rental_companies', need: ['vehicles'] },
     { key: 'people_drivers', need: ['users', 'vehicles'] },
     { key: 'people_users', need: ['users', 'office_users'] },
     { key: 'settings', need: ['users'] },
@@ -119,6 +123,7 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     { key: 'activity', need: ['users'] },
     // Round 4–7 (item 9): Data retention (the periods, Run now).
     { key: 'retention', need: ['users'] },
+    { key: 'bin', need: ['users'] },
   ];
   // Stage 1 (O3 item 3): Tasks → History is the Tasks tab's own button; with Tasks under More, History sits beside it.
   return all.filter((i) => has(permissions, ...i.need) && !onBar.has(i.key) && (i.key !== 'task_history' || !onBar.has('tasks'))).map((i) => i.key);
@@ -127,8 +132,8 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
 /** More's sections (design 19): Work (the screens), People (drivers, office users), then Quick settings. */
 export type MoreSection = 'work' | 'people' | 'settings';
 export const MORE_SECTION: Record<MoreItem, MoreSection> = {
-  approve: 'work', tasks: 'work', task_history: 'work', drivers: 'work', timeline: 'work', asks: 'work', holder_asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work', maintenance: 'work', places: 'work',
-  people_drivers: 'people', people_users: 'people', settings: 'settings', activity: 'settings', retention: 'settings',
+  approve: 'work', tasks: 'work', task_history: 'work', drivers: 'work', timeline: 'work', asks: 'work', holder_asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work', maintenance: 'work', places: 'work', projects: 'work', rental_companies: 'work',
+  people_drivers: 'people', people_users: 'people', settings: 'settings', activity: 'settings', retention: 'settings', bin: 'settings',
 };
 
 /** A notification's link on the site (InboxItem.url) → the office screen in the app, or null when O1 has no such screen. */
@@ -186,6 +191,8 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   if (m) return has(permissions, 'vehicles') ? `/office/places/${m[1]}` : null;
   if (path === '/maintenance') return has(permissions, 'vehicles', 'issues') ? '/office/maintenance' : null;
   if (path === '/reminders') return has(permissions, 'issues') ? '/office/reminders' : null;
+  // Round 52: the site's Projects page.
+  if (path === '/projects') return has(permissions, 'view', 'request') ? '/office/projects' : null;
   // Hotfix O2-H2 (Part 2): the notification settings and one group of them (everyone).
   if (path === '/settings/notifications') return '/office/notifications';
   m = path.match(/^\/settings\/notifications\/([a-z]+)$/);

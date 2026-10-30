@@ -537,6 +537,8 @@ export interface ProjectShare {
 }
 
 export interface OdometerRead {
+  /** Round 52: the reading's id (its "Delete…" for a wrong entry). */
+  id?: string;
   kind: string;
   reading_km: number;
   entry?: string;
@@ -2755,4 +2757,137 @@ export interface RetentionRun {
   line: string;
   counts: { key: string; what: string; days: number; before: string; count: number }[];
   summarised: number;
+}
+
+// ---- Round 52 (docs/phase8-plan.md §40): archive, delete and Recently deleted ----
+
+/** A record that may be deleted when it has no history (can_delete / delete_record). */
+export type RecordKind = "vehicle" | "driver" | "office_person" | "place" | "project" | "rental_company";
+/** A wrong entry (delete_entry). */
+export type EntryKind = "fuel" | "odometer" | "check" | "issue" | "request" | "task";
+
+/** can_delete: may it be deleted (no history), its history in words, or the account guard's sentence; what to type. */
+export interface CanDeleteResult {
+  kind: RecordKind;
+  id: string;
+  label: string;
+  deletable: boolean;
+  history?: Record<string, number>;
+  /** "3 tasks, 2 fills" */
+  history_words?: string;
+  /** The account guards ("You cannot delete your own account. Ask another admin."). */
+  problem?: string;
+  /** A person's name or a plate: typed exactly to confirm (only when deletable). */
+  confirm_with?: string;
+}
+
+/** delete_record and delete_entry: what went into Recently deleted, until when. */
+export interface DeleteRecordResult {
+  deleted: string;
+  kind: RecordKind;
+  bin_id: string;
+  until: string;
+  next?: string;
+}
+
+/** delete_entry with preview true: the entry in words and what goes with it (nothing deleted). */
+export interface DeleteEntryPreview {
+  kind: EntryKind;
+  id: string;
+  label: string;
+  affects: string[];
+}
+
+export interface DeleteEntryResult {
+  deleted: string;
+  kind: EntryKind;
+  bin_id: string;
+  until: string;
+  affects: string[];
+}
+
+/** list_bin: one thing waiting in Recently deleted. */
+export interface BinItem {
+  id: string;
+  kind: RecordKind | EntryKind;
+  record_id: string;
+  label: string;
+  detail?: string;
+  reason?: string;
+  deleted_by: string;
+  /** "2026-10-30 14:05" (Colombo) */
+  deleted_at: string;
+  /** "2026-11-29" */
+  until: string;
+  days_left: number;
+}
+
+export interface BinList extends Paged {
+  items: BinItem[];
+}
+
+export interface RestoreBinResult {
+  restored: string;
+  kind: string;
+  record_id: string;
+  notes?: string[];
+}
+
+/** A trip from today on that archiving a driver or a vehicle would leave without them. */
+export interface ArchiveTrip {
+  task_id: string;
+  title: string;
+  when: string;
+}
+
+/** set_driver_active / set_vehicle_active false with trips from today on: asks first (call again with confirm true). */
+export interface ArchiveNeedsConfirm {
+  needs_confirm: true;
+  driver?: string;
+  username?: string;
+  vehicle?: string;
+  trips: ArchiveTrip[];
+  note: string;
+}
+
+/** set_driver_active's and set_vehicle_active's answer once done. */
+export interface SetActiveResult {
+  needs_confirm?: false;
+  active?: boolean;
+  vehicle?: string;
+  notes?: string[];
+}
+
+/** list_projects: a page of projects (archived ones only with archived true). */
+export interface ProjectRow {
+  id: string;
+  job_no?: string;
+  short_name?: string;
+  name: string;
+  customer?: string;
+  status?: string;
+  /** "2026-10-30 by Palitha" (the server's English; the app says archived_on and archived_by in its own words) */
+  archived?: string;
+  /** "2026-10-30" (Colombo) */
+  archived_on?: string;
+  archived_by?: string;
+}
+
+export interface ProjectsList extends Paged {
+  projects: ProjectRow[];
+}
+
+/** list_rental_companies: with how many vehicles each has. */
+export interface RentalCompanyRow {
+  id: string;
+  name: string;
+  phone?: string;
+  vehicles: number;
+  archived?: string;
+  archived_on?: string;
+  archived_by?: string;
+}
+
+export interface RentalCompaniesList {
+  companies: RentalCompanyRow[];
 }
