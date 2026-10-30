@@ -1568,6 +1568,7 @@
   "odometer[].at: string",
   "odometer[].camera_read: number",
   "odometer[].entry: string",
+  "odometer[].id: string",
   "odometer[].kind: string",
   "odometer[].photo: string",
   "odometer[].photo_attempts: number",
