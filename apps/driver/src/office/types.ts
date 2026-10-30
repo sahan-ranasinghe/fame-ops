@@ -537,6 +537,8 @@ export interface ProjectShare {
 }
 
 export interface OdometerRead {
+  /** Round 52: the reading's id (its "Delete…" for a wrong entry). */
+  id?: string;
   kind: string;
   reading_km: number;
   entry?: string;
@@ -2864,8 +2866,11 @@ export interface ProjectRow {
   name: string;
   customer?: string;
   status?: string;
-  /** "2026-10-30 by Palitha" */
+  /** "2026-10-30 by Palitha" (the server's English; the app says archived_on and archived_by in its own words) */
   archived?: string;
+  /** "2026-10-30" (Colombo) */
+  archived_on?: string;
+  archived_by?: string;
 }
 
 export interface ProjectsList extends Paged {
@@ -2879,6 +2884,8 @@ export interface RentalCompanyRow {
   phone?: string;
   vehicles: number;
   archived?: string;
+  archived_on?: string;
+  archived_by?: string;
 }
 
 export interface RentalCompaniesList {

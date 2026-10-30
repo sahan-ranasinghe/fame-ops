@@ -262,10 +262,12 @@ export function StopArrival({ stop, onSaved }: { stop: Stop; onSaved: () => Prom
 // More details: charged to, the odometer and fuel, the problems, the history, the plan
 // ---------------------------------------------------------------------------
 
-export function TaskMoreDetails({ p, openLink, linkNote, onPlan, fillExtra }: {
+export function TaskMoreDetails({ p, openLink, linkNote, onPlan, fillExtra, odoExtra }: {
   p: TaskDetail;
   /** Round 52: under each fill (its "Delete…" for a wrong entry, the approve permission). */
   fillExtra?: (fill: TaskDetail['fuel'][number]) => ReactNode;
+  /** Round 52: under each odometer reading (its "Delete…"). */
+  odoExtra?: (reading: TaskDetail['odometer'][number]) => ReactNode;
   /** Opens a link by its key (the screen reads the task again first when its links are old). */
   openLink: (key: LinkKey) => void;
   /** "Renewing the link…" or "The link could not open." */
@@ -296,6 +298,7 @@ export function TaskMoreDetails({ p, openLink, linkNote, onPlan, fillExtra }: {
                 {x.photo ? <LinkButton label={t('office.task.photo')} onPress={() => openLink({ kind: 'odo', i })} /> : null}
               </View>
               <Txt variant="muted" size={15}>{datesInWords(t, x.line)}</Txt>
+              {odoExtra ? odoExtra(o) : null}
             </View>
           );
         })}

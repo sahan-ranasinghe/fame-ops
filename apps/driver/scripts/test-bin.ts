@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  appendPage, appendProjects, archivedFilterDefs, asksFirst, binArgs, binRowWords, companiesShown, companyDeletable, confirmMatches, deleteEntryInput,
+  appendPage, appendProjects, archivedFilterDefs, archivedWords, asksFirst, binArgs, binRowWords, companiesShown, companyDeletable, confirmMatches, deleteEntryInput,
   deleteReady, deleteRecordInput, deleteState, HISTORY_KEYS, historyText, previewInput, projectLine, projectsArgs, projectTitle, reasonOk, showArchivedOf,
   vehicleActiveInput,
 } from '../src/office/binLogic';
@@ -73,6 +73,10 @@ console.log('\nThe lists');
   check(b.projects.length === 2 && b.next === undefined, 'Load more: never a row twice; the last page has no next');
   check(appendPage({ items: [{ id: 'x' }] as BinItem[], next: 'n' }, { items: [{ id: 'y' }] as BinItem[] }, 'items').items.length === 2, 'Recently deleted: Load more');
   check(projectTitle({ id: '1', name: 'Kandy towers', short_name: 'TRKAN1' }) === 'TRKAN1 · Kandy towers' && projectLine({ id: '1', name: 'x', job_no: '13021', customer: 'Mobitel' }) === '13021 · Mobitel', "a project's title and line");
+  check(archivedWords({ archived_on: '2026-10-01', archived_by: 'Sahan' }, t) === 'Archived 2026-10-01 by Sahan' && archivedWords({ archived_on: '2026-10-01' }, t) === 'Archived 2026-10-01'
+    && archivedWords({}, t) === undefined && archivedWords({ archived_on: '2026-10-01', archived_by: 'Sahan' }, t, (d) => `[${d}]`) === 'Archived [2026-10-01] by Sahan', "the archive in the app's own words from archived_on / archived_by (the date through the day words); nothing from the server's English sentence");
+  check(!src('app/office/projects.tsx').includes('when: p.archived') && !src('app/office/rental-companies.tsx').includes('when: c.archived'), "the server's archived sentence is never shown");
+  check(src('app/office/task/[id].tsx').includes('<DeleteEntry kind="odometer" id={o.id}'), 'the task page: Delete… on each odometer reading');
   check(companyDeletable({ vehicles: 0 }) && !companyDeletable({ vehicles: 2 }), 'a rental company may go only with no vehicle');
   check(companiesShown([{ id: '1', name: 'Malkey', vehicles: 1 }, { id: '2', name: 'Casons', phone: '+94771234567', vehicles: 0 }], ' cas').map((c) => c.id).join() === '2', 'the search filters the whole list');
   const row = binRowWords({ id: 'b', kind: 'vehicle', record_id: 'v', label: 'WP CAB-4521', detail: 'Toyota HiAce', reason: 'entered twice', deleted_by: 'Sahan', deleted_at: '2026-10-30 14:05', until: '2026-11-29', days_left: 30 }, t);

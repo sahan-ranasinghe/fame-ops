@@ -3905,7 +3905,8 @@
         "request_stops": "ඉල්ලීම් නැවතුම් {n}",
         "starts": "ගමන් ආරම්භ {n}",
         "vehicles": "වාහන {n}"
-      }
+      },
+      "archivedOnBy": "{date} දින {name} සංරක්ෂණය කළා"
     },
     "projects": {
       "title": "ව්‍යාපෘති",

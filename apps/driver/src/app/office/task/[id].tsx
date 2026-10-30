@@ -30,8 +30,7 @@
 // facts are on the timeline's first lines (who approved it with the plan version; Sent · Seen · Accepted with their times;
 // Left when no start row says it); arriving is on each stop's row, done on the banner.
 // Round 52 (§40): "Delete…" for a wrong entry (approve, delete_entry with a reason and the preview of what goes with it):
-// the task itself (not while under way), each fill and each vehicle check it lists. The odometer readings it lists carry
-// no id in task_detail, so they have no Delete here (the server's contract).
+// the task itself (not while under way), each odometer reading, fill and vehicle check it lists.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -442,7 +441,8 @@ export default function TaskDetailScreen() {
           {p && task && (
             <TaskMoreDetails p={p} openLink={openLink} linkNote={linkNote}
               onPlan={p.plan ? () => router.push({ pathname: '/office/task/[id]/plan', params: { id: task.id } }) : undefined}
-              fillExtra={(f) => <DeleteEntry kind="fuel" id={f.id} compact testID="delete-fill" onDeleted={() => void q.reload()} />} />
+              fillExtra={(f) => <DeleteEntry kind="fuel" id={f.id} compact testID="delete-fill" onDeleted={() => void q.reload()} />}
+              odoExtra={(o) => <DeleteEntry kind="odometer" id={o.id} compact testID="delete-odometer" onDeleted={() => void q.reload()} />} />
           )}
           {/* Round 52 (§40): a task made by mistake (approve: delete_entry with a reason; not while it is under way). Cancel
               stays the normal way to call a trip off. */}

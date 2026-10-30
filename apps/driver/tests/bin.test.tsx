@@ -274,7 +274,7 @@ describe('Round 52: wrong entries (delete_entry)', () => {
 
   it("a fill and a vehicle check on the task page have their own Delete…; a task under way has none", async () => {
     const base = FIX('task_detail');
-    answers.task_detail = () => ({ ...base, task: { ...base.task, status: 'in_progress', vehicle_checks: [{ id: 'c1', date: '2026-10-30', at: '07:40', when: '07:40', employee_id: 'e1', result: 'ok', result_text: 'All fine', how: 'clock_in' }] }, fuel: [{ id: 'f1', litres: 20, amount_lkr: 7000, at: '2026-10-30 10:00' }] });
+    answers.task_detail = () => ({ ...base, task: { ...base.task, status: 'in_progress', vehicle_checks: [{ id: 'c1', date: '2026-10-30', at: '07:40', when: '07:40', employee_id: 'e1', result: 'ok', result_text: 'All fine', how: 'clock_in' }] }, fuel: [{ id: 'f1', litres: 20, amount_lkr: 7000, at: '2026-10-30 10:00' }], odometer: [{ id: 'o1', kind: 'task_start', reading_km: 45210, at: '2026-10-30 07:45' }] });
     answers.delete_entry = (args) => ({ kind: args.kind, id: args.id, label: `Fill · ${args.id}`, affects: ['its receipt photo'] });
     renderRouter(routes({ 'office/task/[id]': TaskDetailScreen }), { initialUrl: `/office/task/${base.task.id}` });
     await screen.findByTestId('task-banner');
@@ -284,6 +284,20 @@ describe('Round 52: wrong entries (delete_entry)', () => {
     fireEvent.press(await screen.findByTestId('delete-fill'));
     await waitFor(() => expect(argsOf('delete_entry')).toEqual([{ kind: 'fuel', id: 'f1', preview: true }]));
     expect(await screen.findByText('• its receipt photo')).toBeTruthy();
+    fireEvent.press(within(screen.getByTestId('delete-entry-sheet')).getByText(t('office.common.cancel')));
+    // Each odometer reading it lists has its own Delete… too (task_detail.odometer[].id).
+    fireEvent.press(screen.getByTestId('delete-odometer'));
+    await waitFor(() => expect(argsOf('delete_entry').at(-1)).toEqual({ kind: 'odometer', id: 'o1', preview: true }));
+  });
+
+  it('an odometer reading without an id (an older server): no Delete… on it', async () => {
+    const base = FIX('task_detail');
+    answers.task_detail = () => ({ ...base, odometer: [{ kind: 'task_start', reading_km: 45210, at: '2026-10-30 07:45' }] });
+    renderRouter(routes({ 'office/task/[id]': TaskDetailScreen }), { initialUrl: `/office/task/${base.task.id}` });
+    await screen.findByTestId('task-banner');
+    fireEvent.press(screen.getByText(t('office.common.moreDetails')));
+    await screen.findByTestId('odometer-row');
+    expect(screen.queryByTestId('delete-odometer')).toBeNull();
   });
 
   it("the request's and the issue's Delete…", async () => {
@@ -356,7 +370,7 @@ describe('Round 52: Recently deleted', () => {
 
 describe('Round 52: Projects', () => {
   it('Show archived asks for the archived ones; Archive (asks first) and a project with history has no Delete', async () => {
-    answers.list_projects = (args) => ({ projects: args.archived ? [{ id: 'p9', name: 'Old tower', short_name: 'OLD1', archived: '2026-10-01 by Sahan' }] : [{ id: 'p1', name: 'Kandy towers', short_name: 'TRKAN1', job_no: '13021', customer: 'Mobitel' }], total: 1 });
+    answers.list_projects = (args) => ({ projects: args.archived ? [{ id: 'p9', name: 'Old tower', short_name: 'OLD1', archived: '2026-10-01 by Sahan', archived_on: '2026-10-01', archived_by: 'Sahan' }] : [{ id: 'p1', name: 'Kandy towers', short_name: 'TRKAN1', job_no: '13021', customer: 'Mobitel' }], total: 1 });
     answers.set_project_archived = () => ({ project: 'Kandy towers', archived: true });
     answers.can_delete = () => ({ kind: 'project', id: 'p1', label: 'Kandy towers', deletable: false, history: { tasks: 4 } });
     renderRouter(routes({ 'office/projects': ProjectsScreen }), { initialUrl: '/office/projects' });
@@ -378,6 +392,9 @@ describe('Round 52: Projects', () => {
     fireEvent.press(within(screen.getByTestId('filter-sheet')).getByText(t('patterns.apply')));
     expect(await screen.findByText('OLD1 · Old tower')).toBeTruthy();
     expect(argsOf('list_projects').at(-1)).toEqual({ limit: 25, archived: true });
+    // The archive in the app's own words (the date in words, Latin digits), never the server's English sentence.
+    expect(screen.getByText(t('office.bin.archivedOnBy', { date: dateWords(t, '2026-10-01'), name: 'Sahan' }))).toBeTruthy();
+    expect(screen.queryByText('2026-10-01 by Sahan')).toBeNull();
   });
 
   it('someone with view only: rows, no actions', async () => {
@@ -391,11 +408,13 @@ describe('Round 52: Projects', () => {
 
 describe('Round 52: Rental companies', () => {
   it('the vehicles count; Delete permanently only for a company with no vehicle; one confirm', async () => {
-    answers.list_rental_companies = () => ({ companies: [{ id: 'r1', name: 'Malkey', phone: '+94112345678', vehicles: 3 }, { id: 'r2', name: 'Casons', vehicles: 0 }] });
+    answers.list_rental_companies = () => ({ companies: [{ id: 'r1', name: 'Malkey', phone: '+94112345678', vehicles: 3 }, { id: 'r2', name: 'Casons', vehicles: 0, archived: '2026-09-15 by Palitha', archived_on: '2026-09-15', archived_by: 'Palitha' }] });
     answers.can_delete = () => ({ kind: 'rental_company', id: 'r2', label: 'Casons', deletable: true });
     answers.delete_record = () => ({ deleted: 'Casons', kind: 'rental_company', bin_id: 'b5', until: UNTIL });
     renderRouter(routes({ 'office/rental-companies': RentalCompaniesScreen }), { initialUrl: '/office/rental-companies' });
     expect(await screen.findByText(`+94112345678 · ${t('office.rentals.vehicles', { n: 3 })}`)).toBeTruthy();
+    expect(screen.getByText(t('office.bin.archivedOnBy', { date: dateWords(t, '2026-09-15'), name: 'Palitha' }))).toBeTruthy();
+    expect(screen.queryByText('2026-09-15 by Palitha', { exact: false })).toBeNull();
     fireEvent.press(screen.getByText('Malkey'));
     let actions = await screen.findByTestId('company-actions');
     expect(within(actions).queryByTestId('company-delete')).toBeNull();

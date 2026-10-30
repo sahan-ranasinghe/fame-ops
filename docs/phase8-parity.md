@@ -835,4 +835,4 @@ The others:
 | Projects (list, search, Show archived, Archive / Restore, Delete) | More → Projects (view or request; the actions by their tools) | list_projects, set_project_archived, can_delete, delete_record |
 | Rental companies (vehicles count, Show archived, Archive / Restore, Delete with no vehicle) | More → Rental companies (vehicles) | list_rental_companies, set_rental_company_archived, can_delete, delete_record |
 | Recently deleted (search, rows, Restore) | More → Recently deleted (users) | list_bin, restore_bin_item |
-| Wrong entries: Delete… on a task, a request, an issue, a fill, an odometer reading, a vehicle check | Delete… on the task page (the task, each fill, each vehicle check), the request page, the issue page, the fill's player; the odometer readings have no id in task_detail (no Delete in the app) | delete_entry (preview, reason) |
+| Wrong entries: Delete… on a task, a request, an issue, a fill, an odometer reading, a vehicle check | Delete… on the task page (the task, each odometer reading, fill and vehicle check), the request page, the issue page, the fill's player | delete_entry (preview, reason) |

@@ -151,5 +151,13 @@ export function binRowWords(item: BinItem, t: Words, when: (s: string) => string
   };
 }
 
+/** When it was archived and by whom, in the app's own words ("Archived 1 Oct by Sahan"); nothing from an older server
+ *  that sends only its English sentence (the pill still says archived). `when` says the date in words. */
+export function archivedWords(row: { archived_on?: string; archived_by?: string }, t: Words, when: (s: string) => string = (s) => s): string | undefined {
+  if (!row.archived_on) return undefined;
+  const date = when(row.archived_on);
+  return row.archived_by ? t('office.bin.archivedOnBy', { date, name: row.archived_by }) : t('office.bin.archivedOn', { when: date });
+}
+
 /** The kind of a bin row in words (its chip). */
 export const binKindKey = (kind: string): string => `office.bin.kind_${kind}`;

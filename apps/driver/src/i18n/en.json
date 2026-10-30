@@ -3905,7 +3905,8 @@
         "request_stops": "{n} request stops",
         "starts": "{n} trip starts",
         "vehicles": "{n} vehicles"
-      }
+      },
+      "archivedOnBy": "Archived {date} by {name}"
     },
     "projects": {
       "title": "Projects",

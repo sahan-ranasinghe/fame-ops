@@ -14,10 +14,11 @@ import { Sheet } from '@/components/patterns/Sheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Txt } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
-import { appendProjects, archivedFilterDefs, BIN_SEARCH_MS, projectLine, projectsArgs, projectTitle, showArchivedOf } from '@/office/binLogic';
+import { appendProjects, archivedFilterDefs, archivedWords, BIN_SEARCH_MS, projectLine, projectsArgs, projectTitle, showArchivedOf } from '@/office/binLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, ProjectRow, ProjectsList } from '@/office/types';
 import { BackHeader, Divider, ErrorNotice, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { dateWords } from '@/lib/dateWords';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -93,7 +94,7 @@ export default function ProjectsScreen() {
                 <Row
                   title={projectTitle(p)}
                   line={projectLine(p) || undefined}
-                  line2={p.archived ? t('office.bin.archivedOn', { when: p.archived }) : undefined}
+                  line2={archivedWords(p, t, (d) => dateWords(t, d))}
                   right={p.archived ? <Pill text={t('office.bin.archived')} tone="muted" /> : undefined}
                   chevron={mayArchive || mayDelete}
                   onPress={mayArchive || mayDelete ? () => { setError(null); setPicked(p); } : undefined}

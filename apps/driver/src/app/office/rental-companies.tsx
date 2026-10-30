@@ -14,10 +14,11 @@ import { Sheet } from '@/components/patterns/Sheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Txt } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
-import { archivedFilterDefs, companiesShown, companyDeletable, showArchivedOf } from '@/office/binLogic';
+import { archivedFilterDefs, archivedWords, companiesShown, companyDeletable, showArchivedOf } from '@/office/binLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, RentalCompaniesList, RentalCompanyRow } from '@/office/types';
 import { BackHeader, Divider, ErrorNotice, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { dateWords } from '@/lib/dateWords';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -76,7 +77,7 @@ export default function RentalCompaniesScreen() {
                 <Row
                   title={c.name}
                   line={[c.phone, count(c.vehicles)].filter(Boolean).join(' · ')}
-                  line2={c.archived ? t('office.bin.archivedOn', { when: c.archived }) : undefined}
+                  line2={archivedWords(c, t, (d) => dateWords(t, d))}
                   right={c.archived ? <Pill text={t('office.bin.archived')} tone="muted" /> : undefined}
                   chevron={actionsFor(c)}
                   onPress={actionsFor(c) ? () => { setError(null); setPicked(c); } : undefined}
