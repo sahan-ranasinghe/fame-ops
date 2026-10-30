@@ -2241,6 +2241,8 @@ export const taskDetail = tool({
           };
         }),
         odometer: odometer.map((o) => ({
+          // Round 52: its id, for a wrong reading's Delete… (delete_entry).
+          id: o.id,
           kind: o.kind,
           reading_km: o.reading_km,
           entry: o.entry,

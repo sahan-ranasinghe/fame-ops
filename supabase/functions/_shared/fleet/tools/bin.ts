@@ -505,6 +505,9 @@ export const listRentalCompanies = tool({
       phone: c.phone ?? undefined,
       vehicles: count.get(c.id) ?? 0,
       archived: c.archived_at ? `${colomboDate(new Date(c.archived_at))} by ${c.archived_by ?? "–"}` : undefined,
+      // The same in parts, for the app to say in the person's language.
+      archived_on: c.archived_at ? colomboDate(new Date(c.archived_at)) : undefined,
+      archived_by: c.archived_at ? c.archived_by ?? undefined : undefined,
     }));
     return { result: { companies }, summary: `${companies.length} rental companies${archived ? " (archived)" : ""}` };
   },
@@ -534,6 +537,8 @@ export const listProjects = tool({
       customer: p.customer_name ?? undefined,
       status: p.status ?? undefined,
       archived: p.archived_at ? `${colomboDate(new Date(p.archived_at))} by ${p.archived_by ?? "–"}` : undefined,
+      archived_on: p.archived_at ? colomboDate(new Date(p.archived_at)) : undefined,
+      archived_by: p.archived_at ? p.archived_by ?? undefined : undefined,
     }));
     const page = pageOf(projects, pageWindow(limit, cursor));
     return {
