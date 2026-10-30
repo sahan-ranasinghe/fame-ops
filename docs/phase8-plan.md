@@ -972,6 +972,34 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 39. Round 51b: two bugs and the Mileage tab (30 October 2026, branch `phase9-r51b` from main `b34ac25`, worktree `~/projects/fame-ops-r51b`)
+
+Sahan's brief of 30 October (with the pilot reset of Part 1 waiting for its go; Round 52, delete / archive / restore, queued).
+
+1. **The place search had stopped** (high priority). Cause, reproduced on the live database (`permission denied for table
+   api_minute_calls`): the map search's minute counter `bump_minute_calls` ran as its caller, service_role, which deletes
+   nothing by design (the first migration), so its "keep an hour" delete failed and the function with it; until Round 48 the
+   search ignored a counter it could not read, and Round 48 (28 October) made it fail closed, so every word not already
+   cached answered "Map search paused: the call counter could not be read" (the last openrouteservice call: 22 October).
+   Google's results come only with "Search Google" in Office mode (by design) and on the site's stop boxes. Fix: migration
+   `20261030140000_minute_counter_definer` (the counter runs as its owner; pgTAP `minute_counter.test.sql` as service_role).
+   Typing never meets a limit: `search_places` has its own 90 a minute per person (`SEARCH_TOOLS`, `SEARCH_PER_MINUTE`, the
+   same as openrouteservice's own throttle) on office-api, office-mcp and driver-api's `/places/search`, and the breakers
+   (site and app) allow it 90 (`LOOP_LIMITS`); the boxes stay debounced at 300 ms. Tests: Deno, the breakers, Office
+   mode's `whereTyping.test.tsx`, the e2e on the site (`placeSearch.spec.ts`) and /m/ (`mobile.spec.ts`): Saved and
+   Recent, one search per pause on From, To and a stop, every answer 200, the result shown. The e2e cannot reach
+   openrouteservice (no internet, no key): the live check after the deploy is one search through the connector.
+2. **A card opens its item.** Office mode's Home: the whole "You have a trip to drive" card opens the trip
+   (`office/my-trip/[id]`), Start driving keeps its action; a Needs a driver row opens its task. The site's Overview: a
+   request row and an issue row (a group, its items) open from anywhere on the row (the stretched link, `.row-card`), Decide
+   and ⋯ on top. Already whole (audited): the driver's Today, My trips' cards, Home's other rows, the site's Needs a driver
+   rows. The tiles already opened their lists; "Free" counts free vehicles (the site's "Free now · vehicles"), so it opens
+   Vehicles · Free (Sahan asked Drivers · free: his call at the checkpoint).
+3. **The Mileage tab, one job per tab.** Log fuel only on the Fuel tab; Log odometer the one action; Recent = readings and
+   finished trips (`tripEntry`, `fetchTripsBefore`, by the person's own employee id), the history's chips All · Odometer ·
+   Trips; the month's copy on the phone carries its vehicle and is read only for that vehicle (the TEST-0002 plate over
+   TEST-0001 readings). `mileage.logFuel` removed (unused).
+
 ## 38. Round 51: three fixes (29 October 2026, branch `phase9-r51` from main `da6fd4b`, worktree `~/projects/fame-ops-r51`)
 
 Sahan's brief after Checkpoint 50. "Restyle, never rebuild: keep the planner, place search, drafts, per-person suggestions
