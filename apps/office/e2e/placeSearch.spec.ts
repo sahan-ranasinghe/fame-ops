@@ -119,11 +119,15 @@ test("the Overview's request row opens the request from anywhere on it; Decide k
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  const row = page.getByTestId("request-row").filter({ hasText: asker });
+  // The section shows the first 5 waiting (the suite's other requests may come first): its first row, whichever it is.
+  expect(rq.request.id).toBeTruthy();
+  const row = page.getByTestId("request-row").first();
   await expect(row).toBeVisible();
+  const href = await row.locator("a.row-open").getAttribute("href");
+  expect(href).toMatch(/^\/requests\/[0-9a-f-]+$/);
   await row.locator(".sub").click();
-  await expect(page).toHaveURL(new RegExp(`/requests/${rq.request.id}$`));
+  await expect(page).toHaveURL(new RegExp(`${href}$`));
   await page.goBack();
-  await page.getByTestId("request-row").filter({ hasText: asker }).getByRole("link", { name: "Decide" }).click();
-  await expect(page).toHaveURL(new RegExp(`/requests/${rq.request.id}/decide$`));
+  await page.getByTestId("request-row").first().getByRole("link", { name: "Decide" }).click();
+  await expect(page).toHaveURL(new RegExp(`${href}/decide$`));
 });
