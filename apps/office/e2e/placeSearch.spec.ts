@@ -106,7 +106,7 @@ test("the trip form's place boxes: Saved and Recent first, then one search per p
 });
 
 // Round 51b, bug 2 (Uber's trip card, Google Calendar's event card): a row opens its item from anywhere on it, not only its
-// name; its own button keeps its action. The Overview's request row, clicked on its second line (no link there).
+// name; its own button keeps its action. The Overview's request row, clicked on its own padding (no link there).
 test("the Overview's request row opens the request from anywhere on it; Decide keeps its own page", async ({ page }) => {
   const email = `cards.${stamp}@fame.test`;
   const password = `Cards test ${stamp}!`;
@@ -125,7 +125,9 @@ test("the Overview's request row opens the request from anywhere on it; Decide k
   await expect(row).toBeVisible();
   const href = await row.locator("a.row-open").getAttribute("href");
   expect(href).toMatch(/^\/requests\/[0-9a-f-]+$/);
-  await row.locator(".sub").click();
+  // A click on the row's own padding (top left, 6 px in: no text, no link, no button there; a row's second line can be
+  // empty): the stretched link covers the whole row.
+  await row.click({ position: { x: 6, y: 6 } });
   await expect(page).toHaveURL(new RegExp(`${href}$`));
   await page.goBack();
   await page.getByTestId("request-row").first().getByRole("link", { name: "Decide" }).click();
