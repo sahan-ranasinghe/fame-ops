@@ -1007,6 +1007,18 @@ Sahan's brief with the Round 52 deploy go: the two findings of §40.2, and /m/'s
    as before. Two keys in both languages (driving.moreLineWeb, driving.moreLineNone). Tests: jest drivingMode.test.tsx
    (5 new, Platform web), test:driving-mode, the /m/ e2e (mobile.spec.ts, Round 50's self-trip test: Home's card → the
    drive page, More → Driving → the drive page, then the trip as before).
+   CI 41050400834 found what the jest tests could not: the mobile website has its own app state (`state/app.web.tsx`,
+   nothing of the driver's day), which had no `loadDriveTrips` (a cast hid it; the jest tests mock useApp), so /m/'s Home
+   crashed ("Something went wrong") for a person who can drive. Now the web state has its reader (`loadWebDriveTrips`: the
+   own row and the web's own self trips with the person's session, kept as the query gives them, so one started on the web
+   is Continue driving), and the hook shows no card when a provider has none. Test: `tests/webDriveTrips.test.tsx` against
+   the real web provider (3), and the guard in drivingMode.test.tsx.
+4. **A flaky site test was a real bug** (found in the same run, not load: no CPU cut at its time). phone.spec's requester
+   test resumes a draft and then adds a stop; "People get in" matched two open sheets, Stop 1's and To's. The stop rows'
+   keys came from a counter that restarted with each page load (`s1`, `s2`, …), while a resumed draft keeps its rows' keys
+   from the load that saved it: Add stop could make a row with the key of the draft's To, so both rows were the open one.
+   Now each load has its own prefix (`stopsLogic.ts` newStop; Office mode's copy written by shared-logic.mjs). Test:
+   stopsLogic.test.ts (two loads, a resumed draft, Add stop: every key different; it fails on the old rule).
 
 ## 40. Round 52: archive, delete and restore everywhere; the admin and handover docs (30 October 2026, branch `phase9-r52` from main `76a1596`, worktree `~/projects/fame-ops-r52`)
 

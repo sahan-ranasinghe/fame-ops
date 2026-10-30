@@ -6,9 +6,11 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { deviceLanguage, translate, translateList, type Vars } from '@/i18n';
-import { DEFAULT_DRIVER_SETTINGS } from '@/lib/api';
+import { DEFAULT_DRIVER_SETTINGS, fetchMe, fetchTasks } from '@/lib/api';
 import { getJson, KEYS, setJson } from '@/lib/kv';
-import type { Language } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
+import { colomboDate, startOfColomboDay } from '@/lib/time';
+import type { Employee, Language, TaskWithStops } from '@/lib/types';
 import type { AppValue, SignInOutcome } from './app';
 
 export type { SignInOutcome };
@@ -27,6 +29,20 @@ export function useApp(): AppValue {
   const value = useContext(AppContext);
   if (!value) throw new Error('useApp must be used inside <AppProvider>');
   return value;
+}
+
+/**
+ * Round 53 (c): Home's "You have a trip to drive" and More → Driving read the person's own self trips from today, the
+ * web's own (not started, or started on the web), with their own session: the same two reads as the app's Driving mode,
+ * nothing kept in the browser. (CI 41050400834: without it the website's Home crashed for a person who can drive.)
+ */
+export async function loadWebDriveTrips(): Promise<{ me: Employee; tasks: TaskWithStops[] } | null> {
+  const row = await fetchMe(supabase);
+  if (!row) return null;
+  // The query is the filter (the person's own, driven by themselves, not under way in the app or from My trip); the app's
+  // ownTasks would drop the ones started on the web, which are Continue driving here.
+  const tasks = await fetchTasks(supabase, startOfColomboDay(colomboDate()), { employeeId: row.id, selfOnly: true, on: 'web' });
+  return { me: row, tasks };
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -66,6 +82,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     officeDriver: false,
     driving: false,
     officeSignOutCheck: async () => 'ok',
+    // Round 53 (c): /m/'s way into a self trip (Home's card, More → Driving), the web's own trips only.
+    loadDriveTrips: loadWebDriveTrips,
     booted: true,
     signIn: async (): Promise<SignInOutcome> => 'not_configured',
   }) as unknown as AppValue, [t, tList, language, setLanguage, online]);

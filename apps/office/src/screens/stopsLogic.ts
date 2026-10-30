@@ -45,7 +45,13 @@ export const TYPE_WORD: Record<StopType, string> = { pickup: "Pickup", drop: "Dr
 export const WHAT_LABEL: Record<Exclude<What, "">, string> = { people: "People", goods: "Goods", documents: "Documents", other: "Other" };
 
 let serial = 0;
-export const newStop = (type: StopType = "visit"): StopDraft => ({ key: `s${++serial}`, type, what: "", place: "", pin: "", dwell: "", arriveBy: "", note: "", typeSet: false });
+/**
+ * Each page load's own prefix (30 October 2026, CI 41050400834's flaky phone test): a resumed draft brings back its rows with
+ * the keys of the load that saved it, and a counter that restarted at s1 could hand Add stop the key of the draft's To, so
+ * both rows were "the open one" and both ⋯ Options sheets showed. Keys from another load never repeat one of this load's.
+ */
+const LOAD = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+export const newStop = (type: StopType = "visit"): StopDraft => ({ key: `s${LOAD}-${++serial}`, type, what: "", place: "", pin: "", dwell: "", arriveBy: "", note: "", typeSet: false });
 /**
  * A new trip: From (the start, the base place by default) and one To; Add stop puts rows between them (Fix B). `back`: the
  * trip goes back to the office (a new trip does), so To is a visit (wait there); one-way, To is the drop-off.

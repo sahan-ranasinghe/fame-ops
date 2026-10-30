@@ -70,6 +70,8 @@ export function useTripToDrive(only?: 'app' | 'web'): TaskWithStops | null {
   useFocusEffect(useCallback(() => {
     if (!allowed || loaded) return;
     let live = true;
+    // A provider without the reader (a design page) shows no line: never a crash (CI 41050400834).
+    if (typeof loadRef.current !== 'function') return;
     loadRef.current(where ?? 'app').then((answer) => {
       if (live) setRead(answer);
     }, () => undefined); // no connection: no line (Start driving is on More too)

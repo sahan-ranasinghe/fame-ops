@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { emptyTrip } from "./tripLogic";
 import {
   defaultStops, draftsFromStops, driveText, dwellText, firstStopOf, hasDeadline, metresBetween, moveStop, newStop, parseDwell, parsePin, pickupAtStart, sameAsStart,
@@ -305,5 +305,21 @@ describe("From / To / Add stop (Fix B, 29 October 2026; the stays and the empty 
     expect(withStartRole({ startWhat: "goods" }, "in")).toEqual({ startPax: true, startWhat: "" });
     expect(withStartRole({ startWhat: "documents" }, "leave")).toEqual({ startPax: false, startWhat: "documents" });
     expect(START_ROLES).toEqual(["leave", "in", "goods"]);
+  });
+});
+
+// 30 October 2026 (CI 41050400834, phone.spec "a requester on a phone", flaky): a resumed draft keeps its rows' keys from
+// the page load that saved it. The key counter restarted with every load, so Add stop could make a row with the key of the
+// draft's To: both rows were "the open one" and both ⋯ Options sheets showed. Two loads, the draft, then Add stop.
+describe("row keys never repeat a resumed draft's", () => {
+  it("a row added after a reload has a key no draft row has", async () => {
+    vi.resetModules();
+    const before = await import("./stopsLogic");
+    const draft = before.addStop(before.addStop([], false).list, false).list; // To, then Stop 1 + To: saved as the draft
+    vi.resetModules();
+    const after = await import("./stopsLogic"); // the page loaded again: Resume puts the draft's rows back
+    const { list } = after.addStop(draft, false);
+    const keys = list.map((s) => s.key);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });

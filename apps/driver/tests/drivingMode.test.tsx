@@ -310,6 +310,16 @@ describe('/m/ (the browser): the same Home card and a Driving row in More (Round
     }
   });
 
+  it('Home: a provider without the reader (a design page) shows no card and never crashes (CI 41050400834)', async () => {
+    mockOfficeApp = { ...require('./fakeOffice').mockUseApp(), enterDriving: mockEnter };
+    delete (mockOfficeApp as Record<string, unknown>).loadDriveTrips;
+    act(() => setOfficeMe(officeMe({ can_drive: true })));
+    renderRouter(routes, { initialUrl: '/design/office-home' });
+    await screen.findByTestId('stat-road', {}, { timeout: 5000 });
+    expect(screen.queryByTestId('home-drive-line')).toBeNull();
+    expect(screen.queryByText('Something went wrong')).toBeNull();
+  });
+
   it('More: Driving opens today\'s trip on its drive page', async () => {
     useOfficeApp();
     mockLoadTrips.mockResolvedValue({ me: { id: 'e-1', role: 'fleet_admin' }, tasks: [trip] });
