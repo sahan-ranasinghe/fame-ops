@@ -122,6 +122,35 @@ delete from public.rental_companies where id = '80000000-0000-0000-0000-00000000
 select throws_like($$ select public.bin_restore((select id from public.bin_items where record_id = '20000000-0000-0000-0000-0000000005b3')) $$,
   'gone: public.rental_companies', 'its rental company gone: the Restore says so');
 
+-- 7b. The review's cases (30 October) ----------------------------------------------------------------------------------------
+update public.tasks set status = 'completed' where id = '30000000-0000-0000-0000-0000000005b1';
+-- An office correction typed on the vehicle after the last reading stays when another reading is deleted.
+update public.vehicles set current_odometer_km = 1100 where id = '20000000-0000-0000-0000-0000000005b1';
+select lives_ok($$ select public.bin_take('odometer', '40000000-0000-0000-0000-0000000005b1', 'wrong', 'Admin', null) $$, 'the start reading goes');
+select is((select current_odometer_km from public.vehicles where id = '20000000-0000-0000-0000-0000000005b1'), 1100, 'the office''s 1,100 stays (it did not come from that reading)');
+select lives_ok($$ select public.bin_restore((select id from public.bin_items where record_id = '40000000-0000-0000-0000-0000000005b1')) $$, 'and comes back');
+select is((select current_odometer_km from public.vehicles where id = '20000000-0000-0000-0000-0000000005b1'), 1100, 'an older reading back does not overwrite it');
+update public.vehicles set current_odometer_km = 1042 where id = '20000000-0000-0000-0000-0000000005b1';
+-- A task its driver still has is not deleted: cancel it first.
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, created_by) values
+  ('30000000-0000-0000-0000-0000000005b2', 'Bin later', '10000000-0000-0000-0000-0000000005b1', '20000000-0000-0000-0000-0000000005b1', now() + interval '1 day', 'test');
+select throws_like($$ select public.bin_take('task', '30000000-0000-0000-0000-0000000005b2', 'x', 'Admin', null) $$, 'task_assigned', 'an assigned task: cancel it first');
+-- A problem report's issue stays when its task goes (unlinked), and is linked again when the task comes back.
+insert into public.vehicle_reports (id, vehicle_id, employee_id, task_id, category) values
+  ('90000000-0000-0000-0000-0000000005b1', '20000000-0000-0000-0000-0000000005b1', '10000000-0000-0000-0000-0000000005b1', '30000000-0000-0000-0000-0000000005b1', 'tyre');
+insert into public.issues (id, kind, severity, title, ref_key, task_id, vehicle_report_id) values
+  ('91000000-0000-0000-0000-0000000005b1', 'vehicle_report', 'warning', 'Tyre', 'report:90000000-0000-0000-0000-0000000005b1',
+   '30000000-0000-0000-0000-0000000005b1', '90000000-0000-0000-0000-0000000005b1');
+select lives_ok($$ select public.bin_take('task', '30000000-0000-0000-0000-0000000005b1', 'test', 'Admin', null) $$, 'the task with a report goes');
+select is((select task_id from public.issues where id = '91000000-0000-0000-0000-0000000005b1'), null, 'the report''s issue stays, unlinked');
+select lives_ok($$ select public.bin_restore((select id from public.bin_items where record_id = '30000000-0000-0000-0000-0000000005b1')) $$, 'the task comes back');
+select is((select task_id from public.issues where id = '91000000-0000-0000-0000-0000000005b1'), '30000000-0000-0000-0000-0000000005b1'::uuid, 'and the issue is its again');
+-- A vehicle once on a task that moved to another vehicle has history (its assignment events).
+insert into public.vehicles (id, reg_no) values ('20000000-0000-0000-0000-0000000005b4', 'BIN-0004');
+insert into public.task_assignment_events (task_id, action, employee_id, vehicle_id, actor)
+  values ('30000000-0000-0000-0000-0000000005b2', 'assigned', '10000000-0000-0000-0000-0000000005b1', '20000000-0000-0000-0000-0000000005b4', 'test');
+select ok(public.record_history('vehicle', '20000000-0000-0000-0000-0000000005b4') ? 'assignments', 'a vehicle a task was once on has history');
+
 -- 8. The purge's last step and who may call what --------------------------------------------------------------------------
 select is(public.bin_forget(array(select id from public.bin_items)), 0, 'nothing is forgotten before its 30 days');
 update public.bin_items set purge_after = now() - interval '1 minute' where record_id = '70000000-0000-0000-0000-0000000005b2';

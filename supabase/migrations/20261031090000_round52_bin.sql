@@ -149,16 +149,36 @@ begin
 end;
 $$;
 
-/** The vehicle's current reading: its newest reading left (none: empty). */
-create function public.bin_vehicle_reading(p_vehicle uuid)
+/**
+ * After a deleted reading: only when the vehicle's current reading came from it (the same km), it becomes the newest
+ * reading left that is not in the future (the insert trigger's rule); none left: empty. A reading typed on the vehicle by
+ * the office (update_vehicle) after it is kept.
+ */
+create function public.bin_vehicle_reading(p_vehicle uuid, p_deleted_km numeric)
 returns void
 language plpgsql
 set search_path = ''
 as $$
 begin
   update public.vehicles v
-  set current_odometer_km = (select o.reading_km from public.odometer_logs o where o.vehicle_id = p_vehicle order by o.logged_at desc, o.id desc limit 1)
-  where v.id = p_vehicle;
+  set current_odometer_km = (select o.reading_km from public.odometer_logs o where o.vehicle_id = p_vehicle and o.logged_at <= now()
+                             order by o.logged_at desc, o.id desc limit 1)
+  where v.id = p_vehicle and v.current_odometer_km is not distinct from p_deleted_km;
+end;
+$$;
+
+/** After a reading comes back: it is the vehicle's current reading again if it is the newest one not in the future. */
+create function public.bin_vehicle_reading_back(p_log uuid)
+returns void
+language plpgsql
+set search_path = ''
+as $$
+begin
+  update public.vehicles v set current_odometer_km = o.reading_km
+  from public.odometer_logs o
+  where o.id = p_log and v.id = o.vehicle_id and o.logged_at <= now()
+    and not exists (select 1 from public.odometer_logs n where n.vehicle_id = o.vehicle_id and n.logged_at <= now()
+                    and (n.logged_at, n.id) > (o.logged_at, o.id));
 end;
 $$;
 
@@ -189,6 +209,8 @@ begin
       ('vehicle', 'duty', 'select count(*) from public.duty_sessions where vehicle_id = $1'),
       ('vehicle', 'held', 'select count(*) from public.vehicle_assignments where vehicle_id = $1'),
       ('vehicle', 'requests', 'select count(*) from public.vehicle_requests where proposed_vehicle_id = $1 and status <> ''cancelled'''),
+      ('vehicle', 'assignments', 'select (select count(*) from public.task_assignment_events where vehicle_id = $1) + (select count(*) from public.task_vehicle_segments where vehicle_id = $1)'),
+      ('vehicle', 'held_now', 'select count(*) from public.employees where current_vehicle_id = $1'),
       -- a driver or an office person (the same table)
       ('person', 'tasks', 'select count(*) from public.tasks where $1 in (employee_id, assigned_by_employee_id, approved_by_employee_id, declined_by)'),
       ('person', 'requests', 'select count(*) from public.vehicle_requests where $1 in (requested_by_employee_id, decided_by_employee_id, proposed_employee_id)'),
@@ -207,6 +229,7 @@ begin
       ('person', 'assignments', 'select count(*) from public.task_assignment_events where employee_id = $1'),
       ('person', 'issue_work', 'select count(*) from public.issue_events where actor_employee_id = $1'),
       ('person', 'claims', 'select count(*) from public.claims where employee_id = $1'),
+      ('person', 'trips_web', 'select (select count(*) from public.web_trip_actions where employee_id = $1) + (select count(*) from public.route_matched where employee_id = $1)'),
       -- a place
       ('place', 'stops', 'select count(*) from public.task_stops where $1 in (place_id, saved_place_id)'),
       ('place', 'request_stops', 'select count(*) from public.request_stops where place_id = $1'),
@@ -292,7 +315,7 @@ begin
     update public.odometer_logs set photo_id = null where id = p_id;
     delete from public.photos where odometer_log_id = p_id or id = r.photo_id;
     delete from public.odometer_logs where id = p_id;
-    perform public.bin_vehicle_reading(r.vehicle_id);
+    perform public.bin_vehicle_reading(r.vehicle_id, r.reading_km);
 
   when 'check' then
     select c.*, v.reg_no into r from public.vehicle_checks c left join public.vehicles v on v.id = c.vehicle_id where c.id = p_id;
@@ -322,6 +345,8 @@ begin
     select t.* into r from public.tasks t where t.id = p_id;
     if not found then raise exception 'not_found' using errcode = 'P0001'; end if;
     if r.status = 'in_progress' then raise exception 'task_running' using errcode = 'P0001'; end if;
+    -- A task its driver still has (not started): cancel it first, so the driver is told; then delete it.
+    if r.status = 'assigned' then raise exception 'task_assigned' using errcode = 'P0001'; end if;
     label := concat_ws(' · ', 'Task', r.title);
     detail := to_char(r.start_at at time zone 'Asia/Colombo', 'YYYY-MM-DD HH24:MI');
     sub := public.bin_take_task(p_id);
@@ -337,6 +362,9 @@ begin
     if r.task_id is not null then
       if exists (select 1 from public.tasks where id = r.task_id and status = 'in_progress') then
         raise exception 'task_running' using errcode = 'P0001';
+      end if;
+      if exists (select 1 from public.tasks where id = r.task_id and status = 'assigned') then
+        raise exception 'task_assigned' using errcode = 'P0001';
       end if;
       sub := public.bin_take_task(r.task_id);
       snap := jsonb_set(snap, '{rows}', (snap -> 'rows') || (sub -> 'snap' -> 'rows'));
@@ -385,7 +413,7 @@ begin
     snap := public.bin_snap(snap, 'public.employees', w);
     for x in select t.tbl from (values ('public.device_tokens'), ('public.driver_latest'), ('public.driver_map_state'), ('public.office_prefs'),
         ('public.notification_settings'), ('public.notification_prefs'), ('public.password_links'), ('public.web_push_subscriptions'),
-        ('public.office_keys'), ('public.office_inbox'), ('public.roads_day_calls')) as t(tbl) loop
+        ('public.office_keys'), ('public.office_inbox'), ('public.roads_day_calls'), ('public.push_log')) as t(tbl) loop
       snap := public.bin_snap(snap, x.tbl::regclass, format('employee_id = %L', p_id));
     end loop;
     snap := public.bin_snap(snap, 'public.notifications', format('recipient_employee_id = %L', p_id));
@@ -413,7 +441,7 @@ begin
     for x in select t.tbl from (values ('public.device_tokens'), ('public.driver_latest'), ('public.driver_map_state'), ('public.office_prefs'),
         ('public.notification_settings'), ('public.notification_prefs'), ('public.password_links'), ('public.web_push_subscriptions'),
         ('public.office_keys'), ('public.office_inbox'), ('public.roads_day_calls'), ('public.employee_changes'),
-        ('public.driver_unavailability'), ('public.request_viewers'), ('public.photos')) as t(tbl) loop
+        ('public.driver_unavailability'), ('public.request_viewers'), ('public.photos'), ('public.push_log')) as t(tbl) loop
       execute format('delete from %s where employee_id = %L', x.tbl::regclass, p_id);
     end loop;
     delete from public.notifications where recipient_employee_id = p_id;
@@ -472,10 +500,12 @@ declare
 begin
   snap := public.bin_snap(snap, 'public.tasks', format('id = %L', p_id));
   for x in select t.tbl from (values ('public.task_stops'), ('public.task_projects'), ('public.task_assignment_events'), ('public.task_eta'),
-      ('public.task_passengers'), ('public.task_vehicle_segments'), ('public.push_log'), ('public.web_trip_actions'), ('public.issues')) as t(tbl) loop
+      ('public.task_passengers'), ('public.task_vehicle_segments'), ('public.push_log'), ('public.web_trip_actions')) as t(tbl) loop
     snap := public.bin_snap(snap, x.tbl::regclass, w);
   end loop;
-  snap := public.bin_snap(snap, 'public.issue_events', format('issue_id in (select id from public.issues where task_id = %L)', p_id));
+  -- The task's own issues go with it; a problem report's issue stays (the report is still open), unlinked.
+  snap := public.bin_snap(snap, 'public.issues', format('task_id = %L and vehicle_report_id is null', p_id));
+  snap := public.bin_snap(snap, 'public.issue_events', format('issue_id in (select id from public.issues where task_id = %L and vehicle_report_id is null)', p_id));
   -- The task's readings stay the vehicle's (the odometer moved): unlinked as "manual" readings (a start or end reading needs
   -- its task, odometer_logs_task_kind_check), each row's kind and task recorded so Restore links it back.
   for x in select o.id, o.kind from public.odometer_logs o where o.task_id = p_id loop
@@ -494,8 +524,9 @@ begin
   delete from public.task_passengers where task_id = p_id;
   delete from public.task_vehicle_segments where task_id = p_id;
   delete from public.task_assignment_events where task_id = p_id;
-  delete from public.issue_events where issue_id in (select id from public.issues where task_id = p_id);
-  delete from public.issues where task_id = p_id;
+  delete from public.issue_events where issue_id in (select id from public.issues where task_id = p_id and vehicle_report_id is null);
+  delete from public.issues where task_id = p_id and vehicle_report_id is null;
+  snap := public.bin_null(snap, 'public.issues', 'task_id', p_id);
   -- The projects' 100 % rule is for a task that stays: its rows go with the task (cascade), the rule skips a task that is gone.
   delete from public.tasks where id = p_id;
   return jsonb_build_object('snap', snap);
@@ -553,12 +584,8 @@ begin
   end loop;
   set local session_replication_role = origin;
 
-  -- An odometer reading back: its vehicle's current reading is its newest again.
-  if item.kind = 'odometer' then
-    select (el -> 'r' ->> 'vehicle_id')::uuid into veh
-    from jsonb_array_elements(item.snapshot -> 'rows') el where el ->> 't' = 'public.odometer_logs' limit 1;
-    if veh is not null then perform public.bin_vehicle_reading(veh); end if;
-  end if;
+  -- An odometer reading back: the vehicle's current reading again if it is the newest.
+  if item.kind = 'odometer' then perform public.bin_vehicle_reading_back(item.record_id); end if;
 
   delete from public.bin_items where id = p_id;
   return jsonb_build_object('kind', item.kind, 'record_id', item.record_id, 'label', item.label, 'auth_user_id', item.auth_user_id);
@@ -584,4 +611,5 @@ revoke all on function public.bin_file(jsonb, text, text) from public, anon, aut
 revoke all on function public.bin_null(jsonb, regclass, text, uuid) from public, anon, authenticated, service_role;
 revoke all on function public.bin_insert(regclass, jsonb) from public, anon, authenticated, service_role;
 revoke all on function public.bin_check_links(regclass, jsonb) from public, anon, authenticated, service_role;
-revoke all on function public.bin_vehicle_reading(uuid) from public, anon, authenticated, service_role;
+revoke all on function public.bin_vehicle_reading(uuid, numeric) from public, anon, authenticated, service_role;
+revoke all on function public.bin_vehicle_reading_back(uuid) from public, anon, authenticated, service_role;

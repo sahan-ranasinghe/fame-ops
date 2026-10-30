@@ -108,7 +108,8 @@ describe('Round 52: a driver', () => {
     expect(alert.mock.calls[0][0]).toBe(t('office.people.switchOffTitle', { name: 'Kamal' }));
     expect(String(alert.mock.calls[0][1])).toContain('switched off');
     const sheet = await screen.findByTestId('archive-trips-sheet');
-    expect(argsOf('set_driver_active')).toEqual([{ username: 'kamal', active: false }]);
+    // confirm false asks first (without it the server would archive at once: its answer for the older clients).
+    expect(argsOf('set_driver_active')).toEqual([{ username: 'kamal', active: false, confirm: false }]);
     expect(within(sheet).getByText('Team drop · Kandy')).toBeTruthy();
     expect(within(sheet).getByText(t('office.bin.tripsBodyOne'))).toBeTruthy();
     fireEvent.press(within(sheet).getByTestId('archive-anyway'));

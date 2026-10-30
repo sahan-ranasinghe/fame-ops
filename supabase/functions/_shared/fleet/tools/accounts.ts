@@ -14,7 +14,7 @@
 
 import { z } from "zod";
 import type { Db } from "../db.ts";
-import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
+import { authUserIdByEmail, fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { accountChangeProblem } from "../accountGuards.ts";
 import { normalisePermissions, PERMISSIONS, permissionsForRole, roleForPermissions } from "../permissions.ts";
 import { isRole, OFFICE_ROLES, type Role } from "../roles.ts";
@@ -181,7 +181,19 @@ export const createOfficeUser = tool({
     const label = role ?? roleForPermissions(perms);
 
     const { data: created, error } = await db.auth.admin.createUser({ email, email_confirm: true, user_metadata: { name, role: label } });
-    if (error || !created.user) throw new ToolError(`Could not create the sign-in: ${error?.message ?? "unknown error"}`);
+    let authUserId = created?.user?.id;
+    if (error || !authUserId) {
+      // Round 52: a sign-in left over with this e-mail (a person deleted into Recently deleted, or an attempt that did not
+      // finish) that no account uses: taken over, unblocked (as create_driver does for a username).
+      const existing = await authUserIdByEmail(db, email);
+      const used = existing
+        ? unwrapMaybe(await db.from("employees").select("id").eq("auth_user_id", existing).maybeSingle(), "office user")
+        : null;
+      if (!existing || used) throw new ToolError(`Could not create the sign-in: ${error?.message ?? "unknown error"}`);
+      const reused = await db.auth.admin.updateUserById(existing, { email_confirm: true, ban_duration: "none", user_metadata: { name, role: label } });
+      if (reused.error) throw new ToolError(`Could not reuse the existing sign-in: ${reused.error.message}`);
+      authUserId = existing;
+    }
 
     const employeeCode = code ?? `O-${email.split("@")[0].replace(/[^a-z0-9]/gi, "").slice(0, 20).toUpperCase() || "USER"}`;
     const row = unwrap(
@@ -193,7 +205,7 @@ export const createOfficeUser = tool({
         role: label,
         permissions: perms,
         active: true,
-        auth_user_id: created.user.id,
+        auth_user_id: authUserId,
       }).select("id").single(),
       "office user",
     );

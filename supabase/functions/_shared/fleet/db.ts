@@ -85,3 +85,15 @@ export function inChunks<T>(items: readonly T[], size = 100): T[][] {
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
 }
+
+/** Finds an Auth user by email. The admin API can only list, so this pages through. */
+export async function authUserIdByEmail(db: Db, email: string): Promise<string | null> {
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw new Error(`Auth: ${error.message}`);
+    const found = data.users.find((u) => u.email?.toLowerCase() === email);
+    if (found) return found.id;
+    if (data.users.length < 200) break;
+  }
+  return null;
+}

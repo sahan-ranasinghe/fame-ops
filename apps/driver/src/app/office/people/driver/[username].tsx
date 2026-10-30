@@ -193,7 +193,8 @@ export default function ManageDriver() {
     setSwitchError(null);
     setSwitching(true);
     try {
-      const out = await api.call<SetActiveResult | ArchiveNeedsConfirm>('set_driver_active', confirm ? { username, active: want, confirm: true } : { username, active: want });
+      // confirm false asks first (the trips from today on); without it the server would archive at once (its old answer).
+      const out = await api.call<SetActiveResult | ArchiveNeedsConfirm>('set_driver_active', want ? { username, active: true } : { username, active: false, confirm: Boolean(confirm) });
       if (asksFirst(out)) {
         setTrips(out);
         return;

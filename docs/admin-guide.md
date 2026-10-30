@@ -42,7 +42,8 @@ them: reassign them first (or **Archive anyway**). They can no longer sign in; t
 them back exactly as they were.
 
 **Delete a person** (created by mistake, never used): their page → **Delete permanently** → type their name → Delete. You
-cannot delete yourself, and the last admin can never be archived or deleted.
+cannot delete yourself, and the last admin can never be archived or deleted. You can add them again at once with the same
+e-mail or username (their old sign-in is taken over).
 
 ## 3. Vehicles
 
@@ -60,7 +61,8 @@ CR, the lease agreement. The expiry dates show as chips and remind you 30 days a
 
 A driver typed a fill twice, a reading is from the wrong vehicle, a test task was left behind:
 1. Open it (the fill under Fuel, the reading on its task or vehicle, the task, the request, the issue).
-2. **Delete…** → the page says what goes with it (for a request: its task) → write **why** → **Delete**.
+2. **Delete…** → the page says what goes with it (for a request: its task) → write **why** → **Delete**. A task still with
+   its driver must be **cancelled** first (the driver is told), then deleted.
 3. Totals, km and the vehicle's current reading update at once. A task's own km stay as recorded.
 4. A mistake? **Settings → Recently deleted → Restore** within 30 days.
 
@@ -87,7 +89,7 @@ decide it again. A task made by someone without Approve waits here too ("New tas
 | Problem | First check | Then |
 |---|---|---|
 | A driver's location is not showing | Live → the driver: "Location off" or "App not running"? | Ask them to open the app and turn Location on; Me → Phone setup for their phone brand |
-| Someone cannot sign in | Settings → Users: are they archived? | Send a new set-password link |
+| Someone cannot sign in | Settings → Users: are they archived? | Archived: **Restore** them. Otherwise send a new set-password link |
 | The map or the place search says "paused" or "limit reached" | Settings → Fleet → Map package (today's calls) | It resets the next day; tell the developer if it repeats |
 | A page says "Fame Fleet did not answer" | Your internet | Try again in a minute; tell the developer if it lasts |
 

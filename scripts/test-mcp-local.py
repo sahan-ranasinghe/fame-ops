@@ -3842,8 +3842,8 @@ tool("register_vehicle", {"reg_no": reg52, "make_model": "Test van", "vehicle_ty
 t52 = tool("create_task", {"title": f"Archive trip {tag52}", "date": day(1), "start_time": "10:00", "driver": f"arch.{tag52}", "vehicle": reg52,
                            "pickup": "Head office", "dropoff": "Kurunegala tower site"})
 tid52 = t52.get("task_id") or t52.get("task", {}).get("id")
-r = tool("set_driver_active", {"username": f"arch.{tag52}", "active": False})
-check(r.get("needs_confirm") is True and any(x["task_id"] == tid52 for x in r.get("trips", [])), "archiving a driver with a trip tomorrow asks first, naming it", json.dumps(r)[:240])
+r = tool("set_driver_active", {"username": f"arch.{tag52}", "active": False, "confirm": False})
+check(r.get("needs_confirm") is True and any(x["task_id"] == tid52 for x in r.get("trips", [])), "archiving a driver with a trip tomorrow asks first (confirm false), naming it", json.dumps(r)[:240])
 check(psql(f"select active from employees where username = 'arch.{tag52}'") == "t", "nothing changed yet")
 r = tool("set_driver_active", {"username": f"arch.{tag52}", "active": False, "confirm": True})
 check(r.get("active") is False and psql(f"select active from employees where username = 'arch.{tag52}'") == "f", "Archive anyway archives the driver", json.dumps(r)[:200])
@@ -3889,6 +3889,9 @@ if CHANNEL == "api":
     check(item and item[0]["days_left"] >= 29, "Recently deleted lists it for 30 days", json.dumps(item[:1])[:200])
     r = tool("restore_bin_item", {"id": item[0]["id"]}) if item else {}
     check(r.get("restored") and psql(f"select count(*) from vehicles where reg_no = '{reg52b}'") == "1", "Restore brings it back", json.dumps(r)[:200])
+    r = tool("delete_entry", {"kind": "task", "id": tid52, "preview": True}, expect_error=True)
+    check("cancel it first" in r, "a task still with its driver is not deleted: cancel it first (the driver is told)", r)
+    tool("cancel_task", {"task_id": tid52, "reason": "made for the test"})
     p_ = tool("delete_entry", {"kind": "task", "id": tid52, "preview": True})
     check(p_["label"].startswith("Task · Archive trip") and any("stop" in a for a in p_["affects"]), "a wrong task's preview says what goes with it", json.dumps(p_)[:200])
     r = tool("delete_entry", {"kind": "task", "id": tid52}, expect_error=True)
@@ -3898,7 +3901,7 @@ if CHANNEL == "api":
     item = [i for i in tool("list_bin", {"kind": "task"})["items"] if i["record_id"] == tid52]
     check(item and item[0].get("reason") == "made for the test", "with its reason")
     tool("restore_bin_item", {"id": item[0]["id"]})
-    check(psql(f"select status from tasks where id = '{tid52}'") == "assigned", "and comes back as it was")
+    check(psql(f"select status from tasks where id = '{tid52}'") == "cancelled", "and comes back as it was (cancelled)")
 
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:

@@ -994,8 +994,9 @@ after typing its name or plate). All four surfaces: the website, Office mode, /m
   | Rental company | — | — | `rental_companies.archived_at / archived_by`; `set_rental_company_archived` |
 - **Delete permanently** only a record with **no history** (`delete_record(kind, id, confirm)`): a vehicle (no task, fuel,
   odometer reading, check, report, document, duty or assignment), a driver (no task, fuel, odometer, duty, location,
-  check, report, assignment, ask answer), an office person (no request, task made or approved, decision, audit entry
-  beyond their own account's), a place (no stop, start or request uses it), a project (no task or request), a rental company
+  check, report, assignment, ask answer), an office person (no request, task made or approved, decision, ask, trip as a
+  passenger, issue handled; their activity-log entries, uploaded documents and place imports stay, unlinked from the
+  account, with their name), a place (no stop, start or request uses it), a project (no task or request), a rental company
   (no vehicle). Otherwise the answer is `has_history` with what it has, and the page says "Has history: archive instead".
   Drafts are the browser's and the phone's own (Discard, as today).
 - **Recently deleted** (the bin): a delete moves the row and what hangs off it into `bin_items` (a snapshot: the rows, the
@@ -1005,7 +1006,10 @@ after typing its name or plate). All four surfaces: the website, Office mode, /m
 - **Wrong entries** (`delete_entry(kind, id, reason)`, a reason required): a fuel log, an odometer reading, a vehicle check,
   an issue, a request, a task. Into the bin like the rest; totals and km recalculate (they are derived), the vehicle's
   current reading becomes its newest remaining reading, a task's start or end reading that is deleted clears that task's
-  reading (its km goes with it); a request with its task takes the task with it (said in the confirm); audited.
+  reading: no, a completed task keeps both its readings and its km (the constraint tasks_completed_fields; a task's km are
+  what it recorded); a deleted task's readings stay the vehicle's, unlinked as manual readings (linked back by Restore); a
+  task still with its driver (assigned) is refused: cancel it first so the driver is told; a request with its task takes the
+  task with it (said in the confirm); audited.
 - **Who** (by permission, never by role name; server-enforced on office-api and office-mcp): archive / restore with the
   record's permission (`vehicles`: drivers, vehicles, places, projects, rental companies; `users` or `office_users`:
   office people, the existing guards); a wrong entry with `approve` (the fleet admins and admins; not the Coordinator);
@@ -1024,6 +1028,34 @@ Dismiss (issues) stay: they are what the office normally does; Delete is for a w
 the brief: push-task and notify-office delete dead phone tokens with service_role, which has no DELETE (their errors are not
 read), so dead tokens are never removed; findDriver / findVehicle accept an archived driver or vehicle by name (the task
 tools refuse them after). Both reported at the checkpoint.
+
+### 40.3 As built, and the fresh review
+
+Server: the migration `20261031090000_round52_bin.sql` (pgTAP `round52_bin.test.sql`, 66 checks), `tools/bin.ts` (Deno
+`bin_test.ts`), the connector suite's Round 52 block. Site (`screens/bin/`, `settings/RecentlyDeleted.tsx`,
+`settings/RentalCompanies.tsx`, the pages): 34 new tests; e2e `bin.spec.ts`. Office mode (`components/office/BinParts.tsx`,
+`office/binLogic.ts`, More → Projects, Rental companies, Recently deleted): 22 jest tests, `npm run test:bin`. Docs:
+`docs/admin-guide.md`, `docs/handover.md` (the account ownership checklist).
+
+The fresh reviewer's findings and what was done:
+1. (High) A driver deleted and created again with the same username took over the banned sign-in; the purge after 30 days
+   would have deleted it under the new driver. Fixed: the purge leaves a sign-in any account still uses.
+2. An office person could not be created again with the same e-mail for 30 days. Fixed: create_office_user takes over a
+   left-over sign-in no account uses (as create_driver does).
+3. A vehicle once on a task that moved to another vehicle looked deletable, then failed on a foreign key. Fixed: its
+   assignment events and segments, and a vehicle someone holds, are history; a foreign-key refusal is said in words.
+4. Deleting a task took a problem report's issue with it, and the sync reopened it, so the task could not come back.
+   Fixed: the report's issue stays, unlinked, and is linked again by Restore; "the same issue is open again" is said in words.
+5. set_driver_active's needs_confirm changed its answer for the Teams artifact and older clients (they would have shown
+   "switched off" while nothing changed). Fixed: it asks first only with confirm false (the site and Office mode send it);
+   without confirm the answer is as before (archived, the open tasks in notes).
+6. The vehicle's reading after a deleted reading: now only when the current reading came from it, the newest left that is
+   not in the future (none: empty); a reading back is the current one again only if it is the newest.
+7. Deleting a task still with its driver told the driver nothing. Fixed: refused, "cancel it first (the driver is told)";
+   the same for a request whose task is with its driver.
+8. The docs: §40.1's reading and history words corrected; the admin guide's "cannot sign in" row (an archived person needs
+   Restore). Not changed: the restore's session_replication_role on the hosted project is untested until the first live
+   Restore after the deploy (it was set successfully on the live project in a rolled-back test on 30 October).
 
 ## 39. Round 51b: two bugs and the Mileage tab (30 October 2026, branch `phase9-r51b` from main `b34ac25`, worktree `~/projects/fame-ops-r51b`)
 

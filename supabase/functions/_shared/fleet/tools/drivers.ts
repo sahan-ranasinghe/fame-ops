@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import type { Db } from "../db.ts";
-import { ToolError, unwrap } from "../db.ts";
+import { authUserIdByEmail, ToolError, unwrap } from "../db.ts";
 import { docChip, type Employee, findDriver, loadLatest, loadRefs, sharing } from "../fleet.ts";
 import { phoneDisplay, plain, telLink, waLink } from "../format.ts";
 import { logChanges, seesDriverPhones, storedPhone } from "../phones.ts";
@@ -40,17 +40,7 @@ function driverCard(e: Employee, plate: string | null, location?: string, phones
   };
 }
 
-/** Finds an Auth user by email. The admin API can only list, so this pages through. */
-async function authUserIdByEmail(db: Db, email: string): Promise<string | null> {
-  for (let page = 1; page <= 50; page++) {
-    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) throw new Error(`Auth: ${error.message}`);
-    const found = data.users.find((u) => u.email?.toLowerCase() === email);
-    if (found) return found.id;
-    if (data.users.length < 200) break;
-  }
-  return null;
-}
+export { authUserIdByEmail };
 
 export const listDrivers = tool({
   name: "list_drivers",
@@ -216,14 +206,17 @@ export const setDriverActive = tool({
   title: "Switch a driver on or off",
   description:
     "active=false archives the driver: they can no longer sign in or see anything, and location sharing is ended; their history " +
-    "stays. If they have trips from today on, the answer is needs_confirm with the trips: reassign them, or call again with " +
-    "confirm true. active=true restores them. Nothing is deleted.",
+    "stays. With confirm false and trips from today on, the answer is needs_confirm with the trips (nothing changed): reassign " +
+    "them, or call again with confirm true; without confirm the driver is archived and the open tasks are named in notes. " +
+    "active=true restores them. Nothing is deleted.",
   readOnly: false,
-  input: z.object({ username: zDriverRef, active: z.boolean(), confirm: z.boolean().optional().describe("Archive although trips from today on are theirs") }),
+  input: z.object({ username: zDriverRef, active: z.boolean(), confirm: z.boolean().optional().describe("false: ask first when trips from today on are theirs; true: archive anyway") }),
   async run({ username, active, confirm }, { db, now }) {
     const driver = findDriver(await loadRefs(db), username, { demoToo: true });
-    // Round 52 (§40): archiving a driver with trips from today on names them first (reassign, or archive anyway).
-    if (!active && !confirm) {
+    // Round 52 (§40): archiving a driver with trips from today on names them first (reassign, or archive anyway) when the
+    // caller asks to be told (confirm false: the site and Office mode). Without confirm the answer is as it always was (the
+    // driver switched off, the open tasks in notes): the Teams artifact and older clients rely on it (the tool contract).
+    if (!active && confirm === false) {
       const trips = await tripsFromToday(db, "employee_id", driver.id, now);
       if (trips.length) {
         return {

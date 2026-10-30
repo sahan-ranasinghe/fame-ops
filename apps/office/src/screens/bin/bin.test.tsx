@@ -226,7 +226,8 @@ describe("a driver's Archive (DriverManage)", () => {
     expect(t.argsOf("set_driver_active")).toEqual([]);
     await act(async () => { fireEvent.click(within(box).getByRole("button", { name: "Yes, archive" })); });
     await settle();
-    expect(t.argsOf("set_driver_active")).toEqual([{ username: "kamal", active: false }]);
+    // confirm false asks first (without it the server would archive at once: its answer for the older clients).
+    expect(t.argsOf("set_driver_active")).toEqual([{ username: "kamal", active: false, confirm: false }]);
     const trips = screen.getByTestId("archive-trips");
     expect(within(trips).getByRole("link").getAttribute("href")).toBe("/tasks/t1");
     expect(trips.textContent).toBe("Tue 30 Dec 2025 09:00 · Team drop · Kandy");
@@ -299,7 +300,7 @@ describe("a vehicle's Archive (the vehicle page)", () => {
     expect(box.textContent).toContain("booked for 1 trip from today on");
     await act(async () => { fireEvent.click(within(box).getByRole("button", { name: "Archive anyway" })); });
     await settle();
-    expect(t.argsOf("set_vehicle_active")).toEqual([{ reg_no: "WP CAB-4521", active: false }, { reg_no: "WP CAB-4521", active: false, confirm: true }]);
+    expect(t.argsOf("set_vehicle_active")).toEqual([{ reg_no: "WP CAB-4521", active: false, confirm: false }, { reg_no: "WP CAB-4521", active: false, confirm: true }]);
     expect(toastText()).toBe("WP CAB-4521 archived");
     expect(screen.getByTestId("where").textContent).toBe("/vehicles");
   });

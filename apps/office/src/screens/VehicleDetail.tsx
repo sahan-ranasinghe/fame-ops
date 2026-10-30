@@ -122,7 +122,7 @@ export function VehicleDetail() {
           archived={v.active === false}
           words={(s) => vehicleArchiveText(v.reg_no, s)}
           restoreWords={{ title: `${v.reg_no} is archived (returned)`, text: "Restore brings it back to the lists and pickers." }}
-          archive={(confirm) => transport.call("set_vehicle_active", { reg_no: v.reg_no, active: false, ...(confirm ? { confirm: true } : {}) })}
+          archive={(confirm) => transport.call("set_vehicle_active", { reg_no: v.reg_no, active: false, confirm: Boolean(confirm) })}
           restore={() => transport.call("set_vehicle_active", { reg_no: v.reg_no, active: true })}
           onArchived={() => { toast(`${v.reg_no} archived`); void store.invalidate(); afterSave(back); }}
           onRestored={() => { toast(`${v.reg_no} restored`); void store.invalidate(); afterSave(back); }}

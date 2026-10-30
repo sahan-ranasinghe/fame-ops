@@ -99,6 +99,11 @@ export function confirmMatches(kind: RecordKind, typed: string | undefined, expe
 export function binErrorText(message: string, label: string): string {
   if (message.startsWith("has_history")) return `${label} has history: archive it instead. Nothing was deleted.`;
   if (message.startsWith("task_running")) return "That task is under way: it can be deleted once it is finished or cancelled.";
+  if (message.startsWith("task_assigned")) {
+    return "That task is still with its driver: cancel it first (the driver is told), then delete it. Nothing was deleted.";
+  }
+  if (message.includes("issues_open_ref_key")) return "The same issue is open again: there is nothing to restore.";
+  if (/violates foreign key constraint/.test(message)) return `${label} is still used somewhere: archive it instead. Nothing was deleted.`;
   if (message.startsWith("base_place")) return `${label} is the base place: choose another one in Settings → Fleet first.`;
   if (message.startsWith("taken")) {
     return "Something with the same name, plate or username exists now. Rename or archive it first, then restore this.";
@@ -310,13 +315,18 @@ async function entryOf(db: Db, kind: EntryKind, id: string): Promise<{ label: st
       const affects = ["its stops, timeline and passengers"];
       if (q.task_id) {
         const t = unwrapMaybe(await db.from("tasks").select("title, status").eq("id", q.task_id as string).maybeSingle(), "task");
+        if (t?.status === "in_progress") throw new ToolError(binErrorText("task_running", ""));
+        if (t?.status === "assigned") {
+          throw new ToolError("Its task is still with its driver: cancel the booking first (the driver is told), then delete it. Nothing was deleted.");
+        }
         if (t) affects.unshift(`its task ${t.title} and that task's stops`);
       }
       return { label: [`Request`, (q.title ?? q.requested_by_name) as string, when(q.needed_at)].filter(Boolean).join(" · "), affects };
     }
     case "task": {
       const t = await one("tasks", "title, start_at, status");
-      if (t.status === "in_progress") throw new ToolError("That task is under way: it can be deleted once it is finished or cancelled.");
+      if (t.status === "in_progress") throw new ToolError(binErrorText("task_running", ""));
+      if (t.status === "assigned") throw new ToolError(binErrorText("task_assigned", ""));
       const stops = (await db.from("task_stops").select("id", { count: "exact", head: true }).eq("task_id", id)).count ?? 0;
       return {
         label: [`Task`, t.title as string, when(t.start_at)].filter(Boolean).join(" · "),
@@ -573,7 +583,11 @@ export async function purgeBin(db: Db, now: Date): Promise<{ purged: number; fil
       if (error) ok = false;
       else files += paths.length;
     }
-    if (ok && item.auth_user_id) {
+    // A sign-in someone uses again (a username or e-mail reused for a new account, the sign-in taken over) stays.
+    const inUse = item.auth_user_id
+      ? ((await db.from("employees").select("id", { count: "exact", head: true }).eq("auth_user_id", item.auth_user_id)).count ?? 0) > 0
+      : false;
+    if (ok && item.auth_user_id && !inUse) {
       const { error } = await db.auth.admin.deleteUser(item.auth_user_id);
       // Already gone is fine; anything else waits for the next run.
       if (error && !/not found/i.test(error.message)) ok = false;

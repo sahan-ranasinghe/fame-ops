@@ -125,7 +125,8 @@ export function DriverManage() {
             archived={off}
             words={(s) => personArchiveText(x.name, s)}
             restoreWords={{ title: `${x.name} is archived`, text: "Restore lets them sign in again." }}
-            archive={(confirm) => transport.call("set_driver_active", { username, active: false, ...(confirm ? { confirm: true } : {}) })}
+            // confirm false asks first (the trips from today on); without it the server archives at once (the old answer, kept for the artifact).
+            archive={(confirm) => transport.call("set_driver_active", { username, active: false, confirm: Boolean(confirm) })}
             restore={() => transport.call("set_driver_active", { username, active: true })}
             onArchived={(out) => archived(false, out)}
             onRestored={(out) => archived(true, out)}
