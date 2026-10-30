@@ -972,6 +972,59 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 40. Round 52: archive, delete and restore everywhere; the admin and handover docs (30 October 2026, branch `phase9-r52` from main `76a1596`, worktree `~/projects/fame-ops-r52`)
+
+Patterns: Shopify's and Samsara's archive (a record with history is switched off, never lost), Gmail's and Google Drive's bin
+(deleted things wait 30 days and come back with Restore), GitHub's type-to-confirm (a person or a vehicle is deleted only
+after typing its name or plate). All four surfaces: the website, Office mode, /m/ and the Claude connector (archive only).
+
+### 40.1 The model (the contract)
+
+- **Archive** (switch off) = the record has history. Archived records leave every list and picker, stay in reports,
+  history and old trips, show under a "Show archived" filter, and come back with **Restore**. The verb on every surface is
+  Archive / Restore (the words "Switch off" for a person's sign-in stay in the confirm: archiving a person stops their
+  sign-in). What already exists is kept and named the same:
+  | Record | Archived = | Tools (existing → kept) | New |
+  |---|---|---|---|
+  | Driver | `employees.active` false (sign-in banned, duty ended) | `set_driver_active` | warns first with their trips from today on (needs_confirm, the list) |
+  | Office person | `employees.active` false (sign-in banned, keys revoked, the guards) | `set_office_user_active` | — |
+  | Vehicle | `vehicles.active` false ("returned") | `update_vehicle active` | `set_vehicle_active` with the future trips warning |
+  | Place | `places.active` false + `removed_at` | `remove_place` / `restore_place` | — (its words become Archive / Restore) |
+  | Project | — | — | `projects.archived_at / archived_by`; `set_project_archived` |
+  | Rental company | — | — | `rental_companies.archived_at / archived_by`; `set_rental_company_archived` |
+- **Delete permanently** only a record with **no history** (`delete_record(kind, id, confirm)`): a vehicle (no task, fuel,
+  odometer reading, check, report, document, duty or assignment), a driver (no task, fuel, odometer, duty, location,
+  check, report, assignment, ask answer), an office person (no request, task made or approved, decision, audit entry
+  beyond their own account's), a place (no stop, start or request uses it), a project (no task or request), a rental company
+  (no vehicle). Otherwise the answer is `has_history` with what it has, and the page says "Has history: archive instead".
+  Drafts are the browser's and the phone's own (Discard, as today).
+- **Recently deleted** (the bin): a delete moves the row and what hangs off it into `bin_items` (a snapshot: the rows, the
+  links it cleared, the storage files), so nothing else in the system ever sees it; **Restore** (admins) puts it back as it
+  was (refused when a name or plate was taken meanwhile, or what it points to is gone). After 30 days the retention job
+  removes the snapshot and its storage files for good; a person's sign-in account goes then too (banned from the delete).
+- **Wrong entries** (`delete_entry(kind, id, reason)`, a reason required): a fuel log, an odometer reading, a vehicle check,
+  an issue, a request, a task. Into the bin like the rest; totals and km recalculate (they are derived), the vehicle's
+  current reading becomes its newest remaining reading, a task's start or end reading that is deleted clears that task's
+  reading (its km goes with it); a request with its task takes the task with it (said in the confirm); audited.
+- **Who** (by permission, never by role name; server-enforced on office-api and office-mcp): archive / restore with the
+  record's permission (`vehicles`: drivers, vehicles, places, projects, rental companies; `users` or `office_users`:
+  office people, the existing guards); a wrong entry with `approve` (the fleet admins and admins; not the Coordinator);
+  delete permanently, the bin and its Restore with `users` (the admins only). **The connector keeps no delete**: the
+  delete and bin tools are web only (WEB_ONLY_TOOLS), on purpose; archive and restore stay on it.
+- **Confirm**: a person or a vehicle is deleted only after typing its name or plate (GitHub); every other delete names
+  what goes with it ("the task Team drop · Kandy and its 3 stops") and asks once; the bin's Restore asks nothing.
+
+### 40.2 The inventory (Round 52's C; nothing removed)
+
+From the read-only sweep of 30 October: every switch-off, remove, restore, cancel and dismiss of today stays where it is,
+with its confirm, its filter ("Show: All drivers", "returned vehicles", "Removed places", the people's Filter), its pill and
+its tests (test-people, hotfix3Lists, coordinatorUsers, accountGuards, lists2, officeLists2, vehicleCare, placeRemoveLogic,
+placeRemove, office.spec 1501–1510, test-places, the pgTAP place files, round9_retention). Cancel (requests, tasks) and
+Dismiss (issues) stay: they are what the office normally does; Delete is for a wrong entry. Found on the way, not part of
+the brief: push-task and notify-office delete dead phone tokens with service_role, which has no DELETE (their errors are not
+read), so dead tokens are never removed; findDriver / findVehicle accept an archived driver or vehicle by name (the task
+tools refuse them after). Both reported at the checkpoint.
+
 ## 39. Round 51b: two bugs and the Mileage tab (30 October 2026, branch `phase9-r51b` from main `b34ac25`, worktree `~/projects/fame-ops-r51b`)
 
 Sahan's brief of 30 October (with the pilot reset of Part 1 waiting for its go; Round 52, delete / archive / restore, queued).
