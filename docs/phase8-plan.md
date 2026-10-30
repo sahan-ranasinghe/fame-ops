@@ -976,6 +976,17 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
 
 Sahan's brief of 30 October (with the pilot reset of Part 1 waiting for its go; Round 52, delete / archive / restore, queued).
 
+**Deployed 30 October 2026 (Sahan's go after CI 41020906479; main 22e2dfc, its CI 41024760229 passed: 55 e2e, none
+flaky).** The migration `20261030140000_minute_counter_definer` (the dry run listed only it; afterwards the counter as
+service_role answered instead of "permission denied"); office-api v45, office-mcp v49, driver-api v16 (`--use-api`); one
+search through the connector ("Bulathkohupitiya") answered 8 map results with no note, openrouteservice's first call since
+22 October (routing_calls ors_autocomplete 1, errors 0); the site with /m/ (0e68f642; the scan found nothing, every /m/ file
+served as itself); the EAS update "Place search back, cards open their item, Mileage: one job per tab" (runtime
+1.4.0-gmaps): update group `63a2b3d6-444d-4e8a-9ef8-f3ae30faac50`, Android update `01a18c00-038c-7794-96d3-d4654f7c6dff`.
+CI on the branch took four runs: the connector's search bucket (a real bug the e2e found), then three fixes to the new tests
+themselves (wait for the sign-in, the result row, the Overview row's padding). Sahan's answer: the Free tile stays free
+vehicles → Vehicles · Free (all three tiles count vehicles).
+
 1. **The place search had stopped** (high priority). Cause, reproduced on the live database (`permission denied for table
    api_minute_calls`): the map search's minute counter `bump_minute_calls` ran as its caller, service_role, which deletes
    nothing by design (the first migration), so its "keep an hour" delete failed and the function with it; until Round 48 the
