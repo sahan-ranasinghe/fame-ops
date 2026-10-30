@@ -17,6 +17,7 @@ function setup() {
   const limits: Limits = {
     general: new TokenBuckets({ capacity: 60 }, clock),
     paid: new TokenBuckets({ capacity: 30 }, clock),
+    search: new TokenBuckets({ capacity: 90 }, clock),
     unauth: new TokenBuckets({ capacity: 20 }, clock),
   };
   const auth = { asked: 0 };
@@ -63,15 +64,17 @@ Deno.test("an address refused 20 times a minute is answered 429 before Supabase 
   assertEquals((await post("/places/search", { ip: "198.51.100.7" })).status, 401);
 });
 
-Deno.test("a driver's place search: 30 a minute, the 31st is 429 with the sentence and never searched; /errors goes on under the general 60", async () => {
-  const { post, searched, t } = setup();
-  for (let i = 0; i < 30; i++) assertEquals((await post("/places/search")).status, 200);
+Deno.test("a driver's place search: its own 90 a minute (30 October 2026), the 91st is 429 with the sentence and never searched; /errors goes on under the general 60", async () => {
+  const { post, searched, t, limits } = setup();
+  limits.general = new TokenBuckets({ capacity: 1000 }, () => t.now);
+  for (let i = 0; i < 90; i++) assertEquals((await post("/places/search")).status, 200);
   const refused = await post("/places/search");
   assertEquals([refused.status, ((await refused.json()) as { message: string }).message], [
     429,
     "Too many requests · try again in a minute",
   ]);
-  assertEquals(searched.n, 30);
+  assertEquals(searched.n, 90);
+  assertEquals(limits.paid.peek("d1"), 30, "typing never spends the paid allowance (trips, stops)");
   assertEquals(
     (await post("/errors", { token: "tok" }, { message: "boom", side: "driver" })).status,
     200,

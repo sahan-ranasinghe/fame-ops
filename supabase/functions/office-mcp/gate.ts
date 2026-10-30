@@ -13,6 +13,8 @@ import {
   GENERAL_PER_MINUTE,
   PAID_PER_MINUTE,
   PAID_TOOLS,
+  SEARCH_PER_MINUTE,
+  SEARCH_TOOLS,
   RATE_LIMITED,
   rateLimitedResponse,
   TokenBuckets,
@@ -23,6 +25,8 @@ import { isAuthorized, keyFromPath, sha256Hex } from "./key.ts";
 export interface Limits {
   keys: TokenBuckets;
   paid: TokenBuckets;
+  /** The place search: 90 a minute per key (SEARCH_TOOLS). */
+  search: TokenBuckets;
   unauth: TokenBuckets;
 }
 
@@ -30,6 +34,7 @@ export function defaultLimits(clock?: () => number): Limits {
   return {
     keys: new TokenBuckets({ capacity: GENERAL_PER_MINUTE }, clock),
     paid: new TokenBuckets({ capacity: PAID_PER_MINUTE }, clock),
+    search: new TokenBuckets({ capacity: SEARCH_PER_MINUTE }, clock),
     unauth: new TokenBuckets({ capacity: UNAUTH_PER_IP_PER_MINUTE }, clock),
   };
 }
@@ -70,12 +75,17 @@ export async function gateRequest(request: Request, deps: GateDeps): Promise<Gat
   return { ok: true, actor, limitKey };
 }
 
-/** The tool may run now, or the words the connector answers instead (the tools that can cost: 30 a minute per key). */
+/**
+ * The tool may run now, or the words the connector answers instead (the tools that can cost: 30 a minute per key; the
+ * place search: 90).
+ */
 export function paidGate(
   tool: string,
-  limits: Pick<Limits, "paid"> | undefined,
+  limits: Pick<Limits, "paid" | "search"> | undefined,
   limitKey: string,
 ): { ok: true } | { ok: false; text: string } {
-  if (!limits || !PAID_TOOLS.has(tool) || limits.paid.take(limitKey)) return { ok: true };
+  if (!limits) return { ok: true };
+  if (SEARCH_TOOLS.has(tool)) return limits.search.take(limitKey) ? { ok: true } : { ok: false, text: RATE_LIMITED.message };
+  if (!PAID_TOOLS.has(tool) || limits.paid.take(limitKey)) return { ok: true };
   return { ok: false, text: RATE_LIMITED.message };
 }

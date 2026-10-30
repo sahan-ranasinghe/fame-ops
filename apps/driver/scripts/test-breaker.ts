@@ -5,7 +5,7 @@
 //
 //   npm run test:breaker          (from apps/driver)
 
-import { LOOP_ERROR, LOOP_LIMIT, LoopBreaker, loopReportBody, loopReportMessage } from '../src/lib/breaker';
+import { LOOP_ERROR, LOOP_LIMIT, LOOP_LIMITS, LoopBreaker, loopReportBody, loopReportMessage } from '../src/lib/breaker';
 import { ApiError } from '../src/lib/api';
 import { createDriverApi } from '../src/lib/driverApi';
 import { createOfficeApi } from '../src/office/api';
@@ -109,7 +109,10 @@ async function main() {
     const api = createDriverApi({ baseUrl: base, apiKey: 'anon', token: async () => 'tok', fetch: fetchFn, breaker: new LoopBreaker({}, () => now) });
     let answered = 0;
     let stopped: ApiError | null = null;
-    for (let i = 0; i < 40 && !stopped; i++) {
+    // The place search's own 90 a minute (30 October 2026: typing asks it once a pause).
+    const SEARCH = LOOP_LIMITS['/places/search'];
+    check(SEARCH === 90, 'the place search may ask 90 times a minute', SEARCH);
+    for (let i = 0; i < 120 && !stopped; i++) {
       try {
         await api.searchPlaces('Kandy');
         answered += 1;
@@ -117,10 +120,10 @@ async function main() {
         stopped = e as ApiError;
       }
     }
-    check(answered === LOOP_LIMIT && stopped instanceof ApiError && stopped.code === 'loop' && !stopped.permanent, 'the place search stops after 30 with a loop error that is not permanent', { answered, code: stopped?.code });
+    check(answered === SEARCH && stopped instanceof ApiError && stopped.code === 'loop' && !stopped.permanent, 'the place search stops after 90 with a loop error that is not permanent', { answered, code: stopped?.code });
     const reports = calls.filter((c) => c.path === '/errors');
-    check(calls.filter((c) => c.path === '/places/search').length === LOOP_LIMIT && reports.length === 1 && (reports[0].body as { side: string }).side === 'driver'
-      && (reports[0].body as { message: string }).message.startsWith('Loop: /places/search asked 31 times'), 'one report through driver-api POST /errors, as the driver', reports);
+    check(calls.filter((c) => c.path === '/places/search').length === SEARCH && reports.length === 1 && (reports[0].body as { side: string }).side === 'driver'
+      && (reports[0].body as { message: string }).message.startsWith('Loop: /places/search asked 91 times'), 'one report through driver-api POST /errors, as the driver', reports);
     check(await api.suggestPlaces(null).then(() => false, (e: ApiError) => e.code === 'loop'), 'the same route (suggestions) is closed too');
     check(await api.saveProfile({ phone: '0771234567' } as never).then(() => true, () => false), 'another route still answers');
     now += 61_000;

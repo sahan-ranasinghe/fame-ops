@@ -1,7 +1,7 @@
 // The token buckets (Round 48, item 6b): a burst of capacity, then one a (60 / capacity) seconds; the clock injected;
 // the map bounded; the one sentence; the address the platform adds.
 import { assert, assertEquals } from "@std/assert";
-import { clientIp, PAID_TOOLS, RATE_LIMITED, rateLimitedResponse, TokenBuckets } from "./rateLimit.ts";
+import { clientIp, PAID_PER_MINUTE, PAID_TOOLS, RATE_LIMITED, rateLimitedResponse, SEARCH_PER_MINUTE, SEARCH_TOOLS, TokenBuckets } from "./rateLimit.ts";
 
 function clock(start = 0) {
   const t = { now: start };
@@ -55,9 +55,12 @@ Deno.test("the 429 answer carries the one sentence and Retry-After; the paid too
   assertEquals(res.headers.get("access-control-allow-origin"), "https://x");
   assertEquals(await res.json(), { error: "rate_limited", code: "rate_limited", message: "Too many requests · try again in a minute" });
   assertEquals(RATE_LIMITED.message, "Too many requests · try again in a minute");
-  for (const t of ["search_places", "google_place", "plan_task", "create_task", "driver_route", "register_map_load"]) {
+  for (const t of ["google_place", "plan_task", "create_task", "driver_route", "register_map_load"]) {
     assert(PAID_TOOLS.has(t), t);
   }
+  // The place search as someone types: its own 90 a minute, never the paid 30 (30 October 2026).
+  assert(SEARCH_TOOLS.has("search_places") && !PAID_TOOLS.has("search_places"));
+  assertEquals([SEARCH_PER_MINUTE, PAID_PER_MINUTE], [90, 30]);
   // task_detail's one Google call (a running task's ETA) is cached 15 minutes: the general limit covers it.
   assert(!PAID_TOOLS.has("live_drivers") && !PAID_TOOLS.has("list_vehicles") && !PAID_TOOLS.has("task_detail"));
 });

@@ -16,6 +16,7 @@ function setup() {
   const limits: Limits = {
     keys: new TokenBuckets({ capacity: 120 }, clock),
     paid: new TokenBuckets({ capacity: 30 }, clock),
+    search: new TokenBuckets({ capacity: 90 }, clock),
     unauth: new TokenBuckets({ capacity: 20 }, clock),
   };
   const lookups = { n: 0 };
@@ -87,4 +88,8 @@ Deno.test("the paid tools: 30 a minute per key as a tool error with the sentence
   assertEquals(paidGate("task_board", limits, "shared").ok, true);
   assertEquals(paidGate("plan_task", limits, "key:other").ok, true);
   assertEquals(paidGate("plan_task", undefined, "").ok, true);
+  // The place search: its own 90 a minute per key, apart from the paid 30 (30 October 2026).
+  for (let i = 0; i < 90; i++) assertEquals(paidGate("search_places", limits, "typing").ok, true);
+  assertEquals(paidGate("search_places", limits, "typing"), { ok: false, text: "Too many requests · try again in a minute" });
+  assertEquals(paidGate("plan_task", limits, "typing").ok, true, "typing never spends the paid allowance");
 });

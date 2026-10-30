@@ -404,6 +404,60 @@ test("the Where step in Sinhala at 390 px: From, To and + Add stop, no horizonta
   await page.screenshot({ path: testInfo.outputPath("m-si-where-options-390.png") });
 });
 
+// The place search as someone types (30 October 2026, Round 51b; the site: placeSearch.spec.ts): the Where step's real box on
+// From, To and a stop between them. Empty, Saved (our places) and Recent (the person's own); typing asks search_places once
+// the typing pauses, every answer 200 (no 429, no loop), and the place found shows.
+test("the Where step's place boxes on /m/: Saved and Recent, then one search per pause on From, To and a stop, its results shown", async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  const depot = `Typing Depot ${stamp}`;
+  await tool("add_place", { name: depot, address: "Galle Road, Colombo 03", lat: 6.9012, lng: 79.8521, kind: "store" });
+  const email = `where.typing.${stamp}@fame.test`;
+  const password = await officeUser("Mobile Typing", email, ["view", "request"]);
+  const recentSpot = `Recent Spot ${stamp}`;
+  await asPerson(email, password, "create_request", { date: "2026-12-01", time: "09:00", route_from: "Head office", route_to: recentSpot, need_type: "van", pax: 2 });
+  const typed: string[] = [];
+  const statuses: number[] = [];
+  page.on("request", (r) => {
+    if (!r.url().includes("/office-api/tools/search_places")) return;
+    const body = JSON.parse(r.postData() || "{}") as { text?: string };
+    if (typeof body.text === "string" && body.text !== "") typed.push(body.text);
+  });
+  page.on("response", (r) => {
+    if (r.url().includes("/office-api/tools/search_places")) statuses.push(r.status());
+  });
+  await page.goto("/m/");
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/m\/office/);
+  await page.goto("/m/office/trip/where?mode=request");
+  await expect(shown(page.getByTestId("route-card"))).toBeVisible();
+  const box = () => shown(page.getByLabel("Search a place, or paste a Maps link", { exact: true }));
+  const typeAndFind = async (word: string, label: string) => {
+    // Empty: Saved (our places, a building) and Recent (the person's own, a clock).
+    await expect(shown(page.getByLabel(new RegExp(`^${recentSpot}, Recent$`)))).toBeVisible();
+    await expect(shown(page.getByLabel(/, Our place$/))).toBeVisible();
+    const before = typed.length;
+    await box().pressSequentially(word, { delay: 40 });
+    await expect(shown(page.getByText(depot, { exact: true }))).toBeVisible();
+    const sent = typed.slice(before);
+    expect(sent.at(-1), `${label}: the whole word was searched`).toBe(word);
+    expect(sent.length, `${label}: debounced (${sent.join(" | ")})`).toBeLessThanOrEqual(2);
+    await shown(page.getByText(depot, { exact: true })).click();
+  };
+  // From: Change opens its box.
+  await shown(page.getByTestId("from-change")).click();
+  await typeAndFind("Typing Dep", "From");
+  await expect(shown(page.getByTestId("from-name"))).toHaveText(depot);
+  // To: its box is open on a new trip.
+  await typeAndFind("Typing Depo", "To");
+  // A stop between: + Add stop opens its box.
+  await shown(page.getByTestId("add-stop")).click();
+  await typeAndFind("Typing Depot", "Stop 1");
+  expect(statuses.length).toBeGreaterThan(0);
+  expect(statuses.every((s) => s === 200), `every search answered 200: ${statuses.join(",")}`).toBe(true);
+});
+
 /** A tool as an office person through office-api with their own session (a self trip is made by its own person). */
 async function asPerson<T>(email: string, password: string, name: string, args: Record<string, unknown>): Promise<T> {
   const auth = await fetch(`${API}/auth/v1/token?grant_type=password`, {

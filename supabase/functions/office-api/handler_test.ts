@@ -21,6 +21,7 @@ function setup(clockStart = 0) {
   const limits: Limits = {
     general: new TokenBuckets({ capacity: 120 }, clock),
     paid: new TokenBuckets({ capacity: 30 }, clock),
+    search: new TokenBuckets({ capacity: 90 }, clock),
     unauth: new TokenBuckets({ capacity: 20 }, clock),
     pub: new TokenBuckets({ capacity: 60 }, clock),
   };
@@ -87,6 +88,15 @@ Deno.test("a signed-in person: 30 paid calls a minute (plan_task), the 31st is 4
   assertEquals((await post("plan_task")).status, 200);
 });
 
+Deno.test("the place search as someone types: its own 90 a minute (30 October 2026), the 91st is 429; it never spends the paid 30", async () => {
+  const { post, ran, limits } = setup();
+  for (let i = 0; i < 90; i++) assertEquals((await post("search_places")).status, 200);
+  assertEquals((await post("search_places")).status, 429);
+  assertEquals(ran.filter((n) => n === "search_places").length, 90, "the 91st was never run");
+  assertEquals(limits.paid.peek("e1"), 30, "typing spent nothing of the paid allowance");
+  assertEquals((await post("plan_task")).status, 200, "the plan is still answered");
+});
+
 Deno.test("the general limit: 120 calls a minute per person over every tool, then 429; the person's refusals never charge the address bucket", async () => {
   const { post, limits } = setup();
   for (let i = 0; i < 120; i++) assertEquals((await post("task_board")).status, 200);
@@ -117,6 +127,7 @@ Deno.test("Round 49: the set-password link's public routes: opening checks and n
   const limits: Limits = {
     general: new TokenBuckets({ capacity: 120 }, () => t.now),
     paid: new TokenBuckets({ capacity: 30 }, () => t.now),
+    search: new TokenBuckets({ capacity: 90 }, () => t.now),
     unauth: new TokenBuckets({ capacity: 20 }, () => t.now),
     pub: new TokenBuckets({ capacity: 60 }, () => t.now),
   };

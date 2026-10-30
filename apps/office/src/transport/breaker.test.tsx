@@ -26,6 +26,15 @@ describe("the breaker's rule (pure)", () => {
     expect(b.check("task_board")).toEqual({ open: false });
   });
 
+  it("the place search as someone types has 90 a minute (30 October 2026); another tool keeps 30", () => {
+    const now = 2_000_000;
+    const b = new LoopBreaker({}, () => now);
+    for (let i = 0; i < 90; i++) expect(b.check("search_places")).toEqual({ open: false });
+    expect(b.check("search_places")).toEqual({ open: true, report: true, calls: 91 });
+    for (let i = 0; i < LOOP_LIMIT; i++) expect(b.check("plan_task")).toEqual({ open: false });
+    expect(b.check("plan_task").open).toBe(true);
+  });
+
   it("one report per tool per 10 minutes: a second burst within them opens the breaker again but reports nothing", () => {
     let now = 0;
     const b = new LoopBreaker({}, () => now);

@@ -132,6 +132,15 @@ const SCALE = (() => {
 export const GENERAL_PER_MINUTE = 120 * SCALE;
 export const DRIVER_PER_MINUTE = 60 * SCALE;
 export const PAID_PER_MINUTE = 30 * SCALE;
+/**
+ * The place search as someone types (30 October 2026): its own 90 a minute per person, the same as openrouteservice's own
+ * throttle (ors_autocomplete_per_minute, which stays the provider's guard; Google's autocomplete is counted and capped per
+ * request). A box debounced at 300 ms still asks once a letter for a slow typist (a phone, Sinhala), and a trip has From,
+ * To and the stops between: 30 a minute stopped ordinary typing. The tools that plan, look up a Google place or load a
+ * map keep the paid 30.
+ */
+export const SEARCH_PER_MINUTE = 90 * SCALE;
+export const SEARCH_TOOLS: ReadonlySet<string> = new Set(["search_places"]);
 export const UNAUTH_PER_IP_PER_MINUTE = 20 * SCALE;
 
 /**
@@ -142,7 +151,7 @@ export const UNAUTH_PER_IP_PER_MINUTE = 20 * SCALE;
  * fleet_overview) stay under the general limit: the ETA is cached two minutes a task and openrouteservice is free.
  */
 export const PAID_TOOLS: ReadonlySet<string> = new Set([
-  "search_places",
+  // search_places has its own allowance (SEARCH_TOOLS, 90 a minute): typing asks it once a pause.
   "google_place",
   "register_map_load",
   "plan_task",

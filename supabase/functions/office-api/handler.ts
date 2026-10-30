@@ -21,6 +21,8 @@ import {
   GENERAL_PER_MINUTE,
   PAID_PER_MINUTE,
   PAID_TOOLS,
+  SEARCH_PER_MINUTE,
+  SEARCH_TOOLS,
   rateLimitedResponse,
   TokenBuckets,
   UNAUTH_PER_IP_PER_MINUTE,
@@ -50,6 +52,8 @@ export type Resolved = { ok: true; actor: Actor; email: string; mfa: boolean; ph
 export interface Limits {
   general: TokenBuckets;
   paid: TokenBuckets;
+  /** The place search as someone types: 90 a minute per person (SEARCH_TOOLS). */
+  search: TokenBuckets;
   unauth: TokenBuckets;
   pub: TokenBuckets;
 }
@@ -58,6 +62,7 @@ export function defaultLimits(clock?: () => number): Limits {
   return {
     general: new TokenBuckets({ capacity: GENERAL_PER_MINUTE }, clock),
     paid: new TokenBuckets({ capacity: PAID_PER_MINUTE }, clock),
+    search: new TokenBuckets({ capacity: SEARCH_PER_MINUTE }, clock),
     unauth: new TokenBuckets({ capacity: UNAUTH_PER_IP_PER_MINUTE }, clock),
     pub: new TokenBuckets({ capacity: PUBLIC_PER_MINUTE }, clock),
   };
@@ -259,6 +264,8 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
     if (actor.employeeId && !limits.general.take(actor.employeeId)) return rateLimitedResponse(cors);
     // The tools that can cost (a Google, openrouteservice or Gemini call): 30 a minute per person on top (Round 48).
     if (actor.employeeId && PAID_TOOLS.has(def.name) && !limits.paid.take(actor.employeeId)) return rateLimitedResponse(cors);
+    // The place search as someone types: its own 90 a minute per person (30 October 2026).
+    if (actor.employeeId && SEARCH_TOOLS.has(def.name) && !limits.search.take(actor.employeeId)) return rateLimitedResponse(cors);
 
     let raw: unknown = {};
     const text = await request.text();

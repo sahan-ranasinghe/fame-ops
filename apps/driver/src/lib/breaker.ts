@@ -9,6 +9,11 @@
 // that opens the breaker, never one per refused call. Pure (an injected clock): scripts/test-breaker.ts.
 
 export const LOOP_LIMIT = 30;
+/**
+ * The place search as someone types (30 October 2026): 90 a minute, the server's own allowance for it (rateLimit.ts
+ * SEARCH_PER_MINUTE). A box debounced at 300 ms asks once a letter for a slow typist, and a trip has several boxes.
+ */
+export const LOOP_LIMITS: Readonly<Record<string, number>> = { search_places: 90, '/places/search': 90 };
 export const LOOP_OPEN_MS = 60_000;
 export const LOOP_REPORT_MS = 600_000;
 export const LOOP_ERROR = { code: 'loop', message: 'This screen asked the server too often · try again in a minute' } as const;
@@ -27,11 +32,13 @@ export type Verdict = { open: false } | { open: true; report: boolean; calls: nu
 export class LoopBreaker {
   private tracks = new Map<string, Track>();
   readonly limit: number;
+  readonly limits: Readonly<Record<string, number>>;
   readonly openMs: number;
   readonly reportMs: number;
 
-  constructor(opts: { limit?: number; openMs?: number; reportMs?: number } = {}, private clock: () => number = () => Date.now()) {
+  constructor(opts: { limit?: number; limits?: Readonly<Record<string, number>>; openMs?: number; reportMs?: number } = {}, private clock: () => number = () => Date.now()) {
     this.limit = opts.limit ?? LOOP_LIMIT;
+    this.limits = opts.limits ?? LOOP_LIMITS;
     this.openMs = opts.openMs ?? LOOP_OPEN_MS;
     this.reportMs = opts.reportMs ?? LOOP_REPORT_MS;
   }
@@ -48,7 +55,7 @@ export class LoopBreaker {
     t.until = 0;
     t.stamps = t.stamps.filter((s) => now - s < 60_000);
     t.stamps.push(now);
-    if (t.stamps.length <= this.limit) return { open: false };
+    if (t.stamps.length <= (this.limits[endpoint] ?? this.limit)) return { open: false };
     t.until = now + this.openMs;
     const report = now - t.reportedAt >= this.reportMs;
     if (report) t.reportedAt = now;

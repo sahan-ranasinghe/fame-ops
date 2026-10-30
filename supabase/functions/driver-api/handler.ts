@@ -20,6 +20,7 @@ import {
   clientIp,
   DRIVER_PER_MINUTE,
   PAID_PER_MINUTE,
+  SEARCH_PER_MINUTE,
   rateLimitedResponse,
   TokenBuckets,
   UNAUTH_PER_IP_PER_MINUTE,
@@ -90,6 +91,8 @@ export interface Work {
 export interface Limits {
   general: TokenBuckets;
   paid: TokenBuckets;
+  /** The place search as the driver types: 90 a minute (rateLimit.ts SEARCH_PER_MINUTE). */
+  search: TokenBuckets;
   unauth: TokenBuckets;
 }
 
@@ -97,6 +100,7 @@ export function defaultLimits(clock?: () => number): Limits {
   return {
     general: new TokenBuckets({ capacity: DRIVER_PER_MINUTE }, clock),
     paid: new TokenBuckets({ capacity: PAID_PER_MINUTE }, clock),
+    search: new TokenBuckets({ capacity: SEARCH_PER_MINUTE }, clock),
     unauth: new TokenBuckets({ capacity: UNAUTH_PER_IP_PER_MINUTE }, clock),
   };
 }
@@ -116,8 +120,10 @@ export function auditArgs<T extends { destination: { google_place_id?: string; n
 }
 
 /** The routes that can make a paid call (a Google place search or a Google place's details). */
+/** The place search as the driver types has its own allowance (SEARCH_PATH, 90 a minute; 30 October 2026). */
+export const SEARCH_PATH = "/places/search";
 export const PAID_PATHS = (path: string): boolean =>
-  path === "/places/search" || path === "/trips" || /^\/trips\/[0-9a-f-]{36}\/stops$/.test(path);
+  path === "/trips" || /^\/trips\/[0-9a-f-]{36}\/stops$/.test(path);
 
 export function createHandler(deps: HandlerDeps): (request: Request) => Promise<Response> {
   const { db } = deps;
@@ -168,6 +174,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
     if (row.role !== "driver" && path !== "/places/search" && path !== "/errors") return json(403, { error: "drivers_only" });
     if (!limits.general.take(row.id)) return rateLimitedResponse();
     if (PAID_PATHS(path) && !limits.paid.take(row.id)) return rateLimitedResponse();
+    if (path === SEARCH_PATH && !limits.search.take(row.id)) return rateLimitedResponse();
     let raw: unknown = {};
     try {
       const text = await request.text();
