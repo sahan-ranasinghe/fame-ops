@@ -5,6 +5,8 @@
 // fetchOdometerBefore); two lists merged show only what is certain (lib/history.ts mergeSafe). The fills and readings
 // still on the phone show first; with no connection the month's copy kept on the phone, with "Couldn't refresh · Try
 // again". A page pushed over its tab: back returns there; nothing is typed here (no "Discard changes?").
+// Round 51b (one job per tab): the Mileage tab's history is the readings and the finished trips (All · Odometer · Trips;
+// lib/api.ts fetchTripsBefore, my own trips by my employee id); fuel only from the Fuel tab.
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -17,7 +19,7 @@ import { LogRow, uploadsByFill } from '@/components/LogRows';
 import { ListEmpty, ListError, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { ChoiceChips } from '@/components/patterns/Select';
 import { Card, Txt } from '@/components/ui';
-import { fetchFuelBefore, fetchOdometerBefore, type Mileage } from '@/lib/api';
+import { fetchFuelBefore, fetchOdometerBefore, fetchTripsBefore, type Mileage } from '@/lib/api';
 import { monthWords } from '@/lib/dateWords';
 import {
   addPage,
@@ -31,6 +33,7 @@ import {
   type LogKind,
   mergeSafe,
   odometerEntry,
+  tripEntry,
   ofKind,
   type Stream,
   streamsFor,
@@ -45,14 +48,18 @@ import { colors } from '@/theme';
 
 /** A page waits this long for the server (the list rules: every call has a timeout). */
 const READ_TIMEOUT_MS = 20_000;
-const FILTER_KEY: Record<HistoryFilter, string> = { all: 'logHistory.all', odometer: 'mileage.odometer', fuel: 'mileage.fuel' };
-const EMPTY_KEY: Record<HistoryFilter, string> = { all: 'logHistory.empty', odometer: 'logHistory.emptyOdometer', fuel: 'logHistory.emptyFuel' };
+const FILTER_KEY: Record<HistoryFilter, string> = { all: 'logHistory.all', odometer: 'mileage.odometer', fuel: 'mileage.fuel', trip: 'logHistory.trips' };
+const EMPTY_KEY: Record<HistoryFilter, string> = { all: 'logHistory.empty', odometer: 'logHistory.emptyOdometer', fuel: 'logHistory.emptyFuel', trip: 'logHistory.emptyTrips' };
 
 type Streams = Record<LogKind, Stream | null>;
 
-async function fetchPage(kind: LogKind, stream: Stream | null): Promise<Stream> {
+async function fetchPage(kind: LogKind, stream: Stream | null, employeeId: string): Promise<Stream> {
   const before = cursorOf(stream);
   const cursor = before ? { at: before.at, id: before.id } : null;
+  if (kind === 'trip') {
+    const page = await withTimeout(fetchTripsBefore(supabase, employeeId, cursor, HISTORY_PAGE), READ_TIMEOUT_MS);
+    return addPage(stream, page.rows.map((row) => tripEntry(row)), page.more);
+  }
   if (kind === 'fuel') {
     const page = await withTimeout(fetchFuelBefore(supabase, cursor, HISTORY_PAGE), READ_TIMEOUT_MS);
     return addPage(stream, page.rows.map((row) => fuelEntry(row)), page.more);
@@ -69,7 +76,7 @@ export default function HistoryScreen() {
   const params = useLocalSearchParams<{ kind?: string }>();
   const fuelOnly = params.kind === 'fuel';
   const [filter, setFilter] = useState<HistoryFilter>(fuelOnly ? 'fuel' : 'all');
-  const [streams, setStreams] = useState<Streams>({ odometer: null, fuel: null });
+  const [streams, setStreams] = useState<Streams>({ odometer: null, fuel: null, trip: null });
   const streamsRef = useRef(streams);
   streamsRef.current = streams;
   const [shown, setShown] = useState(HISTORY_PAGE);
@@ -79,6 +86,8 @@ export default function HistoryScreen() {
   const [, bump] = useState(0);
   // Only the newest load's answer counts (a refresh starts the lists again).
   const asked = useRef(0);
+  const employeeRef = useRef(me?.id ?? '');
+  employeeRef.current = me?.id ?? '';
 
   /** The next page of each list the filter shows that has more (or its first page). */
   const load = useCallback(async (kinds: LogKind[], from: Streams) => {
@@ -91,7 +100,7 @@ export default function HistoryScreen() {
     setBusy(true);
     setFailed(false);
     try {
-      const pages = await Promise.all(wanted.map((k) => fetchPage(k, from[k])));
+      const pages = await Promise.all(wanted.map((k) => fetchPage(k, from[k], employeeRef.current)));
       if (mine !== asked.current) return;
       const next = { ...from };
       wanted.forEach((k, i) => (next[k] = pages[i]));
@@ -120,7 +129,12 @@ export default function HistoryScreen() {
     ...pendingFuelLogs().map((log) => fuelEntry(log, true)),
   ];
   const kept = getJson<Mileage>('cache.mileage');
-  const cached = [...(kept?.odometer ?? []).map((log) => odometerEntry(log)), ...(kept?.fuel ?? []).map((log) => fuelEntry(log))];
+  const cached = [
+    ...(kept?.odometer ?? []).map((log) => odometerEntry(log)),
+    ...(kept?.recentOdometer ?? []).map((log) => odometerEntry(log)),
+    ...(kept?.recentTrips ?? []).map((row) => tripEntry(row)),
+    ...(kept?.fuel ?? []).map((log) => fuelEntry(log)),
+  ];
   const kinds = streamsFor(filter);
   const merged = mergeSafe(kinds.map((k) => streams[k]), ofKind(pending, filter), ofKind(cached, filter));
   const visible = windowOf(merged.rows, shown);
@@ -136,7 +150,7 @@ export default function HistoryScreen() {
   }
 
   function refresh() {
-    const fresh: Streams = { odometer: null, fuel: null };
+    const fresh: Streams = { odometer: null, fuel: null, trip: null };
     setPulling(true);
     setStreams(fresh);
     setShown(HISTORY_PAGE);

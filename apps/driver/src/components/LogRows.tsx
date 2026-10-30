@@ -5,12 +5,13 @@
 // it ("Uploaded", "40 % of 12.3 MB", "Waiting for Wi-Fi", "Failed · tap to retry", "No video") with its mark at the end.
 // A failed video is retried by a tap only while the phone still holds the piece; a failure only the server knows is said,
 // not offered. The rules: lib/history.ts.
+// Round 51b: a finished trip too (Mileage's Recent and history): a route, "N km", the plate, the date; it opens its trip.
 
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Fuel, Gauge, RefreshCw, TriangleAlert, Video, Wifi } from '@/components/icons';
+import { Fuel, Gauge, RefreshCw, Route, TriangleAlert, Video, Wifi } from '@/components/icons';
 import { ListRow, RowIcon } from '@/components/patterns/ListRow';
 import { Card, Txt } from '@/components/ui';
 import { dateWords } from '@/lib/dateWords';
@@ -38,6 +39,8 @@ export function LogRow({ entry, first, upload, onRetry }: {
   onRetry?: (entry: LogEntry) => void;
 }) {
   const { t, vehicles, wifiOnly } = useApp();
+  const router = useRouter();
+  const trip = entry.kind === 'trip';
   const plate = entry.vehicleId ? vehicles.find((v) => v.id === entry.vehicleId)?.reg_no ?? null : null;
   const fill = entry.kind === 'fuel';
   const mark = fill ? videoMark(entry, upload, wifiOnly) : null;
@@ -47,7 +50,7 @@ export function LogRow({ entry, first, upload, onRetry }: {
   const retry = mark?.kind === 'failed' && mark.retry && onRetry ? () => onRetry(entry) : undefined;
   const words = mark ? videoWords(mark, !!retry) : null;
   const markWords = words ? t(words.key, words.vars) : null;
-  const Icon = fill ? Fuel : Gauge;
+  const Icon = fill ? Fuel : trip ? Route : Gauge;
   return (
     <View style={!first && styles.divider}>
       <ListRow
@@ -59,8 +62,9 @@ export function LogRow({ entry, first, upload, onRetry }: {
         line2={markWords ?? undefined}
         line2Tone={words?.tone}
         right={mark ? <VideoBadge mark={mark} retry={!!retry} /> : undefined}
-        onPress={retry}
-        accessibilityLabel={[t(fill ? 'mileage.fuel' : 'mileage.odometer'), title, meta, markWords].filter(Boolean).join(', ')}
+        onPress={trip ? () => router.push({ pathname: '/task/[id]', params: { id: entry.id } }) : retry}
+        chevron={trip}
+        accessibilityLabel={[t(fill ? 'mileage.fuel' : trip ? 'mileage.trip' : 'mileage.odometer'), title, meta, markWords].filter(Boolean).join(', ')}
         testID={`log-row-${entry.kind}`}
       />
     </View>

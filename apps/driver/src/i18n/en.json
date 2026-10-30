@@ -283,9 +283,9 @@
     "notStarted": "not started",
     "cancelled": "cancelled",
     "logOdometer": "Log odometer",
-    "logFuel": "Log fuel",
     "recent": "Recent entries",
     "odometer": "Odometer",
+    "trip": "Trip",
     "fuel": "Fuel",
     "nothingYet": "Nothing logged this month yet."
   },
@@ -3985,12 +3985,14 @@
   "logHistory": {
     "recent": "Recent",
     "seeAll": "See all",
-    "title": "Odometer and fuel",
+    "title": "Odometer and trips",
     "fuelTitle": "Fuel history",
     "all": "All",
     "empty": "Nothing logged yet.",
     "emptyFuel": "No fuel logged yet.",
     "emptyOdometer": "No odometer readings yet.",
+    "trips": "Trips",
+    "emptyTrips": "No finished trips yet.",
     "failed": "Couldn't load the history.",
     "noAmount": "{n} fills without an amount",
     "noAmountOne": "1 fill without an amount"

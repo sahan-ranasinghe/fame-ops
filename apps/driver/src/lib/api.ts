@@ -302,31 +302,73 @@ export async function fetchReportsBefore(
   return { rows, older: res.count ?? rows.length };
 }
 
+/** Round 51b: a finished trip of mine with its km (Mileage's Recent card and history). */
+export interface TripRow {
+  id: string;
+  completed_at: string | null;
+  vehicle_id: string | null;
+  km: number | null;
+}
+
 export interface Mileage {
+  /**
+   * Round 51b: the vehicle the month's figures (baselineKm, odometer) are for. A copy kept on the phone for another vehicle
+   * is never shown under this one's plate (the Mileage tab reads it only when this matches).
+   */
+  vehicleId?: string | null;
   /** My last reading for this vehicle before the month began, if any. */
   baselineKm: number | null;
   /** My readings for this vehicle this month, oldest first. */
   odometer: OdometerLog[];
   /** My fuel entries this month (all vehicles), newest first. */
   fuel: FuelLog[];
+  /** Round 51b: my newest readings (every vehicle) and my newest finished trips, for Mileage's Recent card. */
+  recentOdometer?: OdometerLog[];
+  recentTrips?: TripRow[];
 }
 
-export async function fetchMileage(client: Client, vehicleId: string | null, monthStart: Date): Promise<Mileage> {
+/** Round 51b: the columns of a finished trip the Mileage tab shows. */
+const TRIP_COLUMNS = 'id, completed_at, vehicle_id, km';
+
+/**
+ * My finished trips, newest first. By my employee id, always: an office person in Driving mode reads every task through
+ * the office's rule, and only their own trips are theirs here.
+ */
+function myTrips(client: Client, employeeId: string) {
+  return client.from('tasks').select(TRIP_COLUMNS).eq('employee_id', employeeId).eq('status', 'completed')
+    .order('completed_at', { ascending: false }).order('id', { ascending: false });
+}
+
+export async function fetchMileage(client: Client, vehicleId: string | null, monthStart: Date, employeeId: string | null = null): Promise<Mileage> {
   const from = monthStart.toISOString();
   const fuelQuery = client.from('fuel_logs').select('*').gte('logged_at', from).order('logged_at', { ascending: false }).limit(200);
-  if (!vehicleId) return { baselineKm: null, odometer: [], fuel: check(await fuelQuery, 'fuel') };
-
-  const [before, inMonth, fuel] = await Promise.all([
-    client.from('odometer_logs').select('reading_km').eq('vehicle_id', vehicleId).lt('logged_at', from)
-      .order('logged_at', { ascending: false }).limit(1),
-    client.from('odometer_logs').select('*').eq('vehicle_id', vehicleId).gte('logged_at', from).order('logged_at').limit(1000),
+  // Round 51b: Mileage's Recent card: my newest readings and finished trips, every vehicle (each row says its plate).
+  const recentQuery = client.from('odometer_logs').select('*').order('logged_at', { ascending: false }).order('id', { ascending: false }).limit(5);
+  const tripsQuery = employeeId ? myTrips(client, employeeId).limit(5) : null;
+  const [before, inMonth, fuel, recent, trips] = await Promise.all([
+    vehicleId
+      ? client.from('odometer_logs').select('reading_km').eq('vehicle_id', vehicleId).lt('logged_at', from).order('logged_at', { ascending: false }).limit(1)
+      : null,
+    vehicleId ? client.from('odometer_logs').select('*').eq('vehicle_id', vehicleId).gte('logged_at', from).order('logged_at').limit(1000) : null,
     fuelQuery,
+    recentQuery,
+    tripsQuery,
   ]);
   return {
-    baselineKm: check(before, 'odometer')[0]?.reading_km ?? null,
-    odometer: check(inMonth, 'odometer'),
+    vehicleId,
+    baselineKm: before ? check(before, 'odometer')[0]?.reading_km ?? null : null,
+    odometer: inMonth ? check(inMonth, 'odometer') : [],
     fuel: check(fuel, 'fuel'),
+    recentOdometer: check(recent, 'odometer'),
+    recentTrips: trips ? (check(trips, 'trips') as TripRow[]) : [],
   };
+}
+
+/** Round 51b: my finished trips, newest first (completed_at, then id), `limit` at a time below `before`, as fetchOdometerBefore. */
+export async function fetchTripsBefore(client: Client, employeeId: string, before: LogCursor | null, limit: number): Promise<{ rows: TripRow[]; more: boolean }> {
+  const query = myTrips(client, employeeId).limit(limit + 1);
+  const rows = check(await (before ? query.or(`completed_at.lt."${before.at}",and(completed_at.eq."${before.at}",id.lt.${before.id})`) : query), 'trips') as TripRow[];
+  return { rows: rows.slice(0, limit), more: rows.length > limit };
 }
 
 /** Round 4–7 (§33.6): where the history's next page starts (below the oldest row held: logged_at, then id). */

@@ -64,7 +64,9 @@ import {
   mergeEntries,
   mergeSafe,
   missingAmountKey,
+  HISTORY_FILTERS,
   odometerEntry,
+  tripEntry,
   ofKind,
   RECENT_N,
   recentEntries,
@@ -177,6 +179,9 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]> = {}) {
       b.order = (col: string, o?: { ascending?: boolean }) => (steps.push(`order(${col},${o?.ascending ? 'asc' : 'desc'})`), b);
       b.limit = (n: number) => ((limit = n), steps.push(`limit(${n})`), b);
       b.or = (f: string) => (steps.push(`or(${f})`), b);
+      b.eq = (c: string, v: unknown) => (steps.push(`eq(${c},${String(v)})`), b);
+      b.gte = (c: string, v: unknown) => (steps.push(`gte(${c},${String(v)})`), b);
+      b.lt = (c: string, v: unknown) => (steps.push(`lt(${c},${String(v)})`), b);
       b.then = (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => {
         queries.push(steps.join('.'));
         return Promise.resolve({ data: (tables[table] ?? []).slice(0, limit), error: null, status: 200 }).then(ok, bad);
@@ -349,8 +354,14 @@ async function recentAndHistory() {
   check(merged[0].id === 'f0' && merged.filter((e) => e.id === 'f1').length === 1 && merged.find((e) => e.id === 'f1')?.onPhone === true, 'the phone\'s own entries join in, each once (the phone\'s copy first)');
   const groups = byMonth(entries);
   check(same(groups.map((g) => [g.month, g.rows.length]), [['2026-10', 6], ['2026-09', 2]]), 'grouped by the Colombo month, newest first (00:30 on the 1st is October)', groups.map((g) => [g.month, g.rows.map((r) => r.id)]));
-  check(same(ofKind(entries, 'fuel').map((e) => e.id), ['f1', 'f2', 'f3', 'f4']) && ofKind(entries, 'odometer').length === 4 && ofKind(entries, 'all').length === 8, 'the chips: All · Odometer · Fuel');
-  check(same(streamsFor('all'), ['odometer', 'fuel']) && same(streamsFor('fuel'), ['fuel']), 'All reads both lists; a chip reads its own');
+  // Round 51b (one job per tab): Mileage's history is the readings and the finished trips; fuel only on the Fuel tab.
+  const trips = [tripEntry({ id: 't1', completed_at: '2026-10-21T09:00:00Z', vehicle_id: 'v2', km: 42 }), tripEntry({ id: 't2', completed_at: '2026-09-29T09:00:00Z', vehicle_id: 'v1', km: null })];
+  const withTrips = mergeEntries(entries, trips);
+  check(same(HISTORY_FILTERS, ['all', 'odometer', 'trip']) && same(ofKind(withTrips, 'fuel').map((e) => e.id), ['f1', 'f2', 'f3', 'f4']) && ofKind(withTrips, 'odometer').length === 4
+    && same(ofKind(withTrips, 'trip').map((e) => e.id), ['t1', 't2']) && ofKind(withTrips, 'all').length === 6 && ofKind(withTrips, 'all').every((e) => e.kind !== 'fuel'),
+    'Mileage\'s chips: All (readings and trips, never a fill) · Odometer · Trips; the Fuel tab\'s list is fuel');
+  check(same(streamsFor('all'), ['odometer', 'trip']) && same(streamsFor('fuel'), ['fuel']) && same(streamsFor('trip'), ['trip']), 'All reads the readings and the trips; a chip reads its own');
+  check(trips[0].kind === 'trip' && trips[0].km === 42 && trips[0].vehicleId === 'v2' && trips[0].at === '2026-10-21T09:00:00Z' && trips[1].km === null, 'a finished trip: its km (or none), its vehicle, when it finished');
 
   // Money: "–", never "LKR 0"; the totals add only the known amounts.
   check(amountText(null) === '–' && amountText(1240000) === 'LKR 12,400' && amountText(0) === 'LKR 0', 'a missing amount reads "–" (a real zero stays)');
@@ -400,17 +411,34 @@ async function recentAndHistory() {
   check(fake.queries[0] === 'fuel_logs.select(*).order(logged_at,desc).order(id,desc).limit(21)'
     && fake.queries[1] === 'odometer_logs.select(*).order(logged_at,desc).order(id,desc).limit(21).or(logged_at.lt."2026-10-21T00:00:00Z",and(logged_at.eq."2026-10-21T00:00:00Z",id.lt.r9))',
     'newest first (logged_at, then id), below the cursor', fake.queries);
+  // Round 51b: my finished trips (by my employee id: an office person in Driving mode reads every task), and the month's figures say their vehicle.
+  const tf = fakeClient({ tasks: [{ id: 'a', completed_at: '2026-10-21T09:00:00Z', vehicle_id: 'v1', km: 12 }] });
+  const tp = await realApi.fetchTripsBefore(tf.client, 'e-1', { at: '2026-10-22T00:00:00Z', id: 'z' }, HISTORY_PAGE);
+  check(tp.rows.length === 1 && !tp.more && tf.queries[0] === 'tasks.select(id, completed_at, vehicle_id, km).eq(employee_id,e-1).eq(status,completed).order(completed_at,desc).order(id,desc).limit(21).or(completed_at.lt."2026-10-22T00:00:00Z",and(completed_at.eq."2026-10-22T00:00:00Z",id.lt.z))',
+    'my finished trips, newest first, below the cursor, by my employee id', tf.queries);
+  const mf = fakeClient({ odometer_logs: [{ id: 'o', reading_km: 5 }], tasks: [{ id: 'a', completed_at: '2026-10-21T09:00:00Z', vehicle_id: 'v1', km: 12 }] });
+  const mm = await realApi.fetchMileage(mf.client, 'v9', new Date('2026-10-01T00:00:00+05:30'), 'e-1');
+  check(mm.vehicleId === 'v9' && mm.recentTrips?.length === 1 && mm.recentOdometer?.length === 1 && mf.queries.some((q) => q.startsWith('tasks.select(id, completed_at, vehicle_id, km).eq(employee_id,e-1)')),
+    'the month\'s copy says its vehicle; my newest readings and trips come with it', mf.queries);
+  const none = await realApi.fetchMileage(fakeClient().client, null, new Date('2026-10-01T00:00:00+05:30'));
+  check(none.vehicleId === null && none.odometer.length === 0 && same(none.recentTrips, []), 'no vehicle: no month figures, no trips without an employee');
   const history = code('app/history.tsx');
   check(/<ChoiceChips/.test(history) && /HISTORY_FILTERS\.map/.test(history) && /\{!fuelOnly && \(/.test(history) && /monthWords\(t, group\.month\)/.test(history) && /<LoadMore /.test(history)
     && /<SkeletonRows/.test(history) && /<ListError/.test(history) && /<ListEmpty/.test(history) && /RefreshControl/.test(history),
     'the history: the chips (Mileage only), month headers in words, Load more, skeletons, Try again, empty, pull to refresh');
   const mileage = code('app/(tabs)/mileage.tsx');
   check(/seeAll="all"/.test(mileage) && /recentEntries\(mergeEntries\(/.test(mileage) && /pendingOdometerLogs\(\)/.test(mileage) && /windowOf\(todayTasks, shown\)/.test(mileage), 'Mileage: today\'s tasks stay; Recent (5, the phone\'s own too) and See all');
+  // Round 51b: one job per tab: Log odometer alone (Log fuel on the Fuel tab), Recent without fills, the plate's own figures.
+  check(!/mileage\.logFuel|mode: 'fuel'|fuelEntry|pendingFuelLogs/.test(mileage) && /testID="mileage-log-odometer"/.test(mileage) && /tripEntry\(/.test(mileage)
+    && mileage.includes('kept && kept.vehicleId === vehicleId ? kept : kept ? { ...kept, baselineKm: null, odometer: [] } : null'),
+    'Mileage: Log odometer is the one action, Recent is readings and trips (never a fill), the month\'s figures only for the plate shown');
+  check(/mode: 'fuel'/.test(code('app/(tabs)/fuel.tsx')), 'Log fuel stays on the Fuel tab');
   const rowsSrc = code('components/LogRows.tsx');
   // The row is the app's one list row since the review of Round 4–7: the kind's icon in its tile (RowIcon draws it at 20).
-  check(/<RowIcon icon=\{Icon\}/.test(rowsSrc) && /<ListRow\b/.test(rowsSrc) && /const Icon = fill \? Fuel : Gauge;/.test(rowsSrc) && /dateWords\(t, entry\.at\)/.test(rowsSrc) && /testID="video-mark"/.test(rowsSrc) && /pathname: '\/history', params: \{ kind: seeAll \}/.test(rowsSrc),
-    'a row: a fuel pump or an odometer gauge, the date in words, the video\'s mark; See all opens the history');
-  check(rowsSrc.includes("const retry = mark?.kind === 'failed' && mark.retry && onRetry ? () => onRetry(entry) : undefined;") && rowsSrc.includes('onPress={retry}')
+  check(/<RowIcon icon=\{Icon\}/.test(rowsSrc) && /<ListRow\b/.test(rowsSrc) && /const Icon = fill \? Fuel : trip \? Route : Gauge;/.test(rowsSrc) && /dateWords\(t, entry\.at\)/.test(rowsSrc) && /testID="video-mark"/.test(rowsSrc) && /pathname: '\/history', params: \{ kind: seeAll \}/.test(rowsSrc),
+    'a row: a fuel pump, an odometer gauge or a route, the date in words, the video\'s mark; See all opens the history');
+  check(rowsSrc.includes("onPress={trip ? () => router.push({ pathname: '/task/[id]', params: { id: entry.id } }) : retry}"), 'a finished trip\'s row opens its trip');
+  check(rowsSrc.includes("const retry = mark?.kind === 'failed' && mark.retry && onRetry ? () => onRetry(entry) : undefined;") && rowsSrc.includes(': retry}')
     && rowsSrc.includes('const words = mark ? videoWords(mark, !!retry) : null;') && rowsSrc.includes('line2={markWords ?? undefined}'),
     'a row is a retry only while the phone holds the piece; the video\'s state in words on its second line');
 }

@@ -1,14 +1,20 @@
 // Mileage tab: this month's km for my vehicle against its allowance, today's
-// tasks with their km, and the two buttons to log a reading or fuel.
+// tasks with their km, and Log odometer (Round 51b: one job per tab, fuel only on the Fuel tab).
 // A task the office moved to another vehicle (Phase 7 Part 2) shows each vehicle's km under its title.
 // Hotfix 3 (L6): today's tasks 20 at a time with "Load more" (the phone's own list: works offline); never a missed one.
 // Round 4–7, §33.6 (Google Pay / Revolut / PickMe's history): after today's tasks ONE "Recent" card with the last 5
 // readings and fills (an odometer gauge or a fuel pump, the km or the litres, the plate and the date in words; the ones
 // still on the phone too) and "See all": the history (app/history.tsx) with the chips All · Odometer · Fuel.
+// Round 51b (Sahan, 30 October 2026): one job per tab. Log odometer is the one full-width action (Log fuel is on the Fuel
+// tab only); Recent shows ONLY the odometer readings and the finished trips with their km (a gauge or a route, the reading
+// or "N km", the plate, the date in words), never a fill, and See all opens the readings and trips (All · Odometer ·
+// Trips). The This month card's plate is the vehicle its figures are for: the copy kept on the phone carries its vehicle
+// and is read only for that vehicle (a copy for another one never shows under this plate); every Recent row says its own
+// plate.
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ChevronRight, Fuel, Gauge } from '@/components/icons';
+import { ChevronRight, Gauge } from '@/components/icons';
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,12 +27,12 @@ import { shownTaskKm, taskTitle } from '@/components/taskLines';
 import { Button, Card, Mono, Plate, Txt } from '@/components/ui';
 import { fetchMileage, type Mileage } from '@/lib/api';
 import { thousands } from '@/lib/format';
-import { fuelEntry, mergeEntries, odometerEntry, recentEntries } from '@/lib/history';
+import { mergeEntries, odometerEntry, recentEntries, tripEntry } from '@/lib/history';
 import { getJson, setJson } from '@/lib/kv';
 import { loadMore, PAGE, pageInfo, visibleTasks, windowOf } from '@/lib/lists';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboMonth } from '@/lib/time';
-import { pendingFuelLogs, pendingOdometerLogs } from '@/sync';
+import { pendingOdometerLogs } from '@/sync';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -38,16 +44,20 @@ export default function MileageScreen() {
   const { t, workVehicle: vehicle, tasks } = app;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [mileage, setMileage] = useState<Mileage | null>(() => getJson<Mileage>(CACHE_KEY));
+  const [kept, setMileage] = useState<Mileage | null>(() => getJson<Mileage>(CACHE_KEY));
   const [shown, setShown] = useState(PAGE);
   const now = useNow();
 
   const vehicleId = vehicle?.id ?? null;
+  // Round 51b: the month's figures only when they are this vehicle's (a copy from before Round 51b has no vehicle: not
+  // shown either); the newest readings and trips are mine on every vehicle, so they show whatever the vehicle.
+  const mileage = kept && kept.vehicleId === vehicleId ? kept : kept ? { ...kept, baselineKm: null, odometer: [] } : null;
+  const employeeId = app.me?.id ?? null;
   const queued = app.queue.ops;
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      fetchMileage(supabase, vehicleId, startOfColomboMonth())
+      fetchMileage(supabase, vehicleId, startOfColomboMonth(), employeeId)
         .then((fresh) => {
           if (cancelled) return;
           setMileage(fresh);
@@ -58,7 +68,7 @@ export default function MileageScreen() {
         cancelled = true;
       };
       // Reload when the vehicle changes and when queued entries have been sent.
-    }, [vehicleId, queued]),
+    }, [vehicleId, queued, employeeId]),
   );
 
   // Km this month: from the reading the month began with to the newest reading.
@@ -74,12 +84,15 @@ export default function MileageScreen() {
   const todayTasks = visibleTasks(tasks, now)
     .filter((task) => colomboDate(task.start_at) === today || (task.completed_at && colomboDate(task.completed_at) === today));
 
-  // The last 5 readings and fills: the ones still on the phone first, then this month's from the server.
+  // Round 51b: the last 5 readings and finished trips (never a fill): the readings still on the phone first, today's
+  // finished trips the phone holds, then the server's newest (every vehicle), and this vehicle's month as before.
+  const finished = tasks.filter((task) => task.status === 'completed' && !!task.completed_at);
   const recent = recentEntries(mergeEntries(
     pendingOdometerLogs().map((log) => odometerEntry(log, true)),
-    pendingFuelLogs().map((log) => fuelEntry(log, true)),
+    finished.map((task) => tripEntry({ id: task.id, completed_at: task.completed_at, vehicle_id: task.vehicle_id, km: shownTaskKm(task) })),
+    (mileage?.recentOdometer ?? []).map((log) => odometerEntry(log)),
+    (mileage?.recentTrips ?? []).map((row) => tripEntry(row)),
     readings.map((log) => odometerEntry(log)),
-    (mileage?.fuel ?? []).map((log) => fuelEntry(log)),
   ));
   const uploads = uploadsByFill();
 
@@ -112,12 +125,9 @@ export default function MileageScreen() {
           <Txt variant="small">{t('mileage.fromYourReadings')}</Txt>
         </Card>
 
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <Button kind="dark" icon={Gauge} label={t('mileage.logOdometer')} style={{ flex: 1 }}
-            onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'manual' } })} />
-          <Button kind="outline" icon={Fuel} label={t('mileage.logFuel')} style={{ flex: 1 }}
-            onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'fuel' } })} />
-        </View>
+        {/* Round 51b: the one full-width action; fuel is logged on the Fuel tab. */}
+        <Button kind="dark" icon={Gauge} label={t('mileage.logOdometer')} testID="mileage-log-odometer"
+          onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'manual' } })} />
 
         <View style={{ gap: 10 }}>
           <Txt variant="heading" style={{ marginLeft: 6 }}>{t('mileage.todayTasks')}</Txt>

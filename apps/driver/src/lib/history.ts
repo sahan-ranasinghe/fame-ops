@@ -3,7 +3,7 @@
 //
 //   - A tab shows its summary card, the Log buttons, then ONE "Recent" card with the last RECENT_N (5) entries and "See
 //     all", which opens the history (app/history.tsx): the entries grouped by month, newest first, 20 at a time with
-//     Load more; on Mileage the chips All · Odometer · Fuel.
+//     Load more; on Mileage the chips All · Odometer · Trips (Round 51b; before it Fuel).
 //   - A row: an icon (a fuel pump, an odometer gauge), the litres or the km, the plate and the date in words, a video
 //     mark once the fill's video is uploaded.
 //   - Money: a missing amount reads "–", never "LKR 0"; the totals add only the known amounts and say "N fills without an
@@ -15,9 +15,12 @@
 import { megabytes, percentOf, thousands } from './format';
 import { colomboDate } from './time';
 
-export type LogKind = 'fuel' | 'odometer';
+// Round 51b (Sahan, 30 October 2026: one job per tab): fuel lives on the Fuel tab only; Mileage's Recent and its history show
+// the odometer readings and the finished trips with their km (All · Odometer · Trips). The Fuel tab's history is fuel.
+export type LogKind = 'fuel' | 'odometer' | 'trip';
 export type HistoryFilter = 'all' | LogKind;
-export const HISTORY_FILTERS: readonly HistoryFilter[] = ['all', 'odometer', 'fuel'];
+/** Mileage's history chips: All (readings and trips) · Odometer · Trips. */
+export const HISTORY_FILTERS: readonly HistoryFilter[] = ['all', 'odometer', 'trip'];
 
 /** The Recent card's rows. */
 export const RECENT_N = 5;
@@ -33,7 +36,7 @@ export interface LogEntry {
   /** A fill's litres and amount (null = not given). */
   litres: number | null;
   amountCents: number | null;
-  /** A reading's km. */
+  /** A reading's km; a finished trip's km. */
   km: number | null;
   /** The server's word for a fill's video (uploaded, uploading, recorded, failed, none). */
   videoStatus: string | null;
@@ -84,6 +87,26 @@ export function odometerEntry(
   };
 }
 
+/** Round 51b: a finished trip (tasks: completed) as an entry: its km, its vehicle, when it finished. */
+export function tripEntry(
+  row: { id: string; completed_at?: string | null; vehicle_id?: string | null; km?: number | null },
+  onPhone = false,
+  now: () => string = () => new Date().toISOString(),
+): LogEntry {
+  return {
+    id: row.id,
+    kind: 'trip',
+    at: row.completed_at ?? now(),
+    vehicleId: row.vehicle_id ?? null,
+    litres: null,
+    amountCents: null,
+    km: n(row.km),
+    videoStatus: null,
+    videoBytes: null,
+    onPhone,
+  };
+}
+
 const time = (at: string) => {
   const ms = Date.parse(at);
   return Number.isFinite(ms) ? ms : 0;
@@ -101,8 +124,9 @@ export function mergeEntries(...lists: readonly (readonly LogEntry[])[]): LogEnt
   return [...byId.values()].sort(newestFirst);
 }
 
+/** A chip's entries: All is Mileage's (readings and trips, never fuel: the Fuel tab has its own). */
 export function ofKind(entries: readonly LogEntry[], filter: HistoryFilter): LogEntry[] {
-  return filter === 'all' ? [...entries] : entries.filter((e) => e.kind === filter);
+  return filter === 'all' ? entries.filter((e) => e.kind !== 'fuel') : entries.filter((e) => e.kind === filter);
 }
 
 /** The Recent card: the newest RECENT_N. */
@@ -271,7 +295,7 @@ export function mergeSafe(
 
 /** The lists a filter shows. */
 export function streamsFor(filter: HistoryFilter): LogKind[] {
-  return filter === 'all' ? ['odometer', 'fuel'] : [filter];
+  return filter === 'all' ? ['odometer', 'trip'] : [filter];
 }
 
 /** The video's words on a fill's row, as keys: the mark in words (the row's icon says it too) and its tone. */
