@@ -130,6 +130,8 @@ async function mileageOf(
   const checks = logs.filter((l) => (!onlyDriver || l.employee_id === onlyDriver.id) && odometerCheck(l) !== null);
   const checkLinks = await photoLinks(db, { ids: checks.flatMap((l) => l.photo_id ? [l.photo_id] : []) });
   const checkOdometer = checks.map((l) => ({
+    // Round 52: the reading's id, for a wrong reading's Delete… (delete_entry).
+    log_id: l.id,
     at: colomboDateTime(l.logged_at),
     vehicle: refs.veh.get(l.vehicle_id)?.reg_no,
     driver: refs.emp.get(l.employee_id)?.name,
