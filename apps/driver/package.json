@@ -113,6 +113,7 @@
     "test:overview": "tsx scripts/test-overview.ts",
     "test:maintenance": "tsx scripts/test-maintenance.ts",
     "test:places": "tsx scripts/test-places.ts",
+    "test:bin": "tsx scripts/test-bin.ts",
     "test:notif": "tsx scripts/test-notif.ts",
     "test:select": "tsx scripts/test-select.ts",
     "lint:hooks": "eslint src",

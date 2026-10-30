@@ -1,13 +1,16 @@
 // Release 1.4.0 (docs/release-1.4.0.md item 2): one fill's fuel video played in the app (expo-video, the native controls),
 // as the site's /fuel/:id plays it: the pieces one after another, the steps as bookmarks, the pieces to pick when the
 // recording was interrupted, and "Open in the browser" (the way 1.3.0 played it). Opened from Reports → Fuel and from a
-// task's fuel fills (office/fuelPlayer.ts hands the fill over in memory).
+// task's fuel fills (office/fuelPlayer.ts hands the fill over in memory). Round 52: "Delete…" for a fill entered by
+// mistake (approve; delete_entry with a reason), then back.
 
 import { useEvent, useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 
+import { DeleteEntry } from '@/components/office/BinParts';
 import { Chips } from '@/components/office/Controls';
 import { ListEmpty } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
@@ -19,6 +22,7 @@ import { colors } from '@/theme';
 
 export default function FuelVideo() {
   const { t } = useApp();
+  const router = useRouter();
   const [fill] = useState(playerFill);
   const pieces = useMemo(() => (fill ? playerPieces(fill.video) : []), [fill]);
   const [piece, setPiece] = useState(fill?.start ?? 0);
@@ -107,6 +111,8 @@ export default function FuelVideo() {
         <Pressable accessibilityRole="link" onPress={openBrowser} testID="fuel-video-browser" style={({ pressed }) => [{ alignSelf: 'flex-start', paddingVertical: 8 }, pressed && { opacity: 0.8 }]}>
           <Txt variant="strong" size={15} color={colors.blue}>{t('office.video.openBrowser')}</Txt>
         </Pressable>
+        {/* Round 52 (§40): a fill entered by mistake (approve: delete_entry with a reason; its receipt and video go too). */}
+        {fill.id ? <DeleteEntry kind="fuel" id={fill.id} testID="delete-fill" onDeleted={() => (router.canGoBack() ? router.back() : router.replace('/office/reports'))} /> : null}
       </Screen>
     </View>
   );

@@ -1,6 +1,6 @@
 // Office mode (Stage 1, O3 row 8): Places under More, the rules only (pure). As the website's /places and /places/:id
 // (Phase 6 Part 4, Phase 7 §15): the list (list_places) with the search box and one Filter (Ours by default, Dialog sites,
-// Mobitel sites, Other sites, Removed; with or without a pin), 50 a page; a place's page (place_detail: the badge, the
+// Mobitel sites, Other sites, Archived (the value 'removed'; Round 52's word); with or without a pin), 50 a page; a place's page (place_detail: the badge, the
 // address, district, depot, region, the ids, the pin with Open in Maps, how often it was used); Edit (update_place: the
 // name, address, kind, district, depot; the vehicles permission); Remove (remove_place: the first call answers
 // needs_confirm with the reasons when it is the base place or tasks use it, the second sends confirm) and Restore

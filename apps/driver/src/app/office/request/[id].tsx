@@ -33,6 +33,7 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { CalendarX, Check, Clock, type LucideIcon, MessageCircle, Phone, Road, RotateCcw, Undo2, Users, X } from '@/components/icons';
 import { PlanStepper, planWords } from '@/components/office/PlanStepper';
+import { DeleteEntry } from '@/components/office/BinParts';
 import { BarMore, BarRow, barButton, barDanger } from '@/components/patterns/BottomActionBar';
 import { look } from '@/components/patterns/look';
 import { Sheet } from '@/components/patterns/Sheet';
@@ -500,6 +501,11 @@ export default function ApproveRequest() {
           </Section>
         )}
         {problem && <ErrorNotice error={problem} onRetry={lastCancel ? () => void cancel(lastCancel) : refresh} />}
+        {/* Round 52 (§40): a request made by mistake (approve: delete_entry with a reason; its task goes with it, the
+            preview says so). Decline, Cancel booking and Withdraw stay the normal ways. */}
+        {card && decider && !outcome && (
+          <DeleteEntry kind="request" id={card.id} testID="delete-request" onDeleted={() => (router.canGoBack() ? router.back() : router.replace('/office'))} />
+        )}
       </Screen>
       {outcome && (
         <StickyActions>

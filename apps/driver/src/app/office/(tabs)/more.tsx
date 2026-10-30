@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, View } from 'react-native';
 
-import { Bell, Calendar, Car, ChartColumn, Clock, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, ShieldCheck, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
+import { Bell, Briefcase, Building, Calendar, Car, ChartColumn, Clock, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, ShieldCheck, SlidersHorizontal, Trash, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty } from '@/components/patterns/ListState';
@@ -43,7 +43,14 @@ const ITEM: Record<MoreItem, { icon: LucideIcon; label: string; path: string }> 
   settings: { icon: SlidersHorizontal, label: 'office.more.quickSettings', path: '/office/people/settings' },
   activity: { icon: ClipboardCheck, label: 'office.more.activity', path: '/office/people/activity' },
   retention: { icon: ShieldCheck, label: 'office.more.retention', path: '/office/people/retention' },
+  // Round 52 (§40): Projects, Rental companies, Recently deleted.
+  projects: { icon: Briefcase, label: 'office.projects.title', path: '/office/projects' },
+  rental_companies: { icon: Building, label: 'office.rentals.title', path: '/office/rental-companies' },
+  bin: { icon: Trash, label: 'office.bin.title', path: '/office/recently-deleted' },
 };
+/** Round 52: a row whose screen reads one tool shows only with it (never a screen that cannot load). */
+const LIST_TOOL: Partial<Record<MoreItem, string>> = { projects: 'list_projects', rental_companies: 'list_rental_companies', bin: 'list_bin' };
+
 const SECTIONS: { key: MoreSection; label: string }[] = [
   { key: 'work', label: 'office.more.work' },
   { key: 'people', label: 'office.more.people' },
@@ -59,10 +66,10 @@ export default function MoreTab() {
   // Round 4–7 (7): the timeline and the asks need their tools too (day_timeline, holder_asks).
   // The asks for a busy driver or vehicle are the holder feature's: none while holder_contact is off (office/switches.ts).
   const holders = useSwitch('holder_contact');
-  const items = moreFor(me.permissions).filter((key) => (key !== 'task_history' || me.tools.includes('list_tasks')) && (key !== 'timeline' || me.tools.includes('day_timeline')) && (key !== 'holder_asks' || (holders && me.tools.includes('holder_asks'))));
+  const items = moreFor(me.permissions).filter((key) => (key !== 'task_history' || me.tools.includes('list_tasks')) && (key !== 'timeline' || me.tools.includes('day_timeline')) && (key !== 'holder_asks' || (holders && me.tools.includes('holder_asks'))) && (!LIST_TOOL[key] || me.tools.includes(LIST_TOOL[key]!)));
   // The search at the top of More (docs/phase8-plan.md §16): the rows whose words match, as the person types.
   const [find, setFind] = useState('');
-  const lineOf = (key: MoreItem) => (key === 'people_drivers' ? t('office.more.driversLine') : key === 'people_users' ? t('office.more.officeUsersLine') : key === 'settings' ? t('office.more.quickSettingsLine') : key === 'activity' ? t('office.more.activityLine') : key === 'timeline' ? t('office.holders.timelineLine') : key === 'holder_asks' ? t('office.holders.asksLine') : key === 'retention' ? t('office.more.retentionLine') : undefined);
+  const lineOf = (key: MoreItem) => (key === 'people_drivers' ? t('office.more.driversLine') : key === 'people_users' ? t('office.more.officeUsersLine') : key === 'settings' ? t('office.more.quickSettingsLine') : key === 'activity' ? t('office.more.activityLine') : key === 'timeline' ? t('office.holders.timelineLine') : key === 'holder_asks' ? t('office.holders.asksLine') : key === 'retention' ? t('office.more.retentionLine') : key === 'projects' ? t('office.projects.line') : key === 'rental_companies' ? t('office.rentals.line') : key === 'bin' ? t('office.bin.line') : undefined);
   const needle = find.trim().toLowerCase();
   const matches = (key: MoreItem) => !needle || [t(ITEM[key].label), lineOf(key) ?? ''].some((w) => w.toLowerCase().includes(needle));
   const shown = items.filter(matches);

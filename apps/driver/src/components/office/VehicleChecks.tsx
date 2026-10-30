@@ -6,6 +6,7 @@
 // task: its check lines ("Vehicle check 07:42 · All good" / "· Problem: Damage", with the photos). Every word through i18n
 // (the server's English result words are read back: office/myTripLogic.ts resultText).
 
+import type { ReactNode } from 'react';
 import { useRouter } from 'expo-router';
 import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 
@@ -122,7 +123,7 @@ export function VehicleChecksSection({ plate, today: checkToday, focus }: { plat
 }
 
 /** A task's checks: "Vehicle check 07:42 · All good" / "· Problem: Damage", the odometer, the note and the photos. */
-export function TaskCheckLines({ checks }: { checks?: VehicleCheck[] }) {
+export function TaskCheckLines({ checks, extra }: { checks?: VehicleCheck[]; /** Round 52: under each check (its "Delete…"). */ extra?: (check: VehicleCheck) => ReactNode }) {
   const { t } = useApp();
   const on = useSwitch('vehicle_check');
   if (!on || !checks?.length) return null;
@@ -135,6 +136,7 @@ export function TaskCheckLines({ checks }: { checks?: VehicleCheck[] }) {
           </Txt>
           {c.report?.note ? <Txt variant="muted" size={15}>{t('office.checks.note', { note: c.report.note })}</Txt> : null}
           <CheckPhotos photos={c.photos} />
+          {extra ? extra(c) : null}
         </View>
       ))}
     </View>

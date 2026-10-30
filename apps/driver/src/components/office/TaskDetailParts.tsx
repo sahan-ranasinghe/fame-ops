@@ -14,7 +14,7 @@
 // The rules: office/taskDetailLogic.ts. Each write only with its tool; the server's sentence when it refuses.
 
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Chips, MoreDetails } from '@/components/office/Controls';
@@ -262,8 +262,10 @@ export function StopArrival({ stop, onSaved }: { stop: Stop; onSaved: () => Prom
 // More details: charged to, the odometer and fuel, the problems, the history, the plan
 // ---------------------------------------------------------------------------
 
-export function TaskMoreDetails({ p, openLink, linkNote, onPlan }: {
+export function TaskMoreDetails({ p, openLink, linkNote, onPlan, fillExtra }: {
   p: TaskDetail;
+  /** Round 52: under each fill (its "Delete…" for a wrong entry, the approve permission). */
+  fillExtra?: (fill: TaskDetail['fuel'][number]) => ReactNode;
   /** Opens a link by its key (the screen reads the task again first when its links are old). */
   openLink: (key: LinkKey) => void;
   /** "Renewing the link…" or "The link could not open." */
@@ -320,6 +322,7 @@ export function TaskMoreDetails({ p, openLink, linkNote, onPlan }: {
                   ))}
                 </View>
               )}
+              {fillExtra ? fillExtra(f) : null}
             </View>
           );
         })}

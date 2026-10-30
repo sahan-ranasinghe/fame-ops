@@ -29,6 +29,9 @@
 // Sahan's removals (22 October 2026): the five-steps card (Approved · Accepted · On the way · Arrived · Done) is gone. Its
 // facts are on the timeline's first lines (who approved it with the plan version; Sent · Seen · Accepted with their times;
 // Left when no start row says it); arriving is on each stop's row, done on the banner.
+// Round 52 (§40): "Delete…" for a wrong entry (approve, delete_entry with a reason and the preview of what goes with it):
+// the task itself (not while under way), each fill and each vehicle check it lists. The odometer readings it lists carry
+// no id in task_detail, so they have no Delete here (the server's contract).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -36,6 +39,7 @@ import { Linking, Pressable, StyleSheet, useWindowDimensions, View } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Briefcase, CalendarX, Check, ChevronLeft, Clock, Flag, Fuel, type LucideIcon, MessageCircle, Navigation, Phone, Send, UserCog, Users, UserX, X } from '@/components/icons';
+import { DeleteEntry } from '@/components/office/BinParts';
 import { AvatarStack } from '@/components/office/Passengers';
 import { BarMore, BarRow, barSecondary } from '@/components/patterns/BottomActionBar';
 import { RowIcon } from '@/components/patterns/ListRow';
@@ -122,7 +126,7 @@ export default function TaskDetailScreen() {
     const fill = key.kind === 'video' ? data.fuel[key.i] : undefined;
     if (!fill?.video) return openUrl(url);
     const plate = data.task?.vehicle ? plateOf(data.task.vehicle) : '';
-    handToPlayer({ title: dateWords(t, fill.at), sub: [plate, data.task?.driver ?? ''].filter(Boolean).join(' · '), video: fill.video, start: key.kind === 'video' ? startPiece(fill.video, key.n) : 0 });
+    handToPlayer({ id: fill.id, title: dateWords(t, fill.at), sub: [plate, data.task?.driver ?? ''].filter(Boolean).join(' · '), video: fill.video, start: key.kind === 'video' ? startPiece(fill.video, key.n) : 0 });
     router.push('/office/fuel-video');
   }
   useEffect(() => {
@@ -413,7 +417,7 @@ export default function TaskDetailScreen() {
           {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none). */}
           {fuelCardOn && task?.fuel_card ? <FuelCardSection card={task.fuel_card} started={!!task.started || task.status === 'in_progress' || task.status === 'completed'} /> : null}
           {/* Round 4–7 (4): the vehicle check of the task's day by its person, with the photos. */}
-          {checksOn && task?.vehicle_checks?.length ? <Section look="list" title={t('office.checks.title')}><View style={styles.inner}><TaskCheckLines checks={task.vehicle_checks} /></View></Section> : null}
+          {checksOn && task?.vehicle_checks?.length ? <Section look="list" title={t('office.checks.title')}><View style={styles.inner}><TaskCheckLines checks={task.vehicle_checks} extra={(c) => <DeleteEntry kind="check" id={c.id} compact testID="delete-check" onDeleted={() => void q.reload()} />} /></View></Section> : null}
           {p && task && <TripPurposeCard p={p} />}
           {task && (task.km != null || task.gps_km != null) && (
             <Txt variant="muted" size={15}>{[task.km != null ? t('office.task.taskKm', { km: task.km }) : '', task.gps_km != null ? t('office.task.gpsKm', { km: task.gps_km }) : ''].filter(Boolean).join(' · ')}</Txt>
@@ -437,7 +441,13 @@ export default function TaskDetailScreen() {
           )}
           {p && task && (
             <TaskMoreDetails p={p} openLink={openLink} linkNote={linkNote}
-              onPlan={p.plan ? () => router.push({ pathname: '/office/task/[id]/plan', params: { id: task.id } }) : undefined} />
+              onPlan={p.plan ? () => router.push({ pathname: '/office/task/[id]/plan', params: { id: task.id } }) : undefined}
+              fillExtra={(f) => <DeleteEntry kind="fuel" id={f.id} compact testID="delete-fill" onDeleted={() => void q.reload()} />} />
+          )}
+          {/* Round 52 (§40): a task made by mistake (approve: delete_entry with a reason; not while it is under way). Cancel
+              stays the normal way to call a trip off. */}
+          {task && task.status !== 'in_progress' && (
+            <DeleteEntry kind="task" id={task.id} testID="delete-task" onDeleted={() => (router.canGoBack() ? router.back() : router.replace('/office'))} />
           )}
           {problem && <ErrorNotice error={problem} onRetry={() => void q.reload()} />}
         </View>

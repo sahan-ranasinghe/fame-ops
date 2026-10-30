@@ -5,7 +5,8 @@
 // vehicle has, the lease when rented, each Other and "Another document"; a row opens the document's screen (Open in the
 // browser, Take photo / Replace, the expiry date: vehicles/doc). The photo: Take photo / Replace photo with the camera or
 // the phone's photos (photo_upload_url + set_vehicle_photo, straight to Storage). Each button only with its tools.
-// Edit (update_vehicle) opens the form. Found by list_vehicles' search (one page; the active vehicles, then the returned
+// Edit (update_vehicle) opens the form. Round 52 (§40): Archive / Restore (set_vehicle_active, the trips from today on
+// listed first) and Delete permanently for a vehicle with no history (users; the plate typed to confirm). Found by list_vehicles' search (one page; the active vehicles, then the returned
 // ones). Round 4–7 (4): the vehicle check (Today's check and the last 7 days, components/office/VehicleChecks.tsx); a
 // pre-trip problem's notification (/vehicles/<plate>?check=<id>) opens the page with the checks first and that one marked.
 // Sahan's removals (22 October 2026): the three documents all valid (none missing) = one quiet line "Documents valid" with a
@@ -14,8 +15,9 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Linking, Pressable, View } from 'react-native';
+import { Alert, Image, Linking, Pressable, View } from 'react-native';
 
+import { ArchiveTripsSheet, RecordDelete } from '@/components/office/BinParts';
 import { PhotoPick } from '@/components/office/PhotoPick';
 import { VehicleChecksSection } from '@/components/office/VehicleChecks';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
@@ -24,7 +26,8 @@ import { docTone, fuelKeys, kmLine, vehicleTone } from '@/office/manageLogic';
 import { uploadToTicket, type Shot } from '@/office/media';
 import { canSetVehiclePhoto, canUploadDocs, documentRows, ticketOf } from '@/office/mediaLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { FleetError, VehicleCard, VehicleDocuments, VehiclesList } from '@/office/types';
+import { asksFirst, vehicleActiveInput } from '@/office/binLogic';
+import type { ArchiveNeedsConfirm, FleetError, SetActiveResult, VehicleCard, VehicleDocuments, VehiclesList } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { showSnackbar } from '@/components/patterns/Snackbar';
@@ -85,6 +88,41 @@ export default function VehicleScreen() {
   useEffect(() => {
     void load();
   }, [reg]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Round 52 (§40): Archive / Restore (set_vehicle_active, the vehicles permission) with a confirmation; a vehicle booked
+  // from today on lists those trips first (each opens its task), and "Archive anyway" sends confirm.
+  const canArchive = me.tools.includes('set_vehicle_active');
+  const [archiving, setArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState<FleetError | null>(null);
+  const [trips, setTrips] = useState<ArchiveNeedsConfirm | null>(null);
+  function confirmArchive() {
+    if (!v) return;
+    const off = v.active !== false;
+    Alert.alert(t(off ? 'office.vehicles.archiveAsk' : 'office.vehicles.restoreAsk', { plate: v.reg_no }), t(off ? 'office.vehicles.archiveBody' : 'office.vehicles.restoreBody'), [
+      { text: t('office.common.cancel'), style: 'cancel' },
+      { text: t(off ? 'office.bin.archive' : 'office.bin.restore'), style: off ? 'destructive' : 'default', onPress: () => void setActive(!off) },
+    ]);
+  }
+  async function setActive(want: boolean, confirm = false) {
+    if (!v) return;
+    setArchiveError(null);
+    setArchiving(true);
+    try {
+      const out = await api.call<SetActiveResult | ArchiveNeedsConfirm>('set_vehicle_active', vehicleActiveInput(v.reg_no, want, confirm));
+      if (asksFirst(out)) {
+        setTrips(out);
+        return;
+      }
+      setTrips(null);
+      setV((prev) => (prev ? { ...prev, active: want } : prev));
+      showSnackbar({ text: t(want ? 'office.vehicles.restoredDone' : 'office.vehicles.archivedDone', { plate: v.reg_no }) });
+      void load();
+    } catch (e) {
+      setArchiveError(e as FleetError);
+    } finally {
+      setArchiving(false);
+    }
+  }
 
   const km = v ? kmLine(v) : null;
   const fact = (label: string, value?: string | null, sub?: string | null) => (
@@ -189,9 +227,32 @@ export default function VehicleScreen() {
               </Section>
             )}
             {canEdit && <Button kind="dark" label={t('office.vehicles.editVehicle')} onPress={() => router.push({ pathname: '/office/vehicles/form', params: { reg } })} style={{ minHeight: 56 }} />}
+            {canArchive && (
+              <View style={{ gap: 10 }} testID="vehicle-archive">
+                {archiveError && !trips && <ErrorNotice error={archiveError} onRetry={confirmArchive} onSignIn={() => void signOut()} />}
+                <Button
+                  kind="outline"
+                  label={t(v.active !== false ? 'office.vehicles.archive' : 'office.vehicles.restore')}
+                  onPress={confirmArchive}
+                  busy={archiving && !trips}
+                  style={{ minHeight: 52, borderColor: v.active !== false ? colors.red : colors.ink }}
+                  testID="vehicle-archive-button"
+                />
+              </View>
+            )}
+            <RecordDelete kind="vehicle" refText={v.reg_no} onDeleted={() => (router.canGoBack() ? router.back() : router.replace('/office/vehicles'))} />
           </>
         )}
       </Screen>
+      <ArchiveTripsSheet
+        visible={!!trips}
+        name={v?.reg_no ?? reg}
+        trips={trips?.trips ?? []}
+        busy={archiving}
+        error={trips ? archiveError : null}
+        onClose={() => { setTrips(null); setArchiveError(null); }}
+        onConfirm={() => void setActive(false, true)}
+      />
     </View>
   );
 }

@@ -82,3 +82,5 @@ export { default as ArrowRight } from 'lucide-react-native/icons/arrow-right';
 export { default as ArrowLeft } from 'lucide-react-native/icons/arrow-left';
 // Sahan's removals (22 October 2026): a critical group's heading on Issues (warning a triangle, info a circle: above).
 export { default as OctagonAlert } from 'lucide-react-native/icons/octagon-alert';
+// Round 52: More's Recently deleted.
+export { default as Trash } from 'lucide-react-native/icons/trash';

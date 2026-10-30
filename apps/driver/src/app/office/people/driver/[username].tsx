@@ -8,8 +8,9 @@
 // regular vehicle (list_vehicles' regular_driver; read-only here). Photos (Stage 1, O3 item 5): the driver's photo and
 // the licence's front and back (each Open, 1-hour link), Take photo / Choose from photos straight to Storage
 // (photo_upload_url + set_driver_photo / set_driver_licence_photo; the old one is kept). The licence expiry is picked on
-// the calendar (docs/ui-patterns.md §3). "Switch off <name>…" with a confirmation
-// (set_driver_active; the server's notes shown after). Data: driver_profile and the driver's row of list_drivers. Every
+// the calendar (docs/ui-patterns.md §3). Round 52 (§40): "Archive <name>…" / "Restore <name>" with a confirmation
+// (set_driver_active; trips from today on listed first, Archive anyway; the server's notes shown after) and, for the users
+// permission, Delete permanently for a driver with no history (components/office/BinParts.tsx). Data: driver_profile and the driver's row of list_drivers. Every
 // button exists only when me.tools has its tool. The rules: office/peopleLogic.ts.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,6 +19,7 @@ import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeft, ChevronRight, MapPin, MessageCircle, Phone } from '@/components/icons';
+import { ArchiveTripsSheet, RecordDelete } from '@/components/office/BinParts';
 import { PhotoPick } from '@/components/office/PhotoPick';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { DateField } from '@/components/patterns/Calendar';
@@ -34,7 +36,8 @@ import { uploadToTicket, type Shot } from '@/office/media';
 import { canSetDriverPhoto, canSetLicencePhoto, ticketOf } from '@/office/mediaLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
-import type { DriverProfile, DriversList, FleetError, Vehicle, VehiclesList } from '@/office/types';
+import { asksFirst } from '@/office/binLogic';
+import type { ArchiveNeedsConfirm, DriverProfile, DriversList, FleetError, SetActiveResult, Vehicle, VehiclesList } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, useWebThemeColor } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -174,9 +177,11 @@ export default function ManageDriver() {
     }
   }
 
-  // Switch off / on with a second confirmation; the server's notes (open tasks to reassign) shown after.
+  // Round 52 (§40): Archive / Restore (set_driver_active) with a confirmation; archiving someone with trips from today on
+  // lists those trips first (each opens its task) and "Archive anyway" sends confirm. The server's notes shown after.
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<FleetError | null>(null);
+  const [trips, setTrips] = useState<ArchiveNeedsConfirm | null>(null);
   function confirmSwitch() {
     const off = active !== false;
     Alert.alert(t(off ? 'office.people.switchOffTitle' : 'office.people.switchOnTitle', { name: first }), t(off ? 'office.people.switchOffBody' : 'office.people.switchOnBody'), [
@@ -184,11 +189,16 @@ export default function ManageDriver() {
       { text: t(off ? 'office.people.switchOffConfirm' : 'office.people.switchOnConfirm'), style: off ? 'destructive' : 'default', onPress: () => void doSwitch(!off) },
     ]);
   }
-  async function doSwitch(want: boolean) {
+  async function doSwitch(want: boolean, confirm = false) {
     setSwitchError(null);
     setSwitching(true);
     try {
-      const out = await api.call<{ notes?: string[] }>('set_driver_active', { username, active: want });
+      const out = await api.call<SetActiveResult | ArchiveNeedsConfirm>('set_driver_active', confirm ? { username, active: want, confirm: true } : { username, active: want });
+      if (asksFirst(out)) {
+        setTrips(out);
+        return;
+      }
+      setTrips(null);
       void profile.reload();
       void list.reload();
       // Hotfix O2-H2, Part 1b: stays on the driver (the switch shows the new state), a snackbar with the server's notes.
@@ -416,7 +426,7 @@ export default function ManageDriver() {
 
         {canSwitch && (d || row) && (
           <View style={{ gap: 10 }}>
-            {switchError && <ErrorNotice error={switchError} onRetry={confirmSwitch} onSignIn={() => void signOut()} />}
+            {switchError && !trips && <ErrorNotice error={switchError} onRetry={confirmSwitch} onSignIn={() => void signOut()} />}
             <Button
               kind="outline"
               label={t(active !== false ? 'office.people.switchOff' : 'office.people.switchOn', { name: first })}
@@ -426,7 +436,20 @@ export default function ManageDriver() {
             />
           </View>
         )}
+        {/* Round 52: Delete permanently (users), only for a driver with no history; else why not. */}
+        {(d || row) && (
+          <RecordDelete kind="driver" refText={username} onDeleted={() => (router.canGoBack() ? router.back() : router.replace('/office/people/drivers'))} />
+        )}
       </Screen>
+      <ArchiveTripsSheet
+        visible={!!trips}
+        name={first}
+        trips={trips?.trips ?? []}
+        busy={switching}
+        error={trips ? switchError : null}
+        onClose={() => { setTrips(null); setSwitchError(null); }}
+        onConfirm={() => void doSwitch(false, true)}
+      />
 
       {/* Reset PIN: the sheet. */}
       <Sheet
