@@ -180,12 +180,16 @@ export const SETTINGS_PAGES: NavItem[] = [
   { key: "users", label: "Users", need: ["users", "office_users"], path: "/settings/users" },
   { key: "fleet", label: "Fleet", need: ["users"], path: "/settings/fleet" },
   { key: "import-sites", label: "Import sites", need: ["vehicles"], path: "/settings/import-sites" },
+  // Round 52: the rental companies with their vehicles, Archive / Restore, + Add.
+  { key: "rental-companies", label: "Rental companies", need: ["vehicles"], path: "/settings/rental-companies" },
   // Hotfix O2-H2: the app's crash reports (list_app_errors).
   { key: "app-errors", label: "App errors", need: ["users"], path: "/settings/app-errors" },
   // Round 2b: the Activity log (office_audit's changes).
   { key: "activity", label: "Activity log", need: ["users"], path: "/settings/activity" },
   // Round 4–7 (item 9): how long each kind of data is kept, and Run now.
   { key: "retention", label: "Data retention", need: ["users"], path: "/settings/retention" },
+  // Round 52: Recently deleted (the bin: 30 days, Restore).
+  { key: "recently-deleted", label: "Recently deleted", need: ["users"], path: "/settings/recently-deleted" },
   // Web only (the browser's push subscription); the artifact points to the web app.
   { key: "notifications", label: "Notifications", need: [], path: "/settings/notifications" },
 ];

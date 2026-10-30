@@ -16,6 +16,7 @@ import { Notice, Pill } from "../ui/basics";
 import { colomboDay } from "../ui/dateRange";
 import { EmptyLine, SkeletonRows } from "../ui/ListKit";
 import { byDay, checkTone, lastWeekArgs, SIDE_TEXT, taskCheckLine } from "./myTripLogic";
+import { DeleteEntryButton } from "./bin/BinParts";
 
 /** The photos of a check as small thumbnails, each opening large in a new tab. */
 export function CheckPhotos({ photos }: { photos?: VehicleCheck["photos"] }) {
@@ -68,7 +69,7 @@ function OpenIssue({ c, plate }: { c: VehicleCheck; plate: string }) {
 }
 
 /** One check in the 7 days: the time, the result, who, the odometer, how; a problem's note and its issue; the photos. */
-function CheckRow({ c, plate, focused }: { c: VehicleCheck; plate: string; focused: boolean }) {
+function CheckRow({ c, plate, focused, onDeleted }: { c: VehicleCheck; plate: string; focused: boolean; onDeleted: () => void }) {
   return (
     <div id={`check-${c.id}`} className="row" data-testid="check-row" aria-current={focused ? "true" : undefined}
       style={{ alignItems: "flex-start", ...(focused ? { background: "var(--live-bg)", borderRadius: 10 } : {}) }}>
@@ -83,6 +84,8 @@ function CheckRow({ c, plate, focused }: { c: VehicleCheck; plate: string; focus
         <CheckPhotos photos={c.photos} />
         {c.report && <div><OpenIssue c={c} plate={plate} /></div>}
       </div>
+      {/* Round 52: a wrong check (approve). */}
+      <DeleteEntryButton kind="check" id={c.id} fallback={`/vehicles/${encodeURIComponent(plate)}`} className="btn small" onDeleted={onDeleted} />
     </div>
   );
 }
@@ -119,7 +122,7 @@ export function VehicleChecksSection({ plate, today: checkToday, focus }: { plat
           {days.map((d) => (
             <div key={d.date} style={{ display: "grid", gap: 4 }}>
               <div className="sub" style={{ fontWeight: 600 }}>{dayWords(d.date)}</div>
-              {d.checks.map((c) => <CheckRow key={c.id} c={c} plate={plate} focused={c.id === focus} />)}
+              {d.checks.map((c) => <CheckRow key={c.id} c={c} plate={plate} focused={c.id === focus} onDeleted={q.refetch} />)}
             </div>
           ))}
         </>
@@ -128,8 +131,8 @@ export function VehicleChecksSection({ plate, today: checkToday, focus }: { plat
   );
 }
 
-/** A task's checks: "Vehicle check 07:42 · All good" or "· Problem: Damage", with the photos. */
-export function TaskCheckLines({ checks }: { checks?: VehicleCheck[] }) {
+/** A task's checks: "Vehicle check 07:42 · All good" or "· Problem: Damage", with the photos; Delete… (approve) on a wrong one. */
+export function TaskCheckLines({ checks, onDeleted }: { checks?: VehicleCheck[]; onDeleted?: () => void }) {
   if (!checks?.length) return null;
   return (
     <div style={{ gridColumn: "1/-1" }} data-testid="task-checks">
@@ -141,6 +144,7 @@ export function TaskCheckLines({ checks }: { checks?: VehicleCheck[] }) {
             {c.odometer_km != null && <span className="muted"> · {c.odometer_km.toLocaleString("en-US")} km</span>}
             {c.report?.note && <div className="sub">“{c.report.note}”</div>}
             <CheckPhotos photos={c.photos} />
+            {onDeleted && <div><DeleteEntryButton kind="check" id={c.id} fallback="/tasks" className="btn small" onDeleted={onDeleted} /></div>}
           </div>
         ))}
       </dd>

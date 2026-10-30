@@ -1499,10 +1499,11 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   expect(bareNow.results[0]).toMatchObject({ site_id: bare, lat: 7.4675 });
 
   // Phase 7 (§15): Remove has a second step on the page; the search leaves it out; Removed places restores it.
+  // Round 52: its words are Archive / Archived places (the same tools).
   const removeBox = placePage.getByTestId("place-remove");
-  await removeBox.getByRole("button", { name: "Remove" }).click();
-  await removeBox.getByRole("button", { name: "Yes, remove" }).click();
-  await expect(placePage).toContainText("Removed. It is listed under Removed places.");
+  await removeBox.getByRole("button", { name: "Archive" }).click();
+  await removeBox.getByRole("button", { name: "Yes, archive" }).click();
+  await expect(placePage).toContainText("Archived. It is listed under Archived places.");
   const removedNow = await tool<{ results: { site_id?: string }[] }>("search_places", { text: bare, map: false });
   expect(removedNow.results.some((r) => r.site_id === bare)).toBe(false);
   await spaGo(page, "/places?who=removed");

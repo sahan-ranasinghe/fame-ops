@@ -1,4 +1,4 @@
-// Remove a place (Phase 7, §15), on the pages: the place page's second step (the first click only reads place_detail's
+// Remove a place (Phase 7, §15; Round 52: its words are Archive / Archived places, the same tools), on the pages: the place page's second step (the first click only reads place_detail's
 // in_use: the reasons and tasks above the second button, two clicks in all; the server's needs_confirm above Remove
 // anyway for reasons that came up since, the notice with Settings → Fleet when the base place was cleared, the
 // removed place read-only with Restore), and Places → Removed places with Restore on each row.
@@ -84,28 +84,28 @@ describe("the place page's Remove", () => {
     }, fleetAdmin);
     await mount(t, "/places/p1");
     const block = await screen.findByTestId("place-remove");
-    expect(block.textContent).toContain("Remove this place");
+    expect(block.textContent).toContain("Archive this place");
 
     const reads = t.argsOf("place_detail").length;
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Remove" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Archive" })); });
     expect(t.argsOf("remove_place")).toEqual([]);
     expect(t.argsOf("place_detail").length).toBe(reads + 1);
     const asked = screen.getByTestId("place-remove");
-    expect(asked.textContent).toContain("Remove Head office?");
+    expect(asked.textContent).toContain("Archive Head office?");
     expect(asked.textContent).toContain("Head office is the base place; 1 task today or later starts or stops there.");
     expect(screen.getByRole("link", { name: "Sun 18 Oct 09:00 · Team drop · Kurunegala site" }).getAttribute("href")).toBe("/tasks/t1");
 
     // Keep it goes back; asking again starts from the first step.
     fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
-    expect(screen.getByTestId("place-remove").textContent).toContain("Remove this place");
+    expect(screen.getByTestId("place-remove").textContent).toContain("Archive this place");
     expect(screen.queryByTestId("place-remove-tasks")).toBeNull();
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Remove" })); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, remove" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Archive" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, archive" })); });
     expect(t.argsOf("remove_place")).toEqual([{ id: "p1", confirm: true }]);
 
-    expect(await screen.findByText(/Removed\. It is listed under Removed places\./)).toBeTruthy();
+    expect(await screen.findByText(/Archived\. It is listed under Archived places\./)).toBeTruthy();
     expect(screen.getByRole("link", { name: /The base place is no longer set/ }).getAttribute("href")).toBe("/settings/fleet/office");
-    expect(screen.getByTestId("place-removed").textContent).toMatch(/Removed by Sahan Sat 17 Oct/);
+    expect(screen.getByTestId("place-removed").textContent).toMatch(/Archived by Sahan Sat 17 Oct/);
     expect(screen.queryByTestId("place-remove")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
 
@@ -113,7 +113,7 @@ describe("the place page's Remove", () => {
     expect(t.argsOf("restore_place")).toEqual([{ id: "p1" }]);
     expect(await screen.findByText(/Restored\. It is back in the searches/)).toBeTruthy();
     expect(screen.queryByTestId("place-removed")).toBeNull();
-    expect(screen.getByTestId("place-remove").textContent).toContain("Remove this place");
+    expect(screen.getByTestId("place-remove").textContent).toContain("Archive this place");
   });
 
   it("reasons that came up after the first click: the server asks, and Remove anyway confirms", async () => {
@@ -124,15 +124,15 @@ describe("the place page's Remove", () => {
     }, fleetAdmin);
     await mount(t, "/places/p1");
     await screen.findByTestId("place-remove");
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Remove" })); });
-    expect(screen.getByTestId("place-remove").textContent).toContain("It moves to Removed places");
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, remove" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Archive" })); });
+    expect(screen.getByTestId("place-remove").textContent).toContain("It moves to Archived places");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, archive" })); });
     expect(t.argsOf("remove_place")).toEqual([{ id: "p1" }]);
-    expect(screen.getByTestId("place-remove").textContent).toContain("Remove Head office anyway?");
+    expect(screen.getByTestId("place-remove").textContent).toContain("Archive Head office anyway?");
     expect(screen.getByTestId("place-remove-tasks").textContent).toContain("Team drop · Kurunegala site");
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Remove anyway" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Archive anyway" })); });
     expect(t.argsOf("remove_place").at(-1)).toEqual({ id: "p1", confirm: true });
-    expect(await screen.findByText(/Removed\. It is listed under Removed places\./)).toBeTruthy();
+    expect(await screen.findByText(/Archived\. It is listed under Archived places\./)).toBeTruthy();
   });
 
   it("no Remove without remove_place, and no Restore without restore_place", async () => {
@@ -141,7 +141,7 @@ describe("the place page's Remove", () => {
       place_detail: () => ({ place: { ...PLACE, removed: "2026-10-17 10:05 by Sahan" }, stops_90_days: 0 }),
     }, { ...fleetAdmin, tools: ["list_places", "place_detail", "update_place"] });
     await mount(t, "/places/p1");
-    expect((await screen.findByTestId("place-removed")).textContent).toContain("Removed by Sahan");
+    expect((await screen.findByTestId("place-removed")).textContent).toContain("Archived by Sahan");
     expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
     expect(screen.queryByTestId("place-remove")).toBeNull();
   });
@@ -159,20 +159,20 @@ describe("Places → Removed places", () => {
     }, fleetAdmin);
     await mount(t, "/places");
     await screen.findByText("Head office");
-    applyFilter("Places", "Removed places");
-    expect(await screen.findByText(/^Removed by Palitha Fri 16 Oct( 2026)? 15:20$/)).toBeTruthy();
+    applyFilter("Places", "Archived places");
+    expect(await screen.findByText(/^Archived by Palitha Fri 16 Oct( 2026)? 15:20$/)).toBeTruthy();
     expect(t.argsOf("list_places").at(-1)).toEqual({ limit: 25, removed: true });
 
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Restore" })); });
     expect(t.argsOf("restore_place")).toEqual([{ id: "p2" }]);
-    expect(await screen.findByText("No place has been removed.")).toBeTruthy();
+    expect(await screen.findByText("No place has been archived.")).toBeTruthy();
   });
 
   it("no Removed places chip without restore_place", async () => {
     const t = new FakeTransport({ list_places: () => ({ count: 1, places: [PLACE] }) }, { ...fleetAdmin, tools: ["list_places", "place_detail"] });
     await mount(t, "/places?who=removed");
     await screen.findByText("Head office");
-    expect(screen.queryByRole("button", { name: "Removed places" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Archived places" })).toBeNull();
     expect(t.argsOf("list_places").every((a) => !a.removed)).toBe(true);
   });
 });

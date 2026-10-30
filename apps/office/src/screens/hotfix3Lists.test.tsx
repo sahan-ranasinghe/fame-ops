@@ -147,7 +147,7 @@ describe("Drivers", () => {
     expect(screen.getByTestId("empty-line").textContent).toBe(driversEmpty(false, "nobody", true));
   });
 
-  it("on a phone: Load more grows the page; the switched-off drivers are a filter in the URL", async () => {
+  it("on a phone: Load more grows the page; the archived drivers are a filter in the URL (Show archived)", async () => {
     asPhone();
     const t = new FakeTransport({ list_drivers: (a) => { const p = paged(DRIVERS, a); return { count: p.rows.length, total: p.total, next: p.next, drivers: p.rows }; } });
     await mount(t, "/drivers?inactive=1");
@@ -159,7 +159,7 @@ describe("Drivers", () => {
     expect(screen.getAllByTestId("driver-row")).toHaveLength(30);
     expect(screen.queryByTestId("load-more")).toBeNull();
     // The filter in use is a chip: its ✕ shows the active drivers again (docs/ui-patterns.md §1).
-    removeChip("Show: All drivers, the switched-off ones too");
+    removeChip("Drivers: Show archived"); // Round 52: the words (was "Show: All drivers, the switched-off ones too")
     await settle();
     expect(screen.getByTestId("where").textContent).toBe("/drivers");
   });
@@ -253,7 +253,7 @@ describe("Places", () => {
   });
 
   it("an empty filter says what it means", () => {
-    expect(placesEmpty("removed", "", false)).toBe("No place has been removed.");
+    expect(placesEmpty("removed", "", false)).toBe("No place has been archived."); // Round 52: the words (was "removed")
     expect(placesEmpty("ours", "", true)).toBe("Every one of our places has a pin.");
     expect(placesEmpty("mobitel", "MT9", false)).toBe("No Mobitel site matches \"MT9\" (name, address, site id or other id).");
   });

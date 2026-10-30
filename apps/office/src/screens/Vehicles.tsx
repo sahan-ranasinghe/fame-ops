@@ -99,7 +99,7 @@ const FILTER_WORDS: Record<Filter, string> = {
   available: "available vehicles",
   in_garage: "vehicles in the garage",
   documents_expiring: "vehicles with documents expiring",
-  inactive: "returned vehicles",
+  inactive: "archived (returned) vehicles",
 };
 
 /** What an empty list means, in words. */

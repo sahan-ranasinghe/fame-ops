@@ -22,6 +22,7 @@ import { useIsPhone } from "../ui/phone";
 import { useToast } from "../ui/Toast";
 import { BELL_KEY, eventText, isActive, issueFacts, ISSUES_KEY, kindText, patchIssues, severityTone, statusTone } from "./issuesLogic";
 import { datesInWords, whenText } from "../lib/when";
+import { DeleteEntryButton } from "./bin/BinParts";
 
 /** update_issue's answer (not in data/types.ts yet). */
 interface UpdateIssueAnswer {
@@ -195,6 +196,10 @@ export default function IssuePage() {
         </form>
       )}
 
+      {/* Round 52 (§40): a wrong issue (approve): Delete… with a reason (Dismiss stays the usual way). */}
+      {me.tools.includes("delete_entry") && (
+        <div className="acts"><DeleteEntryButton kind="issue" id={i.id} fallback={`/issues${search}`} onDeleted={() => close()} /></div>
+      )}
       <div className="card card-b" data-testid="issue-history">
         <h2>History</h2>
         <dl className="kv">

@@ -64,6 +64,7 @@ import { countWithNames, ridersLine } from "./passengersLogic";
 import { featureOn } from "./switchLogic";
 import { liveForTask } from "./overviewLinks";
 import { isSelfDriveTrip, WEB_LINE_TEXT } from "../data/webTrip";
+import { DeleteEntryButton } from "./bin/BinParts";
 
 /** Round 4–7 (5): "Fuel: Enough fuel · 07:42" with the estimate under it; before the start the estimate alone. */
 function FuelCardLine({ card, started }: { card: NonNullable<TaskDetailData["task"]["fuel_card"]>; started: boolean }) {
@@ -179,6 +180,7 @@ export function TaskDetail() {
   const canChange = (t.status === "assigned" || t.status === "in_progress" || declined) && (me.tools.includes("update_task") || me.tools.includes("reassign_task"));
   const canCancel = (t.status === "assigned" || t.status === "in_progress" || declined) && me.tools.includes("cancel_task");
   const canStops = (t.status === "assigned" || t.status === "in_progress") && me.tools.includes("update_task_stops");
+  const canDelete = t.status !== "in_progress" && me.tools.includes("delete_entry");
   const ext = { target: "_blank", rel: "noopener" } as const;
   const eta = t.eta;
   // Needs a driver (§19): the change page with the driver field first; the edit pages need assign_tasks.
@@ -290,7 +292,7 @@ export function TaskDetail() {
           <div><dt>Sent · seen</dt><dd className="mono">{joinDots([hhmm(t.sent), t.seen === "not opened yet" ? "not opened yet" : hhmm(t.seen)]) || "—"}</dd></div>
           <div><dt>Started · done</dt><dd className="mono">{joinDots([hhmm(t.started), hhmm(t.completed)]) || "—"}</dd></div>
           {/* Round 4–7 (4): the vehicle check of the task's day by its person, with the photos. */}
-          <TaskCheckLines checks={t.vehicle_checks} />
+          <TaskCheckLines checks={t.vehicle_checks} onDeleted={() => void reload()} />
           <div><dt>Odometer</dt><dd className="num">{t.start_odometer_km != null ? num(t.start_odometer_km) : "—"}{t.end_odometer_km != null ? " → " + num(t.end_odometer_km) : ""}</dd></div>
           <div><dt>Km this task</dt><dd className="num">{km != null ? num(km) + " km" : "—"}{segments.length > 1 ? <span className="muted"> · {segments.length} vehicles</span> : null}{t.gps_km != null ? <span className="muted"> · GPS {num(t.gps_km)} km</span> : null}</dd></div>
           {/* Round 4–7 (5): the fuel card the driver saw at Start task and their answer (nothing when the task has none, or
@@ -424,6 +426,8 @@ export function TaskDetail() {
                 <div className="sub">{joinDots([cap(o.kind), whenText(o.at), o.check, o.photo_reading != null ? `photo shows ${o.photo_reading}` : ""])}</div>
               </div>
               {o.photo && <a className="btn small" href={o.photo} {...ext}>Photo</a>}
+              {/* Round 52: a wrong reading (approve), when the answer names it; the task's numbers follow. */}
+              {o.id && <DeleteEntryButton kind="odometer" id={o.id} fallback={`/tasks/${id}`} className="btn small" onDeleted={() => void reload()} />}
             </div>
           ))}
           {p.fuel.map((f, i) => (
@@ -435,6 +439,8 @@ export function TaskDetail() {
               </div>
               {f.video?.status === "uploaded" && f.id && can(me, "vehicles") && <Link className="btn small" to={`/fuel/${f.id}${f.at ? `?range=custom&from=${f.at.slice(0, 10)}&to=${f.at.slice(0, 10)}` : ""}`}><Icon name="video" />Video</Link>}
               {f.receipt_photo && <a className="btn small" href={f.receipt_photo} {...ext}>Receipt</a>}
+              {/* Round 52: a wrong fill (approve). */}
+              {f.id && <DeleteEntryButton kind="fuel" id={f.id} fallback={`/tasks/${id}`} className="btn small" onDeleted={() => void reload()} />}
             </div>
           ))}
           {!p.odometer.length && !p.fuel.length && <Empty>No readings yet.</Empty>}
@@ -459,10 +465,12 @@ export function TaskDetail() {
         </>
       )}
 
-      {(canChange || canCancel) && (
+      {(canChange || canCancel || canDelete) && (
         <div className="acts">
           {canChange && <Link className="btn dark" to={declined ? findDriverPath(id) : `/tasks/${id}/edit${q}`} state={FROM_TASK}>{declined ? "Give it a driver" : "Change the task"}</Link>}
           {canCancel && <Link className="btn danger" to={`/tasks/${id}/edit${q}#cancel`} state={FROM_TASK}>Cancel task</Link>}
+          {/* Round 52 (§40): a wrong task (approve; refused while under way, the sheet says so). Cancel stays the usual way. */}
+          {canDelete && <DeleteEntryButton kind="task" id={id} fallback={backTo} className="btn" />}
         </div>
       )}
       {p.assignment_history?.length ? (

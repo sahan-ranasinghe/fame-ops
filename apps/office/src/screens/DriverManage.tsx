@@ -1,4 +1,5 @@
-// Manage a driver (/drivers/:username/edit): the driver's profile (Part 3b, G), a new PIN, switching the account off or on.
+// Manage a driver (/drivers/:username/edit): the driver's profile (Part 3b, G), a new PIN, Archive / Restore (Round 52: the
+// account switched off or on, the trips from today on first) and Delete permanently for a driver with no history.
 // Phase 7 (§5): the photo with Replace photo (the web app).
 // Part 3b (G): driver_profile, watched: Contact, Emergency contact, Driving licence (with the front and back photos), This
 // month and the app version, Not available, Changes, and a banner for what is missing. Each section's Edit saves through
@@ -21,6 +22,8 @@ import { isPin, randomPin } from "./driverLogic";
 import { missingText, profileFields } from "./driverProfileLogic";
 import { type ProfileDraft, ProfileSections } from "./DriverProfileParts";
 import { DriverPhotoCard } from "./PhotoUpload";
+import { ArchiveCard, DeleteRecordCard } from "./bin/BinParts";
+import { personArchiveText } from "./bin/binLogic";
 
 /** The profile is fetched again this often while the page is open. */
 export const PROFILE_REFRESH_MS = 60_000;
@@ -56,14 +59,20 @@ export function DriverManage() {
 
   const [pin, setPin] = useState("");
   const [pinMsg, setPinMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
-  const [armed, setArmed] = useState(false);
-  const [saMsg, setSaMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const after = () => {
     void store.invalidate();
     void store.load("lists.drivers", "list_drivers", {});
   };
+
+  /** After Archive or Restore: the toast (and the server's note), the lists again, back where the person came from. */
+  function archived(restored: boolean, out: unknown) {
+    toast(restored ? `${x?.name ?? "Driver"} restored` : `${x?.name ?? "Driver"} archived`);
+    const notes = (out as { notes?: string[] } | null)?.notes;
+    if (notes?.length) toast(notes[0]);
+    after();
+    afterSave("/drivers");
+  }
 
   if (loadErr) return <section className="view"><PageTop title="Driver" backTo="/drivers" /><Notice tone="bad">{loadErr}</Notice></section>;
   if (!x) return <section className="view"><PageTop title="Driver" backTo="/drivers" /><Loading>Loading the driver…</Loading></section>;
@@ -84,25 +93,6 @@ export function DriverManage() {
       setPinMsg({ tone: "bad", text: errText(e as FleetError)[0] });
     }
   }
-  async function toggle() {
-    const want = off;
-    if (!want && !armed) {
-      setArmed(true);
-      return;
-    }
-    setBusy(true);
-    try {
-      const out = await transport.call<{ notes?: string[] }>("set_driver_active", { username, active: want });
-      toast(want ? "Driver switched on" : "Driver switched off");
-      if (out.notes?.length) toast(out.notes[0]);
-      after();
-      afterSave("/drivers");
-    } catch (e) {
-      setSaMsg(errText(e as FleetError)[0]);
-      setBusy(false);
-    }
-  }
-
   return (
     <section className="view" data-testid="driver-manage">
       <PageTop title={x.name} sub={<><span className="mono">{x.username}</span> · {x.code || ""}</>} backTo="/drivers" />
@@ -126,16 +116,22 @@ export function DriverManage() {
             {pinMsg && <Notice tone={pinMsg.tone}>{pinMsg.text}</Notice>}
           </form>
         )}
+        {/* Round 52 (§40): Archive (the sign-in switched off) with the trips from today on first, Restore; Delete permanently
+            (users) only for a driver with no history. */}
         {me.tools.includes("set_driver_active") && (
-          <div className="confirm" style={off ? { borderColor: "var(--line)" } : undefined}>
-            <div>
-              <b>{off ? "Switch this driver back on" : "Switch off this driver"}</b>
-              <p className="muted small" style={{ margin: "4px 0 0" }}>{off ? "They can sign in again." : "They can no longer sign in, and location sharing ends. Nothing is deleted."}</p>
-            </div>
-            {saMsg && <Notice tone="bad">{saMsg}</Notice>}
-            <button type="button" className={`btn ${off ? "dark" : "danger"}`} disabled={busy} onClick={() => void toggle()}>{off ? "Switch on" : armed ? "Yes, switch off" : "Switch off"}</button>
-          </div>
+          <ArchiveCard
+            key={`archive-${username}-${off}`}
+            testId="driver-archive"
+            archived={off}
+            words={(s) => personArchiveText(x.name, s)}
+            restoreWords={{ title: `${x.name} is archived`, text: "Restore lets them sign in again." }}
+            archive={(confirm) => transport.call("set_driver_active", { username, active: false, ...(confirm ? { confirm: true } : {}) })}
+            restore={() => transport.call("set_driver_active", { username, active: true })}
+            onArchived={(out) => archived(false, out)}
+            onRestored={(out) => archived(true, out)}
+          />
         )}
+        <DeleteRecordCard key={`delete-${username}`} kind="driver" refValue={username} fallback="/drivers" />
       </div>
     </section>
   );

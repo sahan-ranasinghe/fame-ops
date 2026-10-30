@@ -10,6 +10,7 @@ import { useFleet } from "../app/FleetContext";
 import { useLists } from "../data/hooks";
 import type { MileageSummary } from "../data/types";
 import { argsKey, useQuery } from "../data/useQuery";
+import { DeleteEntryButton } from "./bin/BinParts";
 import { num } from "../lib/format";
 import { errText } from "../transport/errors";
 import { Notice, Tile } from "../ui/basics";
@@ -59,7 +60,7 @@ export function VehicleDriverFilter({ vehicle, driver, onChange, lists }: {
 }
 
 export function Mileage() {
-  const { noConnector, managePermissions } = useFleet();
+  const { me, noConnector, managePermissions } = useFleet();
   const lists = useLists(!noConnector);
   const { search } = useLocation();
   const dates = useDateRange("month", { maxDays: MAX_DAYS });
@@ -129,7 +130,11 @@ export function Mileage() {
               note="A task started more than 2 km away from the last reading" empty={none("None")} />
             <MileageTable title="Odometer checks" testId="mileage-checks" resetKey={reset} rows={v.check_odometer} hide={["task_id", "log_id"]}
               note={`Readings whose photo disagrees, was typed, or could not be read${t.check_odometer ? " · photo links work for 1 hour" : ""}`}
-              empty={none("Every reading matches its photo")} />
+              empty={none("Every reading matches its photo")}
+              // Round 52: Delete… on a wrong reading (approve) when the row names it (log_id; mileage_summary does not yet).
+              action={me.tools.includes("delete_entry") && v.check_odometer.some((r) => typeof r.log_id === "string")
+                ? (r) => typeof r.log_id === "string" ? <DeleteEntryButton kind="odometer" id={r.log_id} fallback="/mileage" className="btn small" onDeleted={() => q.refetch()} /> : null
+                : undefined} />
           </div>
         )}
       </div>

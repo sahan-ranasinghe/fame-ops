@@ -89,7 +89,7 @@ export const VEHICLE_FILTERS: [VehicleFilter, string][] = [
   ["available", "Available"],
   ["in_garage", "In garage"],
   ["documents_expiring", "Documents expiring"],
-  ["inactive", "Returned"],
+  ["inactive", "Archived (returned)"],
 ];
 /** Vehicles: the Overview's "free now" is the chip Available, "in garage" In garage. */
 export const VEHICLE_FILTER_WORDS: FilterWords<VehicleFilter> = {

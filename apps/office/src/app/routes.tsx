@@ -43,6 +43,8 @@ import { FleetSettings, FleetSettingsRoute } from "../screens/settings/FleetSett
 import AppErrorsPage from "../screens/settings/AppErrors";
 import ActivityLogPage from "../screens/settings/ActivityLog";
 import DataRetention from "../screens/settings/DataRetention";
+import RecentlyDeleted from "../screens/bin/RecentlyDeleted";
+import RentalCompaniesPage from "../screens/settings/RentalCompanies";
 import { MyProfile } from "../screens/settings/MyProfile";
 import { UserForm } from "../screens/settings/UserForm";
 import { UserManage } from "../screens/settings/UserManage";
@@ -197,6 +199,9 @@ export const routes: RouteObject[] = [
       { path: "settings/activity", element: <Guard need={["users"]}><ActivityLogPage /></Guard> },
       // Round 4–7 (item 9): Data retention (the periods, Run now).
       { path: "settings/retention", element: <Guard need={["users"]}><DataRetention /></Guard> },
+      // Round 52: Recently deleted (users) and the rental companies (vehicles).
+      { path: "settings/recently-deleted", element: <Guard need={["users"]}><RecentlyDeleted /></Guard> },
+      { path: "settings/rental-companies", element: <Guard need={["vehicles"]}><RentalCompaniesPage /></Guard> },
       { path: "settings/import-sites", element: <Guard need={["vehicles"]}><ImportRoute /></Guard> },
       { path: "settings/notifications", element: <Suspense fallback={<div className="loading">Opening notifications…</div>}><Notifications /></Suspense> },
       // Hotfix O2-H2 (Part 2): the sounds and each group of events on their own page (a static segment outranks :group).

@@ -80,6 +80,8 @@ describe("a Coordinator on Settings → Users", () => {
     expect(await screen.findByText("Only an admin can change this account: it holds Approve.")).toBeTruthy();
     expect(screen.queryByText("New set-password link")).toBeNull();
     expect(screen.queryByText("Switch off")).toBeNull();
+    // Round 52: the button's words are Archive now; still none on a locked account.
+    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
   });
 
   it("another Coordinator's page is shown locked too (the help-desk rule)", async () => {
@@ -87,6 +89,8 @@ describe("a Coordinator on Settings → Users", () => {
     expect(await screen.findByText("Only an admin can change this account: it holds Office accounts.")).toBeTruthy();
     expect(screen.queryByText("New set-password link")).toBeNull();
     expect(screen.queryByText("Switch off")).toBeNull();
+    // Round 52: the button's words are Archive now; still none on a locked account.
+    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
   });
 
   it("on a requester's page, Approve, Users and Office accounts are greyed and the Coordinator, Fleet admin and Admin quick picks are not offered", async () => {

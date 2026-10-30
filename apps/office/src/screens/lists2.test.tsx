@@ -510,9 +510,9 @@ describe("Places (item 8): no Kind column where every row says the filter", () =
     expect(within(table()).queryByText("Site · Dialog")).toBeNull();
     fireEvent.click(screen.getAllByTestId("place-row")[0]);
     expect(where()).toMatch(/^\/places\/p2/);
-    applyFilter("Places", "Removed places");
+    applyFilter("Places", "Archived places");
     await settle();
-    expect(within(table()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Place", "Kind", "Site id", "Removed", ""]);
+    expect(within(table()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Place", "Kind", "Site id", "Archived", ""]);
     fireEvent.click(within(table()).getByRole("button", { name: "Restore" }));
     await settle();
     expect(t.argsOf("restore_place")).toEqual([{ id: "p9" }]);

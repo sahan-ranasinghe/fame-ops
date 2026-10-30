@@ -2,7 +2,7 @@
 // depot, where the pin came from, the credit of a place saved from the map
 // search, and the pin on a small map (dragged on the web, typed in both
 // builds); Save → update_place. A pin set here is never replaced by an import.
-// Phase 7 (§15): Remove with a second step on the page (no dialog; the
+// Phase 7 (§15): Remove (Archive since Round 52, the same tool) with a second step on the page (no dialog; the
 // server's reasons and tasks above Remove anyway), and a removed place's page
 // read-only with Restore.
 import { useEffect, useState } from "react";
@@ -13,7 +13,7 @@ import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { badgeTone, inLanka, pinText } from "../ui/locationLogic";
-import { PageTop } from "../ui/Page";
+import { PageTop, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { parsePin } from "./stopsLogic";
 import {
@@ -21,6 +21,8 @@ import {
   type RemoveState, removeTasks, removeWords, taskLine,
 } from "./placeRemoveLogic";
 import { PLACES_CHANGED } from "./Places";
+import { DeleteRecordCard } from "./bin/BinParts";
+import { deletedToast } from "./bin/binLogic";
 
 const PIN_FROM: Record<string, string> = {
   manual: "set by hand", dialog: "Dialog site list", mobitel_4g: "Mobitel 4G-LTE", mobitel_ep: "Mobitel EP list", ors: "the map search", link: "a Google Maps link", pin: "a typed or moved pin",
@@ -31,6 +33,7 @@ export function PlacePage() {
   const [params] = useSearchParams();
   const { me, transport, store } = useFleet();
   const toast = useToast();
+  const afterSave = useAfterSave();
   const [p, setP] = useState<PlaceDetailWithRemoved | null>(null);
   const [used, setUsed] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -164,7 +167,7 @@ export function PlacePage() {
       <div className="card card-b stack">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Pill tone={badgeTone(p.badge)}>{p.badge}</Pill>
-          {p.removed && <Pill tone="bad">Removed</Pill>}
+          {p.removed && <Pill tone="bad">Archived</Pill>}
           {p.lat == null ? <Pill tone="bad">no pin</Pill> : <Pill tone="ok">Pin from {PIN_FROM[p.pin_source ?? ""] ?? p.pin_source ?? "—"}</Pill>}
           {used != null && <span className="sub">{used ? `${used} stop${used > 1 ? "s" : ""} in the last 90 days` : "Not used in a task in the last 90 days"}</span>}
         </div>
@@ -223,11 +226,17 @@ export function PlacePage() {
           )}
           {rmErr && <Notice tone="bad">{rmErr}</Notice>}
           <div className="acts">
-            <button type="button" className="btn danger" disabled={busy} onClick={() => void remove()}>{busy ? (rm.step === "idle" ? "Checking…" : "Removing…") : words.button}</button>
+            <button type="button" className="btn danger" disabled={busy} onClick={() => void remove()}>{busy ? (rm.step === "idle" ? "Checking…" : "Archiving…") : words.button}</button>
             {words.keep && <button type="button" className="btn" disabled={busy} onClick={() => { setRm(removeStep(rm, { type: "cancel" })); setRmErr(null); }}>Keep it</button>}
           </div>
         </div>
       )}
+      {/* Round 52 (§40): Delete permanently (users) only for a place no stop, start or request ever used: one confirm. */}
+      <DeleteRecordCard key={`delete-${p.id}`} kind="place" refValue={p.id} fallback={backTo} onDeleted={(a) => {
+        toast(deletedToast(a.until));
+        window.dispatchEvent(new Event(PLACES_CHANGED));
+        afterSave(backTo);
+      }} />
     </div>
   );
 }

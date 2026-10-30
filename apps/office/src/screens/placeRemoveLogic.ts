@@ -1,4 +1,4 @@
-// Remove a place (Phase 7, §15), the pure part: the place page's second step
+// Remove a place (Phase 7, §15; its words Archive / Restore since Round 52, the same tools), the pure part: the place page's second step
 // (the first click only reads place_detail's in_use, so the reasons and the
 // tasks show above the second button; the second calls remove_place, with
 // confirm when they were shown; a needs_confirm answer, for reasons that came
@@ -89,20 +89,20 @@ export interface RemoveWords {
 export function removeWords(name: string, s: RemoveState): RemoveWords | null {
   switch (s.step) {
     case "idle":
-      return { title: "Remove this place", text: "It leaves every search, list and picker. Past tasks keep its name. Nothing is deleted: it can be restored.", button: "Remove", keep: false };
+      return { title: "Archive this place", text: "It leaves every search, list and picker. Past tasks keep its name. Nothing is deleted: it can be restored.", button: "Archive", keep: false };
     case "armed":
       return {
-        title: `Remove ${name}?`,
-        text: [reasonsText(s.reasons), s.tasks.length ? "Those tasks keep their stops as they are." : "", "It moves to Removed places and can be restored from there."]
+        title: `Archive ${name}?`,
+        text: [reasonsText(s.reasons), s.tasks.length ? "Those tasks keep their stops as they are." : "", "It moves to Archived places and can be restored from there."]
           .filter(Boolean).join(" "),
-        button: "Yes, remove",
+        button: "Yes, archive",
         keep: true,
       };
     case "needs_confirm":
       return {
-        title: `Remove ${name} anyway?`,
+        title: `Archive ${name} anyway?`,
         text: [reasonsText(s.reasons), s.tasks.length ? "Those tasks keep their stops as they are." : ""].filter(Boolean).join(" "),
-        button: "Remove anyway",
+        button: "Archive anyway",
         keep: true,
       };
     case "removed":
@@ -118,15 +118,15 @@ export interface RemovedNotice {
 
 /** The notice after removing: where the place went, and the base place when it was the base. */
 export function removedNotice(baseCleared: boolean, tools: readonly string[]): RemovedNotice {
-  const text = "Removed. It is listed under Removed places.";
+  const text = "Archived. It is listed under Archived places.";
   if (!baseCleared) return { text };
   return tools.includes("update_settings")
     ? { text, base: { text: "The base place is no longer set: pick another in Settings → Fleet.", link: true } }
     : { text, base: { text: "The base place is no longer set: someone with Settings → Fleet picks another.", link: false } };
 }
 
-/** "Removed by Sahan Sat 17 Oct 10:05" (dates in words, lib/when.ts: the year only when it is not this year's). */
-export const removedLine = (removed: string | undefined, opts: WhenOptions = {}) => byWhenText("Removed", removed, opts);
+/** "Archived by Sahan Sat 17 Oct 10:05" (dates in words, lib/when.ts: the year only when it is not this year's). */
+export const removedLine = (removed: string | undefined, opts: WhenOptions = {}) => byWhenText("Archived", removed, opts);
 
 /** Which buttons the place page shows: a removed place is read-only with Restore; one switched off by an undone import has no Remove. */
 export function placeActions(tools: readonly string[], removed: boolean, switchedOff = false): { edit: boolean; remove: boolean; restore: boolean } {
@@ -140,8 +140,8 @@ export function placeActions(tools: readonly string[], removed: boolean, switche
 export type Who = "ours" | "dialog" | "mobitel" | "removed";
 const WHO: [Who, string][] = [["ours", "Our places"], ["dialog", "Dialog sites"], ["mobitel", "Mobitel sites"]];
 
-/** Places' chips: Removed places only for people who can restore one. */
-export const whoOptions = (tools: readonly string[]): [Who, string][] => (tools.includes("restore_place") ? [...WHO, ["removed", "Removed places"]] : WHO);
+/** Places' chips: Archived places (the removed ones; Round 52's word) only for people who can restore one. */
+export const whoOptions = (tools: readonly string[]): [Who, string][] => (tools.includes("restore_place") ? [...WHO, ["removed", "Archived places"]] : WHO);
 
 /** The chip from the URL's who; an unknown one, or removed without restore_place, is Our places. */
 export function whoOf(param: string | null, tools: readonly string[]): Who {

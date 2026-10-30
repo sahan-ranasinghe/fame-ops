@@ -129,4 +129,7 @@ export const ALL_TOOLS = [
   "update_issues",
   // Round 4–7 (item 9): Settings → Data retention.
   "retention_preview", "run_retention",
+  // Round 52: archive and restore for vehicles, projects and rental companies, and their lists (the delete and bin tools
+  // are the web app's only: the connector keeps no delete).
+  "set_vehicle_active", "set_project_archived", "set_rental_company_archived", "list_projects", "list_rental_companies",
 ];

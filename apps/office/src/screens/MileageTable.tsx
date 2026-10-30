@@ -32,7 +32,7 @@ function cell(k: string, v: Row[string], numeric: boolean): ReactNode {
 }
 
 /** One of Mileage's tables in its card: the header with the count and a note, the page of rows, the paging controls. */
-export function MileageTable({ title, note, intro, rows, hide = [], empty, resetKey, testId }: {
+export function MileageTable({ title, note, intro, rows, hide = [], empty, resetKey, testId, action }: {
   title: ReactNode;
   note?: ReactNode;
   /** A line under the header (the month's figures). */
@@ -44,6 +44,8 @@ export function MileageTable({ title, note, intro, rows, hide = [], empty, reset
   /** The filters the rows belong to: the page goes back to the first when they change. */
   resetKey: string;
   testId?: string;
+  /** Round 52: a control at the end of a row (Delete… on a wrong reading), or nothing for that row. */
+  action?: (row: Row) => ReactNode;
 }) {
   const list = useLocalPages(rows, resetKey);
   const { keys, numeric } = columnsOf(rows, hide);
@@ -54,10 +56,10 @@ export function MileageTable({ title, note, intro, rows, hide = [], empty, reset
       {rows.length ? (
         <div className="tbl-wrap">
           <table>
-            <thead><tr>{keys.map((k) => <th key={k} className={numeric.has(k) ? "r" : ""}>{human(k)}</th>)}</tr></thead>
+            <thead><tr>{keys.map((k) => <th key={k} className={numeric.has(k) ? "r" : ""}>{human(k)}</th>)}{action && <th className="r"><span className="sr-only">Actions</span></th>}</tr></thead>
             <tbody>
               {list.items.map((r, i) => (
-                <tr key={i}>{keys.map((k) => <td key={k} data-label={human(k)} className={numeric.has(k) ? "r num" : ""}>{cell(k, r[k], numeric.has(k))}</td>)}</tr>
+                <tr key={i}>{keys.map((k) => <td key={k} data-label={human(k)} className={numeric.has(k) ? "r num" : ""}>{cell(k, r[k], numeric.has(k))}</td>)}{action && <td className="r">{action(r)}</td>}</tr>
               ))}
             </tbody>
           </table>
