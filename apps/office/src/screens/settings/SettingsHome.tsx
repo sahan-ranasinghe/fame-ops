@@ -16,11 +16,15 @@ const PAGE_TEXT: Record<string, string> = {
   fleet: "Dispatch defaults: minutes at stops, the buffer, the base place, rush hour, the routing provider's usage",
   notifications: "What reaches you, pause all, this browser and its sounds",
   retention: "How long notifications, the activity log, locations and other records are kept; Run now",
+  "rental-companies": "Who the vehicles are rented from, how many each has; archive one no longer used",
+  "recently-deleted": "What was deleted in the last 30 days; restore it before it goes for good",
 };
 
 export default function SettingsHome() {
   const { me, signOut } = useFleet();
-  const pages = allowed(__BUILD__ === "web" ? SETTINGS_PAGES : SETTINGS_PAGES.filter((p) => p.key !== "notifications"), me);
+  const pages = allowed(__BUILD__ === "web" ? SETTINGS_PAGES : SETTINGS_PAGES.filter((p) => p.key !== "notifications"), me)
+    // Round 52: Recently deleted only with its tool (the web app's: the connector keeps no delete).
+    .filter((p) => p.key !== "recently-deleted" || me.tools.includes("list_bin"));
   return (
     <section className="view" data-testid="settings">
       <div className="ph"><div><div className="eyebrow">{signOut ? "Sign-in, security and the office" : "The office"}</div><h1>Settings</h1></div></div>
@@ -28,7 +32,7 @@ export default function SettingsHome() {
         <div className="more-list">
           {pages.map((p) => (
             <Link key={p.key} to={p.path}>
-              <Icon name={p.key === "fleet" ? "settings" : p.key === "notifications" ? "issues" : p.key === "profile" ? "phone" : p.key === "retention" ? "clock" : "accounts"} />
+              <Icon name={p.key === "fleet" ? "settings" : p.key === "notifications" ? "issues" : p.key === "profile" ? "phone" : p.key === "retention" || p.key === "recently-deleted" ? "clock" : p.key === "rental-companies" ? "vehicles" : "accounts"} />
               <span className="grow">{p.label}<span className="sub" style={{ display: "block", fontWeight: 400 }}>{PAGE_TEXT[p.key]}</span></span>
             </Link>
           ))}

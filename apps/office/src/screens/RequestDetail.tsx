@@ -30,6 +30,7 @@ import { useRequestsHome, useTripCard } from "./myTripsQuery";
 import { PassengerList } from "./PassengerList";
 import { ridersLine } from "./passengersLogic";
 import { useSwitch } from "./dispatchParts";
+import { DeleteEntryButton } from "./bin/BinParts";
 
 /**
  * The request from the lists already loaded (followed as they refresh), else
@@ -211,6 +212,8 @@ export function RequestDetail() {
         {view.withdraw && !withdrawing && (
           <button type="button" className="btn" onClick={() => { setWithdrawing(true); setMsg(null); }}>Withdraw</button>
         )}
+        {/* Round 52 (§40): a wrong request (approve); its task goes with it, said in the confirm. Cancel stays the usual way. */}
+        <DeleteEntryButton kind="request" id={q.id} fallback={home} />
       </div>
       {view.withdraw && withdrawing && (
         <div className="confirm" data-testid="withdraw">

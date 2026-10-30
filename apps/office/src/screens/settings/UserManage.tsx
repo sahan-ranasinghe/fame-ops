@@ -1,6 +1,6 @@
 // Manage an office user (/settings/users/:email/edit): name, phone and
 // permissions (kept as a draft), a new set-password link, personal connector
-// keys, switching the account off or on.
+// keys, Archive / Restore (the account switched off or on; Round 52) and Delete permanently for one with no history.
 import { accountChangeProblem } from "@fleet/accountGuards";
 import { normalisePermissions, PERMISSION_TEXT } from "@fleet/permissions";
 import { type FormEvent, useEffect, useState } from "react";
@@ -17,6 +17,8 @@ import { PageTop, useAfterSave } from "../../ui/Page";
 import { useToast } from "../../ui/Toast";
 import { PermissionChips, PermissionPicker, Secret } from "./userParts";
 import { canDriveHint, updateInput, type UserFields } from "./usersLogic";
+import { ArchiveCard, DeleteRecordCard } from "../bin/BinParts";
+import { personArchiveText } from "../bin/binLogic";
 import { whenText } from "../../lib/when";
 
 export function UserManage() {
@@ -52,7 +54,6 @@ export function UserManage() {
   const [secret, setSecret] = useState<{ label: string; value: string; hint: string } | null>(null);
   const [label, setLabel] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
-  const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   // Round 1 (21 October 2026): the driver's Me lists only the people chosen here; saved at once (a switch).
@@ -131,17 +132,11 @@ export function UserManage() {
     void store.invalidate();
     setU({ ...u!, connector_keys: (u!.connector_keys ?? []).filter((k) => k.id !== id) });
   });
-  const toggle = () => {
-    if (u!.active && !armed) {
-      setArmed(true);
-      return;
-    }
-    void run(async () => {
-      await transport.call("set_office_user_active", { email, active: !u!.active });
-      toast(u!.active ? "Account switched off" : "Account switched on");
-      void store.invalidate();
-      afterSave("/settings/users");
-    });
+  /** After Archive or Restore: the toast, the lists again, back where the person came from. */
+  const archived = (restored: boolean) => {
+    toast(restored ? "Account restored" : "Account archived");
+    void store.invalidate();
+    afterSave("/settings/users");
   };
 
   // Round 2b: the same rule as the server (accountGuards.ts): an account holding a permission this person could not give
@@ -165,7 +160,7 @@ export function UserManage() {
 
   return (
     <section className="view" data-testid="user-manage">
-      <PageTop title={u.name} sub={<>{email} · {ROLE_LABEL[u.role as Role] ?? u.role}{!u.active && <> · <Pill tone="bad">Switched off</Pill></>}</>} backTo="/settings/users" />
+      <PageTop title={u.name} sub={<>{email} · {ROLE_LABEL[u.role as Role] ?? u.role}{!u.active && <> · <Pill tone="bad">Archived</Pill></>}</>} backTo="/settings/users" />
       <DraftBanner draft={draft} />
       <div className="page-form">
         {/* Round 3: their photo (the initials until there is one; each person changes their own on My profile). */}
@@ -239,13 +234,22 @@ export function UserManage() {
           </div>
         )}
         {msg && <Notice tone="bad">{msg}</Notice>}
-        <div className="confirm" style={u.active ? undefined : { borderColor: "var(--line)" }}>
-          <div>
-            <b>{u.active ? "Switch off this account" : "Switch this account back on"}</b>
-            <p className="muted small" style={{ margin: "4px 0 0" }}>{u.active ? "They can no longer sign in; their sessions end and their connector keys stop working. Nothing is deleted." : "They can sign in again (keys stay revoked)."}</p>
-          </div>
-          <button type="button" className={`btn ${u.active ? "danger" : "dark"}`} disabled={busy} onClick={toggle}>{u.active ? (armed ? "Yes, switch off" : "Switch off") : "Switch on"}</button>
-        </div>
+        {/* Round 52 (§40): Archive / Restore (the sign-in switched off or on, as before); Delete permanently (users) only for an
+            account with no history, the server's account rules said in its own sentence. */}
+        <ArchiveCard
+          key={`archive-${email}-${u.active}`}
+          testId="user-archive"
+          archived={!u.active}
+          words={(s) => s.step === "idle"
+            ? { title: "Archive this account", text: "They can no longer sign in; their sessions end and their connector keys stop working. Nothing is deleted, and Restore brings them back.", button: "Archive" }
+            : { ...personArchiveText(u.name, s), text: "They can no longer sign in (their sign-in is switched off); their sessions end and their connector keys stop working. Their requests and trips stay." }}
+          restoreWords={{ title: `${u.name} is archived`, text: "Restore lets them sign in again (keys stay revoked)." }}
+          archive={() => transport.call("set_office_user_active", { email, active: false })}
+          restore={() => transport.call("set_office_user_active", { email, active: true })}
+          onArchived={() => archived(false)}
+          onRestored={() => archived(true)}
+        />
+        <DeleteRecordCard key={`delete-${email}`} kind="office_person" refValue={email} fallback="/settings/users" />
       </div>
     </section>
   );

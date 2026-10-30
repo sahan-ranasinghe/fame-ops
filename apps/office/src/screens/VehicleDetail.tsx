@@ -11,7 +11,10 @@ import { joinDots, num, vehicleAvailabilityTone } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
-import { PageTop } from "../ui/Page";
+import { PageTop, useAfterSave } from "../ui/Page";
+import { useToast } from "../ui/Toast";
+import { ArchiveCard, DeleteRecordCard } from "./bin/BinParts";
+import { vehicleArchiveText } from "./bin/binLogic";
 import { VehiclePhotoCard } from "./PhotoUpload";
 import { VehicleChecksSection } from "./VehicleChecks";
 import { useSwitch } from "./dispatchParts";
@@ -66,7 +69,9 @@ export function vehicleDates(v: VehicleCard): Partial<Record<DocKind, string>> {
 export function VehicleDetail() {
   const { reg = "" } = useParams();
   const plate = decodeURIComponent(reg);
-  const { me } = useFleet();
+  const { me, transport, store } = useFleet();
+  const toast = useToast();
+  const afterSave = useAfterSave();
   const { v, err } = useVehicle(plate);
   const canEdit = me.tools.includes("update_vehicle");
   // Round 4–7 (4): the vehicle check section only while the switch vehicle_check is on.
@@ -108,6 +113,22 @@ export function VehicleDetail() {
       {checksOn && <VehicleChecksSection key={`checks-${v.reg_no}`} plate={v.reg_no} today={v.check_today} focus={focus} />}
       <VehicleDocumentsSection key={`docs-${v.reg_no}`} reg={v.reg_no} rented={!!v.rented_from} dates={vehicleDates(v)} />
       {canEdit && <div className="acts"><Link className="btn dark" to={`${vehiclePath(v.reg_no)}/edit`}>Edit vehicle</Link></div>}
+      {/* Round 52 (§40): Archive (returned) with the trips from today on first, Restore; Delete permanently (users) only
+          for a vehicle with no history. */}
+      {me.tools.includes("set_vehicle_active") && (
+        <ArchiveCard
+          key={`archive-${v.reg_no}-${v.active === false}`}
+          testId="vehicle-archive"
+          archived={v.active === false}
+          words={(s) => vehicleArchiveText(v.reg_no, s)}
+          restoreWords={{ title: `${v.reg_no} is archived (returned)`, text: "Restore brings it back to the lists and pickers." }}
+          archive={(confirm) => transport.call("set_vehicle_active", { reg_no: v.reg_no, active: false, ...(confirm ? { confirm: true } : {}) })}
+          restore={() => transport.call("set_vehicle_active", { reg_no: v.reg_no, active: true })}
+          onArchived={() => { toast(`${v.reg_no} archived`); void store.invalidate(); afterSave(back); }}
+          onRestored={() => { toast(`${v.reg_no} restored`); void store.invalidate(); afterSave(back); }}
+        />
+      )}
+      <DeleteRecordCard key={`delete-${v.reg_no}`} kind="vehicle" refValue={v.reg_no} fallback={back} />
     </div>
   );
 }

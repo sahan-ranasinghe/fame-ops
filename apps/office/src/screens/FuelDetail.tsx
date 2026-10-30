@@ -16,6 +16,7 @@ import { PageTop } from "../ui/Page";
 import { amountText, checklistWords, clockOf, megabytes, pieceAt, videoChip, videoTone } from "./fuelLogic";
 import { canOpenTask } from "../transport/types";
 import { whenText } from "../lib/when";
+import { DeleteEntryButton } from "./bin/BinParts";
 
 export function FuelDetail() {
   const { id = "" } = useParams();
@@ -132,6 +133,8 @@ export function FuelDetail() {
       <div className="acts">
         {e.task_id && canOpenTask(me) && <Link className="btn" to={`/tasks/${e.task_id}`}>Open the task →</Link>}
         {e.driver_username && <Link className="btn" to={`/drivers/${e.driver_username}`}>Driver</Link>}
+        {/* Round 52 (§40): a wrong fill (approve): what goes with it, a reason, then back to the list. */}
+        <DeleteEntryButton kind="fuel" id={e.id} fallback={backTo} />
       </div>
     </div>
   );

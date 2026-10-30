@@ -11,9 +11,9 @@ import type { FleetError, Transport } from "./types";
 
 /** The tools the server marks readOnly: they change nothing, so a dropped one may be asked again. */
 export const READ_TOOLS: ReadonlySet<string> = new Set([
-  "activity_log", "ask_answers", "availability", "driver_profile", "driver_route", "day_timeline", "drivers_board", "duty_log", "find_people", "find_project",
+  "activity_log", "ask_answers", "availability", "can_delete", "list_bin", "driver_profile", "driver_route", "day_timeline", "drivers_board", "duty_log", "find_people", "find_project",
   "fleet_overview", "get_settings", "holder_asks", "issue_history", "list_app_errors", "list_drivers", "list_fuel", "list_import_presets",
-  "list_issues", "list_office_users", "list_place_imports", "list_places", "list_requests", "list_tasks",
+  "list_issues", "list_office_users", "list_place_imports", "list_places", "list_projects", "list_rental_companies", "list_requests", "list_tasks",
   "list_vehicle_reports", "list_vehicles", "live_drivers", "mileage_summary", "my_inbox", "my_notification_settings",
   "my_prefs", "my_trip", "my_trips", "place_detail", "retention_preview", "plan_task", "routing_usage", "search_places", "suggest_vehicles",
   "task_board", "task_detail", "unavailability", "vehicle_checks", "vehicle_documents",

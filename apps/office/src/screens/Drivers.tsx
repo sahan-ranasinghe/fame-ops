@@ -1,6 +1,6 @@
 // Drivers (/drivers): the Fame Driver sign-ins; Add at /drivers/new, Manage at
 // /drivers/:username/edit, the route history at /drivers/:username.
-// Hotfix 3 (L3): one list pattern. The active drivers by default (?inactive=1 adds the switched-off ones), a search box
+// Hotfix 3 (L3): one list pattern. The active drivers by default (?inactive=1 adds the archived ones: Show archived), a search box
 // (?q=: name, username, code, plate; on the server), 25 at a time (page numbers on a desktop, Load more and cards on a
 // phone) with the count in the header.
 import { Link } from "react-router";
@@ -31,7 +31,7 @@ export function driversArgs(inactive: boolean, search: string): Record<string, u
 export function driversEmpty(inactive: boolean, search: string, canAdd: boolean): string {
   if (search) return `No ${inactive ? "" : "active "}driver matches "${search}" (name, username, code or plate).`;
   if (inactive) return canAdd ? "No drivers yet. Add the first one with Add driver." : "No drivers yet.";
-  return canAdd ? "No active drivers. Add one with Add driver, or show the switched-off ones." : "No active drivers.";
+  return canAdd ? "No active drivers. Add one with Add driver, or show the archived ones." : "No active drivers.";
 }
 
 export function Drivers() {
@@ -59,7 +59,7 @@ export function Drivers() {
       </div>
       <FilterBar
         search={<SearchBox label="Find a driver" placeholder="Name, username, code or plate" value={box.text} onChange={box.setText} onBlur={box.flush} />}
-        filters={[pairsDef("inactive", "Show", [["0", "Active drivers"], ["1", "All drivers, the switched-off ones too"]], "0")]}
+        filters={[pairsDef("inactive", "Drivers", [["0", "Active drivers"], ["1", "Show archived"]], "0")]}
         values={{ inactive: inactiveFlag }}
         onChange={(v) => setInactiveFlag(v.inactive === "1" ? "1" : "0")}
       />
@@ -76,7 +76,7 @@ export function Drivers() {
                   {list.items.map((x) => (
                     <tr key={x.username} data-testid="driver-row">
                       <td className="photo-cell"><Avatar name={x.name} src={x.photo_url} /></td>
-                      <td data-label="Driver"><span><div className="name">{x.username && routes ? <Link to={`/drivers/${x.username}`}>{x.name}</Link> : x.name}</div>{x.active === false && <Pill tone="bad">Switched off</Pill>}</span></td>
+                      <td data-label="Driver"><span><div className="name">{x.username && routes ? <Link to={`/drivers/${x.username}`}>{x.name}</Link> : x.name}</div>{x.active === false && <Pill tone="bad">Archived</Pill>}</span></td>
                       <td data-label="Code" className="mono">{x.code || "—"}</td>
                       <td data-label="Username" className="mono">{x.username || "—"}</td>
                       <td data-label="Phone">{x.phone || "—"}</td>

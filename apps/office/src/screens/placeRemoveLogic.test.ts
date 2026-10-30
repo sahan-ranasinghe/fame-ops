@@ -1,4 +1,4 @@
-// Remove a place (Phase 7, §15), the pure part: the second step's states (the first click arms it with place_detail's
+// Remove a place (Phase 7, §15; Round 52: its words are Archive / Archived places, the same tools), the pure part: the second step's states (the first click arms it with place_detail's
 // in_use, confirm only for reasons shown: in_use's or a later needs_confirm), the words and tasks above the second
 // button, the notice after removing, which buttons show, and the Removed places view's chips and list_places input.
 import { describe, expect, it } from "vitest";
@@ -68,18 +68,18 @@ describe("the second step", () => {
 
 describe("the words", () => {
   it("each step has its title, text and button; Keep it from the second step on; none once removed", () => {
-    expect(removeWords("Kandy store", REMOVE_IDLE)).toMatchObject({ title: "Remove this place", button: "Remove", keep: false });
+    expect(removeWords("Kandy store", REMOVE_IDLE)).toMatchObject({ title: "Archive this place", button: "Archive", keep: false });
     expect(removeWords("Kandy store", ARMED)).toEqual({
-      title: "Remove Kandy store?",
-      text: "It moves to Removed places and can be restored from there.",
-      button: "Yes, remove",
+      title: "Archive Kandy store?",
+      text: "It moves to Archived places and can be restored from there.",
+      button: "Yes, archive",
       keep: true,
     });
     expect(removeWords("Head office", { step: "armed", reasons: NEEDS.reasons, tasks: TASKS })).toEqual({
-      title: "Remove Head office?",
+      title: "Archive Head office?",
       text: "Head office is the base place; 2 tasks today or later start or stop there. Those tasks keep their stops as they are. " +
-        "It moves to Removed places and can be restored from there.",
-      button: "Yes, remove",
+        "It moves to Archived places and can be restored from there.",
+      button: "Yes, archive",
       keep: true,
     });
     expect(removeWords("Kandy store", { step: "removed", name: "Kandy store", baseCleared: false })).toBeNull();
@@ -88,9 +88,9 @@ describe("the words", () => {
   it("needs_confirm shows the server's reasons as one sentence above Remove anyway", () => {
     const s = removeStep(ARMED, { type: "answer", answer: NEEDS });
     expect(removeWords("Head office", s)).toEqual({
-      title: "Remove Head office anyway?",
+      title: "Archive Head office anyway?",
       text: "Head office is the base place; 2 tasks today or later start or stop there. Those tasks keep their stops as they are.",
-      button: "Remove anyway",
+      button: "Archive anyway",
       keep: true,
     });
     expect(removeWords("Head office", { step: "needs_confirm", reasons: ["Head office is the base place"], tasks: [] })?.text)
@@ -109,7 +109,7 @@ describe("the words", () => {
   });
 
   it("the notice after removing: the base place cleared, with the Settings link only for who can set it", () => {
-    expect(removedNotice(false, ["update_settings"])).toEqual({ text: "Removed. It is listed under Removed places." });
+    expect(removedNotice(false, ["update_settings"])).toEqual({ text: "Archived. It is listed under Archived places." });
     expect(removedNotice(true, ["update_settings"]).base).toEqual({ text: "The base place is no longer set: pick another in Settings → Fleet.", link: true });
     expect(removedNotice(true, ["remove_place"]).base).toMatchObject({ link: false });
   });
@@ -117,10 +117,10 @@ describe("the words", () => {
   it("Removed by whom and when, the year only when it is not this one", () => {
     // Dates in words (Round 3 A4), on 21 October 2026 in Colombo.
     const now = new Date("2026-10-21T04:30:00Z");
-    expect(removedLine("2026-10-17 10:05 by Sahan", { now })).toBe("Removed by Sahan Sat 17 Oct 10:05");
-    expect(removedLine("2026-10-20 10:05 by Sahan", { now })).toBe("Removed by Sahan yesterday 10:05");
-    expect(removedLine("2025-12-30 09:00", { now })).toBe("Removed Tue 30 Dec 2025 09:00");
-    expect(removedLine("just now", { now })).toBe("Removed just now");
+    expect(removedLine("2026-10-17 10:05 by Sahan", { now })).toBe("Archived by Sahan Sat 17 Oct 10:05");
+    expect(removedLine("2026-10-20 10:05 by Sahan", { now })).toBe("Archived by Sahan yesterday 10:05");
+    expect(removedLine("2025-12-30 09:00", { now })).toBe("Archived Tue 30 Dec 2025 09:00");
+    expect(removedLine("just now", { now })).toBe("Archived just now");
   });
 });
 
@@ -137,7 +137,7 @@ describe("which buttons show", () => {
 
   it("the Removed places chip only with restore_place; a typed who without it is Our places", () => {
     expect(whoOptions(["list_places"]).map(([k]) => k)).toEqual(["ours", "dialog", "mobitel"]);
-    expect(whoOptions(["restore_place"]).at(-1)).toEqual(["removed", "Removed places"]);
+    expect(whoOptions(["restore_place"]).at(-1)).toEqual(["removed", "Archived places"]);
     expect(whoOf("removed", ["restore_place"])).toBe("removed");
     expect(whoOf("removed", ["list_places"])).toBe("ours");
     expect(whoOf("dialog", [])).toBe("dialog");

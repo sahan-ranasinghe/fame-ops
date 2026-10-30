@@ -532,6 +532,8 @@ export interface ProjectShare {
 }
 
 export interface OdometerRead {
+  /** Round 52: the reading's id, for Delete… on a wrong one (task_detail does not answer it yet: no Delete… until it does). */
+  id?: string;
   kind: string;
   reading_km: number;
   entry?: string;

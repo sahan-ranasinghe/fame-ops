@@ -4,7 +4,11 @@ import { TOOL_PERMISSION } from "@fleet/permissions";
 import { describe, expect, it } from "vitest";
 import { ALL_TOOLS } from "./types";
 
-const WEB_ONLY = ["photo_upload_url", "vehicle_document_upload_url", "save_vehicle_document"];
+// Round 52: the delete and bin tools too (the connector keeps no delete).
+const WEB_ONLY = [
+  "photo_upload_url", "vehicle_document_upload_url", "save_vehicle_document",
+  "can_delete", "delete_record", "delete_entry", "list_bin", "restore_bin_item",
+];
 
 describe("ALL_TOOLS", () => {
   it("names every connector tool once, and nothing else", () => {

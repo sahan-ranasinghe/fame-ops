@@ -12,7 +12,7 @@ import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
 import { errText } from "../transport/errors";
-import type { FleetError } from "../transport/types";
+import { can, type FleetError } from "../transport/types";
 import { Chips, Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
@@ -23,6 +23,7 @@ import { emptyVehicle, FUEL_GRADE_TEXT, FUEL_TYPES, fuelNotSet, fuelReason, fuel
 import type { FuelGrade, FuelType } from "../data/types";
 import { vehiclePath } from "./Vehicles";
 import { DateField } from "../ui/DayPicker";
+import { AddRentalCompany } from "./settings/RentalCompanies";
 
 export function VehicleForm() {
   const { reg } = useParams();
@@ -44,7 +45,6 @@ export function VehicleForm() {
   const loadingNow = !isNew && now === undefined;
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [company, setCompany] = useState<{ open: boolean; name: string; phone: string; msg: string | null }>({ open: false, name: "", phone: "", msg: null });
   const set = <K extends keyof VehicleFields>(k: K, v: VehicleFields[K]) => setF((x) => ({ ...x, [k]: v }));
   const field = (id: keyof VehicleFields, label: string, type = "text", extra: Record<string, unknown> = {}) => (
     <div className="field">
@@ -80,22 +80,6 @@ export function VehicleForm() {
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);
-    }
-  }
-
-  async function saveCompany() {
-    if (!company.name.trim()) {
-      setCompany({ ...company, msg: "Add the name." });
-      return;
-    }
-    try {
-      const input: Record<string, unknown> = { name: company.name.trim() };
-      if (company.phone.trim()) input.phone = company.phone.trim();
-      await transport.call("add_rental_company", input);
-      set("company", company.name.trim());
-      setCompany({ open: false, name: "", phone: "", msg: `Added ${company.name.trim()}.` });
-    } catch (e) {
-      setCompany({ ...company, msg: errText(e as FleetError)[0] });
     }
   }
 
@@ -143,19 +127,9 @@ export function VehicleForm() {
             {field("until", "Rented until", "date")}
           </div>
           {me.tools.includes("add_rental_company") && (
-            <div>
-              <p className="hint" style={{ margin: "-8px 0 0" }}>A new rental company must be added first: <button type="button" className="linkish" onClick={() => setCompany({ ...company, open: true, msg: null })}>add a rental company</button>.</p>
-              {company.open && (
-                <div style={{ marginTop: 8 }}>
-                  <div className="grid2" style={{ alignItems: "end" }}>
-                    <div className="field"><label htmlFor="rc-name">Rental company</label><input id="rc-name" maxLength={120} value={company.name} onChange={(e) => setCompany({ ...company, name: e.target.value })} /></div>
-                    <div className="field"><label htmlFor="rc-phone">Phone</label><input id="rc-phone" maxLength={30} inputMode="tel" value={company.phone} onChange={(e) => setCompany({ ...company, phone: e.target.value })} /></div>
-                  </div>
-                  <div style={{ marginTop: 8 }}><button type="button" className="btn small dark" onClick={() => void saveCompany()}>Add company</button></div>
-                </div>
-              )}
-              {company.msg && <p className="status live small" style={{ margin: "6px 0 0" }}>{company.msg}</p>}
-            </div>
+            // Round 52: the add flow is shared with Settings → Rental companies, linked from the hint.
+            <AddRentalCompany onAdded={(name) => set("company", name)}
+              hint={can(me, "vehicles") ? <> All of them, with Archive: <Link to="/settings/rental-companies">Rental companies</Link>.</> : null} />
           )}
           <div className="field">
             <label htmlFor="vf-driver">Regular driver</label>
@@ -185,7 +159,7 @@ export function VehicleForm() {
               <div className="field"><label htmlFor="vf-ingarage">In the garage now</label>
                 <select id="vf-ingarage" value={f.ingarage} onChange={(e) => set("ingarage", e.target.value as VehicleFields["ingarage"])}><option value="">Keep</option><option value="true">Yes</option><option value="false">No</option></select></div>
               <div className="field"><label htmlFor="vf-active">Still rented</label>
-                <select id="vf-active" value={f.active} onChange={(e) => set("active", e.target.value as VehicleFields["active"])}><option value="">Keep</option><option value="true">Yes</option><option value="false">No, returned</option></select></div>
+                <select id="vf-active" value={f.active} onChange={(e) => set("active", e.target.value as VehicleFields["active"])}><option value="">Keep</option><option value="true">Yes</option><option value="false">No, returned</option></select><span className="hint">No, returned = archived (Restore on the vehicle's page).</span></div>
             </div>
           )}
           {msg && <Notice tone="bad">{msg}</Notice>}

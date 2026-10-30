@@ -16,7 +16,7 @@ import { daysInput, MINIMUMS_FALLBACK, minimumOf, nightlyTime, periodsOf, previe
 
 const admin: Me = {
   name: "Sahan Ranasinghe", email: "sahan@fame.test", role: "admin", permissions: ["view", "users"],
-  tools: ["get_settings", "update_settings", "retention_preview", "run_retention"],
+  tools: ["get_settings", "update_settings", "retention_preview", "run_retention", "list_bin"],
 };
 
 const NEVER = ["tasks and their stops", "requests", "odometer and fuel logs and their photos", "vehicle reports", "vehicle documents", "employees", "vehicles", "places", "projects", "duty sessions (attendance)"];
@@ -217,7 +217,7 @@ describe("Settings → Data retention", () => {
 });
 
 describe("Settings home: the Data retention row (users only), every other row kept", () => {
-  const links = () => screen.getAllByRole("link").map((a) => [a.textContent?.replace(/(Data retention|Users|Fleet|App errors|Activity log|My profile|Import sites|Notifications).*/, "$1"), a.getAttribute("href")]);
+  const links = () => screen.getAllByRole("link").map((a) => [a.textContent?.replace(/(Data retention|Recently deleted|Users|Fleet|App errors|Activity log|My profile|Import sites|Notifications).*/, "$1"), a.getAttribute("href")]);
   function home(me: Me) {
     const t = new Fake();
     render(
@@ -230,7 +230,9 @@ describe("Settings home: the Data retention row (users only), every other row ke
     home(admin);
     expect(links()).toEqual([
       ["My profile", "/settings/profile"], ["Users", "/settings/users"], ["Fleet", "/settings/fleet"], ["App errors", "/settings/app-errors"],
-      ["Activity log", "/settings/activity"], ["Data retention", "/settings/retention"], ["Notifications", "/settings/notifications"],
+      // Round 52: Recently deleted (users) after Data retention.
+      ["Activity log", "/settings/activity"], ["Data retention", "/settings/retention"], ["Recently deleted", "/settings/recently-deleted"],
+      ["Notifications", "/settings/notifications"],
     ]);
     expect(screen.getByText(/How long notifications, the activity log, locations/)).toBeTruthy();
   });

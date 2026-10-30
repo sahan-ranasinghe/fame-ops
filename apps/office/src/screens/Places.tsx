@@ -38,13 +38,13 @@ export interface PlacesPage extends Paged {
 
 export const placeBadge = (p: RemovedPlace) => (p.kind === "office" ? "Office" : p.operator === "dialog" ? "Site · Dialog" : p.operator === "mobitel" ? "Site · Mobitel" : p.kind === "site" ? "Site" : "Saved");
 
-const NOUN: Record<Who, string> = { ours: "place of ours", dialog: "Dialog site", mobitel: "Mobitel site", removed: "removed place" };
+const NOUN: Record<Who, string> = { ours: "place of ours", dialog: "Dialog site", mobitel: "Mobitel site", removed: "archived place" };
 
 /** What an empty list means, in words. */
 export function placesEmpty(who: Who, search: string, nopin: boolean): string {
   const pin = nopin ? " without a pin" : "";
   if (search) return `No ${NOUN[who]}${pin} matches "${search}" (name, address, site id or other id).`;
-  if (who === "removed") return nopin ? "No removed place is without a pin." : "No place has been removed.";
+  if (who === "removed") return nopin ? "No archived place is without a pin." : "No place has been archived.";
   if (nopin) return who === "ours" ? "Every one of our places has a pin." : `Every ${NOUN[who]} has a pin.`;
   return who === "ours" ? "No places of our own yet." : `No ${NOUN[who]}s yet: Import sites brings them in.`;
 }
@@ -126,7 +126,7 @@ export function Places() {
                 <table data-testid="places-table">
                   <thead>
                     {removedView
-                      ? <tr><th>Place</th><th>Kind</th><th>Site id</th><th>Removed</th><th></th></tr>
+                      ? <tr><th>Place</th><th>Kind</th><th>Site id</th><th>Archived</th><th></th></tr>
                       : <tr><th>Place</th>{kindShown && <th>Kind</th>}<th>Site id</th><th>District</th><th>Pin</th></tr>}
                   </thead>
                   <tbody>
@@ -138,7 +138,7 @@ export function Places() {
                         <td data-label="Site id" className="mono">{p.site_id ?? "—"}</td>
                         {removedView ? (
                           <>
-                            <td data-label="Removed">{removedLine(p.removed)}</td>
+                            <td data-label="Archived">{removedLine(p.removed)}</td>
                             <td className="r">
                               <button type="button" className="btn small" disabled={restoring !== null} onClick={(e) => { e.stopPropagation(); void restore(p); }}>
                                 {restoring === p.id ? "Restoring…" : "Restore"}
