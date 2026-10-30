@@ -202,6 +202,25 @@ describe("Overview: the sections by role (L1)", () => {
   });
 });
 
+// Round 51b (30 October 2026): a row opens its item, not only its link or button: the row's main link covers the row (the
+// stretched link, styles.css .row-card .row-open::after); Decide and ⋯ stay their own (.row-own, above it).
+describe("Overview: a row opens its item", () => {
+  it("a request row is one link to the request with Decide on top; an issue row (and a group) covers its row, ⋯ on top", async () => {
+    await mount(new FakeTransport({ ...grouped, needs_driver: needsDriver.needs_driver }));
+    const req = within(sectionEl("requests")).getByTestId("request-row");
+    expect(req.classList.contains("row-card")).toBe(true);
+    const open = req.querySelector("a.row-open");
+    expect(open?.getAttribute("href")).toBe("/requests/r1");
+    expect(within(req).getByRole("link", { name: "Decide" }).classList.contains("row-own")).toBe(true);
+    const rows = within(sectionEl("attention")).getAllByTestId("attention-row");
+    for (const row of rows) expect(row.querySelector(".row-card .row-open")).not.toBeNull();
+    expect(rows[1].querySelector(".row-card a.row-open")?.getAttribute("href")).toBe("/issues/l1");
+    for (const more of within(sectionEl("attention")).getAllByRole("button", { name: /^Snooze or dismiss/ })) expect(more.classList.contains("row-own")).toBe(true);
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Odometer typed by hand · 3 this week" }));
+    for (const item of within(rows[0]).getAllByTestId("attention-item")) expect(item.classList.contains("row-card") && !!item.querySelector("a.row-open")).toBe(true);
+  });
+});
+
 describe("Overview: never more than 5 rows a section (3 on a phone)", () => {
   const big = (): OverviewData => ({
     ...overview,

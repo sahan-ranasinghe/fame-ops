@@ -77,6 +77,7 @@ const routes = {
   'office/(tabs)/trips': page('trips'),
   'office/issues/index': page('issues'),
   'office/profile': page('profile'),
+  'office/my-trip/[id]': page('my trip'),
   'task/[id]': page('task'),
   'log-mileage': page('log-mileage'),
   vehicle: page('vehicle'),
@@ -208,6 +209,18 @@ describe('Office mode\'s Home: Start driving', () => {
     await screen.findByText('page today');
     expect(mockEnter).toHaveBeenCalledTimes(1);
     expect(r.getPathname()).toBe('/');
+  });
+
+  // Round 51b (30 October 2026; Uber's upcoming-trip card): the whole card opens the trip; Start driving keeps its own action.
+  it('the trip card itself opens the trip\'s page', async () => {
+    useOfficeApp();
+    mockLoadTrips.mockResolvedValue({ me: { id: 'e-1', role: 'fleet_admin' }, tasks: [trip] });
+    act(() => setOfficeMe(officeMe({ can_drive: true })));
+    const r = renderRouter(routes, { initialUrl: '/design/office-home' });
+    fireEvent.press(await screen.findByTestId('home-drive-card', {}, { timeout: 5000 }));
+    expect(await screen.findByText('page my trip')).toBeTruthy();
+    expect(r.getPathname()).toBe('/office/my-trip/t-self-1');
+    expect(mockEnter).not.toHaveBeenCalled();
   });
 
   it('a trip under way: "Your trip is under way · Continue driving"', async () => {

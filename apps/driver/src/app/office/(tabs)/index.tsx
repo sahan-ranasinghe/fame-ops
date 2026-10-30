@@ -16,6 +16,8 @@
 // then On the road, Today's tasks and My trips as list-look sections; the floating New trip button.
 // Round 50 (§37.4): at the top, "You have a trip to drive · Start driving" for a person who drives their own trips
 // (components/office/DriveLine.tsx; Driving mode).
+// Round 51b (30 October 2026): a card opens its item, not only the button in it: the trip-to-drive card opens the trip,
+// a needs-a-driver row its task (Give a driver keeps its own action); the stats tiles open their lists as before.
 
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -183,6 +185,9 @@ export default function OfficeHome() {
                   title={x.title}
                   line={`${whenWords(t, x.start)} · ${x.line}`}
                   below={x.pending_change ? <PendingChangeLine change={x.pending_change} compact testID={`home-pending-change-${x.task_id}`} /> : undefined}
+                  // Round 51b: the whole row opens the task (Give a driver keeps its own action), as Today's tasks do.
+                  onPress={me.tools.includes('task_detail') ? () => router.push({ pathname: '/office/task/[id]', params: { id: x.task_id } }) : undefined}
+                  testID={`home-needs-driver-${x.task_id}`}
                   right={has(me.permissions, 'assign_tasks')
                     ? <Button kind="dark" label={t('office.home.giveDriver')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: x.task_id } })} style={{ minHeight: 44, backgroundColor: colors.red, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }} />
                     : <Pill text={whenWords(t, x.when)} tone="red" />}

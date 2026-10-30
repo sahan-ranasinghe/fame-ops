@@ -95,6 +95,22 @@ describe('Mockup 1: Home keeps its actions', () => {
     expect(errors.seen.map((a) => String(a[0]))).toEqual([]);
   });
 
+  // Round 51b (30 October 2026; Uber's trip card, Google Calendar's event card): a card opens its item, not only its button.
+  it('a needs-a-driver row opens its task (Give a driver keeps its own); the three tiles open Live, Vehicles · Free, Vehicles · In garage', async () => {
+    const r = renderRouter(routes, { initialUrl: '/design/office-home' });
+    fireEvent.press(await screen.findByTestId('home-needs-driver-t-design-2', {}, { timeout: 5000 }));
+    expect(await screen.findByText('page task')).toBeTruthy();
+    expect(r.getPathname()).toBe('/office/task/t-design-2');
+    r.unmount();
+    for (const [tile, path, filter] of [['stat-road', '/office/live', undefined], ['stat-free', '/office/vehicles', 'available'], ['stat-garage', '/office/vehicles', 'in_garage']] as const) {
+      const rr = renderRouter(routes, { initialUrl: '/design/office-home' });
+      fireEvent.press(await screen.findByTestId(tile, {}, { timeout: 5000 }));
+      await waitFor(() => expect(rr.getPathname()).toBe(path));
+      if (filter) expect(rr.getSearchParams().filter).toBe(filter);
+      rr.unmount();
+    }
+  });
+
   it('the avatar opens My profile', async () => {
     renderRouter(routes, { initialUrl: '/design/office-home' });
     fireEvent.press(await screen.findByTestId('top-bar-avatar', {}, { timeout: 5000 }));

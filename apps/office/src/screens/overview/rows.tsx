@@ -14,14 +14,15 @@ export function RequestLine({ q, decide }: { q: RequestCard; decide: boolean }) 
   const proposal = q.kind === "task";
   const change = q.kind === "change";
   return (
-    <div className="row ov-row" data-testid="request-row">
+    // Round 51b: the whole row opens the request (its name is the link that covers the row); Decide keeps its own place.
+    <div className="row ov-row row-card" data-testid="request-row">
       <div className="grow">
         <div className="name">
           {change
-            ? <><Pill tone="warn">Change</Pill> <Link to={`/requests/${q.id}`}>{q.title || q.change?.task_title || "Proposed change"}</Link></>
+            ? <><Pill tone="warn">Change</Pill> <Link className="row-open" to={`/requests/${q.id}`}>{q.title || q.change?.task_title || "Proposed change"}</Link></>
             : proposal
-            ? <><Pill tone="live">Task</Pill> <Link to={`/requests/${q.id}`}>{q.title || "Proposed task"}</Link></>
-            : <><Link to={`/requests/${q.id}`}>{q.requested_by}</Link>{q.on_behalf_of && <span className="muted"> · for {q.on_behalf_of}</span>}</>}
+            ? <><Pill tone="live">Task</Pill> <Link className="row-open" to={`/requests/${q.id}`}>{q.title || "Proposed task"}</Link></>
+            : <><Link className="row-open" to={`/requests/${q.id}`}>{q.requested_by}</Link>{q.on_behalf_of && <span className="muted"> · for {q.on_behalf_of}</span>}</>}
           {q.status === "changed" && <Pill tone="warn">Changed</Pill>}
           {q.late && <Pill tone="bad">{LATE_BADGE}</Pill>}
         </div>
@@ -31,7 +32,7 @@ export function RequestLine({ q, decide }: { q: RequestCard; decide: boolean }) 
           {change && <>{q.when || q.route ? " · " : ""}<span data-testid="proposal-line">{changeLine(q)}</span></>}
         </div>
       </div>
-      {decide && <Link className="btn small dark" to={`/requests/${q.id}/decide`}>Decide</Link>}
+      {decide && <Link className="btn small dark row-own" to={`/requests/${q.id}/decide`}>Decide</Link>}
     </div>
   );
 }

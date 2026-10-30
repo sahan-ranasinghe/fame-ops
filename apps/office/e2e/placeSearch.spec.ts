@@ -1,4 +1,4 @@
-// The place search as someone types (30 October 2026; Round 51b). The map search had stopped on the real server: its
+// The place search as someone types (30 October 2026; Round 51b; and bug 2's row test at the end). The map search had stopped on the real server: its
 // minute counter (bump_minute_calls) failed on its own "keep an hour" delete, and since Round 48 a counter that cannot be
 // read pauses the search, so a box showed only our places and the recent ones. This runs the site's trip form against the
 // local stack: on From, To and a stop between them the empty box shows Saved and Recent, typing asks search_places once
@@ -102,4 +102,26 @@ test("the trip form's place boxes: Saved and Recent first, then one search per p
   expect(searches.statuses.length).toBeGreaterThan(0);
   expect(searches.statuses.every((s) => s === 200), `every search answered 200: ${searches.statuses.join(",")}`).toBe(true);
   await expect(page.getByText("This screen asked the server too often")).toHaveCount(0);
+});
+
+// Round 51b, bug 2 (Uber's trip card, Google Calendar's event card): a row opens its item from anywhere on it, not only its
+// name; its own button keeps its action. The Overview's request row, clicked on its second line (no link there).
+test("the Overview's request row opens the request from anywhere on it; Decide keeps its own page", async ({ page }) => {
+  const email = `cards.${stamp}@fame.test`;
+  const password = `Cards test ${stamp}!`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "Cards Approver", email, permissions: ["view", "request", "approve"] });
+  await setPasswordByLink(user.set_password_link, password);
+  const asker = `Cards Desk ${stamp}`;
+  const rq = await tool<{ request: { id: string } }>("create_request", { requested_by: asker, date: "2026-12-02", time: "10:00", route_from: "Head office", route_to: "Kandy", need_type: "van", pax: 2 });
+  await page.goto("/");
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  const row = page.getByTestId("request-row").filter({ hasText: asker });
+  await expect(row).toBeVisible();
+  await row.locator(".sub").click();
+  await expect(page).toHaveURL(new RegExp(`/requests/${rq.request.id}$`));
+  await page.goBack();
+  await page.getByTestId("request-row").filter({ hasText: asker }).getByRole("link", { name: "Decide" }).click();
+  await expect(page).toHaveURL(new RegExp(`/requests/${rq.request.id}/decide$`));
 });

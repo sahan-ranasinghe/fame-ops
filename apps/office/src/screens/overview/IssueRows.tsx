@@ -70,7 +70,7 @@ export function IssueActions({ title, ids, onAct }: { title: string; ids: string
     <>
       <button
         type="button"
-        className={`btn small icon-btn ov-more${mode !== "closed" ? " on" : ""}`}
+        className={`btn small icon-btn ov-more row-own${mode !== "closed" ? " on" : ""}`}
         aria-label={`Snooze or dismiss: ${title}`}
         aria-expanded={mode !== "closed"}
         title="Snooze or dismiss"
@@ -79,7 +79,7 @@ export function IssueActions({ title, ids, onAct }: { title: string; ids: string
         <Icon name="more" />
       </button>
       {mode !== "closed" && (
-        <div className="ov-acts" data-testid="issue-actions">
+        <div className="ov-acts row-own" data-testid="issue-actions">
           {mode === "open" ? (
             <>
               <span className="muted small">Snooze</span>
@@ -108,9 +108,10 @@ const tone = (severity: string) => severityTone(severity) || "warn";
 function ItemLine({ a, i, canAct, onAct }: { a: Attention; i: number; canAct: boolean; onAct: ActOn }) {
   const r = itemRow(a, i);
   return (
-    <div className="row ov-row ov-item" data-testid="attention-item">
+    // Round 51b: the whole row opens its issue (the title's link covers the row); ⋯ keeps its own action.
+    <div className={`row ov-row ov-item${r.to ? " row-card" : ""}`} data-testid="attention-item">
       <div className="grow">
-        <div className="name">{r.to ? <Link to={r.to}>{r.title}</Link> : r.title}</div>
+        <div className="name">{r.to ? <Link className="row-open" to={r.to}>{r.title}</Link> : r.title}</div>
         {r.sub && <div className="sub">{r.sub}</div>}
       </div>
       {r.due && <span className={`due ${tone(r.severity)}`}>{r.due}</span>}
@@ -128,15 +129,16 @@ export function IssueLine({ row, canAct, onAct, testid = "attention-row" }: { ro
   const t = tone(row.severity);
   return (
     <div className="ov-line" data-testid={testid} data-key={row.key}>
-      <div className="row ov-row">
+      {/* Round 51b: the whole row opens its issue, or a group opens in place; ⋯ keeps its own action. */}
+      <div className={`row ov-row${group || row.to ? " row-card" : ""}`}>
         <span className={`att-ic sm ${t}`}><Icon name={row.severity === "critical" ? "alert" : "issues"} /></span>
         <div className="grow">
           <div className="name">
             {group ? (
-              <button type="button" className="linkish ov-expand" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+              <button type="button" className="linkish ov-expand row-open" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
                 <span className="chev" aria-hidden="true" />{row.title}
               </button>
-            ) : row.to ? <Link to={row.to}>{row.title}</Link> : row.title}
+            ) : row.to ? <Link className="row-open" to={row.to}>{row.title}</Link> : row.title}
             {group && <span className={`pill ${t}`} data-testid="group-count">{row.count}</span>}
           </div>
           {row.sub && <div className="sub">{row.sub}</div>}
