@@ -45,7 +45,7 @@ Deno.serve(async (request) => {
 
   try {
     // A fresh MCP server per request, for this person: the function keeps no session state.
-    const mcp = createMcpHandler(() => buildServer(db, gated.actor, { paid: limits.paid, key: gated.limitKey }), {
+    const mcp = createMcpHandler(() => buildServer(db, gated.actor, { paid: limits.paid, search: limits.search, key: gated.limitKey }), {
       onerror: (error) => console.error(`mcp: ${error.message}`),
     });
     return await mcp.fetch(request);

@@ -16,9 +16,13 @@ function reply(text: string, isError = false): ToolReply {
   return { content: [{ type: "text", text }], ...(isError && { isError: true }) };
 }
 
-/** The paid tools' bucket and this caller's key in it (Round 48: 30 a minute per key on the tools that can cost). */
+/**
+ * The paid tools' bucket and this caller's key in it (Round 48: 30 a minute per key on the tools that can cost); the place
+ * search's own bucket (90 a minute, 30 October 2026).
+ */
 export interface PaidLimit {
   paid: TokenBuckets;
+  search: TokenBuckets;
   key: string;
 }
 
@@ -42,7 +46,7 @@ export function buildServer(db: Db, actor: Actor, limit?: PaidLimit): McpServer 
       },
       async (args: unknown) => {
         // A tool that can cost, over its minute's budget: the one sentence, as a tool error (nothing is run or audited).
-        const gate = paidGate(def.name, limit ? { paid: limit.paid } : undefined, limit?.key ?? "");
+        const gate = paidGate(def.name, limit ? { paid: limit.paid, search: limit.search } : undefined, limit?.key ?? "");
         if (!gate.ok) return reply(gate.text, true);
         const out = await runTool(db, def, args, actor);
         return reply(out.text, out.kind !== "ok");

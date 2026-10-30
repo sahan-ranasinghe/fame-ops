@@ -76,6 +76,7 @@ test("the trip form's place boxes: Saved and Recent first, then one search per p
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await page.goto("/requests/new");
   await expect(page.getByLabel("To", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add stop" }).click();
@@ -117,6 +118,7 @@ test("the Overview's request row opens the request from anywhere on it; Decide k
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   const row = page.getByTestId("request-row").filter({ hasText: asker });
   await expect(row).toBeVisible();
   await row.locator(".sub").click();

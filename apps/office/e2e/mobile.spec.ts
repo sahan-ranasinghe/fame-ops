@@ -439,11 +439,13 @@ test("the Where step's place boxes on /m/: Saved and Recent, then one search per
     await expect(shown(page.getByLabel(/, Our place$/))).toBeVisible();
     const before = typed.length;
     await box().pressSequentially(word, { delay: 40 });
-    await expect(shown(page.getByText(depot, { exact: true }))).toBeVisible();
+    // The search went out once the typing paused, and its result shows (a result row: not From's own name, nor a suggestion).
+    await expect.poll(() => typed.slice(before).at(-1), { message: `${label}: the whole word was searched` }).toBe(word);
+    const result = shown(page.getByRole("button", { name: new RegExp(`${depot}(?!, )`) }));
+    await expect(result).toBeVisible();
     const sent = typed.slice(before);
-    expect(sent.at(-1), `${label}: the whole word was searched`).toBe(word);
     expect(sent.length, `${label}: debounced (${sent.join(" | ")})`).toBeLessThanOrEqual(2);
-    await shown(page.getByText(depot, { exact: true })).click();
+    await result.click();
   };
   // From: Change opens its box.
   await shown(page.getByTestId("from-change")).click();
