@@ -76,7 +76,7 @@ console.log('\nThe lists');
   check(companyDeletable({ vehicles: 0 }) && !companyDeletable({ vehicles: 2 }), 'a rental company may go only with no vehicle');
   check(companiesShown([{ id: '1', name: 'Malkey', vehicles: 1 }, { id: '2', name: 'Casons', phone: '+94771234567', vehicles: 0 }], ' cas').map((c) => c.id).join() === '2', 'the search filters the whole list');
   const row = binRowWords({ id: 'b', kind: 'vehicle', record_id: 'v', label: 'WP CAB-4521', detail: 'Toyota HiAce', reason: 'entered twice', deleted_by: 'Sahan', deleted_at: '2026-10-30 14:05', until: '2026-11-29', days_left: 30 }, t);
-  check(row.line === 'Toyota HiAce · Deleted by Sahan · 2026-10-30 14:05' && row.reason === 'Why: entered twice' && row.until === 'Restore until 2026-11-29 (30 days)', 'a Recently deleted row in words', row);
+  check(row.line === 'Toyota HiAce · Deleted by Sahan · 2026-10-30 14:05' && row.reason === 'Why: entered twice' && row.restoreLine === 'Restore until 2026-11-29 (30 days)', 'a Recently deleted row in words', row);
 }
 
 console.log('\nMore and the links');
@@ -105,6 +105,7 @@ console.log('\nThe screens');
   for (const [file, kind] of [['app/office/task/[id].tsx', 'task'], ['app/office/task/[id].tsx', 'fuel'], ['app/office/task/[id].tsx', 'check'], ['app/office/request/[id].tsx', 'request'], ['app/office/issues/[id].tsx', 'issue'], ['app/office/fuel-video.tsx', 'fuel']] as const) {
     check(src(file).includes(`<DeleteEntry kind="${kind}"`), `${file}: Delete… for a wrong ${kind}`);
   }
+  check(src('app/office/recently-deleted.tsx').includes('binRowWords(item, t, (d) => dateWords(t, d))'), 'Recently deleted says its dates in words');
   check(src('app/office/recently-deleted.tsx').includes("api.call<RestoreBinResult>('restore_bin_item', { id: item.id })") && src('app/office/recently-deleted.tsx').includes("t('office.bin.restored'"), 'Recently deleted: Restore asks nothing, the snackbar says so');
   check(src('app/office/projects.tsx').includes("'set_project_archived', { project: p.id, archived: want }") && src('app/office/rental-companies.tsx').includes("'set_rental_company_archived', { company: c.id, archived: want }"), 'Projects and Rental companies: archive and restore');
 }

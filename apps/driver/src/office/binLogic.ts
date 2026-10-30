@@ -140,13 +140,14 @@ export function companiesShown(list: RentalCompanyRow[], search: string): Rental
   return list.filter((c) => `${c.name} ${c.phone ?? ''}`.toLowerCase().includes(s));
 }
 
-/** A Recently deleted row in words: what it was, by whom and when, the reason, until when. */
-export function binRowWords(item: BinItem, t: Words): { title: string; line: string; reason?: string; until: string } {
+/** A Recently deleted row in words: what it was, by whom and when, the reason, until when (`when` says a date in words:
+ *  the screen passes lib/dateWords' dateWords). */
+export function binRowWords(item: BinItem, t: Words, when: (s: string) => string = (s) => s): { title: string; line: string; reason?: string; restoreLine: string } {
   return {
     title: item.label,
-    line: [item.detail, t('office.bin.deletedBy', { name: item.deleted_by, at: item.deleted_at })].filter(Boolean).join(' · '),
+    line: [item.detail, t('office.bin.deletedBy', { name: item.deleted_by, at: when(item.deleted_at) })].filter(Boolean).join(' · '),
     reason: item.reason ? t('office.bin.reason', { reason: item.reason }) : undefined,
-    until: item.days_left === 1 ? t('office.bin.untilOne', { date: item.until }) : t('office.bin.until', { date: item.until, n: item.days_left }),
+    restoreLine: item.days_left === 1 ? t('office.bin.untilOne', { date: when(item.until) }) : t('office.bin.until', { date: when(item.until), n: item.days_left }),
   };
 }
 

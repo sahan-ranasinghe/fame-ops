@@ -17,6 +17,7 @@ import { useOffice, useTool } from '@/office/state';
 import type { BinItem, BinList, FleetError, RestoreBinResult } from '@/office/types';
 import { BackHeader, Divider, ErrorNotice, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
+import { dateWords } from '@/lib/dateWords';
 import { colors } from '@/theme';
 
 export default function RecentlyDeletedScreen() {
@@ -75,13 +76,13 @@ export default function RecentlyDeletedScreen() {
           <Section title={t('office.bin.title')} count={d.total ?? rows.length}>
             {rows.length === 0 && <ListEmpty text={search ? t('office.bin.emptySearch', { search }) : t('office.bin.empty')} />}
             {rows.map((item, i) => {
-              const w = binRowWords(item, t);
+              const w = binRowWords(item, t, (d) => dateWords(t, d));
               return (
                 <View key={item.id} testID="bin-row">
                   {i > 0 && <Divider />}
                   <Row title={w.title} line={w.line} line2={w.reason} right={<Pill text={t(binKindKey(item.kind))} tone="muted" />} />
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 10, flexWrap: 'wrap' }}>
-                    <Txt variant="small" color={item.days_left <= 3 ? colors.amberText : colors.muted} style={{ flex: 1, minWidth: 160 }}>{w.until}</Txt>
+                    <Txt variant="small" color={item.days_left <= 3 ? colors.amberText : colors.muted} style={{ flex: 1, minWidth: 160 }}>{w.restoreLine}</Txt>
                     {mayRestore && (
                       <Button kind="outline" label={t('office.bin.restore')} busy={busy === item.id} disabled={busy !== null && busy !== item.id} onPress={() => void restore(item)} compact testID="bin-restore" />
                     )}

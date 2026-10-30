@@ -327,10 +327,10 @@ describe('Round 52: Recently deleted', () => {
     renderRouter(routes({ 'office/recently-deleted': RecentlyDeletedScreen }), { initialUrl: '/office/recently-deleted' });
     expect(await screen.findByText('WP CAB-4521')).toBeTruthy();
     expect(argsOf('list_bin')[0]).toEqual({ limit: 25 });
-    expect(screen.getByText(`Toyota HiAce · ${t('office.bin.deletedBy', { name: 'Sahan', at: '2026-10-30 14:05' })}`)).toBeTruthy();
+    expect(screen.getByText(`Toyota HiAce · ${t('office.bin.deletedBy', { name: 'Sahan', at: dateWords(t, '2026-10-30 14:05') })}`)).toBeTruthy();
     expect(screen.getByText(t('office.bin.reason', { reason: 'entered twice' }))).toBeTruthy();
-    expect(screen.getByText(t('office.bin.until', { date: '2026-11-29', n: 30 }))).toBeTruthy();
-    expect(screen.getByText(t('office.bin.untilOne', { date: '2026-11-28' }))).toBeTruthy();
+    expect(screen.getByText(t('office.bin.until', { date: dateWords(t, '2026-11-29'), n: 30 }))).toBeTruthy();
+    expect(screen.getByText(t('office.bin.untilOne', { date: dateWords(t, '2026-11-28') }))).toBeTruthy();
     expect(screen.getByText(t('office.bin.kind_vehicle'))).toBeTruthy();
     const rows = screen.getAllByTestId('bin-row');
     fireEvent.press(within(rows[0]).getByTestId('bin-restore'));
