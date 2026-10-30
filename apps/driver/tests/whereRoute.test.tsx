@@ -1,9 +1,11 @@
 // Fix B (29 October 2026): From / To / Add stop, Uber's and PickMe's route form (docs/phase8-plan.md §38.2). The trip
 // editor's Where step run through the router with the office's real answers: a new trip is From (the base place) and one
-// To with "Then back to the office" on; + Add stop puts a row before To; the types follow the rows (a visit between, the
-// drop-off at To) and reach the server that way; ⋯ Options changes a type, the times, the details and the order; the drag
-// handle moves a row; Next drops the rows with no place and waits while To has none; a resumed draft opens without its
-// empty rows; Change stops uses the same layout; and every item of §38.2's inventory is still reachable (the key actions).
+// To with "Then back to the office" on; + Add stop puts a row before To; the types follow the rows (a short stop between;
+// To a visit with "Wait there" on the row while the trip goes back, the drop-off one-way; 30 October 2026) and reach the
+// server that way; ⋯ Options changes a type (a short stop to a longer visit), the times, the details and the order; the
+// drag handle moves a row; Next drops the rows with nothing in them and waits while To has no place or a row with data has
+// none; a resumed draft opens without its empty rows; Change stops uses the same layout; and every item of §38.2's
+// inventory is still reachable (the key actions).
 // The place box is the real one elsewhere (tests/whereSuggestions.test.tsx); here a stand-in that types and picks.
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -83,7 +85,12 @@ describe('Where: From / To / Add stop', () => {
     expect(screen.getByText(caps('office.trip.from'))).toBeTruthy();
     expect(screen.getByText(caps('office.trip.to'))).toBeTruthy();
     expect(rows()).toHaveLength(1);
-    expect(caption(0)).toBe('Stop 1 · Drop-off');
+    expect(caption(0)).toBe('Stop 1 · Visit · wait');
+    // Going back to the office: To has its Wait there on the row.
+    expect(screen.getByTestId('to-wait')).toBeTruthy();
+    expect(screen.getByText(t('office.trip.waitThere').toUpperCase())).toBeTruthy();
+    // Its stay until one is chosen: the visit's default from the settings (60 min).
+    expect(screen.getByText(t('patterns.suggestedValue', { value: '1 h' }))).toBeTruthy();
     // To alone has no ✕ (the trip keeps one row) and no drag handle.
     expect(screen.queryByTestId('stop-remove-0')).toBeNull();
     expect(screen.queryByTestId('stop-drag-0')).toBeNull();
@@ -102,13 +109,13 @@ describe('Where: From / To / Add stop', () => {
     expect(rows()).toHaveLength(2);
     // The new row is between From and To, its box open; To keeps its place.
     expect(places()).toEqual(['', 'Galle site']);
-    expect(caption(0)).toBe('Stop 1 · Visit');
-    expect(caption(1)).toBe('Stop 2 · Drop-off');
+    expect(caption(0)).toBe('Stop 1 · Short stop · 5 min');
+    expect(caption(1)).toBe('Stop 2 · Visit · wait');
     await pickFirst('Kandy depot');
     expect(screen.getByTestId('trip-primary')).toBeEnabled();
-    // What Review sends (stopsInput, as review.tsx calls it).
+    // What Review sends (stopsInput, as review.tsx calls it): a short stop is a drop-off with the short default stay.
     const sent = stopsInput(getDraft()!.fields.stops);
-    expect('stops' in sent && sent.stops.map((s) => [s.type, s.place])).toEqual([['visit', 'Kandy depot'], ['drop', 'Galle site']]);
+    expect('stops' in sent && sent.stops.map((s) => [s.type, s.place])).toEqual([['drop', 'Kandy depot'], ['visit', 'Galle site']]);
     fireEvent.press(screen.getByTestId('trip-primary'));
     await screen.findByText('when step');
     expect(r.getPathname()).toBe('/office/trip/when');
@@ -123,11 +130,18 @@ describe('Where: From / To / Add stop', () => {
     fireEvent.press(screen.getByTestId('stop-options-0'));
     const sheet = await screen.findByTestId('stop-options-sheet');
     expect(within(sheet).getByText(caps('office.trip.whatHappens'))).toBeTruthy();
-    // The row's own role is picked: a visit between From and To.
-    expect(within(sheet).getByTestId('role-visit').props.accessibilityState.selected).toBe(true);
-    fireEvent.press(within(sheet).getByTestId('role-in'));
+    // The row's own role is picked: a short stop between From and To; Visit · wait makes it a longer visit with its stay.
+    expect(within(sheet).getByTestId('role-short').props.accessibilityState.selected).toBe(true);
+    expect(within(sheet).getByText(t('office.trip.role_short'))).toBeTruthy();
+    fireEvent.press(within(sheet).getByTestId('role-visit'));
+    expect(getDraft()!.fields.stops[0]).toMatchObject({ type: 'visit', typeSet: true });
+    fireEvent.press(within(screen.getByTestId('stop-options-sheet')).getByTestId('options-stay'));
+    fireEvent.press(screen.getByTestId('stay-120'));
+    expect(getDraft()!.fields.stops[0].dwell).toBe('120');
+    expect(caption(0)).toBe('Stop 1 · Visit · wait · 2 h');
+    fireEvent.press(within(screen.getByTestId('stop-options-sheet')).getByTestId('role-in'));
     expect(getDraft()!.fields.stops[0]).toMatchObject({ type: 'pickup', what: 'people', typeSet: true });
-    expect(caption(0)).toBe('Stop 1 · Pickup · People');
+    expect(caption(0)).toBe('Stop 1 · People get in · 2 h');
     fireEvent.press(within(screen.getByTestId('stop-options-sheet')).getByTestId('role-goods'));
     // A pickup of goods stays a pickup.
     expect(getDraft()!.fields.stops[0]).toMatchObject({ type: 'pickup', what: 'goods' });
@@ -135,14 +149,17 @@ describe('Where: From / To / Add stop', () => {
     expect(getDraft()!.fields.stops[0]).toMatchObject({ type: 'drop', what: 'people' });
     expect(within(screen.getByTestId('stop-options-sheet')).getByTestId('options-arrive')).toBeTruthy();
     expect(within(screen.getByTestId('stop-options-sheet')).getByTestId('options-stay')).toBeTruthy();
-    // A chosen type stays when the row moves (Move down: it becomes To but keeps "People get out").
+    // To's own words: its short stop is the drop-off.
+    expect(within(screen.getByTestId('stop-options-sheet')).queryByText(t('office.trip.type_drop'))).toBeNull();
+    // A chosen type stays when the row moves (Move down: it becomes To but keeps "People get out"); Galle, To before, is a short stop now.
     fireEvent.press(within(screen.getByTestId('stop-options-sheet')).getByTestId('options-move-down'));
     expect(places()).toEqual(['Galle site', 'Kandy depot']);
-    expect(getDraft()!.fields.stops.map((s) => s.type)).toEqual(['visit', 'drop']);
+    expect(getDraft()!.fields.stops.map((s) => s.type)).toEqual(['drop', 'drop']);
+    expect(within(screen.getByTestId('stop-options-sheet')).getByText(t('office.trip.type_drop'))).toBeTruthy();
     fireEvent.press(screen.getByTestId('stop-options-done'));
     await waitFor(() => expect(screen.queryByTestId('stop-options-sheet')).toBeNull());
     const sent = stopsInput(getDraft()!.fields.stops);
-    expect('stops' in sent && sent.stops.map((s) => [s.type, s.what, s.place])).toEqual([['visit', undefined, 'Galle site'], ['drop', 'people', 'Kandy depot']]);
+    expect('stops' in sent && sent.stops.map((s) => [s.type, s.what, s.place])).toEqual([['drop', undefined, 'Galle site'], ['drop', 'people', 'Kandy depot']]);
   });
 
   it('Next drops the rows with no place once To has one; with no place on To it stays disabled and names the row', async () => {
@@ -161,7 +178,41 @@ describe('Where: From / To / Add stop', () => {
     fireEvent.press(screen.getByTestId('trip-primary'));
     await screen.findByText('when step');
     expect(places()).toEqual(['Kandy depot', 'Galle site']);
-    expect(getDraft()!.fields.stops.map((s) => s.type)).toEqual(['visit', 'drop']);
+    expect(getDraft()!.fields.stops.map((s) => s.type)).toEqual(['drop', 'visit']);
+  });
+
+  it('a row with a note but no place stays and is named: Next waits (only the rows with nothing in them go)', async () => {
+    await open();
+    await pickFirst('Galle site');
+    fireEvent.press(screen.getByTestId('add-stop'));
+    fireEvent.press(screen.getByTestId('stop-options-0'));
+    await screen.findByTestId('stop-options-sheet');
+    fireEvent.press(within(screen.getByTestId('stop-details')).getByText(t('office.common.moreDetails')));
+    fireEvent.changeText(screen.getByTestId('options-note'), 'Gate 2');
+    fireEvent.press(screen.getByTestId('stop-options-done'));
+    await waitFor(() => expect(screen.queryByTestId('stop-options-sheet')).toBeNull());
+    expect(screen.getByTestId('trip-primary')).toBeDisabled();
+    expect(screen.getByText(t('office.trip.reasonStopPlace', { n: 1 }))).toBeTruthy();
+    fireEvent.press(screen.getByText(t('office.trip.saveDraft')));
+    await screen.findByText('home');
+    expect(getDraft()!.fields.stops.map((s) => [s.place, s.note])).toEqual([['', 'Gate 2'], ['Galle site', '']]);
+  });
+
+  it('Then back to the office: To waits there (its stay sent); one-way, To is the drop-off with no wait field', async () => {
+    await open();
+    await pickFirst('Galle site');
+    fireEvent.press(screen.getByTestId('to-wait'));
+    fireEvent.press(screen.getByTestId('stay-30'));
+    expect(getDraft()!.fields.stops[0]).toMatchObject({ type: 'visit', dwell: '30' });
+    const sent = stopsInput(getDraft()!.fields.stops);
+    expect('stops' in sent && sent.stops).toEqual([{ type: 'visit', place_id: 'id-Galle site', place: 'Galle site', dwell_min: 30 }]);
+    fireEvent(within(screen.getByTestId('return-toggle')).UNSAFE_getByType(Switch), 'valueChange', false);
+    expect(getDraft()!.fields.stops[0]).toMatchObject({ type: 'drop', dwell: '' });
+    expect(screen.queryByTestId('to-wait')).toBeNull();
+    expect(caption(0)).toBe('Stop 1 · Drop-off');
+    fireEvent(within(screen.getByTestId('return-toggle')).UNSAFE_getByType(Switch), 'valueChange', true);
+    expect(getDraft()!.fields.stops[0].type).toBe('visit');
+    expect(screen.getByTestId('to-wait')).toBeTruthy();
   });
 
   it('Save draft drops the empty rows too and leaves', async () => {
@@ -199,14 +250,14 @@ describe('Where: From / To / Add stop', () => {
     expect(screen.getByTestId('drop-line')).toBeTruthy();
     fireEvent(handle, 'responderRelease', { nativeEvent: { pageY: 460 } });
     expect(places()).toEqual(['A', 'B', 'C']);
-    // Dragged to the end, a middle row becomes To (the drop-off); the old To becomes a visit.
+    // Dragged to the end, a middle row becomes To (a visit, the trip goes back); the old To becomes a short stop.
     for (let i = 0; i < 3; i++) fireEvent(screen.getByTestId(`stop-row-${i}`), 'layout', { nativeEvent: { layout: { x: 0, y: i * 100, width: 300, height: 100 } } });
     const first = screen.getByTestId('stop-drag-0');
     fireEvent(first, 'responderGrant', { nativeEvent: { pageY: 0 } });
     fireEvent(first, 'responderMove', { nativeEvent: { pageY: 260 } });
     fireEvent(first, 'responderRelease', { nativeEvent: { pageY: 260 } });
     expect(places()).toEqual(['B', 'C', 'A']);
-    expect(getDraft()!.fields.stops.map((s) => s.type)).toEqual(['visit', 'visit', 'drop']);
+    expect(getDraft()!.fields.stops.map((s) => s.type)).toEqual(['drop', 'drop', 'visit']);
     // A drag that is taken away changes nothing.
     fireEvent(screen.getByTestId('stop-drag-0'), 'responderGrant', { nativeEvent: { pageY: 0 } });
     fireEvent(screen.getByTestId('stop-drag-0'), 'responderTerminate', { nativeEvent: { pageY: 300 } });
@@ -220,8 +271,8 @@ describe('Where: From / To / Add stop', () => {
     await pickFirst('Kandy depot');
     fireEvent.press(screen.getByTestId('stop-remove-1'));
     expect(places()).toEqual(['Kandy depot']);
-    expect(getDraft()!.fields.stops[0].type).toBe('drop');
-    expect(caption(0)).toBe('Stop 1 · Drop-off');
+    expect(getDraft()!.fields.stops[0].type).toBe('visit');
+    expect(caption(0)).toBe('Stop 1 · Visit · wait');
     expect(screen.queryByTestId('stop-remove-0')).toBeNull();
   });
 
@@ -242,7 +293,7 @@ describe('Where: From / To / Add stop', () => {
     expect(getDraft()!.fields).toMatchObject({ startPax: true, startWhat: 'goods', startNote: 'Gate 2' });
     fireEvent.press(screen.getByTestId('start-options-done'));
     // The rows count after the start stop; the summary on From.
-    expect(caption(0)).toBe('Stop 2 · Drop-off');
+    expect(caption(0)).toBe('Stop 2 · Visit · wait');
     expect(screen.getByTestId('from-summary').props.children).toBe(`${t('office.trip.role_goods')} · ${t('office.trip.noteSet')}`);
     expect(startInput(getDraft()!.fields, { id: BASE.id, name: BASE.name })).toEqual({ place_id: 'b1', place: 'Head office', passengers: true, what: 'goods', note: 'Gate 2' });
   });
@@ -258,7 +309,9 @@ describe('Where: From / To / Add stop', () => {
     expect(rows()).toHaveLength(2);
     expect(places()).toEqual(['Google place', 'Old site']);
     expect(getDraft()!.fields.stops[0]).toMatchObject({ type: 'pickup', typeSet: true });
-    expect(caption(0)).toBe('Stop 1 · Pickup');
+    expect(caption(0)).toBe('Stop 1 · People get in');
+    // A drop-off from an older draft stays one, so it has no Wait there.
+    expect(screen.queryByTestId('to-wait')).toBeNull();
     expect(screen.getByText(t('office.trip.googleStop'))).toBeTruthy();
     expect(screen.getByText(t('office.trip.noPinWarning', { place: 'Old site' }))).toBeTruthy();
   });
@@ -269,8 +322,8 @@ describe('Where: From / To / Add stop', () => {
     await waitFor(() => expect(rows()).toHaveLength(2));
     expect(screen.getByTestId('from-row')).toBeTruthy();
     expect(screen.getByText(caps('office.trip.to'))).toBeTruthy();
-    expect(caption(0)).toMatch(/^Stop 1 · Pickup/);
-    expect(caption(1)).toMatch(/^Stop 2 · Drop-off/);
+    expect(caption(0)).toMatch(/^Stop 1 · People get in/);
+    expect(caption(1)).toMatch(/^Stop 2 · People get out/);
     expect(screen.getByTestId('add-stop')).toBeTruthy();
   });
 });
@@ -302,7 +355,7 @@ describe('§38.2 inventory: every field and option is still reachable (the key a
     // Type, What (Documents / Other), Arrive by, Stay, pin, note, Move up / down: the row's Options.
     fireEvent.press(screen.getByTestId('stop-options-0'));
     await screen.findByTestId('stop-options-sheet');
-    for (const r of ['in', 'out', 'visit', 'goods']) expect(screen.getByTestId(`role-${r}`)).toBeTruthy();
+    for (const r of ['short', 'in', 'out', 'visit', 'goods']) expect(screen.getByTestId(`role-${r}`)).toBeTruthy();
     expect(screen.getByTestId('options-arrive')).toBeTruthy();
     expect(screen.getByTestId('options-stay')).toBeTruthy();
     fireEvent.press(within(screen.getByTestId('stop-details')).getByText(t('office.common.moreDetails')));
@@ -315,7 +368,7 @@ describe('§38.2 inventory: every field and option is still reachable (the key a
     expect(screen.getByTestId('options-move-down')).toBeTruthy();
     fireEvent.press(screen.getByTestId('stop-options-done'));
     // The row says what is set.
-    expect(caption(0)).toBe(`Stop 1 · Visit · ${t('office.trip.what_documents')} · ${t('office.trip.pinSet')} · ${t('office.trip.noteSet')}`);
+    expect(caption(0)).toBe(`Stop 1 · ${t('office.trip.role_short')} · ${t('office.trip.what_documents')} · 5 min · ${t('office.trip.pinSet')} · ${t('office.trip.noteSet')}`);
     // Drag and remove on a middle row.
     expect(screen.getByTestId('stop-drag-0')).toBeTruthy();
     expect(screen.getByTestId('stop-remove-0')).toBeTruthy();
@@ -328,7 +381,8 @@ describe('§38.2 inventory: every field and option is still reachable (the key a
     expect(screen.getByTestId('same-as-start')).toBeTruthy();
     fireEvent.press(screen.getByText(t('office.trip.tickIt')));
     expect(getDraft()!.fields.startPax).toBe(true);
-    // The switches under To, Next and Save draft.
+    // Wait there under To while the trip goes back; the switches under To, Next and Save draft.
+    expect(screen.getByTestId('to-wait')).toBeTruthy();
     fireEvent(within(screen.getByTestId('return-toggle')).UNSAFE_getByType(Switch), 'valueChange', false);
     expect(getDraft()!.fields.returnToBase).toBe(false);
     fireEvent(within(screen.getByTestId('expressway-toggle')).UNSAFE_getByType(Switch), 'valueChange', true);

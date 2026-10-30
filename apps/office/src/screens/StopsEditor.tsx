@@ -2,12 +2,14 @@
 // route card: a vertical line joins From (the start: the form gives it as `from`), the stops in order and To (the last
 // row). Each row is the place (the location search box of Part 4: our places and sites, the places used before, the map,
 // Google, a pasted pin; free text still works for a town or an address) with a drag handle, a small line under it with
-// its name by its place in the order ("Stop 2 · Visit · Kalutara": the type follows the row's place until it is chosen),
+// its number and what happens there ("Stop 2 · Short stop · 5 min": the type follows the row's place until it is chosen),
 // ⋯ Options and ✕. ⋯ Options (the site's one sheet, docs/ui-patterns.md §6: a bottom sheet on a phone, a popover on a
-// desktop) holds what happens there (People get in / People get out / Visit · wait / Goods), the stay, the arrive-by time
-// and, under More details, what is carried, a pin and a note for the driver, with Move up / Move down for the keyboard and
-// screen readers. What is set shows on the row ("Arrive by 09:30 · Stay 15 min"). + Add stop puts a row before To; ✕ on
-// To makes the row before it To. A first pickup at the start says so, with Tick it. The rules: stopsLogic.ts.
+// desktop) holds what happens there (Short stop / People get in / People get out / Visit · wait / Goods), the stay, the
+// arrive-by time and, under More details, what is carried, a pin and a note for the driver, with Move up / Move down for the
+// keyboard and screen readers. What is set shows on the row ("Arrive by 09:30 · Stay 15 min"). + Add stop puts a short
+// stop before To; ✕ on To makes the row before it To. While the trip goes back to the office To is a visit with its
+// "Wait there" on the row (30 October 2026), one-way the drop-off. A first pickup at the start says so, with Tick it. The
+// rules: stopsLogic.ts.
 import { type DragEvent, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -21,19 +23,32 @@ import { TimeField } from "../ui/TimeField";
 import { type DwellFallback, DwellPicker } from "./DwellPicker";
 import {
   addStop, dwellText, moveStopTo, parseDwell, pickupAtStart, removeStop, roleOf, START_ROLES, type StartFields, type StartPoint, type StartRole,
-  startRoleOf, type StopDraft, stopLabel, stopNumber, type StopRole, STOP_ROLES, type What, WHAT_LABEL, withRole, withStartRole,
+  startRoleOf, type StopDraft, stopNumber, type StopRole, STOP_ROLES, typeDwell, type What, WHAT_LABEL, withRole, withStartRole,
 } from "./stopsLogic";
 
 /** What happens at a stop, in the words of ⋯ Options. */
-export const ROLE_WORD: Record<StopRole, string> = { in: "People get in", out: "People get out", visit: "Visit · wait", goods: "Goods" };
+export const ROLE_WORD: Record<StopRole, string> = { short: "Short stop", in: "People get in", out: "People get out", visit: "Visit · wait", goods: "Goods" };
+/** The role's word on a row: To's short stop is the drop-off (a one-way trip ends there). */
+export const roleWord = (r: StopRole, isTo: boolean) => (isTo && r === "short" ? "Drop-off" : ROLE_WORD[r]);
+
+/**
+ * The row's caption: its number and what happens there ("Stop 2 · Short stop · 5 min", "Stop 3 · Visit · wait"); a short
+ * stop with no stay chosen says the stay it gets (`defaultMin`: the place's usual time, else the drop-off's default).
+ */
+export function rowCaption(list: StopDraft[], i: number, offset = 0, defaultMin?: number): string {
+  const s = list[i];
+  const role = roleOf(s);
+  const isTo = i === list.length - 1;
+  const stay = role === "short" && !isTo && parseDwell(s.dwell) === null ? ` · ${dwellText(defaultMin ?? typeDwell("drop"))}` : "";
+  return `${stopNumber(i, offset)} · ${roleWord(role, isTo)}${stay}`;
+}
 /** What happens at the start, in the words of From's ⋯ Options. */
 export const START_ROLE_WORD: Record<StartRole, string> = { leave: "Leave from here", in: "People get in", goods: "Goods" };
 
-/** The row's options that are set, in one line ("People get in · Arrive by 09:30 · Stay 15 min"); "" when none. */
+/** The row's options that are set, in one line ("Arrive by 09:30 · Stay 15 min"); "" when none (what happens there is in the caption). */
 export function stopSummary(s: StopDraft): string {
   const dwell = parseDwell(s.dwell);
   return joinDots([
-    s.typeSet ? ROLE_WORD[roleOf(s)] : "",
     s.arriveBy ? `Arrive by ${s.arriveBy}` : "",
     typeof dwell === "number" ? `Stay ${dwellText(dwell)}` : "",
     s.what === "documents" || s.what === "other" ? WHAT_LABEL[s.what] : "",
@@ -51,9 +66,11 @@ function OptionsButton({ btn, name, onClick }: { btn: RefObject<HTMLButtonElemen
   );
 }
 
-export function StopsRows({ list, onChange, idPrefix = "st", offset = 0, fallbacks, start, startIsStop = false, onTickStart, note, from, after }: {
+export function StopsRows({ list, onChange, idPrefix = "st", offset = 0, back = false, fallbacks, start, startIsStop = false, onTickStart, note, from, after }: {
   list: StopDraft[];
   onChange: (list: StopDraft[]) => void;
+  /** The trip goes back to the office: To (not chosen otherwise) is a visit with "Wait there" on the row; one-way, the drop-off. */
+  back?: boolean;
   idPrefix?: string;
   /** Stops before these rows (the start stop, stops already reached): the numbers follow the task's. */
   offset?: number;
@@ -84,7 +101,7 @@ export function StopsRows({ list, onChange, idPrefix = "st", offset = 0, fallbac
   }, [focusKey, idPrefix]);
 
   const add = () => {
-    const r = addStop(list);
+    const r = addStop(list, back);
     onChange(r.list);
     setFocusKey(r.key);
   };
@@ -93,7 +110,7 @@ export function StopsRows({ list, onChange, idPrefix = "st", offset = 0, fallbac
     const fromIndex = dragFrom.current;
     dragFrom.current = null;
     setOver(null);
-    if (fromIndex !== null && fromIndex !== to) onChange(moveStopTo(list, fromIndex, to));
+    if (fromIndex !== null && fromIndex !== to) onChange(moveStopTo(list, fromIndex, to, back));
   };
 
   return (
@@ -101,7 +118,7 @@ export function StopsRows({ list, onChange, idPrefix = "st", offset = 0, fallbac
       <ol className="route-line">
         {from && <li className="route-row" data-kind="from" data-testid="route-from">{from}</li>}
         {list.map((s, i) => (
-          <StopRow key={s.key} list={list} i={i} onChange={onChange} idPrefix={idPrefix} offset={offset} fallback={fallbacks?.get(s.key) ?? null}
+          <StopRow key={s.key} list={list} i={i} onChange={onChange} idPrefix={idPrefix} offset={offset} back={back} fallback={fallbacks?.get(s.key) ?? null}
             sameAsStart={i === atStart} onTickStart={onTickStart} note={note} open={optsFor === s.key} setOpen={(o) => setOptsFor(o ? s.key : null)}
             over={over === i}
             drag={{
@@ -142,12 +159,13 @@ interface DragHandlers {
   end: () => void;
 }
 
-function StopRow({ list, i, onChange, idPrefix, offset, fallback, sameAsStart, onTickStart, note, open, setOpen, over, drag }: {
+function StopRow({ list, i, onChange, idPrefix, offset, back, fallback, sameAsStart, onTickStart, note, open, setOpen, over, drag }: {
   list: StopDraft[];
   i: number;
   onChange: (list: StopDraft[]) => void;
   idPrefix: string;
   offset: number;
+  back: boolean;
   fallback: DwellFallback | null;
   sameAsStart: boolean;
   onTickStart?: (i: number) => void;
@@ -189,10 +207,16 @@ function StopRow({ list, i, onChange, idPrefix, offset, fallback, sameAsStart, o
         </div>
         <OptionsButton btn={btn} name={name} onClick={() => setOpen(!open)} />
         {list.length > 1 && (
-          <button type="button" className="btn small icon-btn" aria-label={`Remove ${name}`} onClick={() => onChange(removeStop(list, i))}><Icon name="close" /></button>
+          <button type="button" className="btn small icon-btn" aria-label={`Remove ${name}`} onClick={() => onChange(removeStop(list, i, back))}><Icon name="close" /></button>
         )}
       </div>
-      <span className="route-cap" data-testid="stop-label">{stopLabel(list, i, offset)}</span>
+      <span className="route-cap" data-testid="stop-label">{rowCaption(list, i, offset, fallback?.min)}</span>
+      {/* To while the trip goes back to the office: how long the driver waits there, on the row (the return is planned from it). */}
+      {last && back && s.type === "visit" && (
+        <div className="route-wait" data-testid="to-wait">
+          <DwellPicker id={`${idPrefix}-wait-${s.key}`} label="Wait there" value={s.dwell} fallback={fallback} onChange={(dwell) => set({ dwell })} />
+        </div>
+      )}
       {summary && <button type="button" className="linkish route-sum" data-testid="stop-summary" onClick={() => setOpen(true)}>{summary}</button>}
       {s.googlePlaceId && <div className="sub" data-testid="google-stop">Google place: its pin is Google's, kept 30 days</div>}
       {s.placeId && s.placePinned === false && (
@@ -208,13 +232,13 @@ function StopRow({ list, i, onChange, idPrefix, offset, fallback, sameAsStart, o
       )}
       {/* The departure check under the row while its options are closed (inside them, under Arrive by, when open). */}
       {!open && after}
-      <StopOptions open={open} onClose={() => setOpen(false)} anchor={btn} list={list} i={i} onChange={onChange} idPrefix={idPrefix} offset={offset} fallback={fallback} note={after} />
+      <StopOptions open={open} onClose={() => setOpen(false)} anchor={btn} list={list} i={i} onChange={onChange} idPrefix={idPrefix} offset={offset} back={back} fallback={fallback} note={after} />
     </li>
   );
 }
 
 /** A row's ⋯ Options: what happens there, the stay, the arrive-by, More details (what, pin, note), Move up / Move down. */
-function StopOptions({ open, onClose, anchor, list, i, onChange, idPrefix, offset, fallback, note }: {
+function StopOptions({ open, onClose, anchor, list, i, onChange, idPrefix, offset, back, fallback, note }: {
   open: boolean;
   onClose: () => void;
   anchor: RefObject<HTMLElement | null>;
@@ -223,6 +247,7 @@ function StopOptions({ open, onClose, anchor, list, i, onChange, idPrefix, offse
   onChange: (list: StopDraft[]) => void;
   idPrefix: string;
   offset: number;
+  back: boolean;
   fallback: DwellFallback | null;
   note?: ReactNode;
 }) {
@@ -231,15 +256,17 @@ function StopOptions({ open, onClose, anchor, list, i, onChange, idPrefix, offse
   if (!open || !s) return null;
   const set = (patch: Partial<StopDraft>) => onChange(list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const role = roleOf(s);
+  const isTo = i === list.length - 1;
+  const place = s.place.trim();
   const details = more || s.what === "documents" || s.what === "other" || s.pin !== "" || s.note !== "";
   return (
-    <Sheet open onClose={onClose} anchor={anchor} width={380} title={`${stopLabel(list, i, offset)} · Options`} testId="stop-options"
+    <Sheet open onClose={onClose} anchor={anchor} width={380} title={`${isTo ? "To" : stopNumber(i, offset)}${place ? ` · ${place}` : ""} · Options`} testId="stop-options"
       footer={<button type="button" className="btn primary" onClick={onClose}>Done</button>}>
       <div className="form">
         <div className="field">
           <span className="lab" id={`${idPrefix}-role-${s.key}`}>What happens there</span>
           <div className="chips" role="group" aria-labelledby={`${idPrefix}-role-${s.key}`}>
-            {STOP_ROLES.map((r) => <ChoiceChip key={r} selected={role === r} onClick={() => set(withRole(s, r))}>{ROLE_WORD[r]}</ChoiceChip>)}
+            {STOP_ROLES.map((r) => <ChoiceChip key={r} selected={role === r} onClick={() => set(withRole(s, r))}>{roleWord(r, isTo)}</ChoiceChip>)}
           </div>
         </div>
         <DwellPicker id={`${idPrefix}-dwell-${s.key}`} value={s.dwell} fallback={fallback} onChange={(dwell) => set({ dwell })} />
@@ -265,8 +292,8 @@ function StopOptions({ open, onClose, anchor, list, i, onChange, idPrefix, offse
         )}
         {list.length > 1 && (
           <div className="acts">
-            <button type="button" className="btn small" disabled={i === 0} onClick={() => onChange(moveStopTo(list, i, i - 1))}>Move up</button>
-            <button type="button" className="btn small" disabled={i === list.length - 1} onClick={() => onChange(moveStopTo(list, i, i + 1))}>Move down</button>
+            <button type="button" className="btn small" disabled={i === 0} onClick={() => onChange(moveStopTo(list, i, i - 1, back))}>Move up</button>
+            <button type="button" className="btn small" disabled={i === list.length - 1} onClick={() => onChange(moveStopTo(list, i, i + 1, back))}>Move down</button>
           </div>
         )}
       </div>

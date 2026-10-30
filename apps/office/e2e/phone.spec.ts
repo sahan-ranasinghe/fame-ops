@@ -74,16 +74,18 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   await expect(page.getByRole("heading", { name: "Assign a task" })).toBeVisible();
   const rows = page.getByTestId("stop-row");
   // Fix B (29 October 2026): a new trip is From (the start) and one To; the rows are named by their place in the order
-  // (Phase 7, §11), the type following the row's place: To is the drop-off, a row added before it a visit.
+  // (Phase 7, §11), what happens there following the row's place (30 October 2026): To waits there (the trip goes back to
+  // the office, Wait there on the row), a row added before it a short stop.
   await expect(page.getByLabel("From", { exact: true })).toBeVisible();
   await expect(rows).toHaveCount(1);
-  await expect(rows.nth(0)).toContainText("Stop 1 · Drop");
+  await expect(rows.nth(0)).toContainText("Stop 1 · Visit · wait");
+  await expect(rows.nth(0).getByTestId("to-wait")).toBeVisible();
   await page.getByRole("button", { name: "Add stop" }).click();
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toContainText("Stop 1 · Visit");
-  await expect(rows.nth(1)).toContainText("Stop 2 · Drop");
+  await expect(rows.nth(0)).toContainText("Stop 1 · Short stop");
+  await expect(rows.nth(1)).toContainText("Stop 2 · Visit · wait");
   await page.getByRole("button", { name: "Add stop" }).click();
-  await expect(rows.nth(2)).toContainText("Stop 3 · Drop");
+  await expect(rows.nth(2)).toContainText("Stop 3 · Visit · wait");
   // Changing one row's type (its ⋯ Options, a bottom sheet on a phone) never changes another's.
   await rows.nth(0).getByRole("button", { name: "Options for Stop 1" }).click();
   const options = page.getByTestId("stop-options");
@@ -93,9 +95,9 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   await expect(options.getByLabel("Arrive by")).toBeVisible();
   await options.getByRole("button", { name: "Done" }).click();
   await expect(options).toHaveCount(0);
-  await expect(rows.nth(0)).toContainText("Stop 1 · Pickup");
-  await expect(rows.nth(1)).toContainText("Stop 2 · Visit");
-  await expect(rows.nth(2)).toContainText("Stop 3 · Drop");
+  await expect(rows.nth(0)).toContainText("Stop 1 · People get in");
+  await expect(rows.nth(1)).toContainText("Stop 2 · Short stop");
+  await expect(rows.nth(2)).toContainText("Stop 3 · Visit · wait");
   // ✕ takes the empty row out; the plan says what is missing, in words that say what to do.
   await page.getByRole("button", { name: "Remove Stop 2" }).click();
   await expect(rows).toHaveCount(2);

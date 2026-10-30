@@ -46,8 +46,11 @@ export const WHAT_LABEL: Record<Exclude<What, "">, string> = { people: "People",
 
 let serial = 0;
 export const newStop = (type: StopType = "visit"): StopDraft => ({ key: `s${++serial}`, type, what: "", place: "", pin: "", dwell: "", arriveBy: "", note: "", typeSet: false });
-/** A new trip: From (the start, the base place by default) and one To; Add stop puts rows between them (Fix B). */
-export const defaultStops = (): StopDraft[] => [newStop("drop")];
+/**
+ * A new trip: From (the start, the base place by default) and one To; Add stop puts rows between them (Fix B). `back`: the
+ * trip goes back to the office (a new trip does), so To is a visit (wait there); one-way, To is the drop-off.
+ */
+export const defaultStops = (back = true): StopDraft[] => [newStop(typeAt(0, 1, back))];
 
 // ---------------------------------------------------------------------------
 // From / To / Add stop (Fix B, Sahan, 29 October 2026; Uber's, PickMe's and Google Maps' route form). The start is From;
@@ -55,84 +58,109 @@ export const defaultStops = (): StopDraft[] => [newStop("drop")];
 // drop-off, the rows between = visits) until it is chosen under ⋯ Options. The server still gets pickup / visit / drop.
 // ---------------------------------------------------------------------------
 
-/** The type a row gets from its place in the list: the last (To) is the drop-off, the rows before it visits. */
-export const typeAt = (i: number, n: number): StopType => (i === n - 1 ? "drop" : "visit");
+/**
+ * The type a row gets from its place in the list (Sahan, 30 October 2026): the rows before To are short stops (a drop-off,
+ * the drop-off's short default stay); To is a visit (wait there) when the trip goes back to the office (`back`), else the
+ * drop-off.
+ */
+export const typeAt = (i: number, n: number, back = false): StopType => (i === n - 1 && back ? "visit" : "drop");
 
 /** Each row whose type was not chosen takes the type of its place (after an add, a move or a removal). */
-export function withPositions(list: StopDraft[]): StopDraft[] {
-  return list.map((s, i) => (s.typeSet || s.type === typeAt(i, list.length) ? s : { ...s, type: typeAt(i, list.length) }));
+export function withPositions(list: StopDraft[], back = false): StopDraft[] {
+  return list.map((s, i) => (s.typeSet || s.type === typeAt(i, list.length, back) ? s : { ...s, type: typeAt(i, list.length, back) }));
+}
+
+/**
+ * "Then back to the office" switched: To (when its type was not chosen) becomes a visit with Wait there, or, one-way, the
+ * drop-off; the wait typed for it goes with the field.
+ */
+export function withReturn(list: StopDraft[], back: boolean): StopDraft[] {
+  const out = withPositions(list, back);
+  const last = out.length - 1;
+  return !back && last >= 0 && !out[last].typeSet && out[last].dwell ? out.map((s, i) => (i === last ? { ...s, dwell: "" } : s)) : out;
 }
 
 /** The row has a place: a picked or typed place, a Google place or a pin. */
 export const hasPlace = (s: StopDraft) => !!(s.place.trim() || s.placeId || s.googlePlaceId || s.pin.trim());
 
 /** + Add stop: a new row between the last stop and To (the first row of an empty list is To). Its key, to open its search. */
-export function addStop(list: StopDraft[]): { list: StopDraft[]; key: string } {
+export function addStop(list: StopDraft[], back = false): { list: StopDraft[]; key: string } {
   if (!list.length) {
-    const to = newStop("drop");
+    const to = newStop(typeAt(0, 1, back));
     return { list: [to], key: to.key };
   }
-  const n = newStop("visit");
-  return { list: withPositions([...list.slice(0, -1), n, list[list.length - 1]]), key: n.key };
+  const n = newStop("drop");
+  return { list: withPositions([...list.slice(0, -1), n, list[list.length - 1]], back), key: n.key };
 }
 
 /** ✕: the row goes; the trip keeps one row (To). The row before a removed To becomes To. */
-export function removeStop(list: StopDraft[], i: number): StopDraft[] {
+export function removeStop(list: StopDraft[], i: number, back = false): StopDraft[] {
   const rest = list.filter((_, j) => j !== i);
-  return rest.length ? withPositions(rest) : [newStop("drop")];
+  return rest.length ? withPositions(rest, back) : [newStop(typeAt(0, 1, back))];
 }
 
 /** Drag (or Move up / down): row `from` lands at `to`; the rows that were not given a type take their new place's. */
-export function moveStopTo(list: StopDraft[], from: number, to: number): StopDraft[] {
+export function moveStopTo(list: StopDraft[], from: number, to: number, back = false): StopDraft[] {
   if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list;
   const out = [...list];
   const [row] = out.splice(from, 1);
   out.splice(to, 0, row);
-  return withPositions(out);
+  return withPositions(out, back);
 }
 
-/** On Next / Save draft / Send: rows without a place go, silently, once To has one (else nothing changes: Next waits). */
-export function tidyStops(list: StopDraft[]): StopDraft[] {
+/**
+ * On Next / Save draft / Send, once To has a place: the rows with nothing in them go, silently (Sahan, 30 October 2026); a
+ * row with an arrive-by, a stay, a note or what is carried but no place stays and is named ("Stop 2 needs a place"), so
+ * Next and Send wait. To with no place: nothing changes (Next waits).
+ */
+export function tidyStops(list: StopDraft[], back = false): StopDraft[] {
   const to = list[list.length - 1];
   if (!to || !hasPlace(to)) return list;
-  const kept = list.filter(hasPlace);
-  return kept.length === list.length ? list : withPositions(kept);
+  const kept = list.filter(usedRow);
+  return kept.length === list.length ? list : withPositions(kept, back);
 }
 
 /**
- * A draft, request or task opened in the form: rows with no place (an old draft's or an old request's empty stop) are
- * left out; a type that came with the trip stays (a move keeps it), a row added in the form follows its new place. At least
- * To stays.
+ * A draft, request or task opened in the form: the rows with nothing in them (an old draft's or an old request's empty
+ * stop) are left out, a row with something in it stays (named on Next); a type that came with the trip stays (a move keeps
+ * it), a row added in the form follows its new place. At least To stays.
  */
-export function openStops(list: StopDraft[]): StopDraft[] {
-  const kept = list.filter(hasPlace);
-  // Nothing has a place: the last row stays as To (its arrive-by or note kept), a drop-off whose type follows its place.
+export function openStops(list: StopDraft[], back = false): StopDraft[] {
+  const kept = list.filter(usedRow);
+  // Nothing in any row: the last row stays as To, a row whose type follows its place.
   if (!kept.length) {
     const last = list[list.length - 1];
-    return last ? [{ ...last, type: "drop", typeSet: false }] : [newStop("drop")];
+    return last ? [{ ...last, type: typeAt(0, 1, back), typeSet: false }] : [newStop(typeAt(0, 1, back))];
   }
-  // A row added here follows its new place (a resumed draft whose To was empty: the last stop becomes the drop-off); a
-  // type that came with the trip or an older draft stays.
-  return withPositions(kept.map((s) => ({ ...s, typeSet: s.typeSet ?? true })));
-}
-
-/** What happens at a stop, as ⋯ Options offers it: People get in / People get out / Visit · wait / Goods. */
-export type StopRole = "in" | "out" | "visit" | "goods";
-export const STOP_ROLES: StopRole[] = ["in", "out", "visit", "goods"];
-
-/** The role a row shows: goods carried, else by its type. */
-export function roleOf(s: Pick<StopDraft, "type" | "what">): StopRole {
-  if (s.what === "goods") return "goods";
-  return s.type === "pickup" ? "in" : s.type === "drop" ? "out" : "visit";
+  // A row added here follows its new place (a resumed draft whose To was empty: the last stop becomes To); a type that came
+  // with the trip or an older draft stays.
+  return withPositions(kept.map((s) => ({ ...s, typeSet: s.typeSet ?? true })), back);
 }
 
 /**
- * The role chosen under ⋯ Options, as the server's type and what: People get in = a pickup of people, People get out = a
- * drop of people, Visit · wait = a visit (documents or other carried stay), Goods = a drop of goods (a pickup of goods
- * stays a pickup). The type is then the row's own: a move keeps it.
+ * What happens at a stop, as ⋯ Options offers it: Short stop (the drop-off's short stay; on To, one-way, the drop-off) /
+ * People get in / People get out / Visit · wait / Goods.
+ */
+export type StopRole = "short" | "in" | "out" | "visit" | "goods";
+export const STOP_ROLES: StopRole[] = ["short", "in", "out", "visit", "goods"];
+
+/** The role a row shows: goods carried, else by its type (a drop-off of people: People get out; any other: a short stop). */
+export function roleOf(s: Pick<StopDraft, "type" | "what">): StopRole {
+  if (s.what === "goods") return "goods";
+  if (s.type === "pickup") return "in";
+  if (s.type === "visit") return "visit";
+  return s.what === "people" ? "out" : "short";
+}
+
+/**
+ * The role chosen under ⋯ Options, as the server's type and what: Short stop = a drop-off with nothing named (documents or
+ * other carried stay), People get in = a pickup of people, People get out = a drop of people, Visit · wait = a visit
+ * (documents or other carried stay), Goods = a drop of goods (a pickup of goods stays a pickup). The type is then the
+ * row's own: a move keeps it.
  */
 export function withRole(s: StopDraft, role: StopRole): StopDraft {
   const keepWhat = s.what === "documents" || s.what === "other" ? s.what : "";
+  if (role === "short") return { ...s, type: "drop", what: keepWhat, typeSet: true };
   if (role === "in") return { ...s, type: "pickup", what: "people", typeSet: true };
   if (role === "out") return { ...s, type: "drop", what: "people", typeSet: true };
   if (role === "visit") return { ...s, type: "visit", what: keepWhat, typeSet: true };
@@ -215,8 +243,8 @@ export function typeDwell(type: StopType, setting?: Record<string, number> | nul
   return s[type] ?? s.default ?? (type === "visit" ? 60 : 5);
 }
 
-/** A row the person has put something in (empty rows at the end are dropped). */
-export const usedRow = (s: StopDraft) => !!(s.place.trim() || s.placeId || s.googlePlaceId || s.pin.trim() || s.arriveBy || s.note.trim());
+/** A row the person has put something in: a place, a pin, an arrive-by, a stay, a note or what is carried (rows with none are dropped). */
+export const usedRow = (s: StopDraft) => !!(s.place.trim() || s.placeId || s.googlePlaceId || s.pin.trim() || s.arriveBy || s.note.trim() || s.dwell.trim() || s.what);
 
 /**
  * The stops[] argument, or what is wrong with them. Empty rows are dropped. `offset`: the stops before these rows (the
@@ -344,11 +372,11 @@ export function firstStopOf(list: StopDraft[], start?: { name: string; lat?: num
  * Tick it: the pickup at the start goes, and "Passengers get in here" takes its place; what the row carried (what,
  * the note, the time at the stop) moves to the start stop. A task keeps at least one row.
  */
-export function tickStart(list: StopDraft[], i: number): { list: StopDraft[]; carried: Pick<StartFields, "startWhat" | "startNote" | "startDwell"> } {
+export function tickStart(list: StopDraft[], i: number, back = false): { list: StopDraft[]; carried: Pick<StartFields, "startWhat" | "startNote" | "startDwell"> } {
   const row = list[i];
   const rest = list.filter((_, j) => j !== i);
   return {
-    list: rest.length ? withPositions(rest) : [newStop("drop")],
+    list: rest.length ? withPositions(rest, back) : [newStop(typeAt(0, 1, back))],
     carried: { startWhat: row?.what ?? "", startNote: row?.note.trim() ?? "", startDwell: row?.dwell.trim() ?? "" },
   };
 }

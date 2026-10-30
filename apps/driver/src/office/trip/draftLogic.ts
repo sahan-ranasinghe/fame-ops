@@ -107,7 +107,7 @@ export function requestFieldsOf(d: Pick<TripDraft, 'fields' | 'req'>): RequestFi
  */
 export function openedDraft(d: TripDraft): TripDraft {
   if (!Array.isArray(d.fields?.stops)) return d;
-  return { ...d, fields: { ...d.fields, stops: openStops(d.fields.stops) } };
+  return { ...d, fields: { ...d.fields, stops: openStops(d.fields.stops, d.fields.returnToBase) } };
 }
 
 /** A draft worth asking about when a flow starts again: something typed, less than a day old. */

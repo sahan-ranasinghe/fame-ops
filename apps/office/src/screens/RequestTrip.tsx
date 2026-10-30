@@ -1,5 +1,6 @@
 // A request's trip, read only (Phase 7, §34): where it starts, the stops with
-// their times (Fix B: on the From → stops → To line), the plan as a timeline and on the map. On the request page and
+// their times, the plan as a timeline and on the map; the stops once (30 October 2026): the plan's timeline when there is
+// one, else the From → stops → To line (Fix B) with each stop's times. On the request page and
 // the trip decide page; the person who asked sees it too (the plan has no
 // driver, vehicle or conflict in it, §35 19). The web asks for each leg's
 // Google road line (list_requests with_line: the stored lines, no Google call),
@@ -73,7 +74,9 @@ export function TripSection({ trip, leaveNote, title = "Stops and plan" }: {
     <div className="card card-b form" data-testid="request-trip">
       <div className="section-t" style={{ marginBottom: 2 }}>{title}</div>
       {trip.changed && <Notice tone="info"><span data-testid="trip-changed">{trip.changed.text}</span></Notice>}
-      <TripRouteLine trip={trip} times={!trip.timeline} />
+      {/* The stops once: the timeline names each stop and the way back; what it does not say (no expressway) under it. */}
+      {!trip.timeline && <TripRouteLine trip={trip} times />}
+      {trip.timeline && trip.avoid_expressway && <p className="muted small" style={{ margin: 0 }} data-testid="route-after">No expressway</p>}
       {trip.timeline && <PlanWithMap timeline={trip.timeline} stops={trip.stops} start={trip.start} startName={trip.start?.name} leaveNote={fromTask ? undefined : leaveNote} />}
     </div>
   );

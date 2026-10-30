@@ -384,6 +384,8 @@ test("the Where step in Sinhala at 390 px: From, To and + Add stop, no horizonta
   await expect(card.getByText("සිට", { exact: true })).toBeVisible();
   await expect(card.getByText("දක්වා", { exact: true })).toBeVisible();
   await expect(card.getByText("නැවතුමක් එකතු කරන්න", { exact: true })).toBeVisible();
+  // To waits there while the trip goes back to the office: si.json office.trip.waitThere on the row (30 October 2026).
+  await expect(card.getByText("එහි රැඳීම", { exact: true })).toBeVisible();
   const width = () => page.evaluate(() => document.documentElement.scrollWidth);
   await page.evaluate(() => document.fonts.ready);
   expect(await width(), "the page's width with From and To").toBeLessThanOrEqual(390);
@@ -396,6 +398,8 @@ test("the Where step in Sinhala at 390 px: From, To and + Add stop, no horizonta
   await shown(page.getByTestId("stop-options-0")).click();
   await expect(shown(page.getByTestId("stop-options-sheet"))).toBeVisible();
   await expect(shown(page.getByText("එහිදී සිදුවන්නේ", { exact: true }))).toBeVisible();
+  // The added row is a short stop (si.json office.trip.role_short).
+  await expect(shown(page.getByTestId("stop-options-sheet")).getByText("කෙටි නැවතුම", { exact: true })).toBeVisible();
   expect(await width(), "the page's width with the Options sheet open").toBeLessThanOrEqual(390);
   await page.screenshot({ path: testInfo.outputPath("m-si-where-options-390.png") });
 });

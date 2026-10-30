@@ -1,7 +1,7 @@
 // Fix B (29 October 2026): From / To / Add stop, Uber's and PickMe's route form. A row's ⋯ Options on the trip editor's
 // Where step (app/office/trip/where.tsx), in the one bottom sheet (components/patterns/Sheet.tsx): no type picker on the
-// row any more. A stop's sheet: "What happens there" (People get in / People get out / Visit · wait / Goods, the shared
-// withRole), Arrive by (the clock) and Stay (the duration sheet), More details (what is carried, a pin typed by hand, the
+// row any more. A stop's sheet: "What happens there" (Short stop / People get in / People get out / Visit · wait / Goods,
+// the shared withRole; To's short stop is the Drop-off), Arrive by (the clock) and Stay (the duration sheet), More details (what is carried, a pin typed by hand, the
 // note for the driver), Move up / Move down (the drag's keyboard and screen-reader way). From's sheet: Leave from here /
 // People get in / Goods (withStartRole); with people or goods, what gets in, the note at the start and the time there.
 // The When step keeps its own Arrive by / Stay rows: both edit the same draft fields.
@@ -15,7 +15,7 @@ import { Sheet } from '@/components/patterns/Sheet';
 import { TimeField } from '@/components/patterns/TimeField';
 import { Button, Field, Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
-import { parseDwell, roleOf, START_ROLES, type StartFields, type StartRole, startRoleOf, STOP_ROLES, type StopDraft, type What, withRole, withStartRole } from '@/office/trip/stopsLogic';
+import { parseDwell, roleOf, START_ROLES, type StartFields, type StartRole, startRoleOf, STOP_ROLES, type StopDraft, type StopRole, typeDwell, type What, withRole, withStartRole } from '@/office/trip/stopsLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -30,13 +30,21 @@ const stayOf = (v: string | undefined): number | null => {
   return typeof m === 'number' ? m : null;
 };
 
-/** The row's caption: "Stop 2 · Visit", then what is set ("by 11:00", "1 h", "Goods", "Note"), so the sheet shows on the row. */
-export function stopCaption(t: T, s: StopDraft, n: number): string {
-  const parts = [t('office.trip.stopCaption', { n, type: t(`office.trip.type_${s.type}`) })];
-  if (s.what) parts.push(t(`office.trip.what_${s.what}`));
+/** What happens at a stop, in words: To's short stop is the drop-off (a one-way trip ends there). */
+export const roleWord = (t: T, r: StopRole, isTo: boolean): string => (isTo && r === 'short' ? t('office.trip.type_drop') : t(`office.trip.role_${r}`));
+
+/**
+ * The row's caption: "Stop 2 · Short stop · 5 min", then what is set ("by 11:00", "1 h", "Documents", "Note"), so the sheet
+ * shows on the row. A short stop with no stay chosen says the stay it gets (`shortMin`: the drop-off's default).
+ */
+export function stopCaption(t: T, s: StopDraft, n: number, opts: { isTo?: boolean; shortMin?: number } = {}): string {
+  const role = roleOf(s);
+  const parts = [t('office.trip.stopCaption', { n, type: roleWord(t, role, !!opts.isTo) })];
+  if (s.what === 'documents' || s.what === 'other') parts.push(t(`office.trip.what_${s.what}`));
   if (s.arriveBy) parts.push(t('office.trip.byTime', { time: s.arriveBy }));
   const stay = stayOf(s.dwell);
   if (stay !== null) parts.push(durationText(t, stay));
+  else if (role === 'short' && !opts.isTo) parts.push(durationText(t, opts.shortMin ?? typeDwell('drop')));
   if (s.pin.trim()) parts.push(t('office.trip.pinSet'));
   if (s.note.trim()) parts.push(t('office.trip.noteSet'));
   return parts.join(' · ');
@@ -78,7 +86,7 @@ export function StopOptionsSheet({ stop, index, count, title, suggestedMin, onCh
           <Txt variant="label" color={colors.muted}>{t('office.trip.whatHappens').toUpperCase()}</Txt>
           <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {STOP_ROLES.map((r) => (
-              <ChoiceChip key={r} small label={t(`office.trip.role_${r}`)} selected={roleOf(s) === r} onPress={() => onChange(withRole(s, r))} testID={`role-${r}`} />
+              <ChoiceChip key={r} small label={roleWord(t, r, index === count - 1)} selected={roleOf(s) === r} onPress={() => onChange(withRole(s, r))} testID={`role-${r}`} />
             ))}
           </View>
           <View style={{ flexDirection: 'row', gap: 12 }}>

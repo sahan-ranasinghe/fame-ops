@@ -1067,6 +1067,37 @@ The fresh reviewer's findings and what was done:
 9. Drag on a real phone (Android's scroll view) and in phone browsers is untested: Move up / Move down in Options always work.
 10. On the request and approval pages the route line sits above the plan's timeline, so the stops show twice: noted.
 
+### 38.4 Checkpoint 51's five changes (Sahan, 30 October 2026; before the deploy)
+
+1. **To's stay.** While "Then back to the office" is on, To (its type not chosen) is a visit, Visit · wait, with a visible
+   "Wait there" field under it on the row (site: the Stay picker labelled Wait there; Office mode / /m/: the DurationField),
+   its suggestion the visit's stay from the settings (`dwell_min.visit`, else 60) or the place's usual time; it is To's own
+   stay (`dwell_min`), so the plan's return is right without opening Options. One-way, To is the drop-off and has no wait
+   field; the switch flips an unchosen To both ways and, going one-way, drops the wait typed for it (`withReturn`). A To
+   whose type was chosen or came with the trip keeps it (Wait there shows whenever To is a visit while the trip goes back).
+   The same on the site's forms, Office mode, /m/ and Change stops (the site's Change stops reads the task's return).
+2. **Short stop.** A stop added between From and To is a short stop: a drop-off with nothing named, the drop-off's default
+   stay (5 min; the place's usual time if it has one). ⋯ Options: Short stop / People get in / People get out / Visit · wait
+   / Goods (on To, the short stop reads Drop-off); Visit · wait with its Stay makes it a longer visit. The rows' captions
+   say what happens there ("Stop 1 · Short stop · 5 min", "Stop 2 · Visit · wait"); the server still gets pickup / visit /
+   drop. `typeAt(i, n, back)`; every list rule takes the trip's return (`addStop`, `removeStop`, `moveStopTo`, `tidyStops`,
+   `openStops`, `tickStart`, `defaultStops`).
+3. **Empty rows.** Only a row with nothing in it goes (no place, pin, arrive-by, stay, note or what is carried: `usedRow`);
+   a row with any of them but no place stays and is named ("Stop 2 needs a place" in Office mode, the site's "Stop 2: add a
+   place name…" on Send), so Next and Send wait. Review finding 4 is closed this way.
+4. **Request pages.** The stops once: with a plan stored the timeline alone (it names each stop and the way back; "No
+   expressway" in a line under it), without one the From → To line with each stop's times. Change proposals (ChangeDecide,
+   no timeline) keep the line; RequestDecide keeps its stay pickers per stop.
+5. The five Office mode keys no screen used (`office.trip.startFrom`, `stops`, `passengersHere`, `returnToBase`, `what`)
+   are removed from both languages; new: `office.trip.role_short` (Short stop · කෙටි නැවතුම) and `office.trip.waitThere`
+   (Wait there · එහි රැඳීම); To's drop-off reads `office.trip.type_drop`.
+
+Tests: `stopsLogic.test.ts` (the Fix B block rewritten for the new rules, 12), `routeCard.test.tsx` (17: Wait there and
+one-way, a short stop to a longer visit, a row with an arrive-by named on Send), `approvalPages.test.tsx` (2: the stops once,
+the line without a plan), `whereRoute.test.tsx` (14: a note-only row named, Wait there and the switch), the source checks
+of test-trip / test-trip-forms / test-select / test-perperson brought to the new calls, `e2e/phone.spec.ts` (the captions)
+and `e2e/mobile.spec.ts` (Wait there and Short stop in Sinhala at 390 px).
+
 ## 37. Round 50: office people who drive themselves get the driver flow (29 October 2026, branch `phase9-r50` from main `9398b64`)
 
 Patterns: Uber's one account with a mode switch (rider ↔ driver); Samsara / Motive's driver capability on any user; Zipcar /

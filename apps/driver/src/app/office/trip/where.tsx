@@ -10,9 +10,11 @@
 // card: From (the start: the base place by default, Change, Use <base>, ⋯ Options: Leave from here / People get in /
 // Goods), the rows on one line, the last row To; each row its place (the same search box), "Stop 2 · Visit" under it (the
 // type follows the row's place until chosen), ⋯ Options (components/office/StopOptions.tsx: what happens there, Arrive by,
-// Stay, More details, Move up / down) and ✕; a middle row moves by its drag handle. + Add stop inserts before To; "Then
-// back to the office" (on for a new trip) and No expressway under it. Next and Save draft drop the rows with no place once
-// To has one (tidyStops); a draft opened again comes without its empty rows (openedDraft).
+// Stay, More details, Move up / down) and ✕; a middle row moves by its drag handle. + Add stop inserts a short stop before
+// To; "Then back to the office" (on for a new trip: To is then a visit with "Wait there" on the row; one-way, the
+// drop-off) and No expressway under it. Next and Save draft drop the rows with nothing in them once To has one (tidyStops;
+// a row with an arrive-by, a stay or a note but no place stays and is named); a draft opened again comes without its empty
+// rows (openedDraft).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -20,7 +22,8 @@ import { Alert, type GestureResponderEvent, Platform, Pressable, StyleSheet, Vie
 
 import { Ellipsis, GripVertical, Plus, X } from '@/components/icons';
 import { ToggleRow } from '@/components/office/Controls';
-import { StartOptionsSheet, startSummary, stopCaption, StopOptionsSheet } from '@/components/office/StopOptions';
+import { roleWord, StartOptionsSheet, startSummary, stopCaption, StopOptionsSheet } from '@/components/office/StopOptions';
+import { DurationField } from '@/components/patterns/DurationField';
 import { PlaceSearch, type Picked } from '@/components/office/PlaceSearch';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Mono, Txt } from '@/components/ui';
@@ -31,7 +34,7 @@ import { useOffice, useTool } from '@/office/state';
 import { draftWorthKeeping, getDraft, newDraft, openedDraft, requestAgainDraft, setDraft, setDraftKeepDays, type TripMode, updateDraft, useTripDraft, withDriver } from '@/office/trip/draft';
 import { pinText, placeBoxState, typedPatch } from '@/office/trip/locationLogic';
 import { editFields } from '@/office/trip/requestLogic';
-import { addStop, moveStopTo, pickupAtStart, removeStop, type StopDraft, stopsInput, tickStart, tidyStops, typeDwell } from '@/office/trip/stopsLogic';
+import { addStop, moveStopTo, parseDwell, pickupAtStart, removeStop, roleOf, type StopDraft, stopsInput, tickStart, tidyStops, typeDwell, withReturn } from '@/office/trip/stopsLogic';
 import { reasonText } from '@/office/trip/words';
 import type { RequestsList, SettingsResult, TaskDetail } from '@/office/types';
 import { draftsFromStops } from '@/office/trip/stopsLogic';
@@ -176,18 +179,18 @@ export default function TripWhere() {
   // A first pickup at the start (the same place): "Same as the start · Tick it" moves it into From's "People get in".
   const atStart = pickupAtStart(f.stops, startName ? { name: startName, lat: f.startLat, lng: f.startLng } : null, f.startPax);
   const tickIt = (i: number) => {
-    const tk = tickStart(f.stops, i);
+    const tk = tickStart(f.stops, i, f.returnToBase);
     setF({ stops: tk.list, startPax: true, ...tk.carried });
   };
   // The rows are numbered after the start stop and the stops already reached (mode stops).
   const offset = (f.startPax ? 1 : 0) + (d.reached ?? 0);
   // Fix B: the check reads the rows as Next sends them (tidyStops: rows with no place go once To has one); an empty To
   // keeps Next disabled with the row named ("Stop 3 needs a place.").
-  const check = stopsInput(tidyStops(f.stops), offset);
+  const check = stopsInput(tidyStops(f.stops, f.returnToBase), offset);
   const problem = 'error' in check ? reasonText(t, check.error) : null;
   const above = d.mode === 'task' ? t('office.trip.assignAbove', { n: 1 }) : d.mode === 'edit' ? t('office.trip.editAbove') : d.mode === 'stops' ? t('office.trip.stopsAbove') : t('office.trip.newAbove', { n: 1 });
   const leave = () => (router.canGoBack() ? router.back() : router.replace('/office'));
-  const tidy = () => updateDraft((x) => ({ ...x, fields: { ...x.fields, stops: tidyStops(x.fields.stops) } }));
+  const tidy = () => updateDraft((x) => ({ ...x, fields: { ...x.fields, stops: tidyStops(x.fields.stops, x.fields.returnToBase) } }));
   const settingsNow = settings.data?.settings;
   const suggestedStay = (s: StopDraft) => (settingsNow?.planner_suggestions !== false ? typeDwell(s.type, settingsNow?.dwell_min) : undefined);
   // The drag (by a row's handle): where the row would land, shown as a line on that row; let go = moveStopTo.
@@ -197,7 +200,7 @@ export default function TripWhere() {
     setDrag(null);
     if (dy === null) return;
     const to = dropIndex(from, dy, laidOut());
-    if (to !== from) setStops(moveStopTo(f.stops, from, to));
+    if (to !== from) setStops(moveStopTo(f.stops, from, to, f.returnToBase));
   };
   const optIndex = options ? f.stops.findIndex((s) => s.key === options) : -1;
   const optStop = optIndex >= 0 ? f.stops[optIndex] : null;
@@ -266,11 +269,11 @@ export default function TripWhere() {
                       {!isTo ? <DragHandle label={t('office.trip.dragToMove')} onMove={(dy) => setDrag({ key: s.key, from: i, dy })} onDrop={(dy) => drop(i, dy)} testID={`stop-drag-${i}`} /> : null}
                       <View style={{ flex: 1, minWidth: 0 }}>
                         {isTo ? <Txt variant="label" color={colors.muted}>{t('office.trip.to').toUpperCase()}</Txt> : null}
-                        <Txt variant="small" testID={`stop-caption-${i}`}>{stopCaption(t, s, i + 1 + offset)}</Txt>
+                        <Txt variant="small" testID={`stop-caption-${i}`}>{stopCaption(t, s, i + 1 + offset, { isTo, shortMin: typeDwell('drop', settingsNow?.dwell_min) })}</Txt>
                       </View>
                       <OptionsButton label={t('office.trip.options')} onPress={() => setOptions(s.key)} testID={`stop-options-${i}`} />
                       {!isTo || f.stops.length > 1 ? (
-                        <Pressable accessibilityRole="button" accessibilityLabel={t('office.trip.removeStop')} onPress={() => setStops(removeStop(f.stops, i))} hitSlop={4} style={styles.iconBtn} testID={`stop-remove-${i}`}>
+                        <Pressable accessibilityRole="button" accessibilityLabel={t('office.trip.removeStop')} onPress={() => setStops(removeStop(f.stops, i, f.returnToBase))} hitSlop={4} style={styles.iconBtn} testID={`stop-remove-${i}`}>
                           <X size={20} color={colors.ink} />
                         </Pressable>
                       ) : null}
@@ -283,6 +286,10 @@ export default function TripWhere() {
                         <Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.changePlace')}</Txt>
                       </Pressable>
                     )}
+                    {/* To while the trip goes back to the office: how long the driver waits there, on the row (the return is planned from it). */}
+                    {isTo && f.returnToBase && s.type === 'visit' ? (
+                      <DurationField label={t('office.trip.waitThere')} value={typeof parseDwell(s.dwell) === 'number' ? String(parseDwell(s.dwell)) : ''} onCommit={(dwell) => patchStop(s.key, { dwell })} suggestedMin={suggestedStay(s)} testID="to-wait" />
+                    ) : null}
                     {s.placeId && s.placePinned === false && <Txt variant="small" color={colors.red}>{t('office.trip.noPinWarning', { place: s.place })}</Txt>}
                     {s.googlePlaceId && <Txt variant="small">{t('office.trip.googleStop')}</Txt>}
                     {i === atStart && (
@@ -297,24 +304,24 @@ export default function TripWhere() {
             })}
           </View>
 
-          <Pressable accessibilityRole="button" onPress={() => { const a = addStop(f.stops); setStops(a.list); setEditing(a.key); }} style={styles.addStop} testID="add-stop">
+          <Pressable accessibilityRole="button" onPress={() => { const a = addStop(f.stops, f.returnToBase); setStops(a.list); setEditing(a.key); }} style={styles.addStop} testID="add-stop">
             <View style={styles.rail}><Plus size={20} color={colors.blue} strokeWidth={2.6} /></View>
             <Txt variant="strong" size={16} color={colors.blue} style={{ flex: 1, paddingLeft: 10 }}>{t('office.trip.addStop')}</Txt>
           </Pressable>
           <View style={styles.divider} />
-          <ToggleRow label={t('office.trip.backToOffice')} value={f.returnToBase} onChange={(returnToBase) => setF({ returnToBase })} testID="return-toggle" />
+          <ToggleRow label={t('office.trip.backToOffice')} value={f.returnToBase} onChange={(returnToBase) => setF({ returnToBase, stops: withReturn(f.stops, returnToBase) })} testID="return-toggle" />
           <ToggleRow label={t('office.trip.noExpressway')} value={f.avoidExpressway} onChange={(avoidExpressway) => setF({ avoidExpressway })} testID="expressway-toggle" />
         </View>
       </Screen>
-      <TripFooter label={t('office.trip.nextWhen')} onPress={() => { updateDraft((x) => ({ ...x, step: 'when', fields: { ...x.fields, stops: tidyStops(x.fields.stops) } })); router.push('/office/trip/when'); }} disabled={!!problem} problem={problem} />
+      <TripFooter label={t('office.trip.nextWhen')} onPress={() => { updateDraft((x) => ({ ...x, step: 'when', fields: { ...x.fields, stops: tidyStops(x.fields.stops, x.fields.returnToBase) } })); router.push('/office/trip/when'); }} disabled={!!problem} problem={problem} />
       <StopOptionsSheet
         stop={optStop}
         index={optIndex}
         count={f.stops.length}
-        title={optStop ? t('office.trip.stopCaption', { n: optIndex + 1 + offset, type: t(`office.trip.type_${optStop.type}`) }) : ''}
+        title={optStop ? t('office.trip.stopCaption', { n: optIndex + 1 + offset, type: roleWord(t, roleOf(optStop), optIndex === f.stops.length - 1) }) : ''}
         suggestedMin={optStop ? suggestedStay(optStop) : undefined}
         onChange={(next) => setStops(f.stops.map((x) => (x.key === next.key ? next : x)))}
-        onMove={(to) => setStops(moveStopTo(f.stops, optIndex, to))}
+        onMove={(to) => setStops(moveStopTo(f.stops, optIndex, to, f.returnToBase))}
         onClose={() => setOptions(null)}
       />
       <StartOptionsSheet visible={startOptions} f={f} setF={setF} onClose={() => setStartOptions(false)} />

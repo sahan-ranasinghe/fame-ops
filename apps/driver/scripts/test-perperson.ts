@@ -183,7 +183,7 @@ console.log('\nPer person: the empty place box in groups');
   check(driverBox.includes('whereRows(officesFirst(known), [], (p) => p.name)') && !driverBox.includes('groupedWhere'), 'the driver\'s box is unchanged (whereRows, no groups, so no headers)');
   const where = read('app/office/trip/where.tsx');
   check(where.includes("...(card.requested_by !== me.name ? { forRequest: id } : {})") && (where.match(/forRequest=\{d\.forRequest\}/g) ?? []).length === 2, 'the trip editor: someone else\'s request carries its id to both kinds of place box (the start and the stops)');
-  check(where.includes('<PlaceSearch value={f.start}') && where.includes('myLocation') && where.includes("t('office.trip.addStop')") && where.includes('addStop(f.stops)') && where.includes('moveStopTo(f.stops, optIndex, to)') && where.includes('drop(i, dy)') && where.includes("t('office.trip.nextWhen')"), 'kept: From with My location, the stops, + Add stop (before To), move up / down (⋯ Options) and the drag, Next: When');
+  check(where.includes('<PlaceSearch value={f.start}') && where.includes('myLocation') && where.includes("t('office.trip.addStop')") && where.includes('addStop(f.stops, f.returnToBase)') && where.includes('moveStopTo(f.stops, optIndex, to, f.returnToBase)') && where.includes('drop(i, dy)') && where.includes("t('office.trip.nextWhen')"), 'kept: From with My location, the stops, + Add stop (before To), move up / down (⋯ Options) and the drag, Next: When');
 }
 
 console.log('\nPer person: the trip draft');

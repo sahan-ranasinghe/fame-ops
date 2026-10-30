@@ -3,7 +3,7 @@
 // "Leave-by passed", the requester's request with its plan and Withdraw (no driver, vehicle or conflict), the proposal on
 // the Requests list, the board's "Waiting for approval" column, and the setting.
 import { chooseDriver, pickedDriver } from "../test/controls";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -287,6 +287,29 @@ describe("the request page for the person who asked (§35 17, 19)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Withdraw the request" }));
     expect(await screen.findByText("My requests")).toBeTruthy();
     expect(transport.argsOf("cancel_request")).toEqual([{ request_id: "r1", reason: "The trip is off" }]);
+  });
+
+  it("the stops show once (30 October 2026): the plan's timeline when there is one, no route line beside it; No expressway still said", async () => {
+    const card: RequestCard = { ...proposal, id: "r1", kind: "request", title: undefined, proposed: undefined, requested_by: "Dilini Jayasinghe", trip: { ...trip, return_to_base: true, avoid_expressway: true } };
+    const transport = new FakeTransport({ list_requests: () => ({ status: "all", count: 1, requests: [card] }) }, requester);
+    await mount(transport, "/requests/r1", <Route path="/requests/:id" element={<RequestDetail />} />);
+    await act(async () => { await Promise.resolve(); });
+    const section = await screen.findByTestId("request-trip");
+    expect(within(section).queryByTestId("route-line")).toBeNull();
+    expect(within(section).getAllByTestId("plan-stop").map((x) => x.querySelector("b")?.textContent)).toEqual(["Stop 1 · Pickup · Head office", "Stop 2 · Drop · Kandy site"]);
+    expect(within(section).getByTestId("route-after").textContent).toBe("No expressway");
+  });
+
+  it("a trip with no plan stored shows its stops on the From → To line with their times", async () => {
+    const card: RequestCard = { ...proposal, id: "r1", kind: "request", title: undefined, proposed: undefined, requested_by: "Dilini Jayasinghe", trip: { ...trip, timeline: undefined, return_to_base: true } };
+    const transport = new FakeTransport({ list_requests: () => ({ status: "all", count: 1, requests: [card] }) }, requester);
+    await mount(transport, "/requests/r1", <Route path="/requests/:id" element={<RequestDetail />} />);
+    await act(async () => { await Promise.resolve(); });
+    const section = await screen.findByTestId("request-trip");
+    expect(within(section).getByTestId("route-line")).toBeTruthy();
+    expect(within(section).getAllByTestId("trip-stop").map((x) => x.textContent)).toEqual(["Stop 1Stop 1 · Pickup · Head officearrive 08:10", "ToStop 2 · Drop · Kandy sitearrive 10:45 · by 11:00"]);
+    expect(within(section).getByTestId("route-after").textContent).toBe("Then back to the office");
+    expect(within(section).queryByTestId("plan-timeline")).toBeNull();
   });
 
   it("once approved, the page shows the task's stops and times with what the office changed; never the plan as asked", async () => {

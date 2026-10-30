@@ -71,7 +71,7 @@ export function NewRequest() {
   // The draft's key changed with the trip (§34): an older draft (From and To) is not offered.
   // Fix B: a draft put back opens without its empty rows (openStops).
   const [f, setF, draft] = useFormDraft<Form>("request-trip-new", null, () => ({ ...(again ?? emptyRequest(today())), vehicle: "", pickedDriver: "" }), true,
-    (x) => ({ ...x, stops: openStops(x.stops) }));
+    (x) => ({ ...x, stops: openStops(x.stops, x.returnToBase) }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [booked, setBooked] = useState<Booked | null>(null);
@@ -119,9 +119,9 @@ export function NewRequest() {
   const pickDriver = (username: string) => setF((x) => ({ ...x, pickedDriver: username }));
   const takeSuggestion = (username: string) => setF((x) => ({ ...x, pickedDriver: username, vehicle: "" }));
 
-  /** Fix B: on Send and Book now the rows with no place go once To has one (tidyStops); the form shows what is sent. */
+  /** Fix B: on Send and Book now the rows with nothing in them go once To has one (tidyStops); the form shows what is sent. */
   function tidied(): Form {
-    const stops = tidyStops(fields.stops);
+    const stops = tidyStops(fields.stops, fields.returnToBase);
     if (stops !== f.stops) setF((x) => ({ ...x, stops }));
     return { ...fields, stops };
   }

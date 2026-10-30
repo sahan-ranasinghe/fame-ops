@@ -395,6 +395,7 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .route-grip i { display: block; width: 14px; height: 2px; border-radius: 1px; background: currentColor }
 .route-cap { font-size: 13px; color: var(--muted) }
 .route-sum { justify-self: start; font-size: 13px; text-align: left }
+.route-wait { max-width: 260px; margin-top: 2px }
 .route-start { display: grid; gap: 4px; min-width: 0 }
 .route-add { padding-left: 34px }
 .route-after { display: grid; gap: 8px }

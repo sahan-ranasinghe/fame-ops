@@ -3,7 +3,7 @@ import { emptyTrip } from "./tripLogic";
 import {
   defaultStops, draftsFromStops, driveText, dwellText, firstStopOf, hasDeadline, metresBetween, moveStop, newStop, parseDwell, parsePin, pickupAtStart, sameAsStart,
   startInput, stopLabel, stopNumber, stopsInput, tickStart, typeDwell,
-  addStop, hasPlace, moveStopTo, openStops, removeStop, roleOf, START_ROLES, startRoleOf, STOP_ROLES, type StopDraft, type StopType, tidyStops, withPositions, withRole, withStartRole,
+  addStop, hasPlace, moveStopTo, openStops, removeStop, roleOf, START_ROLES, startRoleOf, STOP_ROLES, type StopDraft, type StopType, tidyStops, withPositions, withReturn, withRole, withStartRole,
 } from "./stopsLogic";
 
 describe("stops editor rules", () => {
@@ -163,68 +163,102 @@ describe("Start from and Passengers get in here (Phase 7, §11)", () => {
   });
 });
 
-describe("From / To / Add stop (Fix B, 29 October 2026)", () => {
+describe("From / To / Add stop (Fix B, 29 October 2026; the stays and the empty rows, 30 October)", () => {
   const named = (list: StopDraft[]) => list.map((s) => `${s.type}:${s.place}`);
   const at = (place: string, type: StopType = "drop") => ({ ...newStop(type), place });
 
-  it("a new trip is From (the start) and one To; a new trip returns to the base", () => {
-    expect(defaultStops().map((s) => s.type)).toEqual(["drop"]);
+  it("a new trip is From (the start) and one To; it returns to the base, so To is a visit (wait there); one-way, the drop-off", () => {
+    expect(defaultStops().map((s) => s.type)).toEqual(["visit"]);
+    expect(defaultStops(false).map((s) => s.type)).toEqual(["drop"]);
     expect(emptyTrip("2026-10-30").returnToBase).toBe(true);
+    expect(emptyTrip("2026-10-30").stops.map((s) => s.type)).toEqual(["visit"]);
     expect(emptyTrip("2026-10-30").startPax).toBe(false); // From: Leave from here (Sahan's choice)
   });
 
-  it("+ Add stop goes between the last stop and To, as a visit; To stays the drop-off", () => {
+  it("\"Then back to the office\" switched: To (not chosen) becomes the drop-off and its wait goes; on again, a visit; a chosen To stays", () => {
+    const wait = [at("Kalutara"), { ...at("Galle", "visit"), dwell: "45" }];
+    const oneWay = withReturn(wait, false);
+    expect(oneWay.map((s) => [s.type, s.dwell])).toEqual([["drop", ""], ["drop", ""]]);
+    expect(withReturn(oneWay, true).map((s) => s.type)).toEqual(["drop", "visit"]);
+    const chosen = [withRole({ ...at("Galle"), dwell: "30" }, "out")];
+    expect(withReturn(chosen, true).map((s) => [s.type, s.dwell])).toEqual([["drop", "30"]]);
+    const visitTo = [withRole({ ...at("Galle"), dwell: "30" }, "visit")];
+    expect(withReturn(visitTo, false).map((s) => [s.type, s.dwell])).toEqual([["visit", "30"]]);
+    // The wait typed for To is sent as its stay.
+    expect(stopsInput([{ ...at("Galle", "visit"), dwell: "45" }])).toEqual({ stops: [{ type: "visit", place: "Galle", dwell_min: 45 }] });
+  });
+
+  it("+ Add stop goes between the last stop and To as a short stop (a drop-off, its short default stay); To keeps its type", () => {
     const one = [at("Galle")];
     const a = addStop(one);
-    expect(named(a.list)).toEqual(["visit:", "drop:Galle"]);
+    expect(named(a.list)).toEqual(["drop:", "drop:Galle"]);
+    expect(roleOf(a.list[0])).toBe("short");
     expect(a.list[0].key).toBe(a.key);
-    const b = addStop([at("Kalutara", "visit"), at("Galle")]);
-    expect(named(b.list)).toEqual(["visit:Kalutara", "visit:", "drop:Galle"]);
+    expect(named(addStop([at("Galle", "visit")], true).list)).toEqual(["drop:", "visit:Galle"]);
+    const b = addStop([at("Kalutara"), at("Galle")]);
+    expect(named(b.list)).toEqual(["drop:Kalutara", "drop:", "drop:Galle"]);
     expect(named(addStop([]).list)).toEqual(["drop:"]);
+    expect(named(addStop([], true).list)).toEqual(["visit:"]);
+    expect(typeDwell("drop")).toBe(5);
   });
 
   it("the server still gets pickup / visit / drop: inferred by place, chosen under Options", () => {
-    const list = withPositions([at("Kalutara", "drop"), at("Galle", "visit")]);
-    expect(stopsInput(list)).toEqual({ stops: [{ type: "visit", place: "Kalutara" }, { type: "drop", place: "Galle" }] });
-    const chosen = [withRole(list[0], "in"), list[1]];
-    expect(stopsInput(chosen)).toEqual({ stops: [{ type: "pickup", what: "people", place: "Kalutara" }, { type: "drop", place: "Galle" }] });
-    expect(roleOf(chosen[0])).toBe("in");
-    expect(roleOf(list[1])).toBe("out");
-    expect(roleOf(list[0])).toBe("visit");
+    const list = withPositions([at("Kalutara", "visit"), at("Galle", "drop")], true);
+    expect(stopsInput(list)).toEqual({ stops: [{ type: "drop", place: "Kalutara" }, { type: "visit", place: "Galle" }] });
+    expect(named(withPositions(list, false))).toEqual(["drop:Kalutara", "drop:Galle"]);
+    const chosen = [withRole(list[0], "visit"), list[1]];
+    expect(stopsInput(chosen)).toEqual({ stops: [{ type: "visit", place: "Kalutara" }, { type: "visit", place: "Galle" }] });
+    expect([roleOf(list[0]), roleOf(chosen[0]), roleOf(list[1])]).toEqual(["short", "visit", "visit"]);
+    expect(roleOf(withRole(list[0], "in"))).toBe("in");
   });
 
-  it("Options: each role's type and what; documents or other carried stay on a visit", () => {
+  it("Options: each role's type and what; documents or other carried stay on a short stop or a visit", () => {
     const s = at("Matara", "visit");
+    expect([withRole(s, "short").type, withRole(s, "short").what]).toEqual(["drop", ""]);
     expect([withRole(s, "in").type, withRole(s, "in").what]).toEqual(["pickup", "people"]);
     expect([withRole(s, "out").type, withRole(s, "out").what]).toEqual(["drop", "people"]);
     expect([withRole(s, "goods").type, withRole(s, "goods").what]).toEqual(["drop", "goods"]);
-    expect(roleOf(withRole(s, "goods"))).toBe("goods");
+    expect([roleOf(withRole(s, "goods")), roleOf(withRole(s, "out")), roleOf(withRole(s, "short"))]).toEqual(["goods", "out", "short"]);
     expect([withRole({ ...s, type: "pickup" }, "goods").type]).toEqual(["pickup"]); // collecting goods stays a pickup
     expect(withRole({ ...s, what: "documents" }, "visit").what).toBe("documents");
+    expect(withRole({ ...s, what: "other" }, "short").what).toBe("other");
     expect(withRole({ ...s, what: "people" }, "visit").what).toBe("");
-    expect(STOP_ROLES).toEqual(["in", "out", "visit", "goods"]);
+    expect(withRole({ ...s, what: "people" }, "short").what).toBe("");
+    expect(withRole(s, "short").typeSet).toBe(true);
+    expect(STOP_ROLES).toEqual(["short", "in", "out", "visit", "goods"]);
   });
 
   it("a moved row takes its new place's type unless its type was chosen", () => {
-    const list = [at("A", "visit"), at("B", "visit"), at("C")];
-    expect(named(moveStopTo(list, 2, 0))).toEqual(["visit:C", "visit:A", "drop:B"]);
+    const list = withPositions([at("A"), at("B"), at("C")], true);
+    expect(named(list)).toEqual(["drop:A", "drop:B", "visit:C"]);
+    expect(named(moveStopTo(list, 2, 0, true))).toEqual(["drop:C", "drop:A", "visit:B"]);
     const chosen = [withRole(list[0], "in"), list[1], list[2]];
-    expect(named(moveStopTo(chosen, 0, 2))).toEqual(["visit:B", "visit:C", "pickup:A"]);
+    expect(named(moveStopTo(chosen, 0, 2, true))).toEqual(["drop:B", "drop:C", "pickup:A"]);
+    expect(named(moveStopTo(list, 2, 0))).toEqual(["drop:C", "drop:A", "drop:B"]); // one-way: To is the drop-off
     expect(moveStopTo(list, 0, 0)).toBe(list);
     expect(moveStopTo(list, 0, 5)).toBe(list);
   });
 
   it("✕ removes a row; the row before a removed To becomes To; one row always stays", () => {
-    const list = [at("A", "visit"), at("B")];
+    const list = [at("A"), at("B", "visit")];
+    expect(named(removeStop(list, 1, true))).toEqual(["visit:A"]);
     expect(named(removeStop(list, 1))).toEqual(["drop:A"]);
-    expect(named(removeStop(list, 0))).toEqual(["drop:B"]);
+    expect(named(removeStop(list, 0, true))).toEqual(["visit:B"]);
     expect(removeStop([at("A")], 0).map((s) => s.type)).toEqual(["drop"]);
+    expect(removeStop([at("A")], 0, true).map((s) => s.type)).toEqual(["visit"]);
   });
 
-  it("Next / Save draft: rows with no place go silently once To has one; with no To nothing goes and the hint stays", () => {
-    const list = [newStop("visit"), at("Kalutara", "visit"), newStop("visit"), at("Galle")];
-    expect(named(tidyStops(list))).toEqual(["visit:Kalutara", "drop:Galle"]);
-    const noTo = [at("Kalutara", "visit"), newStop("drop")];
+  it("Next / Save draft: only the rows with nothing in them go once To has one; a row with data but no place stays and is named", () => {
+    const list = [newStop("drop"), at("Kalutara"), newStop("drop"), at("Galle")];
+    expect(named(tidyStops(list))).toEqual(["drop:Kalutara", "drop:Galle"]);
+    expect(named(tidyStops(list, true))).toEqual(["drop:Kalutara", "visit:Galle"]);
+    // An arrive-by, a note, a stay or what is carried keeps the row (Sahan, 30 October 2026): Next and Send name it.
+    for (const data of [{ arriveBy: "10:00" }, { note: "Gate 2" }, { dwell: "15" }, { what: "goods" as const }]) {
+      const kept = [at("Kalutara"), { ...newStop("drop"), ...data }, at("Galle")];
+      expect(tidyStops(kept)).toBe(kept);
+      expect(stopsInput(tidyStops(kept))).toEqual({ error: "Stop 2: add a place name (a saved place, a town, or an address) or a pin." });
+    }
+    const noTo = [at("Kalutara"), newStop("drop")];
     expect(tidyStops(noTo)).toBe(noTo);
     expect(stopsInput(noTo)).toEqual({ error: "Stop 2: add a place name (a saved place, a town, or an address) or a pin." });
     expect(stopsInput([newStop("drop")])).toEqual({ error: "Add at least one stop." });
@@ -233,29 +267,34 @@ describe("From / To / Add stop (Fix B, 29 October 2026)", () => {
     expect(tidyStops(full)).toBe(full);
   });
 
-  it("an old draft or request with an empty stop opens without it; a loaded type is kept", () => {
+  it("an old draft or request with an empty stop opens without it; a row with data stays; a loaded type is kept", () => {
     const old = [{ ...newStop("pickup"), place: "" }, at("Galle")];
     expect(named(openStops(old))).toEqual(["drop:Galle"]);
     // Rows of an older draft (no typeSet): their types were picked on the form, so they stay.
-    const typed = openStops([{ ...at("Office", "pickup"), typeSet: undefined }, { ...at("Galle"), typeSet: undefined }]);
+    const typed = openStops([{ ...at("Office", "pickup"), typeSet: undefined }, { ...at("Galle"), typeSet: undefined }], true);
     expect(typed.map((s) => [s.type, !!s.typeSet])).toEqual([["pickup", true], ["drop", true]]);
-    // The reviewer's case: a Fix B draft left with To empty; resumed, the last stop becomes the drop-off.
-    const left = [at("A", "visit"), at("B", "visit"), newStop("drop")];
-    expect(named(openStops(left))).toEqual(["visit:A", "drop:B"]);
-    expect(stopsInput(openStops(left))).toEqual({ stops: [{ type: "visit", place: "A" }, { type: "drop", place: "B" }] });
-    // A task's stops keep their types on a move (Change stops): no silent drop → visit.
+    // The reviewer's case: a draft left with To empty; resumed, the last stop becomes To (a visit while it goes back).
+    const left = [at("A"), at("B"), newStop("drop")];
+    expect(named(openStops(left))).toEqual(["drop:A", "drop:B"]);
+    expect(named(openStops(left, true))).toEqual(["drop:A", "visit:B"]);
+    // A row with an arrive-by or a note but no place stays (named on Next).
+    expect(named(openStops([at("A"), { ...newStop("drop"), arriveBy: "10:00" }, at("B")]))).toEqual(["drop:A", "drop:", "drop:B"]);
+    // A task's stops keep their types on a move (Change stops): no silent change.
     const loaded = draftsFromStops([{ type: "drop", what: "people", place: "A" }, { type: "drop", what: "people", place: "B" }]);
-    expect(named(moveStopTo(loaded, 1, 0))).toEqual(["drop:B", "drop:A"]);
-    // An all-empty To keeps its arrive-by and is the drop-off.
+    expect(named(moveStopTo(loaded, 1, 0, true))).toEqual(["drop:B", "drop:A"]);
+    // A lone To added in the form with an arrive-by keeps it and follows its place.
     expect(openStops([{ ...newStop("pickup"), arriveBy: "10:00" }]).map((s) => [s.type, s.arriveBy])).toEqual([["drop", "10:00"]]);
+    expect(openStops([{ ...newStop("pickup"), arriveBy: "10:00" }], true).map((s) => [s.type, s.arriveBy])).toEqual([["visit", "10:00"]]);
     expect(openStops([newStop("pickup"), newStop("drop")]).map((s) => s.type)).toEqual(["drop"]);
+    expect(openStops([newStop("pickup"), newStop("drop")], true).map((s) => s.type)).toEqual(["visit"]);
     expect(named(draftsFromStops([{ type: "pickup", place: "" }, { type: "visit", place: "Kandy" }]))).toEqual(["visit:Kandy"]);
     expect(draftsFromStops([{ type: "visit", place: "Kandy" }])[0].typeSet).toBe(true); // a visit as the last stop stays a visit
   });
 
-  it("Tick it re-types the rows left: a ticked To makes the stop before it the drop-off", () => {
-    const list = [at("Kandy", "visit"), withRole(at("Head office"), "in")];
+  it("Tick it re-types the rows left: a ticked To makes the stop before it To", () => {
+    const list = [at("Kandy"), withRole(at("Head office"), "in")];
     expect(named(tickStart(list, 1).list)).toEqual(["drop:Kandy"]);
+    expect(named(tickStart(list, 1, true).list)).toEqual(["visit:Kandy"]);
   });
 
   it("From's Options: Leave from here, People get in, Goods", () => {

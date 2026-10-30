@@ -1,8 +1,9 @@
 // Fix B (29 October 2026): From / To / Add stop, Uber's and Google Maps' route form, on the site's trip forms. A new trip
-// opens with From (the base place) and one To and no type picker; + Add stop puts a row before To; the types follow the
-// rows' places (visits between, the drop-off at To) until ⋯ Options chooses one; the empty rows go on Send and an empty To
-// is named; rows move by Move up / Move down and by the drag handle; Then back to the office is on until switched off; and
-// every field and option of the inventory (docs/phase8-plan.md §38.2) is still on the form.
+// opens with From (the base place) and one To and no type picker; + Add stop puts a short stop before To; the types follow
+// the rows' places (short stops between; To a visit with "Wait there" on the row while the trip goes back to the office, the
+// drop-off one-way; 30 October 2026) until ⋯ Options chooses one; the rows with nothing in them go on Send, a row with data
+// but no place and an empty To are named; rows move by Move up / Move down and by the drag handle; Then back to the office
+// is on until switched off; and every field and option of the inventory (docs/phase8-plan.md §38.2) is still on the form.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -82,6 +83,8 @@ async function newRequest() {
 
 const rows = () => screen.getAllByTestId("stop-row");
 const captions = () => screen.getAllByTestId("stop-label").map((c) => c.textContent);
+/** Each row's place, in the order of the rows (the place box is the row's first field). */
+const places = () => rows().map((r) => (r.querySelector("input") as HTMLInputElement).value);
 const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label, { exact: true }), { target: { value } });
 const addStop = () => fireEvent.click(screen.getByRole("button", { name: "Add stop" }));
 function leaveBy(time: string) {
@@ -111,7 +114,7 @@ describe("the route card: From / To / Add stop (Fix B)", () => {
     expect((screen.getByLabelText("From", { exact: true }) as HTMLInputElement).placeholder).toBe("Head office · the base place");
     expect(rows()).toHaveLength(1);
     expect(screen.getByLabelText("To", { exact: true })).toBeTruthy();
-    expect(captions()).toEqual(["Stop 1 · Drop"]);
+    expect(captions()).toEqual(["Stop 1 · Visit · wait"]);
     expect(screen.getByTestId("stops-editor").querySelectorAll("select")).toHaveLength(0);
     // One row: nothing to remove or drag.
     expect(screen.queryByRole("button", { name: "Remove To" })).toBeNull();
@@ -122,25 +125,45 @@ describe("the route card: From / To / Add stop (Fix B)", () => {
     await newRequest();
     addStop();
     expect(rows()).toHaveLength(2);
-    expect(captions()).toEqual(["Stop 1 · Visit", "Stop 2 · Drop"]);
+    expect(captions()).toEqual(["Stop 1 · Short stop · 5 min", "Stop 2 · Visit · wait"]);
     expect(document.activeElement).toBe(screen.getByLabelText("Stop 1", { exact: true }));
     expect(within(rows()[1]).getByLabelText("To", { exact: true })).toBeTruthy();
     addStop();
-    expect(captions()).toEqual(["Stop 1 · Visit", "Stop 2 · Visit", "Stop 3 · Drop"]);
+    expect(captions()).toEqual(["Stop 1 · Short stop · 5 min", "Stop 2 · Short stop · 5 min", "Stop 3 · Visit · wait"]);
     expect(document.activeElement).toBe(screen.getByLabelText("Stop 2", { exact: true }));
   });
 
-  it("the types follow the rows' places to the server: visits in the middle, the drop-off at To (plan_task and create_request)", async () => {
+  it("the types follow the rows' places to the server: short stops (drop-offs) in the middle, a visit at To going back (plan_task and create_request)", async () => {
     const t = await newRequest();
     addStop();
     type("Stop 1", "Kalutara");
     type("To", "Galle");
     leaveBy("09:30");
-    expect(captions()).toEqual(["Stop 1 · Visit · Kalutara", "Stop 2 · Drop · Galle"]);
+    expect(captions()).toEqual(["Stop 1 · Short stop · 5 min", "Stop 2 · Visit · wait"]);
     await settle(1600);
-    expect(t.argsOf("plan_task").at(-1)).toMatchObject({ stops: [{ type: "visit", place: "Kalutara" }, { type: "drop", place: "Galle" }], return_to_base: true });
+    expect(t.argsOf("plan_task").at(-1)).toMatchObject({ stops: [{ type: "drop", place: "Kalutara" }, { type: "visit", place: "Galle" }], return_to_base: true });
     await send();
-    expect(t.argsOf("create_request")[0]).toMatchObject({ stops: [{ type: "visit", place: "Kalutara" }, { type: "drop", place: "Galle" }], return_to_base: true });
+    expect(t.argsOf("create_request")[0]).toMatchObject({ stops: [{ type: "drop", place: "Kalutara" }, { type: "visit", place: "Galle" }], return_to_base: true });
+  });
+
+  it("To shows Wait there while the trip goes back to the office: its stay is sent; one-way, To is the drop-off with no wait field", async () => {
+    const t = await newRequest();
+    type("To", "Galle");
+    leaveBy("09:30");
+    const wait = screen.getByTestId("to-wait");
+    expect(within(wait).getByText("Wait there")).toBeTruthy();
+    fireEvent.click(within(wait).getByRole("button", { name: "Wait there" }));
+    fireEvent.click(within(screen.getByTestId("stay-sheet")).getByRole("button", { name: "30 min" }));
+    expect(within(screen.getByTestId("to-wait")).getByRole("button", { name: "Wait there" }).textContent).toBe("30 min");
+    await settle(1600);
+    expect(t.argsOf("plan_task").at(-1)).toMatchObject({ stops: [{ type: "visit", place: "Galle", dwell_min: 30 }], return_to_base: true });
+    // One-way: To is the drop-off, the wait field and its stay go.
+    fireEvent.click(screen.getByRole("switch", { name: "Then back to the office" }));
+    expect(screen.queryByTestId("to-wait")).toBeNull();
+    expect(captions()).toEqual(["Stop 1 · Drop-off"]);
+    await send();
+    expect(t.argsOf("create_request")[0].stops).toEqual([{ type: "drop", place: "Galle" }]);
+    expect(t.argsOf("create_request")[0]).not.toHaveProperty("return_to_base");
   });
 
   it("the inferred types reach create_task too (Assign a task)", async () => {
@@ -164,7 +187,7 @@ describe("the route card: From / To / Add stop (Fix B)", () => {
     fireEvent.change(screen.getByLabelText("Vehicle", { exact: true }), { target: { value: "WP CAB-4521" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the task" }));
     await settle();
-    expect(t.argsOf("create_task")[0]).toMatchObject({ stops: [{ type: "visit", place: "Kalutara" }, { type: "drop", place: "Galle" }], return_to_base: true });
+    expect(t.argsOf("create_task")[0]).toMatchObject({ stops: [{ type: "drop", place: "Kalutara" }, { type: "visit", place: "Galle" }], return_to_base: true });
   });
 
   it("⋯ Options changes what happens there: People get in = a pickup of people, shown on the row and sent", async () => {
@@ -175,14 +198,36 @@ describe("the route card: From / To / Add stop (Fix B)", () => {
     leaveBy("09:30");
     options("Stop 1");
     const chips = within(sheet()).getByRole("group", { name: "What happens there" });
-    expect(within(chips).getAllByRole("button").map((b) => b.textContent)).toEqual(["People get in", "People get out", "Visit · wait", "Goods"]);
-    expect(within(chips).getByRole("button", { name: "Visit · wait" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(chips).getAllByRole("button").map((b) => b.textContent)).toEqual(["Short stop", "People get in", "People get out", "Visit · wait", "Goods"]);
+    expect(within(chips).getByRole("button", { name: "Short stop" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(within(chips).getByRole("button", { name: "People get in" }));
     done();
-    expect(captions()).toEqual(["Stop 1 · Pickup · Kalutara", "Stop 2 · Drop · Galle"]);
-    expect(screen.getByTestId("stop-summary").textContent).toBe("People get in");
+    expect(captions()).toEqual(["Stop 1 · People get in", "Stop 2 · Visit · wait"]);
+    expect(screen.queryByTestId("stop-summary")).toBeNull();
+    // To's own words: its short stop is the drop-off.
+    options("To");
+    expect(within(within(sheet()).getByRole("group", { name: "What happens there" })).getAllByRole("button").map((b) => b.textContent))
+      .toEqual(["Drop-off", "People get in", "People get out", "Visit · wait", "Goods"]);
+    done();
     await send();
-    expect(t.argsOf("create_request")[0]).toMatchObject({ stops: [{ type: "pickup", what: "people", place: "Kalutara" }, { type: "drop", place: "Galle" }] });
+    expect(t.argsOf("create_request")[0]).toMatchObject({ stops: [{ type: "pickup", what: "people", place: "Kalutara" }, { type: "visit", place: "Galle" }] });
+  });
+
+  it("⋯ Options makes a short stop a longer visit with its stay", async () => {
+    const t = await newRequest();
+    addStop();
+    type("Stop 1", "Kalutara");
+    type("To", "Galle");
+    leaveBy("09:30");
+    options("Stop 1");
+    fireEvent.click(within(within(sheet()).getByRole("group", { name: "What happens there" })).getByRole("button", { name: "Visit · wait" }));
+    fireEvent.click(within(sheet()).getByRole("button", { name: "Stay" }));
+    fireEvent.click(within(screen.getByTestId("stay-sheet")).getByRole("button", { name: "2 h" }));
+    done();
+    expect(captions()).toEqual(["Stop 1 · Visit · wait", "Stop 2 · Visit · wait"]);
+    expect(screen.getByTestId("stop-summary").textContent).toBe("Stay 2 h");
+    await send();
+    expect(t.argsOf("create_request")[0]).toMatchObject({ stops: [{ type: "visit", place: "Kalutara", dwell_min: 120 }, { type: "visit", place: "Galle" }] });
   });
 
   it("the rows with no place go on Send once To has one", async () => {
@@ -192,7 +237,24 @@ describe("the route card: From / To / Add stop (Fix B)", () => {
     type("To", "Galle");
     leaveBy("09:30");
     await send();
-    expect(t.argsOf("create_request")[0].stops).toEqual([{ type: "drop", place: "Galle" }]);
+    expect(t.argsOf("create_request")[0].stops).toEqual([{ type: "visit", place: "Galle" }]);
+  });
+
+  it("a row with an arrive-by but no place stays on Send and is named; nothing is sent", async () => {
+    const t = await newRequest();
+    addStop();
+    type("To", "Galle");
+    leaveBy("09:00");
+    options("Stop 1");
+    const by = within(sheet()).getByLabelText("Arrive by");
+    fireEvent.change(by, { target: { value: "10:00" } });
+    fireEvent.blur(by);
+    done();
+    await send();
+    const said = screen.getAllByText("Stop 1: add a place name (a saved place, a town, or an address) or a pin.");
+    expect(said.some((el) => el.closest(".notice.bad"))).toBe(true);
+    expect(t.argsOf("create_request")).toHaveLength(0);
+    expect(rows()).toHaveLength(2);
   });
 
   it("an empty To is named on Send and nothing is sent", async () => {
@@ -217,19 +279,23 @@ describe("the route card: From / To / Add stop (Fix B)", () => {
     type("To", "C");
     options("Stop 2");
     fireEvent.click(within(sheet()).getByRole("button", { name: "Move up" }));
-    expect(captions()).toEqual(["Stop 1 · Visit · B", "Stop 2 · Visit · A", "Stop 3 · Drop · C"]);
+    expect(places()).toEqual(["B", "A", "C"]);
+    expect(captions()).toEqual(["Stop 1 · Short stop · 5 min", "Stop 2 · Short stop · 5 min", "Stop 3 · Visit · wait"]);
     done();
     options("To");
     expect((within(sheet()).getByRole("button", { name: "Move down" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(sheet()).getByRole("button", { name: "Move up" }));
-    expect(captions()).toEqual(["Stop 1 · Visit · B", "Stop 2 · Visit · C", "Stop 3 · Drop · A"]);
+    expect(places()).toEqual(["B", "C", "A"]);
+    // C, To before, is a short stop now; A, the new To, waits there.
+    expect(captions()).toEqual(["Stop 1 · Short stop · 5 min", "Stop 2 · Short stop · 5 min", "Stop 3 · Visit · wait"]);
     done();
     // Drag the first row's handle onto the last row.
     const grips = screen.getAllByTestId("stop-grip");
     fireEvent.dragStart(grips[0]);
     fireEvent.dragOver(rows()[2]);
     fireEvent.drop(rows()[2]);
-    expect(captions()).toEqual(["Stop 1 · Visit · C", "Stop 2 · Visit · A", "Stop 3 · Drop · B"]);
+    expect(places()).toEqual(["C", "A", "B"]);
+    expect(captions()).toEqual(["Stop 1 · Short stop · 5 min", "Stop 2 · Short stop · 5 min", "Stop 3 · Visit · wait"]);
   });
 
   it("✕ on To makes the row before it To", async () => {
@@ -238,16 +304,18 @@ describe("the route card: From / To / Add stop (Fix B)", () => {
     type("Stop 1", "Kalutara");
     type("To", "Galle");
     fireEvent.click(screen.getByRole("button", { name: "Remove To" }));
-    expect(captions()).toEqual(["Stop 1 · Drop · Kalutara"]);
+    expect(captions()).toEqual(["Stop 1 · Visit · wait"]);
     expect((screen.getByLabelText("To", { exact: true }) as HTMLInputElement).value).toBe("Kalutara");
   });
 
   it("an older draft (an empty pickup, then the drop-off) opens without its empty row, the drop-off as To", async () => {
-    const old = { ...emptyRequest("2026-10-29"), stops: [{ ...newStop("pickup") }, { ...newStop("drop"), place: "Galle" }], vehicle: "", pickedDriver: "" };
+    // Saved before Fix B: its rows carry no typeSet (their types were picked on the form), so the drop-off stays one.
+    const old = { ...emptyRequest("2026-10-29"), stops: [{ ...newStop("pickup"), typeSet: undefined }, { ...newStop("drop"), place: "Galle", typeSet: undefined }], vehicle: "", pickedDriver: "" };
     writeDraft(draftKey("artifact", "request-trip-new", null), old);
     await newRequest();
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
-    expect(captions()).toEqual(["Stop 1 · Drop · Galle"]);
+    expect(captions()).toEqual(["Stop 1 · Drop-off"]);
+    expect(screen.queryByTestId("to-wait")).toBeNull();
     expect((screen.getByLabelText("To", { exact: true }) as HTMLInputElement).value).toBe("Galle");
   });
 
@@ -293,7 +361,7 @@ describe("the route card keeps every field and option (the inventory, §38.2)", 
     expect(within(sheet()).getByTestId("dwell-picker")).toBeTruthy();
     done();
     expect(screen.getByTestId("start-stop").textContent).toContain("Stop 1 · Pickup · Head office");
-    expect(captions()).toEqual(["Stop 2 · Drop"]);
+    expect(captions()).toEqual(["Stop 2 · Visit · wait"]);
   });
 
   it("a stop's ⋯ Options: what happens there, Stay, Arrive by, More details (what carried, pin, note), Move up / down; the row says what is set", async () => {
@@ -314,7 +382,7 @@ describe("the route card keeps every field and option (the inventory, §38.2)", 
     // The rest of the form: the row's ✕ and handle, + Add stop, the two switches, the day and the times.
     for (const name of ["Remove Stop 1", "Remove To", "Add stop", "Options for From", "Options for Stop 1", "Options for To"]) expect(screen.getByRole("button", { name })).toBeTruthy();
     expect(screen.getAllByTestId("stop-grip")).toHaveLength(2);
-    for (const label of ["Day", "Leave by", "Back by", "From", "Then back to the office", "No expressway"]) expect(screen.getByLabelText(label)).toBeTruthy();
+    for (const label of ["Day", "Leave by", "Back by", "From", "Then back to the office", "No expressway", "Wait there"]) expect(screen.getByLabelText(label)).toBeTruthy();
   });
 
   it("under the rows: the Google note, the no-pin warning with the place page, Same as the start · Tick it", async () => {
@@ -329,6 +397,6 @@ describe("the route card keeps every field and option (the inventory, §38.2)", 
     fireEvent.click(screen.getByRole("button", { name: "Tick it" }));
     // The pickup at the start goes; From becomes Stop 1 (people get in there).
     expect(screen.getByTestId("start-stop").textContent).toContain("Stop 1 · Pickup · Head office");
-    expect(captions()).toEqual(["Stop 2 · Visit · Unpinned site", "Stop 3 · Drop · Galle Fort"]);
+    expect(captions()).toEqual(["Stop 2 · Short stop · 5 min", "Stop 3 · Visit · wait"]);
   });
 });

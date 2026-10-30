@@ -72,7 +72,7 @@ export function NewTask() {
   const [state, setState, draft] = useFormDraft<Form>("task-new", null, () => ({
     f: { ...emptyAssign(date), driver: linkedDriver(params), leaveBy: linkedTime(params) },
     rows: [],
-  }), true, (x) => ({ ...x, f: { ...x.f, stops: openStops(x.f.stops) } }));
+  }), true, (x) => ({ ...x, f: { ...x.f, stops: openStops(x.f.stops, x.f.returnToBase) } }));
   const { f, rows } = state;
   const setF = (patch: Partial<AssignFields> | ((x: AssignFields) => AssignFields)) =>
     setState((s) => ({ ...s, f: typeof patch === "function" ? patch(s.f) : { ...s.f, ...patch } }));
@@ -148,8 +148,8 @@ export function NewTask() {
     ev.preventDefault();
     // The driver's vehicle: known (Who's available, else the driver list), known to be none, or not known yet (the server decides).
     const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
-    // Fix B: the rows with no place go once To has one (tidyStops); the form shows what is sent.
-    const stops = tidyStops(f.stops);
+    // Fix B: the rows with nothing in them go once To has one (tidyStops); the form shows what is sent.
+    const stops = tidyStops(f.stops, f.returnToBase);
     if (stops !== f.stops) setF((x) => ({ ...x, stops }));
     // "on the day" is named when it is the default (Hotfix 2, J): never held up for a vehicle.
     const v = validateAssign({ ...f, stops, who, vehicle: noApp ? f.vehicle : vehicleArg(f.vehicle, dflt), ...(riding ? {} : { riders: undefined }) }, rows, me.name, { defaultVehicle: known, base });
@@ -191,7 +191,7 @@ export function NewTask() {
           </>
         ),
       });
-      setState({ f: { ...f, title: "", notes: "", cname: "", cphone: "", pax: "", riders: [], end: "", leaveBy: "", startPax: false, startWhat: "", startNote: "", startDwell: "", stops: defaultStops() }, rows: [] });
+      setState({ f: { ...f, title: "", notes: "", cname: "", cphone: "", pax: "", riders: [], end: "", leaveBy: "", startPax: false, startWhat: "", startNote: "", startDwell: "", stops: defaultStops(f.returnToBase) }, rows: [] });
       toast(out.toast);
       void store.invalidate();
     } catch (e) {

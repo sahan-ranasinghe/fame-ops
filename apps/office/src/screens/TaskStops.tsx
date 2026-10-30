@@ -121,8 +121,8 @@ export function TaskStops() {
 
   async function save() {
     if (!form) return;
-    // Fix B: the rows with no place go once To has one (tidyStops); the form shows what is sent.
-    const list = tidyStops(form.list);
+    // Fix B: the rows with nothing in them go once To has one (tidyStops); the form shows what is sent.
+    const list = tidyStops(form.list, !!t?.return_to_base);
     if (list !== form.list) setForm((x) => (x ? { ...x, list } : x));
     const v = stopsInput(list, offset);
     if ("error" in v) {
@@ -184,11 +184,11 @@ export function TaskStops() {
                 : <span className="hint">{suggestedLeave ? `Suggested ${suggestedLeave} from the stops’ arrive-by times. Change it if you like.` : "Empty: planned from the stops’ arrive-by times."}</span>}
             </div>
           )}
-          <StopsRows list={form.list} onChange={(list) => set({ list })} idPrefix="ts" offset={offset}
+          <StopsRows list={form.list} onChange={(list) => set({ list })} idPrefix="ts" offset={offset} back={!!t.return_to_base}
             fallbacks={suggestions ? dwellFallbacks(form.list, preview?.stops, settings.data?.settings.dwell_min) : undefined}
             start={!running && t.start_place ? { name: t.start_place } : null} startIsStop={startPax}
             onTickStart={running ? undefined : (i) => {
-              const r = tickStart(form.list, i);
+              const r = tickStart(form.list, i, !!t.return_to_base);
               set({ list: r.list, startPax: true, ...r.carried });
             }}
             note={(s) => (s.key === lateKey ? <DepartureNote check={check} onUse={(time) => set({ leaveBy: time })} onMove={moveArriveBy} testId="departure-check-stop" /> : null)}

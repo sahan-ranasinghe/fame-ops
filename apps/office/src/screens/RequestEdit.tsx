@@ -43,7 +43,7 @@ export function RequestEdit() {
   const { q, err } = useRequest(id);
   // The draft's key changed with the trip (§34): an older draft (From and To) is not offered.
   // Fix B: a draft put back opens without its empty rows (openStops); the loaded request already does (tripFromRequest).
-  const [f, setF, draft] = useFormDraft<RequestFields | null>("request-trip-edit", id, null, true, (x) => (x ? { ...x, stops: openStops(x.stops) } : x));
+  const [f, setF, draft] = useFormDraft<RequestFields | null>("request-trip-edit", id, null, true, (x) => (x ? { ...x, stops: openStops(x.stops, x.returnToBase) } : x));
 
   // The form starts from the request once it is loaded (a draft resumed later replaces it).
   useEffect(() => {
@@ -92,8 +92,8 @@ function EditForm({ id, q, f, setF, draft }: {
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
-    // Fix B: the rows with no place go once To has one (tidyStops); the form shows what is sent.
-    const stops = tidyStops(f.stops);
+    // Fix B: the rows with nothing in them go once To has one (tidyStops); the form shows what is sent.
+    const stops = tidyStops(f.stops, f.returnToBase);
     if (stops !== f.stops) setF((x) => (x ? { ...x, stops } : x));
     const sent = { ...f, stops };
     // The passengers switch off: the names are left as they are.

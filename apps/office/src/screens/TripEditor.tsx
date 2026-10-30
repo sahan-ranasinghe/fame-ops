@@ -20,7 +20,7 @@ import { DepartureNote, StartFrom, startPoint, usePlanPreview } from "./dispatch
 import { dwellFallbacks, type PlanReason, planReasons, rowStopNumbers } from "./planLogic";
 import { PlanWithMap } from "./PlanMap";
 import { StopsRows } from "./StopsEditor";
-import { dwellText, tickStart } from "./stopsLogic";
+import { dwellText, tickStart, withReturn } from "./stopsLogic";
 import { type Base, type TripFields, tripOffset } from "./tripLogic";
 import { TripDayPicker } from "../ui/DayPicker";
 import { SwitchLine } from "../ui/basics";
@@ -115,7 +115,7 @@ export function useTrip<F extends TripFields>(f: F, setF: (fn: (x: F) => F) => v
       if (key) update((x) => ({ ...x, stops: x.stops.map((s) => (s.key === key ? { ...s, arriveBy: time } : s)) }));
     },
     onTickStart: (i) => update((x) => {
-      const t = tickStart(x.stops, i);
+      const t = tickStart(x.stops, i, x.returnToBase);
       return { ...x, stops: t.list, startPax: true, ...t.carried };
     }),
   };
@@ -154,14 +154,15 @@ export function BackByField({ trip, id, label = "Back by" }: { trip: Trip; id: s
 export function TripRoute({ trip, prefix }: { trip: Trip; prefix: string }) {
   const { f, update, base, preview, check, lateKey } = trip;
   return (
-    <StopsRows list={f.stops} onChange={(stops) => update((x) => ({ ...x, stops }))} offset={trip.offset}
+    <StopsRows list={f.stops} onChange={(stops) => update((x) => ({ ...x, stops }))} offset={trip.offset} back={f.returnToBase}
       fallbacks={trip.suggestions ? dwellFallbacks(f.stops, preview?.stops, trip.dwellSetting) : undefined}
       start={startPoint(f, base)} startIsStop={f.startPax} onTickStart={trip.onTickStart}
       note={(s) => (s.key === lateKey ? <DepartureNote check={check} onUse={trip.setLeave} onMove={trip.moveArriveBy} testId="departure-check-stop" /> : null)}
       from={<StartFrom id={`${prefix}-start`} value={f} base={base} stay={trip.stay} onChange={(patch) => update((x) => ({ ...x, ...patch }))} />}
       after={(
         <>
-          <SwitchLine title="Then back to the office" on={f.returnToBase} onChange={(on) => update((x) => ({ ...x, returnToBase: on }))} testId="return-to-base" />
+          {/* The switch also makes To a visit with Wait there, or (one-way) the drop-off (withReturn). */}
+          <SwitchLine title="Then back to the office" on={f.returnToBase} onChange={(on) => update((x) => ({ ...x, returnToBase: on, stops: withReturn(x.stops, on) }))} testId="return-to-base" />
           <span className="check"><input type="checkbox" id={`${prefix}-noexp`} checked={f.avoidExpressway} onChange={(e) => update((x) => ({ ...x, avoidExpressway: e.target.checked }))} /> <label htmlFor={`${prefix}-noexp`}>No expressway</label></span>
         </>
       )} />

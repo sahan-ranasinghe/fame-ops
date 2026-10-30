@@ -153,7 +153,7 @@ export function useTrip(d: TripDraft, settings: SettingsResult | null): Trip {
       if (key) updateDraft((x) => ({ ...x, fields: { ...x.fields, stops: x.fields.stops.map((s) => (s.key === key ? { ...s, arriveBy: time } : s)) } }));
     },
     onTickStart: (i) => updateDraft((x) => {
-      const t = tickStart(x.fields.stops, i);
+      const t = tickStart(x.fields.stops, i, x.fields.returnToBase);
       return { ...x, fields: { ...x.fields, stops: t.list, startPax: true, ...t.carried } };
     }),
   };

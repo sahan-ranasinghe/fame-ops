@@ -102,7 +102,7 @@ export function tripFromRequest(fields: RequestEditFields | undefined, startStop
     : openStops([
       { ...newStop("pickup"), place: f?.route_from ?? "", dwell: f?.from_dwell_min == null ? "" : String(f.from_dwell_min), typeSet: true },
       { ...newStop("drop"), place: f?.route_to ?? "", dwell: f?.to_dwell_min == null ? "" : String(f.to_dwell_min), typeSet: true },
-    ]);
+    ], !!f?.return_to_base);
   const st = f?.start;
   const google = !st?.place_id && !!st?.google_place_id;
   const pax = !!st?.passengers;
@@ -110,7 +110,7 @@ export function tripFromRequest(fields: RequestEditFields | undefined, startStop
   return {
     date: f?.date ?? "",
     leaveBy: planned ? f?.leave_by ?? "" : f?.time ?? "",
-    stops: stops.length ? stops : defaultStops(),
+    stops: stops.length ? stops : defaultStops(!!f?.return_to_base),
     start: st?.place ?? "",
     startPlaceId: st?.place_id,
     startGooglePlaceId: google ? st?.google_place_id : undefined,
