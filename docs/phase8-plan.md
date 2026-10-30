@@ -972,11 +972,55 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 41. Round 53: dead phone tokens, archived names, /m/'s way into a trip (30 October 2026, branch `phase9-r53` from main `7576da6`, worktree `~/projects/fame-ops-r53`)
+
+Sahan's brief with the Round 52 deploy go: the two findings of §40.2, and /m/'s self-drive entry as the app has it.
+
+1. **Dead phone tokens are removed** (a). Found in Round 52 and confirmed on the live database (read only, 30 October):
+   service_role holds no DELETE on `device_tokens` (by design: access_rules checks that neither drivers nor the connector
+   delete from any table), so push-task's and notify-office's `device_tokens.delete()` for a DeviceNotRegistered ticket
+   failed every time, and neither read the error: a dead token stayed and was sent to on every push (2 tokens live today,
+   nothing piled up yet after the pilot reset). Now the migration `20261031120000_dead_device_tokens` adds
+   `remove_dead_device_tokens(ids)` (SECURITY DEFINER, service_role only, at most 100 ids, answers how many it removed);
+   both functions call it through one helper (`_shared/deadTokens.ts` removeDeadTokens), which reads the error, logs it
+   (`console.error` with the function's name) and hands it back: push-task writes it into the push's `push_log.errors`
+   and answers `removed_tokens`; notify-office adds it to the outbox row's error. A failed removal never fails the push.
+   Tests: pgTAP `dead_device_tokens.test.sql` (9: service_role still deletes nothing itself, the function removes only
+   the ids named, twice is harmless, nobody else may call it), Deno `notify-office/deadTokens_test.ts` (3).
+2. **An archived driver or vehicle is refused the moment it is named** (b). `fleet.ts` findActiveDriver / findActiveVehicle:
+   among several matches only the active ones count (an archived Kamal Perera never makes "Kamal" ambiguous); when only
+   archived ones match: "<name> is archived: restore them first or pick another" ("<plate> is archived: restore it first
+   or pick another"; several: "… matches only archived drivers: … Restore one first or pick another."). Used by every tool
+   that gives a trip, a vehicle or a question: create_task, plan_task, update_task, reassign_task, decide_request,
+   redecide_request, book_vehicle (activeDriver / activeVehicle), ask_drivers, Move (an archived vehicle is never given;
+   an archived driver's vehicle may still be taken away), a vehicle's regular driver; set_unavailability and a request's
+   proposed driver say the same words. History, reports, mileage, fuel, routes and the account tools still find archived
+   ones (findDriver / findVehicle unchanged). Tests: Deno `archivedRefs_test.ts` (4), the connector suite (a trip for an
+   archived driver, one on an archived vehicle).
+3. **/m/'s way into a self trip, as the app's** (c). Round 50 gave /m/ the drive page (my-trip/[id]/drive) behind the
+   trip page's "Drive this trip here"; Home's card and More's Driving row were the app's only (Driving mode). Now on /m/
+   too, for the same people (Can drive and self_drive_mode, `lib/drivingMode.ts` driveWhere): Home's "You have a trip to
+   drive" / "Your trip is under way" card (the whole card opens the trip's page; Start driving / Continue driving opens
+   the drive page, never Driving mode), and More → Driving ("Your trip, from this browser · <title>" opens it there; no
+   trip today: "No trip to drive today · My trips" opens My trips). The same rule picks the trip (`tripToDrive`); /m/
+   reads the web's own trips (`loadDriveTrips('web')`: not started, or started on the web; `drivenInFilter`), the app's
+   as before. Two keys in both languages (driving.moreLineWeb, driving.moreLineNone). Tests: jest drivingMode.test.tsx
+   (5 new, Platform web), test:driving-mode, the /m/ e2e (mobile.spec.ts, Round 50's self-trip test: Home's card → the
+   drive page, More → Driving → the drive page, then the trip as before).
+
 ## 40. Round 52: archive, delete and restore everywhere; the admin and handover docs (30 October 2026, branch `phase9-r52` from main `76a1596`, worktree `~/projects/fame-ops-r52`)
 
 Patterns: Shopify's and Samsara's archive (a record with history is switched off, never lost), Gmail's and Google Drive's bin
 (deleted things wait 30 days and come back with Restore), GitHub's type-to-confirm (a person or a vehicle is deleted only
 after typing its name or plate). All four surfaces: the website, Office mode, /m/ and the Claude connector (archive only).
+
+**Deployed 30 October 2026 (Sahan's go after CI 41041142400 on 7576da6).** The migration `20261031090000_round52_bin`
+(the dry run listed only it; afterwards bin_items empty and its five functions there); office-api v46, office-mcp v50,
+driver-api v17, fleet-jobs v25 (`--use-api`; the connector answered); the site with /m/ (0afe39c8; the scan found nothing,
+every /m/ file served as itself); main fast-forwarded to 7576da6 and pushed (CI 41046575542 passed: 58 e2e, none flaky); the EAS update
+"Archive, delete and restore" (runtime 1.4.0-gmaps, channel preview): update group `64e38e81-da9a-497d-bd81-defeeb8578d0`,
+Android update `01a18c85-61e1-7059-807a-e65b126b5d49`. The Restore's `session_replication_role` on the hosted project is
+proved by the first live Restore.
 
 ### 40.1 The model (the contract)
 
