@@ -38,14 +38,14 @@ export const PERMISSION_TEXT: Record<Permission, { label: string; text: string }
     text: "Overview counts and who is on the road, live locations, the drivers list, the vehicles board, your own requests",
   },
   request: { label: "Request", text: "Ask for a vehicle and follow your own requests" },
-  approve: { label: "Approve", text: "The requests queue: approve or decline, book a vehicle directly, cancel a booking" },
+  approve: { label: "Approve", text: "The requests queue: approve or decline, book a vehicle directly, cancel a booking; delete a wrong entry" },
   assign_tasks: {
     label: "Assign tasks",
     text: "The tasks board: assign, reassign and cancel tasks and their stops; task details, routes and task attention items",
   },
   vehicles: { label: "Vehicles", text: "Register and edit vehicles, rental companies, places, driver accounts; mileage and maintenance" },
   issues: { label: "Issues", text: "The issues centre, vehicle problem reports and every attention item" },
-  users: { label: "Users", text: "Settings: office users, connector keys, fleet settings" },
+  users: { label: "Users", text: "Settings: office users, connector keys, fleet settings; delete what has no history, Recently deleted" },
   office_users: {
     label: "Office accounts",
     text: "Add and edit office accounts that neither approve nor manage accounts, giving only permissions you hold yourself",
@@ -134,6 +134,19 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   create_driver: VEH,
   reset_pin: VEH,
   set_driver_active: VEH,
+  // Round 52 (§40): archive with the record's permission; a wrong entry with approve (fleet admins and admins, not the
+  // Coordinator); deleting a record with no history, the bin and its Restore with users (the admins). The delete and bin
+  // tools are web only (media.ts WEB_ONLY_TOOLS): the connector never deletes.
+  set_vehicle_active: VEH,
+  set_project_archived: VEH,
+  set_rental_company_archived: VEH,
+  list_projects: VR,
+  list_rental_companies: V,
+  delete_entry: ["approve"],
+  can_delete: USERS,
+  delete_record: USERS,
+  list_bin: USERS,
+  restore_bin_item: USERS,
   update_driver: ["vehicles", "users"],
   // Round 2b: project import is the approvers' (Admins and Fleet admins keep it; a Coordinator does not).
   import_projects: ["approve"],

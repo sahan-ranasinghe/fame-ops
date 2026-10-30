@@ -9,6 +9,7 @@ import { logChanges, seesDriverPhones, storedPhone } from "../phones.ts";
 import { colomboDate, colomboTime, dayRange } from "../time.ts";
 import { driverPhotoLinks } from "../media.ts";
 import { realDate, tool, zDate, zPaging, zSearch, zText } from "../tool.ts";
+import { tripsFromToday } from "./bin.ts";
 import { pageOf, pageWindow } from "../paging.ts";
 
 // Drivers sign in with a username and a 6-digit PIN. Supabase Auth needs an
@@ -214,11 +215,23 @@ export const setDriverActive = tool({
   name: "set_driver_active",
   title: "Switch a driver on or off",
   description:
-    "active=false: the driver can no longer sign in or see anything, and location sharing is ended. active=true switches them back on. Nothing is deleted.",
+    "active=false archives the driver: they can no longer sign in or see anything, and location sharing is ended; their history " +
+    "stays. If they have trips from today on, the answer is needs_confirm with the trips: reassign them, or call again with " +
+    "confirm true. active=true restores them. Nothing is deleted.",
   readOnly: false,
-  input: z.object({ username: zDriverRef, active: z.boolean() }),
-  async run({ username, active }, { db, now }) {
+  input: z.object({ username: zDriverRef, active: z.boolean(), confirm: z.boolean().optional().describe("Archive although trips from today on are theirs") }),
+  async run({ username, active, confirm }, { db, now }) {
     const driver = findDriver(await loadRefs(db), username, { demoToo: true });
+    // Round 52 (§40): archiving a driver with trips from today on names them first (reassign, or archive anyway).
+    if (!active && !confirm) {
+      const trips = await tripsFromToday(db, "employee_id", driver.id, now);
+      if (trips.length) {
+        return {
+          result: { needs_confirm: true, driver: driver.name, username: driver.username, trips, note: `${driver.name} has ${trips.length} trip(s) from today on. Reassign them first, or archive anyway.` },
+          summary: `archive ${driver.name}: needs confirm (${trips.length} trips)`,
+        };
+      }
+    }
     unwrap(await db.from("employees").update({ active }).eq("id", driver.id).select("id"), "employee");
 
     const notes: string[] = [];

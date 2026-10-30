@@ -633,7 +633,7 @@ export const webTripAction = tool({
         lat: pos?.lat ?? null,
         lng: pos?.lng ?? null,
         accuracy_m: pos?.accuracy_m ?? null,
-        answer: answer as Json,
+        answer: answer as NonNullable<Json>,
       }),
       "web trip action",
     );

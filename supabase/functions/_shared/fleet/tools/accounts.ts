@@ -31,7 +31,7 @@ const zOfficeRole = z.enum(["admin", "fleet_admin", "office", "coordinator", "st
 const zPermissions = z.array(z.enum(PERMISSIONS as [string, ...string[]])).max(PERMISSIONS.length)
   .describe("Any of: view, request, approve, assign_tasks, vehicles, issues, users, office_users");
 
-async function officeUser(db: Db, email: string) {
+export async function officeUser(db: Db, email: string) {
   const row = unwrapMaybe(
     await db.from("employees").select("id, code, name, email, phone, role, permissions, active, auth_user_id").eq("email", email)
       .maybeSingle(),
@@ -47,7 +47,7 @@ async function officeUser(db: Db, email: string) {
  * Round 2b: the least-privilege rules (accountGuards.ts), the same for office-api and office-mcp. For a change to an
  * admin's account the active admins are counted first (rule 5: the last one stays an admin and stays on).
  */
-async function guard(
+export async function guard(
   db: Db,
   actor: { employeeId: string | null; permissions: readonly string[] },
   change: Parameters<typeof accountChangeProblem>[1],
@@ -66,7 +66,7 @@ async function countActiveAdmins(db: Db): Promise<number> {
   if (error) throw new Error(`active admins: ${error.message}`);
   return count ?? 0;
 }
-const targetOf = (row: { id: string; permissions: unknown; role: string; active: boolean }) => ({
+export const targetOf = (row: { id: string; permissions: unknown; role: string; active: boolean }) => ({
   id: row.id,
   permissions: normalisePermissions(row.permissions as string[]),
   role: row.role,

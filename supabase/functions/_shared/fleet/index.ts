@@ -90,6 +90,18 @@ import {
 } from "./tools/tasks.ts";
 import { addRentalCompany, listVehicles, registerVehicle, updateVehicle } from "./tools/vehicles.ts";
 import {
+  canDelete,
+  deleteEntry,
+  deleteRecord,
+  listBin,
+  listProjects,
+  listRentalCompanies,
+  restoreBinItem,
+  setProjectArchived,
+  setRentalCompanyArchived,
+  setVehicleActive,
+} from "./tools/bin.ts";
+import {
   photoUploadUrl,
   removeVehicleDocument,
   restoreVehicleDocument,
@@ -234,6 +246,17 @@ export const TOOLS: AnyTool[] = [
   // Round 4–7 (item 9): data retention (users).
   retentionPreview,
   runRetentionNow,
+  // Round 52: archive, delete and the bin (the delete and bin tools are web only: media.ts WEB_ONLY_TOOLS).
+  setVehicleActive,
+  setProjectArchived,
+  setRentalCompanyArchived,
+  listProjects,
+  listRentalCompanies,
+  canDelete,
+  deleteRecord,
+  deleteEntry,
+  listBin,
+  restoreBinItem,
 ];
 // Round 2b: the Activity log reads every tool's title and whether it writes (this list, read when it runs).
 setActivityTools(() => TOOLS);
@@ -304,8 +327,10 @@ export const INSTRUCTIONS = [
   "Photos and documents: drivers and vehicles may have photos (photo_url, thumb_url), and vehicles their documents " +
   "(vehicle_documents: revenue licence, insurance, emission test, CR, the rent or lease agreement, others; missing ones are listed). " +
   "Files are added in the web app only.",
-  "Nothing is deleted: tasks are cancelled, drivers and vehicles switched off, places removed and restored (remove_place " +
-  "answers needs_confirm for the base place or a place that tasks today or later use; list_places removed lists them).",
+  "Nothing is deleted through this connector (deleting is the web app's, admins only, and waits 30 days in Recently deleted): " +
+  "tasks are cancelled; drivers, vehicles, places, projects and rental companies are archived and restored (set_driver_active, " +
+  "set_vehicle_active, remove_place / restore_place, set_project_archived, set_rental_company_archived). Archiving a driver or a " +
+  "vehicle booked from today on answers needs_confirm with the trips; remove_place does for the base place or a place in use.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Drivers can start a trip themselves in the app (kind self; purpose company or personal, the setting driver_personal_trips): " +
   "task_board and task_detail show kind and purpose; set_trip_purpose switches one or attaches a project; mileage_summary counts personal km apart. " +

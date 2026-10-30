@@ -103,7 +103,10 @@ function toColumns(args: Partial<Record<VehicleField, unknown>>, refs: Refs): Up
 
 function findCompany(refs: Refs, typed: string) {
   const want = typed.trim().toLowerCase();
-  const all = [...refs.company.values()];
+  // Round 52: an archived rental company is not offered (restore it in Rental companies to use it again).
+  const archived = [...refs.company.values()].find((c) => (c as { archived_at?: string | null }).archived_at && c.name.toLowerCase() === want);
+  if (archived) throw new ToolError(`${archived.name} is archived: restore it in Rental companies first.`);
+  const all = [...refs.company.values()].filter((c) => !(c as { archived_at?: string | null }).archived_at);
   const exact = all.filter((c) => c.name.toLowerCase() === want);
   const matches = exact.length > 0 ? exact : all.filter((c) => c.name.toLowerCase().includes(want));
   if (matches.length === 1) return matches[0];

@@ -18,7 +18,17 @@ type VehicleDocument = Row<"vehicle_documents">;
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "application/pdf": "pdf" };
 
 /** The upload tools are the web app's: Claude never moves files (they are not listed on the connector either). */
-export const WEB_ONLY_TOOLS = new Set(["photo_upload_url", "vehicle_document_upload_url", "save_vehicle_document"]);
+export const WEB_ONLY_TOOLS = new Set([
+  "photo_upload_url",
+  "vehicle_document_upload_url",
+  "save_vehicle_document",
+  // Round 52 (Sahan): the connector keeps NO delete, on purpose: Claude archives; deleting and the bin are the web app's.
+  "can_delete",
+  "delete_record",
+  "delete_entry",
+  "list_bin",
+  "restore_bin_item",
+]);
 
 function webOnly(actor: Actor) {
   if (actor.channel !== "web") throw new ToolError("Files are added in the web app (Fame Fleet), not through the connector.");

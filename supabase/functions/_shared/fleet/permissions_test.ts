@@ -136,6 +136,9 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "answer_holder_ask",
     "holder_asks",
     "day_timeline",
+    // Round 52: the projects and rental companies lists (archived ones apart).
+    "list_projects",
+    "list_rental_companies",
   ]);
   assertEquals(toolsFor(PRESETS.viewer.permissions, names), [
     "fleet_overview",
@@ -169,6 +172,8 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "answer_holder_ask",
     "holder_asks",
     "day_timeline",
+    "list_projects",
+    "list_rental_companies",
   ]);
   assertEquals(allows(PRESETS.dispatcher.permissions, "plan_task"), true);
   // Hotfix 2: "reviewing" is the approvers'. Round 4–7 (6): My trips is everyone's (a passenger may hold only view).

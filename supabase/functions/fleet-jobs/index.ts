@@ -4,7 +4,8 @@
 //   POST { "job": "prune_fuel_videos" }   (pg_cron fuel-videos-prune, monthly: the files older
 //                                          than 12 months go, the rows are marked pruned)
 //   POST { "job": "retention" }           (pg_cron retention, nightly 02:45 Colombo, Round 4–7 item 9: what is past its
-//                                          period removed in batches, one activity-log row, a couple of days summarised)
+//                                          period removed in batches, one activity-log row, a couple of days summarised;
+//                                          Round 52: the bin's items past their 30 days, with their files and sign-ins)
 //   POST { "job": "summaries" }           (pg_cron day-summaries, every 15 minutes: a few driver-days kept as summaries
 //                                          before their points may go; yesterday first, then the oldest)
 //   POST { "job": "google_content" }      (pg_cron google-content, nightly: the Google pins of stops
@@ -22,6 +23,7 @@ import { syncIssues, type SyncScope } from "../_shared/fleet/issues.ts";
 import { pruneFuelVideos } from "../_shared/fleet/videos.ts";
 import { googleContentJob } from "../_shared/fleet/googlePlaces.ts";
 import { runRetention, summariseSome } from "../_shared/fleet/retention.ts";
+import { purgeBin } from "../_shared/fleet/tools/bin.ts";
 import { routineToolNames } from "../_shared/fleet/tools/activity.ts";
 // The tool list registers itself with the activity log (its reads are the log's routine entries).
 import "../_shared/fleet/index.ts";
@@ -75,8 +77,11 @@ Deno.serve(async (request) => {
   if (body.job === "retention") {
     const started = Date.now();
     try {
-      const result = await runRetention(adminClient(), new Date(), { dry: false, routine: routineToolNames(), by: "System" });
-      return json(200, { job: "retention", ...result, ms: Date.now() - started });
+      const db = adminClient();
+      const result = await runRetention(db, new Date(), { dry: false, routine: routineToolNames(), by: "System" });
+      // Round 52 (§40): Recently deleted, after its 30 days: the files and a person's sign-in first, then the item.
+      const bin = await purgeBin(db, new Date());
+      return json(200, { job: "retention", ...result, bin, ms: Date.now() - started });
     } catch (error) {
       console.error("fleet-jobs retention failed", error);
       return json(500, { error: "retention_failed", message: error instanceof Error ? error.message : String(error) });

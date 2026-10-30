@@ -71,6 +71,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"bin_items": {
+                  Row: {
+                    "auth_user_id": string | null,"deleted_at": string,"deleted_by": string,"deleted_by_employee_id": string | null,"detail": string | null,"files": NonNullable<Json>,"id": string,"kind": string,"label": string,"purge_after": string,"reason": string | null,"record_id": string,"snapshot": NonNullable<Json>
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "auth_user_id"?: string | null,"deleted_at"?: string,"deleted_by": string,"deleted_by_employee_id"?: string | null,"detail"?: string | null,"files"?: NonNullable<Json>,"id"?: string,"kind": string,"label": string,"purge_after"?: string,"reason"?: string | null,"record_id": string,"snapshot": NonNullable<Json>
+                  }
+                  Update: {
+                    "auth_user_id"?: string | null,"deleted_at"?: string,"deleted_by"?: string,"deleted_by_employee_id"?: string | null,"detail"?: string | null,"files"?: NonNullable<Json>,"id"?: string,"kind"?: string,"label"?: string,"purge_after"?: string,"reason"?: string | null,"record_id"?: string,"snapshot"?: NonNullable<Json>
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"claim_lines": {
                   Row: {
                     "allowance_type_id": string,"amount_cents": number,"claim_id": string,"id": string
@@ -489,19 +503,6 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"odometer_calls": {
-                  Row: {
-                    "calls": number,"day": string,"mode": string,"refused": number,"scope": string,"updated_at": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "calls"?: number,"day": string,"mode": string,"refused"?: number,"scope": string,"updated_at"?: string
-                  }
-                  Update: {
-                    "calls"?: number,"day"?: string,"mode"?: string,"refused"?: number,"scope"?: string,"updated_at"?: string
-                  }
-                  Relationships: [
-                  ]
                 },"google_call_sources": {
                   Row: {
                     "calls": number,"day": string,"feature": string,"refused": number,"source": string,"updated_at": string
@@ -514,45 +515,7 @@ isOneToOne: false
                     "calls"?: number,"day"?: string,"feature"?: string,"refused"?: number,"source"?: string,"updated_at"?: string
                   }
                   Relationships: [
-                  ]
-                },"password_links": {
-                  Row: {
-                    "created_at": string,"created_by": string | null,"employee_id": string,"expires_at": string,"id": string,"kind": string,"opened_at": string | null,"password_fingerprint": string,"replaced_at": string | null,"token_hash": string,"used_at": string | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "created_at"?: string,"created_by"?: string | null,"employee_id": string,"expires_at": string,"id"?: string,"kind": string,"opened_at"?: string | null,"password_fingerprint": string,"replaced_at"?: string | null,"token_hash": string,"used_at"?: string | null
-                  }
-                  Update: {
-                    "created_at"?: string,"created_by"?: string | null,"employee_id"?: string,"expires_at"?: string,"id"?: string,"kind"?: string,"opened_at"?: string | null,"password_fingerprint"?: string,"replaced_at"?: string | null,"token_hash"?: string,"used_at"?: string | null
-                  }
-                  Relationships: [
-                  ]
-                },"web_trip_actions": {
-                  Row: {
-                    "accuracy_m": number | null,"action": string,"answer": Json,"at": string,"client_id": string,"created_at": string,"employee_id": string,"lat": number | null,"lng": number | null,"stop_id": string | null,"task_id": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "accuracy_m"?: number | null,"action": string,"answer": Json,"at": string,"client_id": string,"created_at"?: string,"employee_id": string,"lat"?: number | null,"lng"?: number | null,"stop_id"?: string | null,"task_id": string
-                  }
-                  Update: {
-                    "accuracy_m"?: number | null,"action"?: string,"answer"?: Json,"at"?: string,"client_id"?: string,"created_at"?: string,"employee_id"?: string,"lat"?: number | null,"lng"?: number | null,"stop_id"?: string | null,"task_id"?: string
-                  }
-                  Relationships: [
-                  ]
-                },"roads_day_calls": {
-                  Row: {
-                    "calls": number,"day": string,"employee_id": string,"refused": number,"updated_at": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "calls"?: number,"day": string,"employee_id": string,"refused"?: number,"updated_at"?: string
-                  }
-                  Update: {
-                    "calls"?: number,"day"?: string,"employee_id"?: string,"refused"?: number,"updated_at"?: string
-                  }
-                  Relationships: [
+                    
                   ]
                 },"google_calls": {
                   Row: {
@@ -822,6 +785,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"odometer_calls": {
+                  Row: {
+                    "calls": number,"day": string,"mode": string,"refused": number,"scope": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "calls"?: number,"day": string,"mode": string,"refused"?: number,"scope": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "calls"?: number,"day"?: string,"mode"?: string,"refused"?: number,"scope"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"odometer_logs": {
                   Row: {
                     "ai_attempts": number,"ai_checked_at": string | null,"ai_status": string | null,"ai_value": number | null,"demo": boolean,"employee_id": string,"entry": string,"flag": string | null,"id": string,"kind": string,"logged_at": string,"ocr_value": number | null,"photo_attempts": number,"photo_id": string | null,"reading_km": number,"task_id": string | null,"vehicle_id": string
@@ -972,6 +949,26 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"password_links": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"employee_id": string,"expires_at": string,"id": string,"kind": string,"opened_at": string | null,"password_fingerprint": string,"replaced_at": string | null,"token_hash": string,"used_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"employee_id": string,"expires_at": string,"id"?: string,"kind": string,"opened_at"?: string | null,"password_fingerprint": string,"replaced_at"?: string | null,"token_hash": string,"used_at"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"employee_id"?: string,"expires_at"?: string,"id"?: string,"kind"?: string,"opened_at"?: string | null,"password_fingerprint"?: string,"replaced_at"?: string | null,"token_hash"?: string,"used_at"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "password_links_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"photos": {
                   Row: {
                     "claim_line_id": string | null,"employee_id": string,"fuel_log_id": string | null,"id": string,"kind": string,"lat": number | null,"lng": number | null,"odometer_log_id": string | null,"side": string | null,"storage_path": string,"taken_at": string,"vehicle_check_id": string | null,"vehicle_report_id": string | null
@@ -1084,14 +1081,14 @@ isOneToOne: false
                   ]
                 },"projects": {
                   Row: {
-                    "customer_id": string | null,"customer_name": string | null,"id": string,"job_no": string | null,"name": string,"short_name": string | null,"status": string | null,"updated_at": string,"zoho_project_id": string
+                    "archived_at": string | null,"archived_by": string | null,"customer_id": string | null,"customer_name": string | null,"id": string,"job_no": string | null,"name": string,"short_name": string | null,"status": string | null,"updated_at": string,"zoho_project_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "customer_id"?: string | null,"customer_name"?: string | null,"id"?: string,"job_no"?: string | null,"name": string,"short_name"?: string | null,"status"?: string | null,"updated_at"?: string,"zoho_project_id": string
+                    "archived_at"?: string | null,"archived_by"?: string | null,"customer_id"?: string | null,"customer_name"?: string | null,"id"?: string,"job_no"?: string | null,"name": string,"short_name"?: string | null,"status"?: string | null,"updated_at"?: string,"zoho_project_id": string
                   }
                   Update: {
-                    "customer_id"?: string | null,"customer_name"?: string | null,"id"?: string,"job_no"?: string | null,"name"?: string,"short_name"?: string | null,"status"?: string | null,"updated_at"?: string,"zoho_project_id"?: string
+                    "archived_at"?: string | null,"archived_by"?: string | null,"customer_id"?: string | null,"customer_name"?: string | null,"id"?: string,"job_no"?: string | null,"name"?: string,"short_name"?: string | null,"status"?: string | null,"updated_at"?: string,"zoho_project_id"?: string
                   }
                   Relationships: [
                     
@@ -1124,14 +1121,14 @@ isOneToOne: false
                   ]
                 },"rental_companies": {
                   Row: {
-                    "created_at": string,"id": string,"name": string,"phone": string | null
+                    "archived_at": string | null,"archived_by": string | null,"created_at": string,"id": string,"name": string,"phone": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"name": string,"phone"?: string | null
+                    "archived_at"?: string | null,"archived_by"?: string | null,"created_at"?: string,"id"?: string,"name": string,"phone"?: string | null
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"name"?: string,"phone"?: string | null
+                    "archived_at"?: string | null,"archived_by"?: string | null,"created_at"?: string,"id"?: string,"name"?: string,"phone"?: string | null
                   }
                   Relationships: [
                     
@@ -1231,6 +1228,26 @@ isOneToOne: false
       columns: ["request_id"]
 isOneToOne: false
       referencedRelation: "vehicle_requests"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"roads_day_calls": {
+                  Row: {
+                    "calls": number,"day": string,"employee_id": string,"refused": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "calls"?: number,"day": string,"employee_id": string,"refused"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "calls"?: number,"day"?: string,"employee_id"?: string,"refused"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "roads_day_calls_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
       referencedColumns: ["id"]
     }
                   ]
@@ -1784,6 +1801,38 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"web_trip_actions": {
+                  Row: {
+                    "accuracy_m": number | null,"action": string,"answer": NonNullable<Json>,"at": string,"client_id": string,"created_at": string,"employee_id": string,"lat": number | null,"lng": number | null,"stop_id": string | null,"task_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accuracy_m"?: number | null,"action": string,"answer": NonNullable<Json>,"at": string,"client_id": string,"created_at"?: string,"employee_id": string,"lat"?: number | null,"lng"?: number | null,"stop_id"?: string | null,"task_id": string
+                  }
+                  Update: {
+                    "accuracy_m"?: number | null,"action"?: string,"answer"?: NonNullable<Json>,"at"?: string,"client_id"?: string,"created_at"?: string,"employee_id"?: string,"lat"?: number | null,"lng"?: number | null,"stop_id"?: string | null,"task_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "web_trip_actions_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "web_trip_actions_stop_id_fkey"
+      columns: ["stop_id"]
+isOneToOne: false
+      referencedRelation: "task_stops"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "web_trip_actions_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
@@ -1804,11 +1853,44 @@ isOneToOne: false
               "employee_id": string,"last_stop_at": string,"stops": number
             }[]
                            },
+"app_trip":
+{ Args: { "p_driven_by": string,"p_employee": string }; Returns: boolean
+                           },
 "apply_passenger_list":
 { Args: { "p_id": string,"p_list": Json,"p_owner": string }; Returns: undefined
                            },
 "approve_recipients":
 { Args: Record<PropertyKey, never>; Returns: (string)[]
+                           },
+"bin_check_links":
+{ Args: { "p_row": Json,"p_table": unknown }; Returns: undefined
+                           },
+"bin_file":
+{ Args: { "p_bucket": string,"p_files": Json,"p_path": string }; Returns: Json
+                           },
+"bin_forget":
+{ Args: { "p_ids": (string)[] }; Returns: number
+                           },
+"bin_insert":
+{ Args: { "p_row": Json,"p_table": unknown }; Returns: undefined
+                           },
+"bin_null":
+{ Args: { "p_col": string,"p_snap": Json,"p_table": unknown,"p_value": string }; Returns: Json
+                           },
+"bin_restore":
+{ Args: { "p_id": string }; Returns: Json
+                           },
+"bin_snap":
+{ Args: { "p_snap": Json,"p_table": unknown,"p_where": string }; Returns: Json
+                           },
+"bin_take":
+{ Args: { "p_actor": string,"p_actor_employee": string,"p_id": string,"p_kind": string,"p_reason": string }; Returns: Json
+                           },
+"bin_take_task":
+{ Args: { "p_id": string }; Returns: Json
+                           },
+"bin_vehicle_reading":
+{ Args: { "p_vehicle": string }; Returns: undefined
                            },
 "bump_minute_calls":
 { Args: { "p_provider": string }; Returns: number
@@ -1853,6 +1935,9 @@ isOneToOne: false
 "dispatch_recipients":
 { Args: Record<PropertyKey, never>; Returns: (string)[]
                            },
+"drives_with_app":
+{ Args: { "p_employee": string }; Returns: boolean
+                           },
 "duty_cutoff_after":
 { Args: { "p_at": string,"p_cutoff": string }; Returns: string
                            },
@@ -1887,28 +1972,9 @@ isOneToOne: false
 { Args: { "p_feature": string }; Returns: number
                            },
 "google_take":
-{ Args: { "p_day_cap": number,"p_feature": string,"p_month_cap": number,"p_source"?: string }; Returns: Json
-                           },
-"roads_trip_take":
-{ Args: { "p_cap": number,"p_employee": string }; Returns: Json
-                           },
-"password_link_issue":
-{ Args: { "p_by": string,"p_days": number,"p_employee": string,"p_kind": string,"p_token_hash": string }; Returns: Json
-                           },
-"password_link_check":
-{ Args: { "p_claim": boolean,"p_token_hash": string }; Returns: Json
-                           },
-"password_link_release":
-{ Args: { "p_link": string }; Returns: undefined
-                           },
-"drives_with_app":
-{ Args: { "p_employee": string }; Returns: boolean
-                           },
-"app_trip":
-{ Args: { "p_driven_by": string,"p_employee": string }; Returns: boolean
-                           },
-"odometer_take":
-{ Args: { "p_day_cap": number,"p_mode": string,"p_scope": string }; Returns: Json
+{ Args: { "p_day_cap": number,"p_feature": string,"p_month_cap": number }; Returns: Json
+                           } |
+{ Args: { "p_day_cap": number,"p_feature": string,"p_month_cap": number,"p_source": string }; Returns: Json
                            },
 "import_place_rows":
 { Args: { "p_attach_m"?: number,"p_import_id"?: string,"p_preset": string,"p_rows": Json }; Returns: Json
@@ -1965,6 +2031,9 @@ isOneToOne: false
 "odometer_log_flag":
 { Args: { "p_ai_status": string,"p_ai_value": number,"p_entry": string,"p_reading": number }; Returns: string
                            },
+"odometer_take":
+{ Args: { "p_day_cap": number,"p_mode": string,"p_scope": string }; Returns: Json
+                           },
 "office_book_vehicle":
 { Args: { "p_decided_by"?: string,"p_projects"?: Json,"p_request": Json,"p_stops": Json,"p_task": Json }; Returns: Json
                            },
@@ -1997,6 +2066,18 @@ isOneToOne: false
                            },
 "passenger_trip_line":
 { Args: { "p_leave": string,"p_title": string }; Returns: string
+                           },
+"password_fingerprint":
+{ Args: { "p_auth_user": string }; Returns: string
+                           },
+"password_link_check":
+{ Args: { "p_claim": boolean,"p_token_hash": string }; Returns: Json
+                           },
+"password_link_issue":
+{ Args: { "p_by": string,"p_days": number,"p_employee": string,"p_kind": string,"p_token_hash": string }; Returns: Json
+                           },
+"password_link_release":
+{ Args: { "p_link": string }; Returns: undefined
                            },
 "prune_app_errors":
 { Args: Record<PropertyKey, never>; Returns: number
@@ -2036,6 +2117,9 @@ isOneToOne: false
               "address": string,"last_used": string,"lat": number,"lng": number,"name": string,"uses": number
             }[]
                            },
+"record_history":
+{ Args: { "p_id": string,"p_kind": string }; Returns: Json
+                           },
 "register_device_token":
 { Args: { "p_app_version"?: string,"p_channels"?: (string)[],"p_device_model"?: string,"p_language"?: string,"p_platform"?: string,"p_token": string }; Returns: undefined
                            },
@@ -2060,6 +2144,9 @@ isOneToOne: false
 "retention_batch":
 { Args: { "p_before": string,"p_dry": boolean,"p_limit": number,"p_rule": string,"p_tools"?: (string)[] }; Returns: number
                            },
+"roads_trip_take":
+{ Args: { "p_cap": number,"p_employee": string }; Returns: Json
+                           },
 "save_fleet_setting":
 { Args: { "p_by": string,"p_key": string,"p_value": Json }; Returns: undefined
                            },
@@ -2073,6 +2160,9 @@ isOneToOne: false
                            },
 "seed_demo_driver":
 { Args: { "p_days"?: number,"p_username": string }; Returns: Json
+                           },
+"self_trip_covers":
+{ Args: { "p_at": string,"p_employee": string }; Returns: boolean
                            },
 "send_heartbeat":
 { Args: { "p_app_state"?: string,"p_app_version"?: string,"p_at": string,"p_battery_pct"?: number,"p_data_available"?: boolean,"p_fix_age_s"?: number,"p_location_on": boolean,"p_permission": string,"p_queued_points"?: number,"p_rejected_points"?: number,"p_sharing": boolean,"p_video_bytes_waiting"?: number,"p_video_uploads_waiting"?: number }; Returns: Json
@@ -2103,6 +2193,9 @@ isOneToOne: false
                            },
 "top_up_demo_tasks":
 { Args: Record<PropertyKey, never>; Returns: number
+                           },
+"trip_cutoff":
+{ Args: { "p_started": string }; Returns: string
                            },
 "unavailability_window":
 { Args: { "p_end": string,"p_from": string,"p_part": string,"p_split": string,"p_start": string,"p_to": string }; Returns: {

@@ -19,24 +19,25 @@ const likeLiteral = (text: string) => text.replace(/[\\%_]/g, (ch) => `\\${ch}`)
  * 1. the full project name, 2. the part after the first "_" (the DU ID / short name),
  * 3. the part before the first "_" (the job number), 4. names containing the text.
  */
-export async function matchProjects(db: Db, typed: string): Promise<{ rule: MatchRule; projects: Project[] }> {
+export /** Round 52: an archived project is never matched (find_project, the trip forms' projects). */
+async function matchProjects(db: Db, typed: string): Promise<{ rule: MatchRule; projects: Project[] }> {
   const text = typed.trim();
   const lower = text.toLowerCase();
   if (text === "") return { rule: "none", projects: [] };
 
-  const byName = unwrap(await db.from("projects").select(COLUMNS).ilike("name", likeLiteral(text)).limit(50), "projects")
+  const byName = unwrap(await db.from("projects").select(COLUMNS).is("archived_at", null).ilike("name", likeLiteral(text)).limit(50), "projects")
     .filter((p) => p.name.toLowerCase() === lower);
   if (byName.length > 0) return { rule: "name", projects: byName };
 
-  const byShort = unwrap(await db.from("projects").select(COLUMNS).ilike("short_name", likeLiteral(text)).limit(50), "projects")
+  const byShort = unwrap(await db.from("projects").select(COLUMNS).is("archived_at", null).ilike("short_name", likeLiteral(text)).limit(50), "projects")
     .filter((p) => p.short_name?.toLowerCase() === lower);
   if (byShort.length > 0) return { rule: "short_name", projects: byShort };
 
-  const byJob = unwrap(await db.from("projects").select(COLUMNS).eq("job_no", text).limit(50), "projects");
+  const byJob = unwrap(await db.from("projects").select(COLUMNS).is("archived_at", null).eq("job_no", text).limit(50), "projects");
   if (byJob.length > 0) return { rule: "job_no", projects: byJob };
 
   const containing = unwrap(
-    await db.from("projects").select(COLUMNS).ilike("name", `%${likeLiteral(text)}%`).order("name").limit(25),
+    await db.from("projects").select(COLUMNS).is("archived_at", null).ilike("name", `%${likeLiteral(text)}%`).order("name").limit(25),
     "projects",
   );
   return { rule: containing.length > 0 ? "contains" : "none", projects: containing };
