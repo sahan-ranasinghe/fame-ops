@@ -977,6 +977,15 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
 Sahan's brief after Checkpoint 50. "Restyle, never rebuild: keep the planner, place search, drafts, per-person suggestions
 and every existing option."
 
+**Deployed 30 October 2026 (Sahan's go after Checkpoint 51, with the five changes of §38.4; b884953 on main).** No migration.
+office-api v44 and office-mcp v48 (`--use-api`; the connector answered); the site with /m/ (7598fb3c; the scan found nothing,
+every /m/ file served as itself); main fast-forwarded and pushed (CI 40997406618 cancelled by the run started by hand,
+40997406507 passed: 52 e2e, none flaky; the branch's 40991784122 passed the same). The EAS update "Driving mode, From / To /
+Add stop, 6-character passwords" (runtime 1.4.0-gmaps, channel preview): update group `535a87cb-a94d-4204-8de1-f40964ffc2ff`,
+Android update `01a18b15-4bdd-770b-8cee-c0095f75a961`. It also carries Round 50's app code: Round 50's own update ("Driving
+mode for self-drivers") was never published (two network failures at the upload: a DNS failure on 29 October, a dropped
+api.expo.dev request on 30 October; the retry published this one).
+
 ### 38.1 A: one password rule for office accounts
 
 | Where a password is set or typed | Before | Now |
@@ -1111,8 +1120,8 @@ API with nothing changed (status page: no incident): office-api v43, then office
 of its 2.9 MB bundle failed with TransportError; `--use-api` bundles on Supabase's side), driver-api v15, read-odometer v10,
 push-task v14, fleet-jobs v24, all with `--use-api`; `list_office_users` through the connector then answered `can_drive` (the
 backfill gave it to the active requester, not to the switched-off R49 test account). The site with /m/ (59d5b71e; the scan found
-nothing, every /m/ file served as itself). The EAS update "Driving mode for self-drivers" (runtime 1.4.0-gmaps): its ID is in
-the next round's notes.
+nothing, every /m/ file served as itself). The EAS update "Driving mode for self-drivers" was not published (a network failure);
+Round 50's app code went out with Round 51's update (§38, its ID there).
 
 ### 37.1 The model (the contract for the server and the three clients)
 
