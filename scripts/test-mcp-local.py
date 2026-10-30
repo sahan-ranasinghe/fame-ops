@@ -3824,6 +3824,82 @@ if CHANNEL == "api":
         ok_, notmine = call_as(B, "api", "answer_holder_ask", {"ask_id": ask.get("ask_id", str(uuid.uuid4())), "answer": "no"})
         check(not ok_, "only the holder (or a fleet admin) answers", str(notmine)[:160])
 
+print("\n== Round 52: archive, delete and restore (docs/phase8-plan.md §40) ==")
+tag52 = uuid.uuid4().hex[:6]
+code, answer = mcp("tools/list", {})
+names52 = [t["name"] for t in answer.get("result", {}).get("tools", [])]
+check(not any(n in names52 for n in ["can_delete", "delete_record", "delete_entry", "list_bin", "restore_bin_item"])
+      and all(n in names52 for n in ["set_driver_active", "set_vehicle_active", "set_project_archived", "set_rental_company_archived", "list_projects"]),
+      "the connector lists archive and restore, never a delete or the bin",
+      ",".join(n for n in names52 if any(w in n for w in ("delete", "bin", "archiv", "_active"))))
+code, answer = mcp("tools/call", {"name": "delete_record", "arguments": {"kind": "vehicle", "ref": "cab4521", "confirm_text": "WP CAB-4521"}})
+check("not found" in str(answer.get("error", {}).get("message", "")), "Claude cannot delete: delete_record is not on the connector", json.dumps(answer)[:200])
+
+# Archive asks first when trips are booked from today on (a driver, a vehicle).
+tool("create_driver", {"name": f"Archive Driver {tag52}", "code": f"A{tag52}", "username": f"arch.{tag52}", "pin": "531790", "phone": "0771235210"})
+reg52 = f"WP ARC-{tag52[:4].upper()}"
+tool("register_vehicle", {"reg_no": reg52, "make_model": "Test van", "vehicle_type": "van", "seats": 8})
+t52 = tool("create_task", {"title": f"Archive trip {tag52}", "date": day(1), "start_time": "10:00", "driver": f"arch.{tag52}", "vehicle": reg52,
+                           "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+tid52 = t52.get("task_id") or t52.get("task", {}).get("id")
+r = tool("set_driver_active", {"username": f"arch.{tag52}", "active": False})
+check(r.get("needs_confirm") is True and any(x["task_id"] == tid52 for x in r.get("trips", [])), "archiving a driver with a trip tomorrow asks first, naming it", json.dumps(r)[:240])
+check(psql(f"select active from employees where username = 'arch.{tag52}'") == "t", "nothing changed yet")
+r = tool("set_driver_active", {"username": f"arch.{tag52}", "active": False, "confirm": True})
+check(r.get("active") is False and psql(f"select active from employees where username = 'arch.{tag52}'") == "f", "Archive anyway archives the driver", json.dumps(r)[:200])
+tool("set_driver_active", {"username": f"arch.{tag52}", "active": True})
+check(psql(f"select active from employees where username = 'arch.{tag52}'") == "t", "Restore brings the driver back")
+r = tool("set_vehicle_active", {"reg_no": reg52, "active": False})
+check(r.get("needs_confirm") is True and any(x["task_id"] == tid52 for x in r.get("trips", [])), "a vehicle booked tomorrow asks first too", json.dumps(r)[:240])
+tool("set_vehicle_active", {"reg_no": reg52, "active": False, "confirm": True})
+check(psql(f"select active from vehicles where reg_no = '{reg52}'") == "f", "archived (returned)")
+tool("set_vehicle_active", {"reg_no": reg52, "active": True})
+
+# A project and a rental company: archived ones leave the matching, restore brings them back.
+tool("import_projects", {"projects": [{"project_id": f"r52{tag52}", "project_name": f"52{tag52[:3]}_Archive project {tag52}", "customer_name": "Test", "status": "active"}]})
+pid52 = psql(f"select id from projects where zoho_project_id = 'r52{tag52}'")
+check(tool("find_project", {"text": f"Archive project {tag52}"})["count"] == 1, "the project is found")
+tool("set_project_archived", {"project": pid52, "archived": True})
+check(tool("find_project", {"text": f"Archive project {tag52}"})["count"] == 0
+      and any(p_["id"] == pid52 for p_ in tool("list_projects", {"archived": True, "search": tag52})["projects"]), "archived: not found, listed under archived")
+tool("set_project_archived", {"project": pid52, "archived": False})
+check(tool("find_project", {"text": f"Archive project {tag52}"})["count"] == 1, "restored: found again")
+tool("add_rental_company", {"name": f"Archive Rentals {tag52}"})
+cid52 = psql(f"select id from rental_companies where name = 'Archive Rentals {tag52}'")
+tool("set_rental_company_archived", {"company": cid52, "archived": True})
+r = tool("update_vehicle", {"reg_no": reg52, "rental_company": f"Archive Rentals {tag52}"}, expect_error=True)
+check("archived" in r, "an archived rental company is not offered to a vehicle", r)
+check(not any(c["id"] == cid52 for c in tool("list_rental_companies", {})["companies"])
+      and any(c["id"] == cid52 for c in tool("list_rental_companies", {"archived": True})["companies"]), "listed only under archived")
+tool("set_rental_company_archived", {"company": cid52, "archived": False})
+
+if CHANNEL == "api":
+    # Delete (admins, the web app only): a record with history refused, one without into the bin and back; a wrong task too.
+    r = tool("can_delete", {"kind": "vehicle", "ref": reg52})
+    check(r["deletable"] is False and "task" in r.get("history_words", ""), "a vehicle with a trip has history: archive instead", json.dumps(r)[:200])
+    reg52b = f"WP DEL-{tag52[:4].upper()}"
+    tool("register_vehicle", {"reg_no": reg52b, "make_model": "Mistake", "vehicle_type": "car", "seats": 4})
+    r = tool("can_delete", {"kind": "vehicle", "ref": reg52b})
+    check(r["deletable"] is True and r.get("confirm_with") == reg52b, "a vehicle never used may be deleted, typing its plate", json.dumps(r)[:200])
+    r = tool("delete_record", {"kind": "vehicle", "ref": reg52b, "confirm_text": "wrong"}, expect_error=True)
+    check("Type the plate" in r, "the wrong plate typed: refused", r)
+    r = tool("delete_record", {"kind": "vehicle", "ref": reg52b, "confirm_text": reg52b.lower()})
+    check(r.get("deleted") == reg52b and psql(f"select count(*) from vehicles where reg_no = '{reg52b}'") == "0", "deleted into the bin", json.dumps(r)[:200])
+    item = [i for i in tool("list_bin", {"search": reg52b})["items"] if i["kind"] == "vehicle"]
+    check(item and item[0]["days_left"] >= 29, "Recently deleted lists it for 30 days", json.dumps(item[:1])[:200])
+    r = tool("restore_bin_item", {"id": item[0]["id"]}) if item else {}
+    check(r.get("restored") and psql(f"select count(*) from vehicles where reg_no = '{reg52b}'") == "1", "Restore brings it back", json.dumps(r)[:200])
+    p_ = tool("delete_entry", {"kind": "task", "id": tid52, "preview": True})
+    check(p_["label"].startswith("Task · Archive trip") and any("stop" in a for a in p_["affects"]), "a wrong task's preview says what goes with it", json.dumps(p_)[:200])
+    r = tool("delete_entry", {"kind": "task", "id": tid52}, expect_error=True)
+    check("why" in r, "a wrong entry needs a reason", r)
+    r = tool("delete_entry", {"kind": "task", "id": tid52, "reason": "made for the test"})
+    check(psql(f"select count(*) from tasks where id = '{tid52}'") == "0", "the task goes into the bin", json.dumps(r)[:200])
+    item = [i for i in tool("list_bin", {"kind": "task"})["items"] if i["record_id"] == tid52]
+    check(item and item[0].get("reason") == "made for the test", "with its reason")
+    tool("restore_bin_item", {"id": item[0]["id"]})
+    check(psql(f"select status from tasks where id = '{tid52}'") == "assigned", "and comes back as it was")
+
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:
     print("  - " + f)
