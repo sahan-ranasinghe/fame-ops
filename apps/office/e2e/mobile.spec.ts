@@ -498,7 +498,7 @@ async function choosePhoto(page: Page, within: Locator): Promise<void> {
   await (await chooser).setFiles({ name: "odometer.png", mimeType: "image/png", buffer: PIXEL });
 }
 
-test("Round 50: Users → Can drive on /m/, then a self trip driven in the browser (driver-lite): Start with the check and the odometer, Arrived and Done, Finish; one position per action, no live tracking", async ({ page, context }) => {
+test("Round 50 and 53: Users → Can drive on /m/, Home's trip card and More → Driving, then a self trip driven in the browser (driver-lite): Start with the check and the odometer, Arrived and Done, Finish; one position per action, no live tracking", async ({ page, context }) => {
   // The self-driver: an office person who books and drives their own trip (approve, so the task is made at once).
   const email = `selfdriver.${stamp}@fame.test`;
   const password = await officeUser(`Self Driver ${stamp}`, email, ["view", "request", "approve", "assign_tasks"]);
@@ -532,6 +532,20 @@ test("Round 50: Users → Can drive on /m/, then a self trip driven in the brows
   await page.locator('input[type="password"]').fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(tab(page, "More")).toBeVisible();
+
+  // Round 53 (c): Home says "You have a trip to drive" in the browser too, and Start driving opens the trip's drive page
+  // (never Driving mode, which is the app's).
+  const card = shown(page.getByTestId("home-drive-line"));
+  await expect(card).toContainText("You have a trip to drive");
+  await expect(card).toContainText(`Web trip ${stamp}`);
+  await card.getByRole("button", { name: "Start driving" }).click();
+  await expect(page).toHaveURL(new RegExp(`/m/office/my-trip/${task.task_id}/drive`));
+  // More → Driving opens the same trip there.
+  await page.goto("/m/office/more");
+  const driving = shown(page.getByTestId("more-driving"));
+  await expect(driving).toContainText(`Your trip, from this browser · Web trip ${stamp}`);
+  await driving.click();
+  await expect(page).toHaveURL(new RegExp(`/m/office/my-trip/${task.task_id}/drive`));
 
   // My trip offers "Drive this trip here" in the browser; the page says live tracking needs the app.
   await page.goto(`/m/office/my-trip/${task.task_id}`);

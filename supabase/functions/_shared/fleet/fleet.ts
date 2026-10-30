@@ -139,6 +139,53 @@ export function findVehicle(refs: Refs, typed: string): Vehicle {
   return pickOne(partial, "vehicle", typed, show, "Use list_vehicles to see the vehicles.");
 }
 
+/** Round 53 (b): the words when an archived driver or vehicle is named for a trip, a vehicle or a question. */
+export const archivedDriverText = (e: Pick<Employee, "name">): string => `${e.name} is archived: restore them first or pick another.`;
+export const archivedVehicleText = (v: Pick<Vehicle, "reg_no">): string => `${v.reg_no} is archived: restore it first or pick another.`;
+
+/**
+ * Round 53 (b): one active match or the reason there is none. Among several matches the active ones count (an archived
+ * Kamal Perera never makes "Kamal" ambiguous); when only archived ones match, the answer says so at once instead of "no
+ * driver matches" or a refusal later in the tool.
+ */
+function pickActive<T extends { active: boolean }>(
+  matches: T[],
+  what: string,
+  typed: string,
+  show: (item: T) => string,
+  archived: (item: T) => string,
+  hint: string,
+): T {
+  const live = matches.filter((m) => m.active);
+  if (live.length > 0 || matches.length === 0) return pickOne(live, what, typed, show, hint);
+  if (matches.length === 1) throw new ToolError(archived(matches[0]));
+  throw new ToolError(
+    `"${typed}" matches only archived ${what}s: ${matches.slice(0, 8).map(show).join("; ")}. Restore one first or pick another.`,
+  );
+}
+
+/** A driver who may be given a trip, a vehicle or a question: by username, code or name, never an archived one. */
+export function findActiveDriver(refs: Refs, typed: string): Employee {
+  const drivers = refs.employees.filter((e) => e.role === "driver");
+  const want = typed.trim().toLowerCase();
+  const show = (e: Employee) => `${e.name} (${e.username ?? e.code})`;
+  const exact = drivers.filter((e) => e.username === want || e.code.toLowerCase() === want || e.name.toLowerCase() === want);
+  if (exact.length > 0) return pickActive(exact, "driver", typed, show, archivedDriverText, "");
+  const partial = drivers.filter((e) => e.name.toLowerCase().includes(want));
+  return pickActive(partial, "driver", typed, show, archivedDriverText, "Use list_drivers to see the drivers.");
+}
+
+/** A vehicle that may be given a trip or a driver: by plate (as findVehicle), never an archived (returned) one. */
+export function findActiveVehicle(refs: Refs, typed: string): Vehicle {
+  const want = plain(typed);
+  if (want === "") throw new ToolError("The vehicle plate is empty.");
+  const show = (v: Vehicle) => v.reg_no;
+  const exact = refs.vehicles.filter((v) => plain(v.reg_no) === want);
+  if (exact.length > 0) return pickActive(exact, "vehicle", typed, show, archivedVehicleText, "");
+  const partial = refs.vehicles.filter((v) => plain(v.reg_no).includes(want));
+  return pickActive(partial, "vehicle", typed, show, archivedVehicleText, "Use list_vehicles to see the vehicles.");
+}
+
 /** "wp cab-4521" -> "WP CAB-4521" */
 export function normalisePlate(typed: string): string {
   return typed.trim().replace(/\s+/g, " ").toUpperCase();

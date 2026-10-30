@@ -10,7 +10,7 @@ import { join } from 'node:path';
 
 import { fetchTasks } from '../src/lib/api';
 import {
-  canEnterDriving, driverParts, drivingShown, isOfficeDriver, isOwnTask, leaveOutcome, ownTasks, shouldStopSharing, showSideSwitch, tapSide,
+  canEnterDriving, driveWhere, drivenInFilter, driverParts, drivingShown, isOfficeDriver, isOwnTask, leaveOutcome, ownTasks, shouldStopSharing, showSideSwitch, tapSide,
   taskScope, tripRunning, tripToDrive,
 } from '../src/lib/drivingMode';
 
@@ -41,6 +41,10 @@ async function main(): Promise<void> {
     check(!canEnterDriving({}, true) && !canEnterDriving({ can_drive: false }, true), 'can_drive absent (= false) or taken away: never');
     check(!canEnterDriving({ can_drive: true }, false), 'in a browser (/m/): never (it has its driver-lite page)');
     check(!canEnterDriving(null, true), 'no office person: never');
+    // Round 53 (c): /m/ offers the same people their trips, on the drive page.
+    check(driveWhere({ can_drive: true }, true) === 'app' && driveWhere({ can_drive: true }, false) === 'web', 'can drive: the app\'s Driving mode, or /m/\'s drive page in a browser');
+    check(driveWhere({ can_drive: true, self_drive_mode: false }, false) === null && driveWhere({}, false) === null && driveWhere(null, false) === null,
+      'in a browser too: never with the setting off or without Can drive');
     check(drivingShown(false, false) && drivingShown(false, true), 'a driver\'s screens are always in front');
     check(drivingShown(true, true) && !drivingShown(true, false), 'an office person\'s only after Start driving, until Back to office');
   }
@@ -85,6 +89,10 @@ async function main(): Promise<void> {
     const notElsewhere = (a: unknown[]) => same(a, ['driven_in.is.null,driven_in.eq.app']);
     check(forOffice.some(([n, a]) => n === 'or' && notElsewhere(a)) && !forDriver.some(([n, a]) => n === 'or' && notElsewhere(a)),
       'an office person\'s query leaves out trips started on the web or from My trip (a driver\'s does not ask)');
+    // Round 53 (c): /m/ reads the web's own: not started, or started on the web (never one under way in the app).
+    const forWeb = await asked({ ...taskScope(OFFICE), on: 'web' });
+    check(forWeb.some(([n, a]) => n === 'or' && same(a, ['driven_in.is.null,driven_in.eq.web'])) && drivenInFilter() === 'driven_in.is.null,driven_in.eq.app',
+      '/m/\'s query: trips not started or driven on the web; the app\'s as before');
     const rest = (log: [string, unknown[]][]) => log.filter(([n, a]) => n !== 'eq' && !(n === 'or' && notElsewhere(a)));
     check(same(rest(forDriver), rest(forOffice)), 'the rest of the query is the same for both (the window, never a missed task, by start)');
     check(!isOwnTask({ employee_id: OFFICE.id, driven_by: 'self', driven_in: 'web' }, OFFICE)
@@ -221,7 +229,9 @@ async function main(): Promise<void> {
     const home = read('app/office/(tabs)/index.tsx');
     check(home.includes('<DriveLine />'), 'Home has the drive line');
     const more = read('app/office/(tabs)/more.tsx');
-    check(more.includes('canDrive && drivingMatches') && more.includes('testID="more-driving"'), 'More has the Driving row (only with can_drive and self_drive_mode, on the app)');
+    // Round 53 (c): on the app with Driving mode, on /m/ with the drive page (tests/drivingMode.test.tsx presses both).
+    check(more.includes('const showDriving = canDrive || webDrive;') && more.includes('showDriving && drivingMatches') && more.includes('testID="more-driving"'),
+      'More has the Driving row (only with can_drive and self_drive_mode: Driving mode on the app, the drive page on /m/)');
     check(more.includes('await officeSignOutCheck()'), 'More\'s Sign out asks first while a trip runs or its data waits');
     check(read('app/office/profile.tsx').includes('await officeSignOutCheck()'), 'My profile\'s Sign out too');
     const trip = read('app/office/my-trip/[id].tsx');

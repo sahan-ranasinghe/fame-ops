@@ -8,7 +8,7 @@ import type { Update } from "../db.ts";
 import { ToolError, unwrap } from "../db.ts";
 import {
   docChip,
-  findDriver,
+  findActiveDriver,
   findPerson,
   findVehicle,
   loadRefs,
@@ -93,7 +93,7 @@ function toColumns(args: Partial<Record<VehicleField, unknown>>, refs: Refs): Up
     columns.rental_company_id = args.rental_company === null ? null : findCompany(refs, args.rental_company as string).id;
   }
   if (args.regular_driver !== undefined) {
-    columns.regular_driver_id = args.regular_driver === null ? null : findDriver(refs, args.regular_driver as string).id;
+    columns.regular_driver_id = args.regular_driver === null ? null : findActiveDriver(refs, args.regular_driver as string).id;
   }
   if (args.custodian !== undefined) {
     columns.custodian_employee_id = args.custodian === null ? null : findPerson(refs, args.custodian as string).id;
@@ -104,7 +104,9 @@ function toColumns(args: Partial<Record<VehicleField, unknown>>, refs: Refs): Up
 function findCompany(refs: Refs, typed: string) {
   const want = typed.trim().toLowerCase();
   // Round 52: an archived rental company is not offered (restore it in Rental companies to use it again).
-  const archived = [...refs.company.values()].find((c) => (c as { archived_at?: string | null }).archived_at && c.name.toLowerCase() === want);
+  const archived = [...refs.company.values()].find((c) =>
+    (c as { archived_at?: string | null }).archived_at && c.name.toLowerCase() === want
+  );
   if (archived) throw new ToolError(`${archived.name} is archived: restore it in Rental companies first.`);
   const all = [...refs.company.values()].filter((c) => !(c as { archived_at?: string | null }).archived_at);
   const exact = all.filter((c) => c.name.toLowerCase() === want);
@@ -372,8 +374,10 @@ export const updateVehicle = tool({
       ...(active !== undefined && { active }),
     };
     // A new fuel type drops a grade that no longer fits it, unless a grade comes with it.
-    if (fields.fuel_type !== undefined && fields.fuel_grade === undefined && vehicle.fuel_grade &&
-      gradeProblem(fields.fuel_type, vehicle.fuel_grade)) columns.fuel_grade = null;
+    if (
+      fields.fuel_type !== undefined && fields.fuel_grade === undefined && vehicle.fuel_grade &&
+      gradeProblem(fields.fuel_type, vehicle.fuel_grade)
+    ) columns.fuel_grade = null;
     const changed = Object.keys(columns);
     if (changed.length === 0) throw new ToolError("Nothing to change: give at least one field.");
     const wrongGrade = gradeProblem(

@@ -1785,7 +1785,7 @@ async function approveTrip(
   const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
   const proposed = request.proposed_employee_id ? refs.emp.get(request.proposed_employee_id) : undefined;
   if (args.driver === undefined && proposed && !proposed.active) {
-    throw new ToolError(`${proposed.name} (proposed) is switched off: give another driver.`);
+    throw new ToolError(`${proposed.name} (proposed) is archived: restore them first or pick another.`);
   }
   const driverTyped = args.driver ?? (proposed ? proposed.username ?? proposed.code : undefined);
   const sameAsProposed = !args.driver || (proposed !== undefined && sameDriver(proposed, args.driver));

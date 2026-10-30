@@ -3,6 +3,8 @@
 // "Start driving" all go through useStartDriving: the person's own employees row is loaded as the driver state
 // (state/app.tsx enterDriving: no new sign-in, nothing forgotten) and the driver screens come to the front, on the trip
 // when one is named. Only on the app, only with /me's can_drive and the setting self_drive_mode on (lib/drivingMode.ts).
+// Round 53 (c): /m/ (the browser) has the same Home card and More row for the same people; there Start driving opens the
+// trip's drive page (office/my-trip/[id]/drive: one position per action, no background tracking), never Driving mode.
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -10,7 +12,7 @@ import { Platform } from 'react-native';
 
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { getJson, KEYS } from '@/lib/kv';
-import { canEnterDriving, type DriverRow, tripToDrive } from '@/lib/drivingMode';
+import { canEnterDriving, driveWhere, type DriverRow, tripToDrive } from '@/lib/drivingMode';
 import { colomboDate } from '@/lib/time';
 import type { TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
@@ -20,6 +22,12 @@ import { useOfficeMe } from './store';
 export function useCanDrive(): boolean {
   const me = useOfficeMe();
   return canEnterDriving(me, Platform.OS !== 'web');
+}
+
+/** Round 53 (c): where this person drives their trips here: the app's Driving mode, /m/'s drive page, or nowhere. */
+export function useDriveWhere(): 'app' | 'web' | null {
+  const me = useOfficeMe();
+  return driveWhere(me, Platform.OS !== 'web');
 }
 
 /** Start driving, optionally on one trip: Driving mode in front (Today underneath the trip), or why not in the snackbar. */
@@ -48,24 +56,27 @@ export function useStartDriving(): { busy: boolean; start: (taskId?: string) => 
  * Home's line: a trip of theirs under way, else the first one today still to start; null when there is none (or Driving
  * mode is not offered). The driver state's list when it is loaded (a trip behind Office mode), else read when Home shows.
  */
-export function useTripToDrive(): TaskWithStops | null {
+export function useTripToDrive(only?: 'app' | 'web'): TaskWithStops | null {
   const app = useApp();
-  const allowed = useCanDrive();
+  const where = useDriveWhere();
+  // `only`: read for that place alone (More reads the web's on /m/; the app's More needs no trip, Driving mode lists them).
+  const allowed = where !== null && (!only || where === only);
   const [read, setRead] = useState<{ me: DriverRow; tasks: TaskWithStops[] } | null>(null);
-  const loaded = app.officeDriver && app.me !== null;
+  // The driver state is the app's only (Driving mode); /m/ always reads the web's own trips.
+  const loaded = where === 'app' && app.officeDriver && app.me !== null;
   // The newest reader (the app's value is a new object at every render: never a dependency of the focus effect).
   const loadRef = useRef(app.loadDriveTrips);
   loadRef.current = app.loadDriveTrips;
   useFocusEffect(useCallback(() => {
     if (!allowed || loaded) return;
     let live = true;
-    loadRef.current().then((answer) => {
+    loadRef.current(where ?? 'app').then((answer) => {
       if (live) setRead(answer);
     }, () => undefined); // no connection: no line (Start driving is on More too)
     return () => {
       live = false;
     };
-  }, [allowed, loaded]));
+  }, [allowed, loaded, where]));
   if (!allowed) return null;
   const today = colomboDate();
   if (loaded && app.me) return tripToDrive(app.tasks, app.me, today, colomboDate);

@@ -23,6 +23,7 @@
 import { ApplicationServer, importVapidKeys, PushMessageError, Urgency } from "@negrel/webpush";
 import { adminClient, type Db, type Row, type Update } from "../_shared/fleet/db.ts";
 import { type DeviceToken, EXPO_PUSH_URL, expoMessagesFor, readTickets, type Ticket } from "./expo.ts";
+import { removeDeadTokens } from "../_shared/deadTokens.ts";
 
 const BACKOFF_MIN = [1, 5, 15, 60];
 const MAX_ATTEMPTS = 5;
@@ -231,12 +232,14 @@ async function deliverExpo(db: Db, claimed: Notification, now: Date): Promise<Ou
     return "failed";
   }
   const r = readTickets(tickets, tokens as DeviceToken[]);
-  if (r.gone.length > 0) await db.from("device_tokens").delete().in("id", r.gone);
+  // Round 53 (a): through the database function (service_role deletes nothing); a failed removal goes on the row's error.
+  const removal = await removeDeadTokens(db, r.gone, "notify-office");
+  const errors = removal.error ? [...r.errors, removal.error] : r.errors;
   if (r.sent > 0) {
-    await finish(db, claimed.id, { status: "sent", sent_at: nowIso, error: r.errors.length > 0 ? r.errors.join("; ") : null });
+    await finish(db, claimed.id, { status: "sent", sent_at: nowIso, error: errors.length > 0 ? errors.join("; ") : null });
     return "sent";
   }
-  return dead(r.errors.join("; ") || "no_ticket");
+  return dead(errors.join("; ") || "no_ticket");
 }
 
 Deno.serve(async (request) => {

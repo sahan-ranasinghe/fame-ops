@@ -13,7 +13,7 @@ import { type AvailArgs, parseAvailAnswer, type UnavailabilityRow } from './avai
 import { type OfficeContacts, parseOfficeContacts, parseTaskContacts, type TaskContacts } from './contacts';
 import { type FuelAnswer, type FuelAnswerReply, type FuelEstimate, parseFuelEstimate } from './fuelCard';
 import type { LateReply } from './late';
-import type { TaskScope } from './drivingMode';
+import { drivenInFilter, type TaskScope } from './drivingMode';
 import type { LicenceSide } from './profile';
 import { parsePersonalTrips, type PersonalTrips } from './trips';
 import type { Employee, FuelLog, Language, OdometerLog, TaskWithStops, Vehicle, VehicleReport } from './types';
@@ -224,7 +224,8 @@ export async function fetchTasks(client: Client, since: Date, scope: TaskScope):
     .select(`*, task_stops(*), task_vehicle_segments(*), task_passengers(${PASSENGER_COLUMNS})`)
     .eq('employee_id', scope.employeeId);
   // Never a trip started on the web (/m/) or from My trip: it finishes where it started (the fresh review, finding 10).
-  if (scope.selfOnly) query = query.eq('driven_by', 'self').or('driven_in.is.null,driven_in.eq.app');
+  // Round 53 (c): /m/ asks for the web's own (drivenInFilter 'web').
+  if (scope.selfOnly) query = query.eq('driven_by', 'self').or(drivenInFilter(scope.on));
   const tasks = check(
     await query
       .or(`status.in.(assigned,in_progress),start_at.gte."${since.toISOString()}"`)

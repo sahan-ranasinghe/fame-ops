@@ -326,7 +326,8 @@ export interface AppValue {
    * Office mode's Home, before Driving mode is entered: the person's own row and the trips they drive themselves from today
    * (read as the driver screens read them; nothing kept). null = no row. Throws without a connection.
    */
-  loadDriveTrips: () => Promise<{ me: Pick<Employee, 'id' | 'role'>; tasks: TaskWithStops[] } | null>;
+  /** The person's own self trips from today, as Driving mode (on 'app') or /m/'s drive page (on 'web', Round 53) would show them. */
+  loadDriveTrips: (on?: 'app' | 'web') => Promise<{ me: Pick<Employee, 'id' | 'role'>; tasks: TaskWithStops[] } | null>;
   refresh: () => Promise<void>;
   sendNow: (includeFailed?: boolean) => Promise<void>;
   setSharing: (on: boolean) => Promise<'on' | 'off' | 'no_permission' | 'cancelled'>;
@@ -1307,10 +1308,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (officeDriverRef.current) setDrivingView(true);
   }, [setDrivingView]);
 
-  const loadDriveTrips = useCallback(async () => {
+  const loadDriveTrips = useCallback(async (on: 'app' | 'web' = 'app') => {
     const row = await api.fetchMe(supabase);
     if (!row) return null;
-    const rows = await api.fetchTasks(supabase, startOfColomboDay(colomboDate()), { employeeId: row.id, selfOnly: true });
+    const rows = await api.fetchTasks(supabase, startOfColomboDay(colomboDate()), { employeeId: row.id, selfOnly: true, on });
     return { me: row, tasks: ownTasks(rows, row) };
   }, []);
 

@@ -26,6 +26,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { channelFor, DAY_KINDS, type DayKind, type Kind, TASK_KINDS, type TaskKind } from "./channels.ts";
+import { removeDeadTokens } from "../_shared/deadTokens.ts";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const COLOMBO_OFFSET_MS = 5.5 * 60 * 60 * 1000;
@@ -326,7 +327,7 @@ Deno.serve(async (request) => {
     return json(502, { error: "push_failed" });
   }
 
-  const errors: { token_id: string; error: string }[] = [];
+  const errors: { token_id?: string; error: string }[] = [];
   const gone: string[] = [];
   tickets.forEach((ticket, i) => {
     const token = tokens[i];
@@ -335,9 +336,12 @@ Deno.serve(async (request) => {
     errors.push({ token_id: token.id, error: code });
     if (code === "DeviceNotRegistered") gone.push(token.id);
   });
-  if (gone.length > 0) await admin.from("device_tokens").delete().in("id", gone);
+  // Round 53 (a): through the database function (service_role deletes nothing); a failed removal is logged with the push.
+  const removal = await removeDeadTokens(admin, gone, "push-task");
 
-  const sent = tokens.length - errors.length;
-  await admin.from("push_log").insert({ ...log, sent, failed: errors.length, errors: errors.length > 0 ? errors : null });
-  return json(200, { sent, failed: errors.length });
+  const failed = errors.length;
+  const sent = tokens.length - failed;
+  if (removal.error) errors.push({ error: removal.error });
+  await admin.from("push_log").insert({ ...log, sent, failed, errors: errors.length > 0 ? errors : null });
+  return json(200, { sent, failed, ...(gone.length > 0 ? { removed_tokens: removal.removed } : {}) });
 });

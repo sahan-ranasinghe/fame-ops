@@ -13,9 +13,10 @@ import { Bell, Briefcase, Building, Calendar, Car, ChartColumn, Clock, MessageCi
 import { Button, Txt } from '@/components/ui';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty } from '@/components/patterns/ListState';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { MORE_SECTION, type MoreItem, type MoreSection, moreFor } from '@/office/nav';
 import { useOffice } from '@/office/state';
-import { useCanDrive, useStartDriving } from '@/office/driving';
+import { useCanDrive, useDriveWhere, useStartDriving, useTripToDrive } from '@/office/driving';
 import { useSwitch } from '@/office/switches';
 import { Avatar, DarkHeader, Divider, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -75,6 +76,15 @@ export default function MoreTab() {
   const shown = items.filter(matches);
   const canDrive = useCanDrive();
   const driving = useStartDriving();
+  // Round 53 (c): /m/ has the row too: it opens today's trip to drive (its drive page in this browser), else My trips.
+  const webDrive = useDriveWhere() === 'web';
+  const webTrip = useTripToDrive('web');
+  const showDriving = canDrive || webDrive;
+  function openWebDriving() {
+    if (webTrip) router.push({ pathname: '/office/my-trip/[id]/drive', params: { id: webTrip.id } });
+    else if (me.permissions.includes('request')) router.push('/office/trips');
+    else showSnackbar({ text: t('driving.noTrips') });
+  }
   const drivingMatches = !needle || [t('driving.moreRow'), t('driving.start'), t('driving.moreLine')].some((w) => w.toLowerCase().includes(needle));
 
   function confirmSignOut() {
@@ -115,16 +125,16 @@ export default function MoreTab() {
           />
         </Section>}
         <FilterBar search={find} onSearch={setFind} placeholder={t('office.more.search')} defs={[]} values={{}} onApply={() => undefined} testID="more-search" />
-        {needle && shown.length === 0 && !(canDrive && drivingMatches) && <ListEmpty text={t('office.more.noMatch', { text: find.trim() })} />}
+        {needle && shown.length === 0 && !(showDriving && drivingMatches) && <ListEmpty text={t('office.more.noMatch', { text: find.trim() })} />}
         {/* Round 50 (§37.4): Driving mode, for a person who drives their own trips (the app only; Uber's driver mode switch). */}
-        {canDrive && drivingMatches && (
+        {showDriving && drivingMatches && (
           <Section title={t('driving.moreRow')}>
             <Row
               left={<Car size={24} color={colors.ink} />}
-              title={t('driving.start')}
-              line={t('driving.moreLine')}
+              title={t(webDrive && webTrip?.status === 'in_progress' ? 'driving.continue' : 'driving.start')}
+              line={webDrive ? (webTrip ? [t('driving.moreLineWeb'), webTrip.title].filter(Boolean).join(' · ') : t('driving.moreLineNone')) : t('driving.moreLine')}
               right={<ChevronRight size={22} color={colors.muted} />}
-              onPress={() => void driving.start()}
+              onPress={() => (webDrive ? openWebDriving() : void driving.start())}
               testID="more-driving"
             />
           </Section>

@@ -17,8 +17,8 @@ import {
   assignWarnings,
   type Conflict,
   type Employee,
-  findDriver,
-  findVehicle,
+  findActiveDriver,
+  findActiveVehicle,
   isDriver,
   type Latest,
   loadLatest,
@@ -116,10 +116,9 @@ export async function resolveSplit(db: Db, split: z.infer<typeof zSplit> | undef
   return out;
 }
 
+/** Round 53 (b): an archived driver is refused the moment they are named ("… is archived: restore them first or pick another"). */
 export function activeDriver(refs: Refs, typed: string): Employee {
-  const driver = findDriver(refs, typed);
-  if (!driver.active) throw new ToolError(`${driver.name} is switched off. Use set_driver_active first.`);
-  return driver;
+  return findActiveDriver(refs, typed);
 }
 
 /** The vehicle a task gets when only the driver is named (Phase 7, §3): the one they hold today, else their regular one. */
@@ -261,10 +260,9 @@ export function vehicleChoiceText(choice: unknown): string | undefined {
     .trim();
 }
 
+/** Round 53 (b): an archived vehicle is refused the moment it is named. */
 export function activeVehicle(refs: Refs, typed: string): Vehicle {
-  const vehicle = findVehicle(refs, typed);
-  if (!vehicle.active) throw new ToolError(`${vehicle.reg_no} is not active. Use update_vehicle first.`);
-  return vehicle;
+  return findActiveVehicle(refs, typed);
 }
 
 // ---------------------------------------------------------------------------
@@ -1563,7 +1561,9 @@ export const updateTaskStops = tool({
       notes.push("Passengers get in at the start only on a task not under way: the stops were saved without it.");
     } else if (start && kept.length === 0 && stops[0]?.type === "pickup" && samePlace(start, stops[0])) {
       notes.push(
-        `Same as the start: Stop 1 (${stops[0].place_name}) is a pickup where the trip starts. Choose "People get in" for the start (From) instead.`,
+        `Same as the start: Stop 1 (${
+          stops[0].place_name
+        }) is a pickup where the trip starts. Choose "People get in" for the start (From) instead.`,
       );
     }
 

@@ -4209,6 +4209,8 @@
     "continue": "Continue driving",
     "moreRow": "Driving",
     "moreLine": "Your own trips on the driver screens",
+    "moreLineWeb": "Your trip, from this browser",
+    "moreLineNone": "No trip to drive today · My trips",
     "backToOffice": "Back to office",
     "banner": "Driving mode",
     "bannerLine": "Your own trips · location is shared only during a trip",

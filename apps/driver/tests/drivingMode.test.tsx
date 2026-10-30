@@ -6,12 +6,14 @@
 //     driver's Me: Sign out and Availability as before.
 //   - Office mode's Home: "You have a trip to drive · Start driving" for a person who can drive (Driving mode opens), none
 //     for one who cannot or with the setting off.
+//   - Round 53 (c), /m/ (the browser): the same card for the web's own trips (loadDriveTrips('web')); Start driving opens
+//     the trip's drive page, never Driving mode; More's Driving row opens today's trip there, else My trips.
 // The real screens through the router with the design pages' sample state (src/design/sampleDriver.ts, sampleOffice.ts).
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { Stack } from 'expo-router';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 
 import { failOnConsoleError } from './fakeOffice';
 
@@ -60,6 +62,8 @@ jest.mock('@/lib/video', () => ({ megabytes: (bytes: number) => `${Math.round(by
 import TodayScreen from '@/app/(tabs)/index';
 import MeScreen from '@/app/(tabs)/me';
 import OfficeHomeDesign from '@/design/OfficeHome';
+import MoreTab from '@/app/office/(tabs)/more';
+import { OfficeProvider } from '@/office/state';
 import { hideSnackbar } from '@/components/patterns/Snackbar';
 import { setOfficeMe } from '@/office/store';
 import type { Me } from '@/office/types';
@@ -78,6 +82,7 @@ const routes = {
   'office/issues/index': page('issues'),
   'office/profile': page('profile'),
   'office/my-trip/[id]': page('my trip'),
+  'office/my-trip/[id]/drive': page('web drive'),
   'task/[id]': page('task'),
   'log-mileage': page('log-mileage'),
   vehicle: page('vehicle'),
@@ -244,5 +249,97 @@ describe('Office mode\'s Home: Start driving', () => {
       expect(mockLoadTrips).not.toHaveBeenCalled();
       r.unmount();
     }
+  });
+});
+
+describe('/m/ (the browser): the same Home card and a Driving row in More (Round 53)', () => {
+  const OS = Platform.OS;
+  const officeMe = (over: Record<string, unknown>) => ({ name: 'Sahan Ranasinghe', email: 's@fame.lk', role: 'fleet_admin', permissions: ['view', 'request'], tools: [], ...over }) as unknown as Me;
+  const trip = { id: 't-web-1', title: 'Site visit · Kandy', status: 'assigned', start_at: '2026-10-29T05:00:00Z', leave_by: '2026-10-29T05:00:00Z', employee_id: 'e-1', driven_by: 'self' };
+  function useOfficeApp() {
+    mockOfficeApp = { ...require('./fakeOffice').mockUseApp(), loadDriveTrips: mockLoadTrips, enterDriving: mockEnter };
+  }
+  const withOffice = (me: Me) => ({
+    ...routes,
+    _layout: () => (
+      <OfficeProvider me={me}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </OfficeProvider>
+    ),
+    'office/(tabs)/more': MoreTab,
+  });
+  beforeEach(() => Object.defineProperty(Platform, 'OS', { value: 'web', configurable: true }));
+  afterEach(() => Object.defineProperty(Platform, 'OS', { value: OS, configurable: true }));
+
+  it('Home: "You have a trip to drive" from the web\'s own trips; Start driving opens the drive page, never Driving mode', async () => {
+    useOfficeApp();
+    mockLoadTrips.mockResolvedValue({ me: { id: 'e-1', role: 'fleet_admin' }, tasks: [trip] });
+    act(() => setOfficeMe(officeMe({ can_drive: true })));
+    const r = renderRouter(routes, { initialUrl: '/design/office-home' });
+    await screen.findByTestId('home-drive-line', {}, { timeout: 5000 });
+    expect(mockLoadTrips).toHaveBeenCalledWith('web');
+    expect(screen.getByText('You have a trip to drive')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('home-start-driving'));
+    expect(await screen.findByText('page web drive')).toBeTruthy();
+    expect(r.getPathname()).toBe('/office/my-trip/t-web-1/drive');
+    expect(mockEnter).not.toHaveBeenCalled();
+  });
+
+  it('Home: the whole card opens the trip\'s page; a trip under way on the web says Continue driving', async () => {
+    useOfficeApp();
+    mockLoadTrips.mockResolvedValue({ me: { id: 'e-1', role: 'fleet_admin' }, tasks: [{ ...trip, status: 'in_progress', driven_in: 'web' }] });
+    act(() => setOfficeMe(officeMe({ can_drive: true })));
+    const r = renderRouter(routes, { initialUrl: '/design/office-home' });
+    await screen.findByTestId('home-drive-line', {}, { timeout: 5000 });
+    expect(screen.getByText('Continue driving')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('home-drive-card'));
+    expect(await screen.findByText('page my trip')).toBeTruthy();
+    expect(r.getPathname()).toBe('/office/my-trip/t-web-1');
+  });
+
+  it('Home: nothing for a person who cannot drive or with self_drive_mode off (nothing is read)', async () => {
+    for (const over of [{}, { can_drive: true, self_drive_mode: false }]) {
+      useOfficeApp();
+      mockLoadTrips.mockResolvedValue({ me: { id: 'e-1', role: 'fleet_admin' }, tasks: [trip] });
+      act(() => setOfficeMe(officeMe(over)));
+      const r = renderRouter(routes, { initialUrl: '/design/office-home' });
+      await screen.findByTestId('stat-road', {}, { timeout: 5000 });
+      await waitFor(() => expect(screen.queryByTestId('home-drive-line')).toBeNull());
+      expect(mockLoadTrips).not.toHaveBeenCalled();
+      r.unmount();
+    }
+  });
+
+  it('More: Driving opens today\'s trip on its drive page', async () => {
+    useOfficeApp();
+    mockLoadTrips.mockResolvedValue({ me: { id: 'e-1', role: 'fleet_admin' }, tasks: [trip] });
+    const me = officeMe({ can_drive: true });
+    act(() => setOfficeMe(me));
+    const r = renderRouter(withOffice(me), { initialUrl: '/office/more' });
+    await waitFor(() => expect(screen.getByText('Your trip, from this browser · Site visit · Kandy')).toBeTruthy(), { timeout: 5000 });
+    fireEvent.press(screen.getByTestId('more-driving'));
+    expect(await screen.findByText('page web drive')).toBeTruthy();
+    expect(r.getPathname()).toBe('/office/my-trip/t-web-1/drive');
+    expect(mockEnter).not.toHaveBeenCalled();
+  });
+
+  it('More: no trip today → "No trip to drive today · My trips" opens My trips; no row for someone who cannot drive', async () => {
+    useOfficeApp();
+    mockLoadTrips.mockResolvedValue({ me: { id: 'e-1', role: 'fleet_admin' }, tasks: [] });
+    const me = officeMe({ can_drive: true });
+    act(() => setOfficeMe(me));
+    const r = renderRouter(withOffice(me), { initialUrl: '/office/more' });
+    const row = await screen.findByTestId('more-driving', {}, { timeout: 5000 });
+    expect(screen.getByText('No trip to drive today · My trips')).toBeTruthy();
+    fireEvent.press(row);
+    expect(await screen.findByText('page trips')).toBeTruthy();
+    expect(r.getPathname()).toBe('/office/trips');
+    r.unmount();
+
+    const cannot = officeMe({});
+    act(() => setOfficeMe(cannot));
+    renderRouter(withOffice(cannot), { initialUrl: '/office/more' });
+    await screen.findByTestId('more-profile', {}, { timeout: 5000 });
+    expect(screen.queryByTestId('more-driving')).toBeNull();
   });
 });

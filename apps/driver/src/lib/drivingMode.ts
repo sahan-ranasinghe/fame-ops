@@ -35,10 +35,29 @@ export function canEnterDriving(me: OfficeDriveFlags | null | undefined, native:
   return native && !!me && me.can_drive === true && me.self_drive_mode !== false;
 }
 
+/**
+ * Round 53 (c): where this person drives their own trips here: 'app' (Driving mode), 'web' (/m/: the trip's drive page,
+ * one position per action) or null (cannot drive, or self_drive_mode off). The same /me flags on both.
+ */
+export function driveWhere(me: OfficeDriveFlags | null | undefined, native: boolean): 'app' | 'web' | null {
+  if (!me || me.can_drive !== true || me.self_drive_mode === false) return null;
+  return native ? 'app' : 'web';
+}
+
 /** What the task list asks the server for: the person's own tasks; for an office person, only the trips they drive. */
 export interface TaskScope {
   employeeId: string;
   selfOnly: boolean;
+  /** Round 53 (c): /m/ reads the trips driven on the web instead of the app's (absent = the app). */
+  on?: 'app' | 'web';
+}
+
+/**
+ * The self trips a place may show: never one under way elsewhere, since a trip finishes where it started (the app: not
+ * yet started or driven in the app; the web: not yet started or driven on the web). A PostgREST or-filter on driven_in.
+ */
+export function drivenInFilter(on: 'app' | 'web' = 'app'): string {
+  return `driven_in.is.null,driven_in.eq.${on}`;
 }
 
 export function taskScope(me: DriverRow): TaskScope {

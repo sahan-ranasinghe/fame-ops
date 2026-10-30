@@ -3847,12 +3847,19 @@ check(r.get("needs_confirm") is True and any(x["task_id"] == tid52 for x in r.ge
 check(psql(f"select active from employees where username = 'arch.{tag52}'") == "t", "nothing changed yet")
 r = tool("set_driver_active", {"username": f"arch.{tag52}", "active": False, "confirm": True})
 check(r.get("active") is False and psql(f"select active from employees where username = 'arch.{tag52}'") == "f", "Archive anyway archives the driver", json.dumps(r)[:200])
+# Round 53 (b): an archived driver named for a trip is refused at once, in words.
+r = tool("create_task", {"title": f"Archived driver trip {tag52}", "date": day(1), "start_time": "11:00", "driver": f"arch.{tag52}", "vehicle": reg52,
+                         "pickup": "Head office", "dropoff": "Kandy"}, expect_error=True)
+check(f"Archive Driver {tag52} is archived: restore them first or pick another" in r, "Round 53: a trip for an archived driver is refused by name", r)
 tool("set_driver_active", {"username": f"arch.{tag52}", "active": True})
 check(psql(f"select active from employees where username = 'arch.{tag52}'") == "t", "Restore brings the driver back")
 r = tool("set_vehicle_active", {"reg_no": reg52, "active": False})
 check(r.get("needs_confirm") is True and any(x["task_id"] == tid52 for x in r.get("trips", [])), "a vehicle booked tomorrow asks first too", json.dumps(r)[:240])
 tool("set_vehicle_active", {"reg_no": reg52, "active": False, "confirm": True})
 check(psql(f"select active from vehicles where reg_no = '{reg52}'") == "f", "archived (returned)")
+r = tool("create_task", {"title": f"Archived vehicle trip {tag52}", "date": day(1), "start_time": "11:00", "driver": f"arch.{tag52}", "vehicle": reg52,
+                         "pickup": "Head office", "dropoff": "Kandy"}, expect_error=True)
+check(f"{reg52} is archived: restore it first or pick another" in r, "Round 53: a trip on an archived vehicle is refused by plate", r)
 tool("set_vehicle_active", {"reg_no": reg52, "active": True})
 
 # A project and a rental company: archived ones leave the matching, restore brings them back.

@@ -6,7 +6,7 @@
 import { z } from "zod";
 import { type AvailabilityWindow, tripWindow } from "../availability.ts";
 import { ToolError, unwrap } from "../db.ts";
-import { type Employee, findDriver, loadRefs, nearestTown } from "../fleet.ts";
+import { type Employee, findActiveDriver, loadRefs, nearestTown } from "../fleet.ts";
 import { mapsPoint, personLinks } from "../format.ts";
 import { driverPhotoLinks } from "../media.ts";
 import { pageOf, pageWindow } from "../paging.ts";
@@ -176,8 +176,7 @@ export const askDrivers = tool({
       if (chosen.length === 0) throw new ToolError(tripFrom ? "No driver is free then." : "No driver is on duty and free now.");
     } else {
       chosen = [...new Map(args.drivers!.map((d) => {
-        const e = findDriver(refs, d);
-        if (!e.active) throw new ToolError(`${e.name} is switched off: they cannot be asked.`);
+        const e = findActiveDriver(refs, d);
         return [e.id, e] as const;
       })).values()];
     }

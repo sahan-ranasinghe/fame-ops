@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 import { ToolError, unwrap } from "../db.ts";
-import { findDriver, loadRefs } from "../fleet.ts";
+import { archivedDriverText, findDriver, loadRefs } from "../fleet.ts";
 import { REASON_TEXT, type UnavailableReason, unavailableText } from "../presence.ts";
 import { addDays, colomboDate, colomboDateTime, colomboTime, daysBetween, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
@@ -106,7 +106,7 @@ export const setUnavailability = tool({
     realDate(args.date, "date");
     if (args.to_date) realDate(args.to_date, "to_date");
     const driver = findDriver(await loadRefs(db), args.driver);
-    if (!driver.active) throw new ToolError(`${driver.name} is switched off.`);
+    if (!driver.active) throw new ToolError(archivedDriverText(driver));
     const saved = unwrap(
       await db.rpc("save_unavailability", {
         p_employee: driver.id,
