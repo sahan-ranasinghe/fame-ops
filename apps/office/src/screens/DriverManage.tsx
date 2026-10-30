@@ -67,9 +67,10 @@ export function DriverManage() {
 
   /** After Archive or Restore: the toast (and the server's note), the lists again, back where the person came from. */
   function archived(restored: boolean, out: unknown) {
-    toast(restored ? `${x?.name ?? "Driver"} restored` : `${x?.name ?? "Driver"} archived`);
+    // One toast: a second one would replace it (CI 41036570936: only the note was left on the page).
     const notes = (out as { notes?: string[] } | null)?.notes;
-    if (notes?.length) toast(notes[0]);
+    const done = restored ? `${x?.name ?? "Driver"} restored` : `${x?.name ?? "Driver"} archived`;
+    toast(notes?.length ? `${done} · ${notes[0]}` : done);
     after();
     afterSave("/drivers");
   }

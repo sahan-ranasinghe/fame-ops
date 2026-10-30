@@ -79,7 +79,7 @@ test("a vehicle with no history: Delete permanently after typing its plate, then
   await expect(row).toContainText("Vehicle");
   await expect(row).toContainText("Deleted by Bin Admin");
   await row.getByRole("button", { name: "Restore" }).click();
-  await expect(page.locator("#toast")).toContainText(`Restored ${plate}`);
+  await expect(page.locator("#toast")).toContainText(`Restored Vehicle · ${plate}`);
   await expect(page.getByTestId("bin-row").filter({ hasText: plate })).toHaveCount(0);
 
   // Back: its page opens again, and the connector lists it.
@@ -133,10 +133,18 @@ test("a wrong task: Delete… with a reason from its page, the reason in Recentl
   const task = await tool<{ task_id: string }>("create_task", { title, date: dayFromNow(2), start_time: "10:00", driver: driver.username, vehicle: plate, pickup: "Head office", dropoff: "Kandy" });
   await signInAdmin(page, tag);
 
+  // Still with its driver: Delete says cancel it first, and nothing can be deleted.
   await page.goto(`/tasks/${task.task_id}`);
   await expect(page.getByTestId("task-detail")).toBeVisible();
   await page.getByTestId("delete-entry-task").click();
   const sheet = page.getByTestId("delete-entry-sheet");
+  await expect(sheet).toContainText("cancel it first");
+  await expect(sheet.getByTestId("delete-entry-confirm")).toBeDisabled();
+
+  await tool("cancel_task", { task_id: task.task_id, reason: "Made by mistake" });
+  await page.reload();
+  await expect(page.getByTestId("task-detail")).toBeVisible();
+  await page.getByTestId("delete-entry-task").click();
   await expect(sheet.getByTestId("delete-entry-label")).toContainText(title);
   await expect(sheet.getByTestId("delete-entry-affects")).toContainText("stop");
   const del = sheet.getByTestId("delete-entry-confirm");
