@@ -46,11 +46,14 @@ functions, then the website, then main, then the app update; never a website or 
 ## 3. Tests and CI
 
 - **Fast, while working:** `npm run typecheck` and `npx vitest run` (apps/office); `npm run typecheck`, `npx jest` and
-  the `npm run test:*` scripts (apps/driver); Deno tests in Docker (CLAUDE.md, "Deno via Docker"); pgTAP with
-  `npx supabase test db --local` on the local database.
-- **CI decides** (`.github/workflows/office-suite.yml`, docs/ci.md): `gh workflow run office-suite.yml --ref <branch>`
-  runs everything (the local stack, pgTAP, Deno, the connector suite, the website's e2e on Playwright, the app's
-  suites). A checkpoint needs a green run with zero failed tests.
+  the `npm run test:*` scripts (apps/driver); Deno tests in Docker; pgTAP with `npx supabase test db --local` on the local
+  database; the connector suite with `scripts/test-mcp-local.sh <env file>` (it needs the local stack and the functions served).
+- **CI decides** (`.github/workflows/office-suite.yml`, docs/ci.md): `gh workflow run office-suite.yml --ref <branch> -f
+  scope=full` runs the site's and the app's checks and the e2e on Playwright; a checkpoint needs a green run with zero failed
+  tests. pgTAP, Deno and the connector suite are not on CI: run them on the laptop before a deploy.
+- **CI minutes:** they are on Sahan's personal GitHub account: 2,000 free a month, about 36 for a full run, and when they run
+  out GitHub starts nothing (30 October 2026). `python3 scripts/ci-minutes.py` shows the month's use. Moving the repo to a Fame
+  organisation (section 6) gives the company its own minutes and billing.
 
 ## 4. Where the secrets are (never in git, never printed)
 
@@ -80,7 +83,7 @@ service's own settings and fill in the last column.
 
 | Service | What it holds | Today | Fame owner + two admins |
 |---|---|---|---|
-| **GitHub** | the code, CI, the history (`github.com/sahan-ranasinghe/fame-ops`, private) | Sahan Ranasinghe's personal account | ☐ transfer to a Fame GitHub organisation; ☐ two admins |
+| **GitHub** | the code, CI, the history (`github.com/sahan-ranasinghe/fame-ops`, private) | Sahan Ranasinghe's personal account | ☐ transfer to a Fame GitHub organisation (the CI minutes and their billing move with it: today they are on his personal account); ☐ two admins |
 | **Supabase** | the database, sign-ins, photos, documents, videos, the functions and their secrets (project `hinurfsaxvplbyqgtozj`) | the organisation this CLI is logged into: confirm its owner | ☐ Fame organisation owner; ☐ two admins; ☐ billing on a company card |
 | **Cloudflare** | the website and /m/ (Pages project `fame-fleet`, `fame-fleet.pages.dev`) | the account wrangler deploys with: confirm its owner | ☐ Fame account; ☐ two admins |
 | **Expo / EAS** | the app's builds, updates, signing key, its environment variables (organisation `fame-global`; CLI user `fameops`) | organisation `fame-global` | ☐ confirm the owner is Fame; ☐ two admins |

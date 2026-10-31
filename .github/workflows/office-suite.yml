@@ -2,10 +2,26 @@
 # working; a checkpoint passes when this run passes. No repository secrets: every key the local functions need is a
 # throwaway value made inside the run, the Supabase stack is the CLI's local one (its own generated keys), and the Google
 # keys stay empty (the free map and the fallbacks). The repo must stay private.
+# What a run costs (Sahan, 31 October 2026): scope full at a checkpoint, on main and when he asks; specs for a fix that touches
+# only tests (the fast job + those spec files); fast for docs. By hand the scope is always chosen, never a costly default.
 name: office-suite
 
 on:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: "full = the whole e2e job (checkpoints, main, when Sahan asks); specs = fast + the spec files or grep below; fast = the fast job only"
+        type: choice
+        required: true
+        options: [full, specs, fast]
+      specs:
+        description: "scope specs: spec files, space-separated (e2e/bin.spec.ts e2e/mobile.spec.ts)"
+        type: string
+        required: false
+      grep:
+        description: "scope specs: only tests whose title matches (Playwright --grep)"
+        type: string
+        required: false
   push:
     branches: [main]
 
@@ -25,7 +41,14 @@ jobs:
       minutes: ${{ steps.done.outputs.minutes }}
     steps:
       - name: Start the clock
-        run: echo "CI_START=$(date +%s)" >> "$GITHUB_ENV"
+        env:
+          SCOPE: ${{ inputs.scope }}
+          SPECS: ${{ inputs.specs }}
+          GREP: ${{ inputs.grep }}
+        run: |
+          # Scope specs with nothing named would be a full e2e by accident: refused before a minute is spent.
+          if [ "$SCOPE" = "specs" ] && [ -z "$SPECS$GREP" ]; then echo "Scope specs needs specs or grep."; exit 1; fi
+          echo "CI_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -70,6 +93,8 @@ jobs:
   e2e:
     name: e2e
     needs: fast
+    # On main (a push has no scope) always the full job; by hand as chosen.
+    if: github.event_name == 'push' || inputs.scope != 'fast'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
@@ -132,17 +157,22 @@ jobs:
       - name: The office suite (as on the laptop; workers 1, retries 1, zero hard failures)
         env:
           CI: "1"
+          # Scope specs: only these (scripts/test-office-local.sh); empty = the whole suite.
+          E2E_SPECS: ${{ inputs.scope == 'specs' && inputs.specs || '' }}
+          E2E_GREP: ${{ inputs.scope == 'specs' && inputs.grep || '' }}
         run: |
           set -o pipefail
           bash scripts/test-office-local.sh "$RUNNER_TEMP/office-mcp.env" 2>&1 | tee "$OUT/office-suite.log"
           echo "$(date -u +%T) suite" >> "$TIMES"
       - name: The driver app's data layer against the stack (test:data, after the suite)
+        if: github.event_name == 'push' || inputs.scope == 'full'
         run: |
           # After the office suite, never before it: its rows (tasks that need a driver, critical issues) would be on the
           # suite's Overview, which the laptop's full run measures on a freshly reset database (run 39472331649).
           cd apps/driver && npm run -s test:data
           echo "$(date -u +%T) test:data" >> "$TIMES"
       - name: The key and secret scans of the built site (no upload)
+        if: github.event_name == 'push' || inputs.scope == 'full'
         run: |
           # The production build's public values: the project's address (in the repo's docs) and a stand-in publishable key;
           # deploy-pages.sh without --deploy builds both sites, checks for source maps and scans, and uploads nothing.
