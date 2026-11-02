@@ -1026,6 +1026,18 @@ Sahan's brief with the Round 52 deploy go: the two findings of §40.2, and /m/'s
    tool list had not got Round 52's two read tools (list_projects, list_rental_companies); two random ids gave one plate
    (`plate_u` now has a letter per channel).
 
+6. **The fresh review's findings 1, 3, 4 and 5, fixed (Sahan's decision, 2 November 2026).** (1) A driver whose phone has no
+   token left is no longer silent: push-task writes `no_token` in push_log, and the push issue names the driver ("No phone
+   registered for notifications: …", `issues.ts` pushIssueRows); the app registers its token again when it comes to the
+   front, at most every 6 hours (`lib/pushDue.ts`), so a token the server removed comes back. (3) The driver and vehicle a
+   trip keeps are checked too (`refuseArchivedKept`): reassign_task and update_task refuse a kept archived driver or vehicle
+   with the same words. (4) Move swaps the vehicle of a trip already running when its driver was archived (the regression);
+   with no trip running it still refuses. (5) Tests: the connector suite's Round 53 block refuses an archived driver through
+   reassign_task, update_task, move_driver_vehicle, ask_drivers, update_vehicle and book_vehicle and a kept archived vehicle
+   through reassign_task and update_task, and checks nothing changed; Deno: refuseArchivedKept, Move with and without a
+   running trip, pushIssueRows, and a source check that neither function deletes device_tokens with service_role again.
+   Connector suite: 655 + 781 calls, contract and smoke passed. Findings 2 (Expo receipts) and the low ones stay for later.
+
 ## 40. Round 52: archive, delete and restore everywhere; the admin and handover docs (30 October 2026, branch `phase9-r52` from main `76a1596`, worktree `~/projects/fame-ops-r52`)
 
 Patterns: Shopify's and Samsara's archive (a record with history is switched off, never lost), Gmail's and Google Drive's bin

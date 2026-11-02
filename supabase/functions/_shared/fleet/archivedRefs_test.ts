@@ -3,7 +3,9 @@
 // and reports still find archived ones (findDriver / findVehicle unchanged).
 import { assertEquals, assertThrows } from "@std/assert";
 import { type Employee, findActiveDriver, findActiveVehicle, findDriver, findVehicle, type Refs, type Vehicle } from "./fleet.ts";
-import { activeDriver, activeVehicle } from "./tools/tasks.ts";
+import { activeDriver, activeVehicle, refuseArchivedKept } from "./tools/tasks.ts";
+import { moveDriverVehicle } from "./tools/duty.ts";
+import type { Db } from "./db.ts";
 
 const emp = (
   id: string,
@@ -58,4 +60,47 @@ Deno.test("an archived vehicle named for a trip: refused at once; it never makes
 Deno.test("history and reports still find archived ones", () => {
   assertEquals(findDriver(refs, "Nimal").id, "e3");
   assertEquals(findVehicle(refs, "WP CAB-4521").id, "v1");
+});
+
+// The review (2 November): the driver and vehicle a trip keeps are checked too, and a trip already running keeps its swap.
+
+Deno.test("a kept archived driver or vehicle is refused with the same words; active ones and none pass", () => {
+  const r = refs;
+  assertThrows(() => refuseArchivedKept(r, { driverId: "e1" }), Error, "Kamal Perera is archived: restore them first or pick another.");
+  assertThrows(() => refuseArchivedKept(r, { vehicleId: "v1" }), Error, "is archived: restore it first or pick another.");
+  refuseArchivedKept(r, { driverId: "e2", vehicleId: null });
+  refuseArchivedKept(r, {});
+});
+
+/** A database that answers every read of a table with its rows (enough for loadRefs and Move's running-trip read). */
+function tablesDb(tables: Record<string, unknown[]>): Db {
+  const chain = (table: string): unknown => {
+    const result = { data: tables[table] ?? [], error: null };
+    const self: Record<string, unknown> = new Proxy({}, {
+      get(_t, prop) {
+        if (prop === "then") return (ok: (r: unknown) => unknown, bad?: (e: unknown) => unknown) => Promise.resolve(result).then(ok, bad);
+        return () => self;
+      },
+    });
+    return self;
+  };
+  return { from: chain, rpc: () => Promise.resolve({ data: null, error: { message: "not in this test" } }) } as unknown as Db;
+}
+
+Deno.test("Move: an archived driver with no trip running gets no vehicle; with a trip running the swap goes on", async () => {
+  const r = refs;
+  const active = r.vehicles.find((v) => v.active)!;
+  const ctx = (tasks: unknown[]) =>
+    ({ db: tablesDb({ employees: r.employees, vehicles: r.vehicles, rental_companies: [], tasks }), actor: { name: "Office" } }) as never;
+  const idle = await moveDriverVehicle.run({ driver: "kamal.p", vehicle: active.reg_no } as never, ctx([])).then(
+    () => "",
+    (e) => String(e),
+  );
+  assertEquals(idle.includes("Kamal Perera is archived: restore them first or pick another."), true, idle);
+  const running = await moveDriverVehicle.run(
+    { driver: "kamal.p", vehicle: active.reg_no } as never,
+    ctx([{ id: "t1", title: "Trip", vehicle_id: "v9" }]),
+  )
+    .then(() => "", (e) => String(e));
+  assertEquals(running.includes("is archived"), false, `the swap was not refused for the archive: ${running}`);
 });

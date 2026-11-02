@@ -35,3 +35,11 @@ Deno.test("a refusal is read and handed back for the push's own record, never th
   const lost = fake(new Error("connection reset"));
   assertEquals(await removeDeadTokens(lost.db, ["a"], "notify-office"), { removed: 0, error: "remove_tokens: connection reset" });
 });
+
+Deno.test("neither function deletes a token with service_role again (it deletes nothing): both go through removeDeadTokens", () => {
+  for (const file of ["../push-task/index.ts", "./index.ts"]) {
+    const source = Deno.readTextFileSync(new URL(file, import.meta.url));
+    assertEquals(/device_tokens["']\)\s*\.delete\(/.test(source), false, `${file} deletes device_tokens directly`);
+    assertEquals(source.includes("removeDeadTokens("), true, `${file} uses removeDeadTokens`);
+  }
+});

@@ -3853,6 +3853,22 @@ check(r.get("active") is False and psql(f"select active from employees where use
 r = tool("create_task", {"title": f"Archived driver trip {tag52}", "date": day(1), "start_time": "11:00", "driver": f"arch.{tag52}", "vehicle": reg52,
                          "pickup": "Head office", "dropoff": "Kandy"}, expect_error=True)
 check(f"Archive Driver {tag52} is archived: restore them first or pick another" in r, "Round 53: a trip for an archived driver is refused by name", r)
+# The review (2 November): every tool that gives a driver work refuses an archived one, named or kept.
+archived_words = f"Archive Driver {tag52} is archived: restore them first or pick another"
+pv52 = int(psql(f"select plan_version from tasks where id = '{tid52}'") or 0)
+for name, args in [
+    ("reassign_task (the driver kept)", ("reassign_task", {"task_id": tid52, "start_time": "11:30"})),
+    ("update_task (a new vehicle, the driver kept)", ("update_task", {"task_id": tid52, "plan_version": pv52, "vehicle": "WP PH-2087"})),
+    ("move_driver_vehicle (no trip running)", ("move_driver_vehicle", {"driver": f"arch.{tag52}", "vehicle": "WP PH-2087"})),
+    ("ask_drivers", ("ask_drivers", {"kind": "where_now", "drivers": [f"arch.{tag52}"]})),
+    ("update_vehicle (regular driver)", ("update_vehicle", {"reg_no": "WP PH-2087", "regular_driver": f"arch.{tag52}"})),
+    ("book_vehicle", ("book_vehicle", {"date": day(3), "time": "14:00", "vehicle": "ph2087", "driver": f"arch.{tag52}"})),
+]:
+    r = tool(args[0], args[1], expect_error=True)
+    check(archived_words in r, f"Round 53: {name} refuses the archived driver", r)
+check(psql(f"select employee_id from tasks where id = '{tid52}'") == psql(f"select id from employees where username = 'arch.{tag52}'")
+      and psql("select coalesce(regular_driver_id::text, '') from vehicles where reg_no = 'WP PH-2087'") != psql(f"select id from employees where username = 'arch.{tag52}'"),
+      "nothing was changed by the refusals")
 tool("set_driver_active", {"username": f"arch.{tag52}", "active": True})
 check(psql(f"select active from employees where username = 'arch.{tag52}'") == "t", "Restore brings the driver back")
 r = tool("set_vehicle_active", {"reg_no": reg52, "active": False})
@@ -3862,6 +3878,13 @@ check(psql(f"select active from vehicles where reg_no = '{reg52}'") == "f", "arc
 r = tool("create_task", {"title": f"Archived vehicle trip {tag52}", "date": day(1), "start_time": "11:00", "driver": f"arch.{tag52}", "vehicle": reg52,
                          "pickup": "Head office", "dropoff": "Kandy"}, expect_error=True)
 check(f"{reg52} is archived: restore it first or pick another" in r, "Round 53: a trip on an archived vehicle is refused by plate", r)
+pv52 = int(psql(f"select plan_version from tasks where id = '{tid52}'") or 0)
+for name, args in [
+    ("reassign_task (a new driver, the vehicle kept)", ("reassign_task", {"task_id": tid52, "driver": "kasun.s"})),
+    ("update_task (a new driver, the vehicle kept)", ("update_task", {"task_id": tid52, "plan_version": pv52, "driver": "kasun.s"})),
+]:
+    r = tool(args[0], args[1], expect_error=True)
+    check(f"{reg52} is archived: restore it first or pick another" in r, f"Round 53: {name} refuses the archived vehicle", r)
 tool("set_vehicle_active", {"reg_no": reg52, "active": True})
 
 # A project and a rental company: archived ones leave the matching, restore brings them back.

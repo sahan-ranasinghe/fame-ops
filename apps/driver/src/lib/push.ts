@@ -25,8 +25,18 @@ import { getJson, KEYS, remove, setJson } from './kv';
 import { ensureChannels, notificationsAllowed, removeReplacedChannels } from './notifications';
 import { supabase } from './supabase';
 import type { Language } from './types';
+import { reregisterDue } from './pushDue';
 
 /** The push token this phone has registered, if any. */
+/** When this process last registered the token (0 = not yet): see pushDue.ts. */
+let lastRegisteredAt = 0;
+
+/** Registers the token again when it is due (pushDue.ts): when the app comes to the front. */
+export async function registerPushIfDue(now = Date.now()): Promise<boolean> {
+  if (!reregisterDue(now, lastRegisteredAt)) return false;
+  return registerPush();
+}
+
 export function pushToken(): string | null {
   return getJson<string>(KEYS.pushToken);
 }
@@ -58,6 +68,7 @@ export async function registerPush(): Promise<boolean> {
     }
     if (error) return false;
     setJson(KEYS.pushToken, token);
+    lastRegisteredAt = Date.now();
     // Part 6: the server now sends on the 1.3.0 channels, so the 1.2.0 ones they replace can go (only then).
     if (named) await removeReplacedChannels(channels);
     return true;

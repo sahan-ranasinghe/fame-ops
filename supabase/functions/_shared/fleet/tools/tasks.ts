@@ -13,6 +13,8 @@ import { DECLINE_TEXT } from "../decline.ts";
 export { DECLINE_TEXT };
 import { basePoint, type Eta, taskEta } from "../eta.ts";
 import {
+  archivedDriverText,
+  archivedVehicleText,
   assignCheck,
   assignWarnings,
   type Conflict,
@@ -263,6 +265,18 @@ export function vehicleChoiceText(choice: unknown): string | undefined {
 /** Round 53 (b): an archived vehicle is refused the moment it is named. */
 export function activeVehicle(refs: Refs, typed: string): Vehicle {
   return findActiveVehicle(refs, typed);
+}
+
+/**
+ * Round 53, from the review (2 November): the driver and vehicle a trip keeps are checked too, not only the ones named. A new
+ * driver with the task's archived vehicle, a new vehicle for its archived driver, or a declined task handed back to an
+ * archived driver is refused with the same words.
+ */
+export function refuseArchivedKept(refs: Refs, kept: { driverId?: string | null; vehicleId?: string | null }): void {
+  const driver = kept.driverId ? refs.emp.get(kept.driverId) : undefined;
+  if (driver && !driver.active) throw new ToolError(archivedDriverText(driver));
+  const vehicle = kept.vehicleId ? refs.veh.get(kept.vehicleId) : undefined;
+  if (vehicle && !vehicle.active) throw new ToolError(archivedVehicleText(vehicle));
 }
 
 // ---------------------------------------------------------------------------
@@ -2727,6 +2741,10 @@ export const updateTask = tool({
     const day = args.date ?? colomboDate(task.start_at);
     const startAt = args.date || args.time ? utcIso(day, args.time ?? colomboTime(task.start_at)) : undefined;
     const endBy = args.end_time === undefined ? undefined : args.end_time === null ? null : utcIso(day, args.end_time);
+    // A new driver keeps the task's vehicle, a new vehicle keeps its driver: neither may be archived.
+    if (refs) {
+      refuseArchivedKept(refs, { driverId: args.driver ? null : task.employee_id, vehicleId: args.vehicle ? null : task.vehicle_id });
+    }
 
     // Round 48 (item 1): without approve, a change to the day, time, end, driver or vehicle waits in the queue (the words
     // alone, title / passengers / contact / notes, go straight to the task as before).
@@ -2988,6 +3006,7 @@ export const reassignTask = tool({
       : task.vehicle_id
       ? refs.veh.get(task.vehicle_id) ?? null
       : null;
+    refuseArchivedKept(refs, { driverId: newDriver.id, vehicleId: newVehicle?.id });
     const newMode: VehicleMode = newVehicle && (vehicle && !word) ? "specific" : word ? word.mode : task.vehicle_mode as VehicleMode;
     const newType = word?.mode === "any_type" ? word.type : word ? null : newVehicle && vehicle ? null : task.vehicle_type_wanted;
     const vehicleWords = (v: { reg_no: string } | null | undefined, m: string | null, t: string | null) =>

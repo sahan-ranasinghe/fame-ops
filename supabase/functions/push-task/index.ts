@@ -258,7 +258,14 @@ Deno.serve(async (request) => {
     return json(200, { sent: 0, failed: 0, reason: "not_a_driver" });
   }
   if (tokens.length === 0 || !driver.active) {
-    await admin.from("push_log").insert({ ...log, sent: 0, failed: 0, errors: driver.active ? null : [{ error: "driver_inactive" }] });
+    // Round 53, from the review: no_token is written down, so the office's push issue names a driver whose phone has no
+    // token left (Expo's dead ones are removed now) instead of going quiet; failed stays 0, as nothing was sent.
+    await admin.from("push_log").insert({
+      ...log,
+      sent: 0,
+      failed: 0,
+      errors: [{ error: driver.active ? "no_token" : "driver_inactive" }],
+    });
     return json(200, { sent: 0, failed: 0, reason: driver.active ? "no_token" : "driver_inactive" });
   }
 

@@ -4,7 +4,17 @@
 
 import { z } from "zod";
 import { type Db, fetchAll, ToolError, unwrap } from "../db.ts";
-import { findActiveDriver, findActiveVehicle, findDriver, findDriverOrSelfDriver, findVehicle, loadRefs, vehicleLabel } from "../fleet.ts";
+import {
+  archivedDriverText,
+  type Employee,
+  findActiveDriver,
+  findActiveVehicle,
+  findDriver,
+  findDriverOrSelfDriver,
+  findVehicle,
+  loadRefs,
+  vehicleLabel,
+} from "../fleet.ts";
 import { buildRoute } from "../route.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange } from "../time.ts";
 import { realDate, tool, zDate, zId, zPaging, zText } from "../tool.ts";
@@ -235,13 +245,24 @@ export const moveDriverVehicle = tool({
   async run({ driver, vehicle, old_end_km, new_start_km, reason }, { db, actor }) {
     const refs = await loadRefs(db);
     // Round 53 (b): an archived driver or vehicle is never given a vehicle or a driver; an archived driver's vehicle may
-    // still be taken away (vehicle none).
+    // still be taken away (vehicle none), and (the review, 2 November) a trip already running when they were archived may
+    // still have its vehicle swapped: a breakdown is not left without a vehicle.
     const target = vehicle === null || vehicle.toLowerCase() === "none" ? null : findActiveVehicle(refs, vehicle);
-    const who = target ? findActiveDriver(refs, driver) : findDriver(refs, driver);
+    let who: Employee;
+    let archived = false;
+    try {
+      who = target ? findActiveDriver(refs, driver) : findDriver(refs, driver);
+    } catch (error) {
+      if (!target) throw error;
+      who = findDriver(refs, driver);
+      if (who.active) throw error;
+      archived = true;
+    }
     const running = unwrap(
       await db.from("tasks").select("id, title, vehicle_id").eq("employee_id", who.id).eq("status", "in_progress").limit(1),
       "tasks",
     )[0];
+    if (archived && !running?.vehicle_id) throw new ToolError(archivedDriverText(who));
     // A task under way always has its vehicle (the database's check): the swap moves it.
     if (running?.vehicle_id) {
       return await swapDuringTask(db, actor.name, who.name, { ...running, vehicle_id: running.vehicle_id }, target, {

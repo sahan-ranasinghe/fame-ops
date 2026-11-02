@@ -829,17 +829,25 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   if (full) {
     const dayStart = new Date(now.getTime() - ms(1)).toISOString();
     const [pushRes, routingRes] = await Promise.all([
-      db.from("push_log").select("failed, errors").gt("failed", 0).gte("created_at", dayStart),
+      db.from("push_log").select("employee_id, failed, tokens, errors").or("failed.gt.0,tokens.eq.0").gte("created_at", dayStart),
       db.from("routing_calls").select("provider, calls, errors").eq("day", today).gt("errors", 0),
     ]);
-    const pushes = unwrap(pushRes, "push log");
-    if (pushes.length > 0) {
+    const pushes = pushIssueRows(unwrap(pushRes, "push log"));
+    if (pushes.failed + pushes.noPhone.length > 0) {
+      const names = pushes.noPhone.map((id) => refs.emp.get(id)?.name).filter((n): n is string => !!n);
       wanted.push({
         kind: "push_failed",
         ref_key: `push:${today}`,
         severity: "info",
-        title: `Push notifications failed: ${pushes.length} today`,
-        detail: "Some drivers' phones did not get a task notification (expired tokens are removed by themselves).",
+        title: `Push notifications failed: ${pushes.failed + pushes.noPhoneSends} today`,
+        detail: [
+          pushes.failed ? "Some drivers' phones did not get a task notification (expired tokens are removed by themselves)." : null,
+          names.length
+            ? `No phone registered for notifications: ${
+              names.join(", ")
+            }. They get no task notification until they open Fame Fleet on their phone.`
+            : null,
+        ].filter(Boolean).join(" "),
         due: "today",
         sort_key: 0,
       });
@@ -886,6 +894,23 @@ export const usageRefKey = (c: Pick<UsageCounter, "feature" | "period">, today: 
   `usage:${c.feature}:${c.period}:${c.period === "day" ? today : today.slice(0, 7)}`;
 
 /** The issues the counters want now (pure): one per feature and period from 80 % of the cap, critical at 100 %. */
+/**
+ * Round 53, from the review (2 November): the day's push records that need the office. A failed send counts as before; a
+ * push to an app driver with no phone token left (no_token: Expo's dead tokens are removed now) names the driver, so a phone
+ * that lost its token is not silent. A push skipped for someone who is not an app driver, or archived, is not a failure.
+ */
+export function pushIssueRows(rows: { employee_id: string | null; failed: number; tokens: number; errors: unknown }[]): {
+  failed: number;
+  noPhone: string[];
+  noPhoneSends: number;
+} {
+  const noToken = (r: { errors: unknown }) =>
+    Array.isArray(r.errors) && r.errors.some((e) => (e as { error?: string })?.error === "no_token");
+  const failed = rows.filter((r) => r.failed > 0).length;
+  const quiet = rows.filter((r) => r.failed === 0 && r.tokens === 0 && noToken(r));
+  return { failed, noPhone: [...new Set(quiet.map((r) => r.employee_id).filter((id): id is string => !!id))], noPhoneSends: quiet.length };
+}
+
 export function usageCapIssues(counters: readonly UsageCounter[], today: string): Wanted[] {
   const out: Wanted[] = [];
   for (const c of counters) {
@@ -931,7 +956,10 @@ const GOOGLE_AT_CAP: Record<GoogleFeature, string> = {
  */
 export async function usageCounters(
   db: Db,
-  settings: Pick<Settings, "google_caps" | "ors_gap_daily_cap" | "ors_autocomplete_daily_cap" | "odometer_server_daily_cap" | "roads_trip_daily_cap">,
+  settings: Pick<
+    Settings,
+    "google_caps" | "ors_gap_daily_cap" | "ors_autocomplete_daily_cap" | "odometer_server_daily_cap" | "roads_trip_daily_cap"
+  >,
   today: string,
   nameOf: (employeeId: string) => string | null = () => null,
 ): Promise<UsageCounter[]> {

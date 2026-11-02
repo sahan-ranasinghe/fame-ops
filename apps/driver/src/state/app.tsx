@@ -64,7 +64,7 @@ import { useFuelReminderSwitch } from '@/lib/fuelReminderSwitch';
 import { type ArrivalFlag, canMarkDone, taskKmSoFar, withSwapReading } from '@/lib/dayRules';
 import { noteArrivalUndone } from '@/lib/stopCorrections';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
-import { pushToken, registerPush, unregisterPush } from '@/lib/push';
+import { pushToken, registerPush, registerPushIfDue, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
 import { mapSession, SETTINGS_EVERY_MS } from '@/lib/mapEngine';
 import { flushMapReport } from '@/lib/mapReport';
@@ -1043,6 +1043,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (liveRef.current !== 'connected') setLiveGeneration((n) => n + 1);
       void refresh();
       void checkForUpdate(safeToApplyUpdate);
+      // Round 53 review: a token the server removed (Expo said it was dead) comes back, at most every 6 hours.
+      if (meRef.current) void ensureChannels().then(() => registerPushIfDue());
     });
     const network = Network.addNetworkStateListener((state) => {
       const up = state.isInternetReachable ?? state.isConnected ?? true;
