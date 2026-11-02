@@ -1654,7 +1654,7 @@ export interface DriverRoute {
   /** Part 5b (estimate_gaps): each gap of over 300 m and 60 s as the likely road, [lat, lng]; for the map, never km. */
   estimated?: { from_at: string; to_at: string; from: string; to: string; km_road?: number; points: [number, number][] }[];
   estimated_note?: string;
-  snapped?: { provider: string; status: "off" | "ok" | "partial" | "failed"; legs?: number; matched?: number };
+  snapped?: { provider: string; status: "off" | "ok" | "partial" | "failed"; legs?: number; matched?: number; from?: string; held?: string };
   points_stored?: number;
   points_shown?: number;
   outlier_points?: number;

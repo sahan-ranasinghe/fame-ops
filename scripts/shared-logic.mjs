@@ -28,6 +28,8 @@ export const PAIRS = [
   // Round 4–7 (6): the Passengers field's rules (before the request and assign rules that use them).
   ["screens/passengersLogic.ts", "passengersLogic.ts", { "../data/types": "../types", "../lib/phones": "./phones" }],
   ["screens/requestLogic.ts", "requestLogic.ts", { "../data/types": "../types", "../ui/whoDrivesLogic": "./whoDrivesLogic" }],
+  // The snap cost fix: the page's own copy of a snapped line (no import, no words).
+  ["transport/snapHold.ts", "snapHold.ts", {}],
   ["screens/assignLogic.ts", "assignLogic.ts", { "../data/types": "../types", "../lib/format": "./format", "../ui/whoDrivesLogic": "./whoDrivesLogic" }],
 ];
 

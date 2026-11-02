@@ -299,7 +299,7 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   odometer_server_daily_cap:
     "The server's own odometer photo checks a day (Gemini, for readings typed with no connection; the pg_cron job check-odometer-photos): counted before each call and refused at the cap until the next Colombo day; a driver's own reads stay at 60 a day each. 0 pauses the checks",
   roads_trip_daily_cap:
-    "Snap to roads: how many Google Roads calls one driver's day may cost (each call snaps up to 100 points; a two-hour drive is about 14): past it that driver's route shows the GPS line until tomorrow and one info issue opens, so one trip never eats the fleet's day cap. 0 = never snap. routing_usage shows the calls by source (which screen asked)",
+    "Snap to roads: how many Google Roads calls one driver's day may cost (each call snaps up to 100 points, about 25 km; opening a 100 km day is about 5, and a page's refresh pays only for what is new): past it that driver's route shows the GPS line until tomorrow and one info issue opens, so one trip never eats the fleet's day cap. 0 = never snap. routing_usage shows the calls by source (which screen asked)",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);

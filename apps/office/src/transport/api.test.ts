@@ -193,3 +193,85 @@ describe("ApiTransport: the time limits", () => {
     }
   });
 });
+
+// The snap cost fix (2 November 2026): the page holds the line it was answered; a refresh pays only for what is new.
+describe("ApiTransport: a snapped route held by the page", () => {
+  const columns = ["time", "lat", "lng", "km/h", "at", "acc", "snapped"];
+  const row = (at: string, snapped = 1) => ["10:00", 7, 80, 0, at, null, snapped];
+  const args = { driver: "kanishka", date: "2026-11-02", snap: true, source: "site_route" };
+
+  it("sends the token back, adds the new part to the line, and every screen gets one whole answer", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const answers = [
+      { route_snapped: { columns, points: [row("2026-11-02T05:00:00.000Z"), row("2026-11-02T05:10:00.000Z")] }, snapped: { status: "ok", held: "v1.a" } },
+      { route_snapped: { columns, points: [row("2026-11-02T05:11:00.000Z", 0)] }, snapped: { status: "ok", from: "2026-11-02T05:10:00.000Z", held: "v1.b" } },
+      { route_snapped: { columns, points: [row("2026-11-02T05:12:00.000Z")] }, snapped: { status: "ok", from: "2026-11-02T05:10:00.000Z", held: "v1.c" } },
+    ];
+    const fetchFn = vi.fn(async (_u: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return reply(200, { result: answers.shift() });
+    });
+    const t = transport(fetchFn as typeof fetch);
+    await t.call("driver_route", args);
+    const second = await t.call<{ route_snapped: { points: unknown[][] } }>("driver_route", args);
+    const third = await t.call<{ route_snapped: { points: unknown[][] } }>("driver_route", args);
+    expect(bodies[0].snap_held).toBeUndefined();
+    expect(bodies[1].snap_held).toBe("v1.a");
+    expect(bodies[2].snap_held).toBe("v1.b");
+    expect(second.route_snapped.points.map((p) => p[4])).toEqual(["2026-11-02T05:00:00.000Z", "2026-11-02T05:10:00.000Z", "2026-11-02T05:11:00.000Z"]);
+    // The raw tail after the line is replaced by each answer; the line up to snapped.from stays.
+    expect(third.route_snapped.points.map((p) => p[4])).toEqual(["2026-11-02T05:00:00.000Z", "2026-11-02T05:10:00.000Z", "2026-11-02T05:12:00.000Z"]);
+  });
+
+  it("an answer without from replaces the line (a late upload), and one without a token forgets it", async () => {
+    const answers = [
+      { route_snapped: { columns, points: [row("2026-11-02T05:00:00.000Z")] }, snapped: { held: "v1.a" } },
+      { route_snapped: { columns, points: [row("2026-11-02T04:00:00.000Z"), row("2026-11-02T05:00:00.000Z")] }, snapped: { held: "v1.b" } },
+      { snapped: { status: "off" } },
+      { route_snapped: { columns, points: [row("2026-11-02T05:00:00.000Z")] }, snapped: { held: "v1.c" } },
+    ];
+    const bodies: Record<string, unknown>[] = [];
+    const fetchFn = vi.fn(async (_u: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return reply(200, { result: answers.shift() });
+    });
+    const t = transport(fetchFn as typeof fetch);
+    await t.call("driver_route", args);
+    const whole = await t.call<{ route_snapped: { points: unknown[][] } }>("driver_route", args);
+    expect(whole.route_snapped.points).toHaveLength(2);
+    await t.call("driver_route", args);
+    await t.call("driver_route", args);
+    expect(bodies[3].snap_held).toBeUndefined();
+  });
+
+  it("a part with no line behind it is shown as it is and not held: the next call asks for it whole", async () => {
+    const answers = [
+      { route_snapped: { columns, points: [row("2026-11-02T05:11:00.000Z")] }, snapped: { from: "2026-11-02T05:10:00.000Z", held: "v1.b" } },
+      { route_snapped: { columns, points: [row("2026-11-02T05:00:00.000Z")] }, snapped: { held: "v1.c" } },
+    ];
+    const bodies: Record<string, unknown>[] = [];
+    const fetchFn = vi.fn(async (_u: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return reply(200, { result: answers.shift() });
+    });
+    const t = transport(fetchFn as typeof fetch);
+    await t.call("driver_route", args);
+    await t.call("driver_route", args);
+    expect(bodies[1].snap_held).toBeUndefined();
+  });
+
+  it("another driver, another day and an unsnapped call are not given the token", async () => {
+    const answers = [{ route_snapped: { columns, points: [row("2026-11-02T05:00:00.000Z")] }, snapped: { held: "v1.a" } }, {}, {}, {}];
+    const bodies: Record<string, unknown>[] = [];
+    const fetchFn = vi.fn(async (_u: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return reply(200, { result: answers.shift() });
+    });
+    const t = transport(fetchFn as typeof fetch);
+    await t.call("driver_route", args);
+    await t.call("driver_route", { ...args, driver: "other" });
+    await t.call("driver_route", { ...args, date: "2026-11-01" });
+    await t.call("driver_route", { ...args, snap: false });
+    expect(bodies.slice(1).every((b) => b.snap_held === undefined)).toBe(true);
+  });
+});

@@ -11,6 +11,7 @@
 import { LOOP_ERROR, LoopBreaker, loopReportBody, sendLoopReport } from '../lib/breaker';
 import type { FleetError, Me } from './types';
 import { normalisePermissions, permissionsForRole } from './permissions';
+import { SnapHolds } from './trip/snapHold';
 
 /** The tools the server marks readOnly: they change nothing, so a dropped one may be asked again. */
 export const READ_TOOLS: ReadonlySet<string> = new Set([
@@ -124,6 +125,8 @@ export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
   const doFetch = deps.fetch ?? fetch;
   const base = deps.baseUrl.replace(/\/$/, '');
   const breaker = deps.breaker ?? new LoopBreaker();
+  /** The snapped lines this client already draws: a refresh pays only for what came after them. */
+  const snapHolds = new SnapHolds();
 
   /** The breaker before a tool call: a looping screen is stopped here and reported once (never a report per refused call). */
   async function guard(tool: string): Promise<void> {
@@ -188,7 +191,7 @@ export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
     },
     async call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {
       await guard(tool);
-      const run = async () => (await request<{ result: T }>('POST', `/tools/${tool}`, args, tool)).result;
+      const run = async () => snapHolds.answer(tool, args, (await request<{ result: T }>('POST', `/tools/${tool}`, snapHolds.ask(tool, args), tool)).result);
       try {
         return await onceMore(run, (e) => mayRetry(tool, e), deps.retryWaitMs);
       } catch (e) {

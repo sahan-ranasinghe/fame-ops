@@ -133,9 +133,16 @@ Deno.test("matchPoints: every chunk is one counted call; a failed call counts, t
   const echo = (url: string) => {
     calls.push(url);
     const path = decodeURIComponent(new URL(url).searchParams.get("path") ?? "");
-    const snappedPoints = path.split("|").map((pair, i) => {
-      const [lat, lng] = pair.split(",").map(Number);
-      return { location: { latitude: lat, longitude: lng }, originalIndex: i };
+    // Each input point, with road vertices between (interpolate=true): Google's answer to sparse points.
+    const anchors = path.split("|").map((pair) => pair.split(",").map(Number));
+    const snappedPoints = anchors.flatMap(([lat, lng], i) => {
+      const anchor = { location: { latitude: lat, longitude: lng }, originalIndex: i };
+      const next = anchors[i + 1];
+      if (!next) return [anchor];
+      return [
+        anchor,
+        ...[0.25, 0.5, 0.75].map((k) => ({ location: { latitude: lat + (next[0] - lat) * k, longitude: lng + (next[1] - lng) * k } })),
+      ];
     });
     return Promise.resolve(
       new Response(JSON.stringify({ snappedPoints }), { status: 200, headers: { "Content-Type": "application/json" } }),
@@ -231,9 +238,16 @@ function googleEcho() {
   const fetchFn = (url: string) => {
     state.calls += 1;
     const path = decodeURIComponent(new URL(url).searchParams.get("path") ?? "");
-    const snappedPoints = path.split("|").map((pair, i) => {
-      const [lat, lng] = pair.split(",").map(Number);
-      return { location: { latitude: lat, longitude: lng }, originalIndex: i };
+    // Each input point, with road vertices between (interpolate=true): Google's answer to sparse points.
+    const anchors = path.split("|").map((pair) => pair.split(",").map(Number));
+    const snappedPoints = anchors.flatMap(([lat, lng], i) => {
+      const anchor = { location: { latitude: lat, longitude: lng }, originalIndex: i };
+      const next = anchors[i + 1];
+      if (!next) return [anchor];
+      return [
+        anchor,
+        ...[0.25, 0.5, 0.75].map((k) => ({ location: { latitude: lat + (next[0] - lat) * k, longitude: lng + (next[1] - lng) * k } })),
+      ];
     });
     return Promise.resolve(
       new Response(JSON.stringify({ snappedPoints }), { status: 200, headers: { "Content-Type": "application/json" } }),
