@@ -1672,6 +1672,13 @@ by it):
 
 Tests: `matching_cost_test.ts`, `matching_tool_test.ts`, `transport/api.test.ts`.
 
+**Deployed 2 November 2026 (Sahan's go after CI 41405943396 on `phase9-snap-cost` 2a7ce81 passed: 58 e2e, none flaky, 1,271
+unit tests).** No migration. Functions office-api v47, office-mcp v51, driver-api v18, fleet-jobs v26 (from v46, v50, v17, v25);
+the website and /m/ (Cloudflare deployment da4af1f3, the scan found nothing); main fast-forwarded to 2a7ce81 and pushed (CI
+41410661280); the EAS update "Snap cost fix" (group de575446-aa60-44ea-b339-0c66a6c1e695, Android
+01a19b4d-1f60-7a78-875d-ce397a11ed3e, runtime 1.4.0-gmaps). The same day: `google_caps.roads` day back to 215 (month 4,750);
+`roads_trip_daily_cap` stays 60 until a real day's counts are read (then 30, Sahan's decision).
+
 ### 34.1 Item 1: the approval bypass (security, done first)
 
 The hole: with `tasks_need_approval` on, only `create_task` went to the fleet admin (§33). A dispatcher (assign_tasks, no
