@@ -12,16 +12,20 @@
 //                 isolate's memory for 30 minutes (googleRoadsStore, at most 200 legs, the least
 //                 recently used dropped first), so a page's 60-second refresh does not pay for
 //                 the same leg again; a new isolate, or a leg not asked for in 30 minutes, asks
-//                 Google again. Before Round 48 they were kept 30 days in route_matched.
+//                 Google again, unless the asker says it holds the line (HeldLine, the tool's snap_held). Before Round
+//                 48 they were kept 30 days in route_matched.
 //   osrm          a self-hosted OSRM /match (secret OSRM_URL, e.g.
 //                 https://osrm.example.com): GET /match/v1/driving/{lng,lat;…}
 //                 with timestamps, radiuses (the accuracy) and per-leg distance
 //                 annotations; a matching's legs carry the road geometry between
 //                 consecutive matched input points, timed the same way.
 //
-// Before a call a leg is thinned to about one point per 50 m (Phase 7, §26) and cut where two fixes are 2 minutes
-// or more apart: a longer gap is never bridged along the road (it stays dashed), a shorter one is bridged by the
-// matcher. Each piece goes in chunks of 100 points (about 5 km), consecutive chunks sharing one point. The answers
+// Before a call a leg is cut where two fixes are 2 minutes or more apart: a longer gap is never bridged along the road
+// (it stays dashed), a shorter one is bridged by the matcher. OSRM's pieces are thinned to about one point per 50 m (Phase
+// 7, §26) and go in chunks of 100 (about 5 km), consecutive chunks sharing one point. Google's use its documented sparse
+// method (the snap cost fix, 2 November 2026): consecutive points up to 300 m apart with the turns kept and interpolate=true
+// (thinForRoads), and one request carries up to 100 points of as many pieces as fit (packForRoads): a day's short legs and
+// the pieces around a pause share a call, and the road vertices between two pieces are dropped. The answers
 // are kept per driving leg (snapLegs: OSRM's in route_matched, Google's in memory). A leg that is still growing (today's last, while the
 // driver drives) is sent only in whole chunks: once 100 new thinned points have collected since the last snapped
 // one, or when the leg ends; until then the tail since the last snap is drawn raw. A window inside a leg already
@@ -51,6 +55,20 @@ export const TAIL_MIN_MS = 3 * 60000;
 export const TAIL_MIN_POINTS = 30;
 export const MATCH_OVERLAP = 5;
 export const MATCH_TIMEOUT_MS = 8000;
+/** Google's guidance for snapToRoads: consecutive points within 300 m of each other, interpolate=true fills in the road. */
+export const ROADS_SPACING_M = 300;
+/** A bend of at least this many degrees, seen over at least ROADS_TURN_MIN_M either side, keeps its point (GPS noise is shorter). */
+export const ROADS_TURN_DEG = 35;
+export const ROADS_TURN_MIN_M = 80;
+/** A piece that never leaves this radius (a vehicle that stood, GPS drift) has no road to find: it stays raw and costs nothing. */
+export const ROADS_MIN_EXTENT_M = 50;
+/**
+ * The asker already draws the line up to a time (HeldLine): what came after it goes once HELD_MIN_POINTS thinned points wait
+ * (about 12 km) or HELD_FLUSH_MS after that line's last call, whichever is first; until then it is drawn raw. A page open all
+ * day on a driver who drives all day costs about two calls an hour.
+ */
+export const HELD_MIN_POINTS = 50;
+export const HELD_FLUSH_MS = 30 * 60000;
 export const GOOGLE_ROADS_URL = "https://roads.googleapis.com/v1/snapToRoads";
 
 export interface MatchInput {
@@ -82,8 +100,41 @@ export function thinBySpacing(points: MatchInput[], spacingM = MATCH_SPACING_M):
   return out;
 }
 
-/** The pieces to send: cut at gaps of 2 minutes or more (on the raw points), each thinned to about 50 m, in chunks of 100 sharing one point. */
-export function chunkForMatching(points: MatchInput[]): MatchInput[][] {
+function bearingOf(a: MatchInput, b: MatchInput): number {
+  const rad = Math.PI / 180;
+  const y = Math.sin((b.lng - a.lng) * rad) * Math.cos(b.lat * rad);
+  const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lng - a.lng) * rad);
+  return Math.atan2(y, x) / rad;
+}
+
+/**
+ * Google's sparse points: the first and the last; between them the last point before the next would be over `spacingM` from
+ * the one kept, and every turn (the bearing changes by ROADS_TURN_DEG, each side at least ROADS_TURN_MIN_M long). A raw gap
+ * over the spacing stays as it is. Pure.
+ */
+export function thinForRoads(points: MatchInput[], spacingM = ROADS_SPACING_M): MatchInput[] {
+  if (points.length <= 2) return [...points];
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    const last = out[out.length - 1];
+    const here = distanceM(last, points[i]);
+    if (distanceM(last, points[i + 1]) > spacingM) {
+      if (here >= 1) out.push(points[i]);
+      continue;
+    }
+    if (here < ROADS_TURN_MIN_M) continue;
+    let ahead = i + 1;
+    while (ahead < points.length - 1 && distanceM(points[i], points[ahead]) < ROADS_TURN_MIN_M) ahead++;
+    if (distanceM(points[i], points[ahead]) < ROADS_TURN_MIN_M) continue;
+    const turn = Math.abs(((bearingOf(points[i], points[ahead]) - bearingOf(last, points[i]) + 540) % 360) - 180);
+    if (turn >= ROADS_TURN_DEG) out.push(points[i]);
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
+/** A leg cut at gaps of 2 minutes or more (on the raw points), in time order; a piece of one point is dropped. */
+function piecesOf(points: MatchInput[]): MatchInput[][] {
   const sorted = [...points].sort((a, b) => a.at - b.at);
   const pieces: MatchInput[][] = [];
   let piece: MatchInput[] = [];
@@ -96,8 +147,13 @@ export function chunkForMatching(points: MatchInput[]): MatchInput[][] {
     piece.push(p);
   }
   if (piece.length >= 2) pieces.push(piece);
+  return pieces;
+}
+
+/** OSRM's pieces: each thinned to about 50 m, in chunks of 100 sharing one point. */
+export function chunkForMatching(points: MatchInput[]): MatchInput[][] {
   const chunks: MatchInput[][] = [];
-  for (const raw of pieces) {
+  for (const raw of piecesOf(points)) {
     const part = thinBySpacing(raw);
     for (let i = 0; i < part.length - 1; i += MATCH_CHUNK - 1) chunks.push(part.slice(i, i + MATCH_CHUNK));
   }
@@ -114,10 +170,12 @@ export function tailToSend(
   legOpen: boolean,
   /** Round 48 snap hotfix: how long ago this leg was last snapped (undefined = never). */
   sinceMs?: number,
+  /** How the provider thins (Google's sparse points, OSRM's 50 m). */
+  thin: (points: MatchInput[]) => MatchInput[] = thinBySpacing,
 ): { points: MatchInput[]; upTo: number } | null {
   if (tail.length < 2) return null;
   if (!legOpen) return { points: tail, upTo: tail[tail.length - 1].at };
-  const thinned = thinBySpacing(tail);
+  const thinned = thin(tail);
   const whole = Math.floor((thinned.length - 1) / (MATCH_CHUNK - 1));
   if (whole >= 1) {
     const upTo = thinned[whole * (MATCH_CHUNK - 1)].at;
@@ -149,8 +207,13 @@ export function googleRoadsRequest(points: MatchInput[], key: string): string {
   return `${GOOGLE_ROADS_URL}?interpolate=true&path=${encodeURIComponent(path)}&key=${encodeURIComponent(key)}`;
 }
 
-/** snappedPoints with originalIndex for the input points, road vertices between them (interpolate=true). */
-export function googleRoadsResponse(json: unknown, points: MatchInput[]): MatchedPoint[] {
+interface RoadsVertex {
+  lat: number;
+  lng: number;
+  index: number | null;
+}
+
+function roadsVertices(json: unknown): RoadsVertex[] {
   const snapped = (json as { snappedPoints?: { location?: { latitude?: number; longitude?: number }; originalIndex?: number }[] })
     ?.snappedPoints;
   if (!Array.isArray(snapped)) throw new Error("Google Roads: no snappedPoints in the answer");
@@ -160,6 +223,15 @@ export function googleRoadsResponse(json: unknown, points: MatchInput[]): Matche
     index: typeof s.originalIndex === "number" ? s.originalIndex : null,
   }));
   if (vertices.some((v) => !isFinite(v.lat) || !isFinite(v.lng))) throw new Error("Google Roads: a point without coordinates");
+  return vertices;
+}
+
+/** snappedPoints with originalIndex for the input points, road vertices between them (interpolate=true). */
+export function googleRoadsResponse(json: unknown, points: MatchInput[]): MatchedPoint[] {
+  return timedVertices(roadsVertices(json), points);
+}
+
+function timedVertices(vertices: RoadsVertex[], points: MatchInput[]): MatchedPoint[] {
   const out: MatchedPoint[] = [];
   let runStart = 0;
   let prevAnchor: { pos: number; at: number } | null = null;
@@ -230,6 +302,101 @@ export interface MatchEnv {
   url?: string;
 }
 
+/** One Roads request: up to 100 points, and which leg (job) each run of them belongs to. */
+export interface RoadsRequest {
+  points: MatchInput[];
+  runs: { job: number; start: number; end: number }[];
+}
+
+/**
+ * What the legs cost: every piece thinned (thinForRoads), then packed in order into requests of up to 100 points. The next
+ * piece joins the request while it starts within ROADS_SPACING_M of the last point (a stop or a pause between them: Google
+ * sees one path, and the road between the two pieces is dropped from the answer); a jump over that starts a new request, as
+ * a path with a long jump in it snaps badly. A piece longer than the room left goes on in the next request, sharing a point.
+ */
+export function packForRoads(jobs: MatchInput[][]): RoadsRequest[] {
+  const requests: RoadsRequest[] = [];
+  let cur: RoadsRequest = { points: [], runs: [] };
+  const flush = () => {
+    if (cur.points.length) requests.push(cur);
+    cur = { points: [], runs: [] };
+  };
+  jobs.forEach((points, job) => {
+    for (const raw of piecesOf(points)) {
+      if (raw.every((p) => distanceM(raw[0], p) < ROADS_MIN_EXTENT_M)) continue;
+      const piece = thinForRoads(raw);
+      const lastPoint = cur.points[cur.points.length - 1];
+      if (lastPoint && (distanceM(lastPoint, piece[0]) > ROADS_SPACING_M || cur.points.length > MATCH_CHUNK - 2)) flush();
+      let i = 0;
+      while (i < piece.length - 1 || cur.points.length === 0) {
+        const take = piece.slice(i, i + MATCH_CHUNK - cur.points.length);
+        cur.runs.push({ job, start: cur.points.length, end: cur.points.length + take.length - 1 });
+        cur.points.push(...take);
+        i += take.length;
+        if (i >= piece.length) break;
+        flush();
+        i -= 1; // The next request starts on this request's last point.
+      }
+    }
+  });
+  flush();
+  return requests;
+}
+
+/** A request's answer, run by run: each run's anchors and the road between them; the road between two runs is dropped. */
+export function roadsRuns(json: unknown, request: RoadsRequest): { job: number; points: MatchedPoint[] }[] {
+  const vertices = roadsVertices(json);
+  return request.runs.map((run) => {
+    const inRun = (v: RoadsVertex) => v.index !== null && v.index >= run.start && v.index <= run.end;
+    const first = vertices.findIndex(inRun);
+    const last = vertices.findLastIndex(inRun);
+    return { job: run.job, points: first < 0 ? [] : timedVertices(vertices.slice(first, last + 1), request.points) };
+  });
+}
+
+/**
+ * The legs' new parts through Google in as few requests as they fit: each job's points in time order, or its error. Stops at
+ * the first refusal or failure: what is left stays raw until the next try, and nothing more is paid while Google says no.
+ */
+async function matchRoads(
+  jobs: MatchInput[][],
+  env: MatchEnv,
+  fetchFn: Fetcher,
+  onCall: (ok: boolean) => Promise<void> | void,
+  gate: () => Promise<string | null>,
+): Promise<{ matched: MatchedPoint[][]; errors: Map<number, Error> }> {
+  const matched: MatchedPoint[][] = jobs.map(() => []);
+  const errors = new Map<number, Error>();
+  const requests = packForRoads(jobs);
+  for (let r = 0; r < requests.length; r++) {
+    const request = requests[r];
+    try {
+      if (!env.key) throw new Error("GOOGLE_SERVER_KEY is not set");
+      const refused = await gate();
+      if (refused) throw new Error(refused);
+      let json: unknown;
+      try {
+        const res = await fetchFn(googleRoadsRequest(request.points, env.key), { signal: AbortSignal.timeout(MATCH_TIMEOUT_MS) });
+        json = await res.json();
+        if (!res.ok) throw new Error(`google_roads ${res.status}`);
+        await onCall(true);
+      } catch (error) {
+        await onCall(false);
+        throw error;
+      }
+      for (const run of roadsRuns(json, request)) {
+        const lastAt = matched[run.job].length ? matched[run.job][matched[run.job].length - 1].at : -Infinity;
+        matched[run.job].push(...run.points.filter((p) => p.at > lastAt));
+      }
+    } catch (error) {
+      const failure = error instanceof Error ? error : new Error(String(error));
+      for (const left of requests.slice(r)) for (const run of left.runs) errors.set(run.job, failure);
+      break;
+    }
+  }
+  return { matched, errors };
+}
+
 /**
  * Matches one leg: every chunk through the provider, answers joined in time order.
  * `onCall(ok)` counts each HTTP call. Throws on the first failed call.
@@ -245,11 +412,17 @@ export async function matchPoints(
 ): Promise<MatchedPoint[]> {
   if (provider === "google_roads" && !env.key) throw new Error("GOOGLE_SERVER_KEY is not set");
   if (provider === "osrm" && !env.url) throw new Error("OSRM_URL is not set");
+  if (provider === "google_roads") {
+    const { matched, errors } = await matchRoads([points], env, fetchFn, onCall, gate);
+    const failure = errors.get(0);
+    if (failure) throw failure;
+    return matched[0];
+  }
   const out: MatchedPoint[] = [];
   for (const chunk of chunkForMatching(points)) {
     const refused = await gate();
     if (refused) throw new Error(refused);
-    const url = provider === "google_roads" ? googleRoadsRequest(chunk, env.key!) : osrmRequest(chunk, env.url!);
+    const url = osrmRequest(chunk, env.url!);
     let json: unknown;
     try {
       const res = await fetchFn(url, { signal: AbortSignal.timeout(MATCH_TIMEOUT_MS) });
@@ -260,7 +433,7 @@ export async function matchPoints(
       await onCall(false);
       throw error;
     }
-    const matched = provider === "google_roads" ? googleRoadsResponse(json, chunk) : osrmResponse(json, chunk);
+    const matched = osrmResponse(json, chunk);
     const lastAt = out.length ? out[out.length - 1].at : -Infinity;
     out.push(...matched.filter((p) => p.at > lastAt));
   }
@@ -288,6 +461,15 @@ export interface SnappedLeg {
 export interface SnapResult {
   status: "ok" | "partial" | "failed";
   legs: SnappedLeg[];
+  /** How many legs went to the provider in this answer (a held line's last call moves only when some did). */
+  sent: number;
+}
+
+/** The asker already draws the snapped line up to `to` (the page's own copy): only what came after it is needed. */
+export interface HeldLine {
+  to: number;
+  /** When that line's last call was made. */
+  snappedAt: number;
 }
 
 function envFor(): MatchEnv {
@@ -430,7 +612,7 @@ export async function snapLegs(
   caps?: GoogleCaps,
   store: MatchStore = storeFor(db, provider),
   /** Round 48 snap hotfix: the source counted with each Google call, and the per-driver-day budget taken before it. */
-  opts: { source?: string; budget?: { employeeId: string; cap: number } } = {},
+  opts: { source?: string; budget?: { employeeId: string; cap: number }; held?: HeldLine } = {},
 ): Promise<SnapResult> {
   const env = envFor();
   const gate = async (): Promise<string | null> => {
@@ -448,17 +630,28 @@ export async function snapLegs(
   const bump = async (ok: boolean): Promise<void> => {
     await db.rpc("bump_routing_calls", { p_provider: provider, p_ok: ok }).then(() => undefined, () => undefined);
   };
+  const thin = provider === "google_roads" ? thinForRoads : thinBySpacing;
+  const held = opts.held;
   const out: SnappedLeg[] = [];
   let failed = 0;
+  const jobs: {
+    slot: number;
+    leg: SnapLeg;
+    stored: MatchedPoint[];
+    haveTo: number | null;
+    send: { points: MatchInput[]; upTo: number };
+    /** Only the part after a line the asker holds: not a whole leg, so it is not kept for the next viewer. */
+    partial: boolean;
+  }[] = [];
   for (const leg of legs) {
     // A window inside a leg snapped before (a task's route, playback): that leg's road, clipped. Never paid twice.
     const covering = rows.find((r) => r.status === "ok" && r.legFrom <= leg.from && r.legTo >= leg.to && r.legFrom !== leg.from);
     if (covering) {
       const clipped = covering.geometry.filter((p) => p.at >= leg.from && p.at <= leg.to);
-      if (clipped.length >= 2) {
-        out.push({ from: leg.from, to: leg.to, source: "matched", points: clipped, matchedTo: leg.to });
-        continue;
-      }
+      // A window so short that no road vertex falls inside it is drawn raw: it is not worth a call.
+      if (clipped.length >= 2) out.push({ from: leg.from, to: leg.to, source: "matched", points: clipped, matchedTo: leg.to });
+      else out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });
+      continue;
     }
     const have = byFrom.get(leg.from);
     const haveTo = have ? have.legTo : null;
@@ -473,55 +666,97 @@ export async function snapLegs(
       continue;
     }
     // A leg that grew since its last match: only the new part goes out, joined to the stored one, and while the leg
-    // is still growing only in whole chunks (the tail is drawn raw meanwhile).
-    const stored = have && have.status === "ok" && haveTo !== null && haveTo < leg.to ? have.geometry : [];
+    // is still growing only in whole chunks (the tail is drawn raw meanwhile). A leg the asker holds part of starts after
+    // that part, when this isolate has nothing further.
+    const partial = !!held && leg.from < held.to && (!have || have.status !== "ok" || haveTo! < held.to);
+    const stored = !partial && have && have.status === "ok" && haveTo !== null && haveTo < leg.to ? have.geometry : [];
+    const from = partial ? held!.to : stored.length ? haveTo! : null;
+    // A finished leg with nothing after what is matched is done: a leg's end can lie past its last line point (the line
+    // leaves out a vehicle slowing to a stop). Before this every refresh paid for that leg's last points again, for good.
+    if (from !== null && !leg.open && !leg.points.some((p) => p.at > from)) {
+      out.push({ from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: leg.to });
+      continue;
+    }
     // The tail since the last snap, with a few points before it sent again for a clean join (the answer's points up
     // to the last stored one are dropped below).
-    const firstNew = stored.length ? leg.points.findIndex((p) => p.at >= haveTo!) : 0;
-    const tail = stored.length ? leg.points.slice(Math.max(0, firstNew - MATCH_OVERLAP)) : leg.points;
-    const send = tailToSend(tail, leg.open === true, have ? now.getTime() - have.matchedAt : undefined);
+    const firstNew = from !== null ? leg.points.findIndex((p) => p.at >= from) : 0;
+    const tail = from !== null ? (firstNew < 0 ? [] : leg.points.slice(Math.max(0, firstNew - MATCH_OVERLAP))) : leg.points;
+    const send = held
+      ? (tail.length >= 2 ? { points: tail, upTo: tail[tail.length - 1].at } : null)
+      : tailToSend(tail, leg.open === true, have ? now.getTime() - have.matchedAt : undefined, thin);
     if (!send) {
       if (stored.length) out.push({ from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: haveTo! });
       else out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });
       continue;
     }
-    try {
-      const fresh = await matchPoints(provider, send.points, env, fetchFn, bump, gate);
-      const lastAt = stored.length ? stored[stored.length - 1].at : -Infinity;
-      const points = [...stored, ...fresh.filter((p) => p.at > lastAt)];
-      // Up to the last point sent: a growing leg's tail after it waits for its next whole chunk.
-      await store.save(employeeId, date, {
-        legFrom: leg.from,
-        legTo: send.upTo,
-        geometry: points,
-        matchedAt: now.getTime(),
-        status: "ok",
-        error: null,
-      });
-      out.push({ from: leg.from, to: leg.to, source: "matched", points, matchedTo: send.upTo });
-    } catch (error) {
-      failed += 1;
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`map matching ${provider}: ${message}`);
-      if (stored.length) {
-        // The part matched before stays; the new part is raw until the next try.
-        await store.tried(employeeId, date, leg.from, now.getTime(), message.slice(0, 200));
-        out.push({ from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: haveTo! });
-        continue;
-      }
-      await store.save(employeeId, date, {
-        legFrom: leg.from,
-        legTo: leg.to,
-        geometry: [],
-        matchedAt: now.getTime(),
-        status: "failed",
-        error: message.slice(0, 200),
-      })
-        .catch(() => undefined);
-      out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });
+    jobs.push({ slot: out.length, leg, stored, haveTo, send, partial });
+    out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });
+  }
+  // Someone who holds the line waits: what came after it goes once it is worth a call.
+  const waits = !!held && now.getTime() - held.snappedAt < HELD_FLUSH_MS &&
+    jobs.reduce((n, j) => n + thin(j.send.points).length, 0) < HELD_MIN_POINTS;
+  if (waits) {
+    for (const j of jobs) {
+      if (j.stored.length) out[j.slot] = { from: j.leg.from, to: j.leg.to, source: "matched", points: j.stored, matchedTo: j.haveTo! };
+    }
+    return { status: failed === 0 ? "ok" : failed === legs.length ? "failed" : "partial", legs: out, sent: 0 };
+  }
+  const results = new Map<number, MatchedPoint[] | Error>();
+  if (provider === "google_roads") {
+    const { matched, errors } = await matchRoads(jobs.map((j) => j.send.points), env, fetchFn, bump, gate);
+    jobs.forEach((_, i) => results.set(i, errors.get(i) ?? matched[i]));
+  } else {
+    for (let i = 0; i < jobs.length; i++) {
+      results.set(
+        i,
+        await matchPoints(provider, jobs[i].send.points, env, fetchFn, bump, gate)
+          .catch((error) => (error instanceof Error ? error : new Error(String(error)))),
+      );
     }
   }
-  return { status: failed === 0 ? "ok" : failed === legs.length ? "failed" : "partial", legs: out };
+  for (let i = 0; i < jobs.length; i++) {
+    const { slot, leg, stored, haveTo, send, partial } = jobs[i];
+    const result = results.get(i)!;
+    if (!(result instanceof Error)) {
+      // A finished leg is matched to its end, whatever its last line point's time.
+      const upTo = leg.open ? send.upTo : leg.to;
+      const lastAt = stored.length ? stored[stored.length - 1].at : -Infinity;
+      const points = [...stored, ...result.filter((p) => p.at > lastAt)];
+      // Up to the last point sent: a growing leg's tail after it waits for its next whole chunk.
+      if (!partial) {
+        await store.save(employeeId, date, {
+          legFrom: leg.from,
+          legTo: upTo,
+          geometry: points,
+          matchedAt: now.getTime(),
+          status: "ok",
+          error: null,
+        });
+      }
+      out[slot] = { from: leg.from, to: leg.to, source: "matched", points, matchedTo: upTo };
+      continue;
+    }
+    failed += 1;
+    const message = result.message;
+    console.error(`map matching ${provider}: ${message}`);
+    if (stored.length) {
+      // The part matched before stays; the new part is raw until the next try.
+      await store.tried(employeeId, date, leg.from, now.getTime(), message.slice(0, 200));
+      out[slot] = { from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: haveTo! };
+      continue;
+    }
+    if (partial) continue;
+    await store.save(employeeId, date, {
+      legFrom: leg.from,
+      legTo: leg.to,
+      geometry: [],
+      matchedAt: now.getTime(),
+      status: "failed",
+      error: message.slice(0, 200),
+    })
+      .catch(() => undefined);
+  }
+  return { status: failed === 0 ? "ok" : failed === legs.length ? "failed" : "partial", legs: out, sent: jobs.length };
 }
 
 function geometryOf(geometry: unknown): MatchedPoint[] {

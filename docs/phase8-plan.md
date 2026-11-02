@@ -1572,6 +1572,32 @@ tests, none flaky):** `db push` applied `20261028150000_round48_snap_budget` alo
 (today's 679 calls were all before it). Main fast-forwarded to the hotfix branch; the website and /m/ and the EAS update
 "R48 hotfix: snap incremental and budgeted, password eye" follow in the same chain (their ids in the checkpoint).
 
+### 34.8 The snap cost fix (2 November 2026, branch `phase9-snap-cost` from main `7576da6`)
+
+**What happened.** Kanishka's 2.2 km day hit the budget of 20 by 10:54, 40 minutes after his first point, from `site_route`;
+Thilina hit 20 at 11:16 (`site_route_playback` 20 in all today). **The cause:** a finished leg whose end lies past its last line
+point (05:08:09 and 05:07:44 on Kanishka's) was never "matched to its end", so every 60-second refresh paid for its last points
+again, also on a warm isolate: 2 calls a minute. A past day's view at 50 m spacing cost 45 calls on a 117.6 km day, over the
+budget by itself. Cold isolates added to it: each paid the whole day.
+
+**The fix:** a finished leg is matched to its end; Google's sparse points and one request for several pieces; the page holds its
+line (`snap_held`, `snapped.from`, `snapped.held`, `transport/snapHold.ts`, a shared copy in Office mode), so no refresh, on any
+isolate, pays for what is drawn. Nothing of Google's is stored on the server (Sahan's decision of 28 October stands). As built:
+`docs/google-maps-setup.md`. Counts on real points, with a fake Roads API (the count is real; the line's quality is not tested
+by it):
+
+| | before | after |
+|---|---:|---:|
+| Thilina 28 Oct, 117.6 km, one view | 45 | 6 |
+| the first 103.3 km of it, one view | 42 | 5 |
+| those 103.3 km, 3 viewers on 3 isolates | 126 | 15 |
+| 117.6 km, a past day refreshed after 6 h on a new isolate | +45 | +0 |
+| 117.6 km watched live all day, a new isolate every 4 min | 4,613 | 24 |
+| Kanishka's 2 Nov (2.2 km), one view | 2 | 1 |
+| Kanishka's 2 Nov, 40 refreshes on one warm isolate | 80 | 2 (1 with the page's line) |
+
+Tests: `matching_cost_test.ts`, `matching_tool_test.ts`, `transport/api.test.ts`.
+
 ### 34.1 Item 1: the approval bypass (security, done first)
 
 The hole: with `tasks_need_approval` on, only `create_task` went to the fleet admin (§33). A dispatcher (assign_tasks, no

@@ -8,7 +8,7 @@ import { taskEta } from "../eta.ts";
 import { GPS_KM_NOTE } from "../geo.ts";
 import { googleUse } from "../google.ts";
 import { loadSettings, type MapMatchingProvider, type Settings } from "../settings.ts";
-import { type SnapLeg, snapLegs } from "../matching.ts";
+import { type HeldLine, type SnapLeg, snapLegs, type SnappedLeg } from "../matching.ts";
 import { estimatedLines } from "../gapRoutes.ts";
 import type { Channel } from "../roles.ts";
 
@@ -299,6 +299,33 @@ export const liveDrivers = tool({
   },
 });
 
+/** snap_held: the day, how far the line reaches, when this answer was made and when that line's last call was (Unix ms). */
+const SNAP_HELD = /^v1\.\d{4}-\d{2}-\d{2}\.\d+\.\d+\.\d+$/;
+
+/**
+ * The line the asker says it holds, or null when it must be sent whole: no such line, another day (a page left open past
+ * midnight), or a point recorded inside it arrived since (a phone that uploaded late: the held line lacks that road).
+ */
+export function heldLine(token: string | undefined, day: string, fixes: { at: number; receivedAt?: number | null }[]): HeldLine | null {
+  if (!token) return null;
+  const [, tokenDay, to, at, snappedAt] = token.split(".");
+  if (tokenDay !== day) return null;
+  const late = fixes.some((f) => f.at <= Number(to) && f.receivedAt != null && f.receivedAt > Number(at));
+  return late ? null : { to: Number(to), snappedAt: Number(snappedAt) };
+}
+
+/** How far the line is on the roads without a hole: up to the first leg still raw, or the part of it already matched. */
+export function heldUpTo(legs: SnappedLeg[], from: number | null): number | null {
+  let to = from;
+  for (const leg of legs) {
+    if (leg.source !== "matched") break;
+    const reached = leg.matchedTo ?? leg.to;
+    to = Math.max(to ?? reached, reached);
+    if (reached < leg.to) break;
+  }
+  return to;
+}
+
 export const driverRoute = tool({
   name: "driver_route",
   title: "Driver's route: a day, a task or a time window",
@@ -330,9 +357,13 @@ export const driverRoute = tool({
     source: z.enum(["site_route", "site_live", "site_task", "app_route", "app_live", "app_task"]).optional().describe(
       "The screen asking (the web clients send it): counted with each snap-to-roads call so usage reads by source",
     ),
+    // The snap cost fix (2 November 2026): the asker's own copy of the snapped line, so a refresh on a cold isolate pays nothing again.
+    snap_held: z.string().regex(SNAP_HELD).max(60).optional().describe(
+      "With snap: the last answer's snapped.held. The answer's route_snapped then has only what came after snapped.from: the asker adds it to the line it holds",
+    ),
   }),
   async run(
-    { driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap, estimate_gaps, source: sourceArg },
+    { driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap, estimate_gaps, source: sourceArg, snap_held },
     { db, now, actor },
   ) {
     const refs = await loadRefs(db);
@@ -516,7 +547,10 @@ export const driverRoute = tool({
     // when the setting names it (kept per leg in route_matched; a leg still growing goes in whole 5 km chunks, its
     // tail raw meanwhile; Phase 7, §26). The website asks it on its Google map; Office mode and /m/ since Round 48.
     const provider = snapProvider(settings, actor.channel);
-    let snapped: { provider: string; status: string; legs?: number; matched?: number; source?: string } = { provider, status: "off" };
+    let snapped: { provider: string; status: string; legs?: number; matched?: number; source?: string; from?: string; held?: string } = {
+      provider,
+      status: "off",
+    };
     let routeSnapped: { columns: string[]; points: (string | number | null)[][] } | undefined;
     if (snap && provider !== "none" && route.line.length > 1) {
       const legs: SnapLeg[] = [];
@@ -538,15 +572,18 @@ export const driverRoute = tool({
           acc: p.acc,
         }));
       }
-      const usable = legs.filter((l) => l.points.length >= 2);
+      // A line the asker holds (snap_held): its finished legs are not sent or answered again, on any isolate.
+      const held = heldLine(snap_held, day, fixes);
+      const usable = legs.filter((l) => l.points.length >= 2 && (!held || l.to > held.to));
       // Round 48 snap hotfix: the source counted with each call ("_playback" for a past day), and the driver's budget.
       const source = `${sourceArg ?? (actor.channel === "claude" ? "claude" : "web")}${day < colomboDate(now) ? "_playback" : ""}`;
       const result = usable.length
         ? await snapLegs(db, who.id, day, provider, usable, now, fetch, settings.google_caps, undefined, {
           source,
           budget: { employeeId: who.id, cap: settings.roads_trip_daily_cap },
+          held: held ?? undefined,
         })
-        : { status: "ok" as const, legs: [] };
+        : { status: "ok" as const, legs: [], sent: 0 };
       // The drawn line with every matched leg replaced by its road geometry; the rest raw.
       const out: (LinePoint & { snapped: boolean })[] = [];
       let i = 0;
@@ -563,14 +600,20 @@ export const driverRoute = tool({
       const timed = withSpeeds(out.sort((a, b) => a.at - b.at));
       routeSnapped = {
         columns: ["time", "lat", "lng", "km/h", "at", "acc", "snapped"],
-        points: timed.map((p, k) => [...linePoint(p), out[k].snapped ? 1 : 0]),
+        points: timed.flatMap((p, k) => (held && p.at <= held.to ? [] : [[...linePoint(p), out[k].snapped ? 1 : 0]])),
       };
+      const heldTo = heldUpTo(result.legs, held?.to ?? null);
       snapped = {
         provider,
-        status: result.status,
+        // What the asker holds is on the roads whatever this answer's part did.
+        status: held && result.status === "failed" ? "partial" : result.status,
         legs: usable.length,
         matched: result.legs.filter((l) => l.source === "matched").length,
         source,
+        from: held ? iso(held.to) : undefined,
+        held: heldTo === null
+          ? undefined
+          : `v1.${day}.${heldTo}.${now.getTime()}.${result.sent ? now.getTime() : held?.snappedAt ?? now.getTime()}`,
       };
     }
 

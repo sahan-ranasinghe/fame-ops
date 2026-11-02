@@ -5,6 +5,7 @@ import { normalisePermissions, permissionsForRole } from "@fleet/permissions";
 import { LOOP_ERROR, LoopBreaker, loopReportMessage } from "./breaker";
 import { emitWriteDropped, gestureOrigin } from "./gesture";
 import { reportBody, sendReport } from "./report";
+import { SnapHolds } from "./snapHold";
 import { BACKGROUND_WRITES, dropped, isWrite, mayRetry, onceMore, QUICK_RETRY_MS, TIMED_OUT, timeoutFor } from "./retryRule";
 import type { FleetError, Me, Transport, WatchEvent } from "./types";
 
@@ -38,6 +39,8 @@ export function mapHttpError(status: number, body: ApiErrorBody | null): FleetEr
 export class ApiTransport implements Transport {
   readonly kind = "api" as const;
   private watchers = new Set<() => void>();
+  /** The snapped lines this page already draws: a refresh pays only for what came after them. */
+  private snapHolds = new SnapHolds();
 
   constructor(
     private base: string,
@@ -108,8 +111,8 @@ export class ApiTransport implements Transport {
     // What the person pressed to start it (a write they may want to try again), taken before the call waits.
     const origin = isWrite(tool) && !BACKGROUND_WRITES.has(tool) ? gestureOrigin() : null;
     try {
-      const out = await this.request<{ result: T }>("POST", `/tools/${tool}`, args, timeoutFor(tool));
-      return out.result;
+      const out = await this.request<{ result: T }>("POST", `/tools/${tool}`, this.snapHolds.ask(tool, args), timeoutFor(tool));
+      return this.snapHolds.answer(tool, args, out.result);
     } catch (e) {
       const error = e as FleetError;
       if (!isWrite(tool)) throw error;
