@@ -1019,6 +1019,12 @@ Sahan's brief with the Round 52 deploy go: the two findings of §40.2, and /m/'s
    from the load that saved it: Add stop could make a row with the key of the draft's To, so both rows were the open one.
    Now each load has its own prefix (`stopsLogic.ts` newStop; Office mode's copy written by shared-logic.mjs). Test:
    stopsLogic.test.ts (two loads, a resumed draft, Add stop: every key different; it fails on the old rule).
+5. **The connector suite ran on 2 November** (Sahan's go; it is not on CI, and had last run on 29 October, so Round 52 went
+   live without it). On this branch: office-mcp 647 tool calls and office-api 773, all passed; the tool contract and the
+   smoke test passed; no server change was needed. Its three failures on the way were the suite's own: the Round 52 block's
+   driver and van sort first, so the contract check read them (`snapshot-tool-shapes.py` now skips them); the requester's
+   tool list had not got Round 52's two read tools (list_projects, list_rental_companies); two random ids gave one plate
+   (`plate_u` now has a letter per channel).
 
 ## 40. Round 52: archive, delete and restore everywhere; the admin and handover docs (30 October 2026, branch `phase9-r52` from main `76a1596`, worktree `~/projects/fame-ops-r52`)
 
