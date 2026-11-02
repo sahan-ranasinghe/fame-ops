@@ -1038,6 +1038,14 @@ Sahan's brief with the Round 52 deploy go: the two findings of §40.2, and /m/'s
    running trip, pushIssueRows, and a source check that neither function deletes device_tokens with service_role again.
    Connector suite: 655 + 781 calls, contract and smoke passed. Findings 2 (Expo receipts) and the low ones stay for later.
 
+**Deployed 2 November 2026 (Sahan's go after CI 41411563455 on `phase9-r53` 4505e27 passed: 58 e2e, none flaky, 1,272 unit
+tests; with main 2a7ce81 and `phase9-ci-minutes` merged in).** The migration `20261031120000_dead_device_tokens` (the dry run
+listed it alone); functions push-task v15, notify-office v9, office-api v48, office-mcp v52, driver-api v19, fleet-jobs v27
+(from v14, v8, v47, v51, v18, v26); the website and /m/ (Cloudflare deployment e923ae6b, the scan found nothing); main
+fast-forwarded to 4505e27 and pushed (CI 41419202711); the EAS update "Round 53: archived names, phone tokens, /m/ driving
+entry" (group e72494c7-e6c6-49f7-83bb-299c1629f1bf, Android 01a19b8c-7419-7bde-8066-495353139b36, runtime 1.4.0-gmaps). The
+CI-minutes rules (scopes, the docs-only skip on main) are on main with it.
+
 ## 40. Round 52: archive, delete and restore everywhere; the admin and handover docs (30 October 2026, branch `phase9-r52` from main `76a1596`, worktree `~/projects/fame-ops-r52`)
 
 Patterns: Shopify's and Samsara's archive (a record with history is switched off, never lost), Gmail's and Google Drive's bin
