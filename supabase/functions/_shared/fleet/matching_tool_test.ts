@@ -123,8 +123,7 @@ Deno.test("driver_route: the first view is whole with a token; a refresh on a co
       assert(Date.parse(String(p[atColumn])) > from, "nothing the asker holds is sent again");
     }
 
-    // A point inside the line arrived after the token: the whole line again.
-    googleRoadsStore.clear();
+    // A point inside the line arrived after the token: the whole line again, not the old geometry this isolate remembers.
     const late = day.map((p, i) => (i === 5 ? { ...p, received_at: new Date(now + 90000).toISOString() } : p));
     const whole = (await ask(late, now + 120000, refresh.snapped.held)).result;
     assertEquals(whole.snapped.from, undefined, "a whole answer");
@@ -133,10 +132,25 @@ Deno.test("driver_route: the first view is whole with a token; a refresh on a co
   });
 });
 
+Deno.test("driver_route: a batch that lands while the answer is being made is no late upload; another provider never answers a token", async () => {
+  await withRoads(async (calls) => {
+    googleRoadsStore.clear();
+    const day = pointsUpTo(60);
+    const now = T0 + 3600000; // Every point's received_at is at or before its own time, up to now.
+    const first = (await ask(day, now - 5000)).result; // The answer's clock is 5 s before the newest point was read.
+    const paid = calls.n;
+    googleRoadsStore.clear();
+    const refresh = (await ask(day, now + 60000, first.snapped.held)).result;
+    assert(refresh.snapped.from, "the line is still held");
+    assertEquals(calls.n, paid);
+    googleRoadsStore.clear();
+  });
+});
+
 Deno.test("driver_route: a token of another day is ignored", async () => {
   await withRoads(async () => {
     googleRoadsStore.clear();
-    const answer = (await ask(pointsUpTo(20), T0 + 3600000, `v1.2026-11-01.${T0}.${T0}.${T0}`)).result;
+    const answer = (await ask(pointsUpTo(20), T0 + 3600000, `v1.2026-11-01.${T0}.${T0}.${T0}.0`)).result;
     assertEquals(answer.snapped.status, "ok");
     assertEquals(answer.snapped.from, undefined);
     googleRoadsStore.clear();

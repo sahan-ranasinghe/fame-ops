@@ -113,7 +113,8 @@ Pro $10.00, Roads $10.00 per 1,000. Maps SDK for Android: unlimited and free (wi
   request, and one request carries as many pieces as fit (`packForRoads`: legs and pauses that start within 300 m of the last
   point). A 100 km day is about 5 calls to open. The page keeps the line it was answered (`transport/snapHold.ts`, memory only)
   and a refresh says so (`snap_held`): the server sends only what came after it, once 50 sparse points wait (about 12 km) or 30
-  minutes after its last call. A point recorded inside the held line that arrives later asks for the whole line again. Also fixed:
+  minutes after its last call (Google only; never another provider's map). After a refused or failed call its next tries wait 10
+  minutes. A point recorded inside the held line that arrives later asks for the whole line again. Also fixed:
   a finished leg whose end lay past its last line point was paid for again on every refresh, on any isolate.
 - `roads` (snap to roads) is on within the free usage since Round A of Phase 7: 215 a day and 4,750 a
   month (95 % of the 5,000 free), counted before each call and refused at either cap or on a counter

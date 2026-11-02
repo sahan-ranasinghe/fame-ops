@@ -2880,7 +2880,8 @@ if CHANNEL == "api":
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["view", "request"]
           and sorted(me.get("tools", [])) == ["answer_holder_ask", "ask_for_it", "cancel_request", "create_request", "day_timeline", "find_people",
                                              "find_project", "finish_my_trip", "fleet_overview", "get_settings", "google_place", "holder_asks",
-                                             "list_drivers", "list_places", "list_requests", "list_vehicles", "live_drivers", "mark_inbox_read",
+                                             "list_drivers", "list_places", "list_projects", "list_rental_companies", "list_requests", "list_vehicles",
+                                             "live_drivers", "mark_inbox_read",
                                              "my_inbox", "my_notification_settings", "my_prefs", "my_trip", "my_trip_check", "my_trips", "place_detail",
                                              "plan_task", "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
                                              "set_my_notification_settings", "set_my_prefs", "task_detail", "update_my_profile", "update_request",
@@ -3220,7 +3221,8 @@ if CHANNEL == "api":
         check(ok, f"{tag}: a Coordinator registers a driver", body[:200])
         audit = psql(f"select actor_name from office_audit where tool = 'create_driver' and args_summary like '%intern.{u}%' order by id desc limit 1")
         check(audit == "Achini Coordinator", f"{tag}: the change is in the audit log in the Coordinator's name", audit)
-        plate_u = f"WP IN-{int(u, 16) % 9000 + 1000}"
+        # A letter per channel: two random u's can land on one number (it happened on 2 November 2026).
+        plate_u = f"WP I{ch[0].upper()}-{int(u, 16) % 9000 + 1000}"
         ok, body = as_coordinator(ch, "register_vehicle", {"reg_no": plate_u, "make_model": "Toyota HiAce", "vehicle_type": "van", "seats": 12})
         check(ok, f"{tag}: and a vehicle", body[:200])
         ok, body = as_coordinator(ch, "create_office_user", {"name": f"Intern Requester {u}", "email": f"req.{u}@fame.test", "permissions": ["request"]})

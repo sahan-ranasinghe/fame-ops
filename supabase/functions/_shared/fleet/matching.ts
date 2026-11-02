@@ -58,8 +58,11 @@ export const MATCH_TIMEOUT_MS = 8000;
 /** Google's guidance for snapToRoads: consecutive points within 300 m of each other, interpolate=true fills in the road. */
 export const ROADS_SPACING_M = 300;
 /** A bend of at least this many degrees, seen over at least ROADS_TURN_MIN_M either side, keeps its point (GPS noise is shorter). */
-export const ROADS_TURN_DEG = 35;
+export const ROADS_TURN_DEG = 40;
 export const ROADS_TURN_MIN_M = 80;
+/** The line keeps a stand of a minute or more as two points at one place (route.ts). */
+const PAUSE_MS = 60000;
+const PAUSE_M = 10;
 /** A piece that never leaves this radius (a vehicle that stood, GPS drift) has no road to find: it stays raw and costs nothing. */
 export const ROADS_MIN_EXTENT_M = 50;
 /**
@@ -69,6 +72,8 @@ export const ROADS_MIN_EXTENT_M = 50;
  */
 export const HELD_MIN_POINTS = 50;
 export const HELD_FLUSH_MS = 30 * 60000;
+/** After a refused or failed call a page's refreshes do not try again for this long: Google being down must not eat the budget. */
+export const HELD_RETRY_MS = 10 * 60000;
 export const GOOGLE_ROADS_URL = "https://roads.googleapis.com/v1/snapToRoads";
 
 export interface MatchInput {
@@ -118,6 +123,12 @@ export function thinForRoads(points: MatchInput[], spacingM = ROADS_SPACING_M): 
   for (let i = 1; i < points.length - 1; i++) {
     const last = out[out.length - 1];
     const here = distanceM(last, points[i]);
+    // A pause keeps both its points, with their times: the marker stops there, not crawling over the next 300 m.
+    const paused = (a: MatchInput, b: MatchInput) => b.at - a.at >= PAUSE_MS && distanceM(a, b) < PAUSE_M;
+    if (paused(points[i], points[i + 1]) || paused(points[i - 1], points[i])) {
+      out.push(points[i]);
+      continue;
+    }
     if (distanceM(last, points[i + 1]) > spacingM) {
       if (here >= 1) out.push(points[i]);
       continue;
@@ -463,6 +474,8 @@ export interface SnapResult {
   legs: SnappedLeg[];
   /** How many legs went to the provider in this answer (a held line's last call moves only when some did). */
   sent: number;
+  /** A call was refused or failed in this answer: the asker's next tries wait (HELD_RETRY_MS). */
+  errored?: boolean;
 }
 
 /** The asker already draws the snapped line up to `to` (the page's own copy): only what came after it is needed. */
@@ -470,6 +483,8 @@ export interface HeldLine {
   to: number;
   /** When that line's last call was made. */
   snappedAt: number;
+  /** When a call for it was last refused or failed (0 = not since it last worked). */
+  failedAt?: number;
 }
 
 function envFor(): MatchEnv {
@@ -612,7 +627,13 @@ export async function snapLegs(
   caps?: GoogleCaps,
   store: MatchStore = storeFor(db, provider),
   /** Round 48 snap hotfix: the source counted with each Google call, and the per-driver-day budget taken before it. */
-  opts: { source?: string; budget?: { employeeId: string; cap: number }; held?: HeldLine } = {},
+  opts: {
+    source?: string;
+    budget?: { employeeId: string; cap: number };
+    held?: HeldLine;
+    /** Ask again whatever this isolate remembers: a point arrived inside a line already matched (a late upload). */
+    fresh?: boolean;
+  } = {},
 ): Promise<SnapResult> {
   const env = envFor();
   const gate = async (): Promise<string | null> => {
@@ -625,7 +646,7 @@ export async function snapLegs(
     const g = await takeGoogleCall(db, "roads", caps, opts.source);
     return g.allowed ? null : refusedNote("roads", g.reason, g);
   };
-  const rows = await store.load(employeeId, date, now.getTime());
+  const rows = opts.fresh ? [] : await store.load(employeeId, date, now.getTime());
   const byFrom = new Map(rows.map((r) => [r.legFrom, r]));
   const bump = async (ok: boolean): Promise<void> => {
     await db.rpc("bump_routing_calls", { p_provider: provider, p_ok: ok }).then(() => undefined, () => undefined);
@@ -673,8 +694,9 @@ export async function snapLegs(
     const from = partial ? held!.to : stored.length ? haveTo! : null;
     // A finished leg with nothing after what is matched is done: a leg's end can lie past its last line point (the line
     // leaves out a vehicle slowing to a stop). Before this every refresh paid for that leg's last points again, for good.
-    if (from !== null && !leg.open && !leg.points.some((p) => p.at > from)) {
-      out.push({ from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: leg.to });
+    // A leg still open with nothing new (a phone gone silent mid-drive) waits the same way, without a call.
+    if (from !== null && !leg.points.some((p) => p.at > from)) {
+      out.push({ from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: leg.open ? from : leg.to });
       continue;
     }
     // The tail since the last snap, with a few points before it sent again for a clean join (the answer's points up
@@ -693,13 +715,16 @@ export async function snapLegs(
     out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });
   }
   // Someone who holds the line waits: what came after it goes once it is worth a call.
-  const waits = !!held && now.getTime() - held.snappedAt < HELD_FLUSH_MS &&
-    jobs.reduce((n, j) => n + thin(j.send.points).length, 0) < HELD_MIN_POINTS;
+  const sinceFailure = held?.failedAt ? now.getTime() - held.failedAt : Infinity;
+  const waits = !!held && (sinceFailure < HELD_RETRY_MS || (now.getTime() - held.snappedAt < HELD_FLUSH_MS &&
+    jobs.reduce((n, j) => n + thin(j.send.points).length, 0) < HELD_MIN_POINTS));
   if (waits) {
     for (const j of jobs) {
       if (j.stored.length) out[j.slot] = { from: j.leg.from, to: j.leg.to, source: "matched", points: j.stored, matchedTo: j.haveTo! };
     }
-    return { status: failed === 0 ? "ok" : failed === legs.length ? "failed" : "partial", legs: out, sent: 0 };
+    // A finished leg drawn raw meanwhile is said so; a growing leg's tail is the usual look.
+    const rawLeg = jobs.some((j) => !j.leg.open);
+    return { status: failed === 0 && !rawLeg ? "ok" : failed === legs.length ? "failed" : "partial", legs: out, sent: 0 };
   }
   const results = new Map<number, MatchedPoint[] | Error>();
   if (provider === "google_roads") {
@@ -756,7 +781,8 @@ export async function snapLegs(
     })
       .catch(() => undefined);
   }
-  return { status: failed === 0 ? "ok" : failed === legs.length ? "failed" : "partial", legs: out, sent: jobs.length };
+  const errored = jobs.some((_, i) => results.get(i) instanceof Error);
+  return { status: failed === 0 ? "ok" : failed === legs.length ? "failed" : "partial", legs: out, sent: jobs.length, errored };
 }
 
 function geometryOf(geometry: unknown): MatchedPoint[] {

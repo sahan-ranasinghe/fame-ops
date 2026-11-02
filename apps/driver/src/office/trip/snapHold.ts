@@ -50,6 +50,8 @@ export class SnapHolds {
     if (!token || !fresh) return result;
     let points = fresh.points;
     const from = answer.snapped?.from;
+    // Only the part after a line this page no longer has: shown as it is, and not held, so the next call asks for it whole.
+    if (from && !before) return result;
     if (from && before) {
       const at = before.columns.indexOf("at");
       const upTo = Date.parse(from);

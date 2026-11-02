@@ -244,6 +244,22 @@ describe("ApiTransport: a snapped route held by the page", () => {
     expect(bodies[3].snap_held).toBeUndefined();
   });
 
+  it("a part with no line behind it is shown as it is and not held: the next call asks for it whole", async () => {
+    const answers = [
+      { route_snapped: { columns, points: [row("2026-11-02T05:11:00.000Z")] }, snapped: { from: "2026-11-02T05:10:00.000Z", held: "v1.b" } },
+      { route_snapped: { columns, points: [row("2026-11-02T05:00:00.000Z")] }, snapped: { held: "v1.c" } },
+    ];
+    const bodies: Record<string, unknown>[] = [];
+    const fetchFn = vi.fn(async (_u: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return reply(200, { result: answers.shift() });
+    });
+    const t = transport(fetchFn as typeof fetch);
+    await t.call("driver_route", args);
+    await t.call("driver_route", args);
+    expect(bodies[1].snap_held).toBeUndefined();
+  });
+
   it("another driver, another day and an unsnapped call are not given the token", async () => {
     const answers = [{ route_snapped: { columns, points: [row("2026-11-02T05:00:00.000Z")] }, snapped: { held: "v1.a" } }, {}, {}, {}];
     const bodies: Record<string, unknown>[] = [];

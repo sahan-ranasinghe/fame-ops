@@ -299,8 +299,8 @@ export const liveDrivers = tool({
   },
 });
 
-/** snap_held: the day, how far the line reaches, when this answer was made and when that line's last call was (Unix ms). */
-const SNAP_HELD = /^v1\.\d{4}-\d{2}-\d{2}\.\d+\.\d+\.\d+$/;
+/** snap_held: the day; how far the line reaches; the newest point read for it; its last call; its last refused or failed call (Unix ms). */
+const SNAP_HELD = /^v1\.\d{4}-\d{2}-\d{2}\.\d+\.\d+\.\d+\.\d+$/;
 
 /**
  * The line the asker says it holds, or null when it must be sent whole: no such line, another day (a page left open past
@@ -308,10 +308,10 @@ const SNAP_HELD = /^v1\.\d{4}-\d{2}-\d{2}\.\d+\.\d+\.\d+$/;
  */
 export function heldLine(token: string | undefined, day: string, fixes: { at: number; receivedAt?: number | null }[]): HeldLine | null {
   if (!token) return null;
-  const [, tokenDay, to, at, snappedAt] = token.split(".");
+  const [, tokenDay, to, at, snappedAt, failedAt] = token.split(".");
   if (tokenDay !== day) return null;
   const late = fixes.some((f) => f.at <= Number(to) && f.receivedAt != null && f.receivedAt > Number(at));
-  return late ? null : { to: Number(to), snappedAt: Number(snappedAt) };
+  return late ? null : { to: Number(to), snappedAt: Number(snappedAt), failedAt: Number(failedAt) };
 }
 
 /** How far the line is on the roads without a hole: up to the first leg still raw, or the part of it already matched. */
@@ -358,7 +358,7 @@ export const driverRoute = tool({
       "The screen asking (the web clients send it): counted with each snap-to-roads call so usage reads by source",
     ),
     // The snap cost fix (2 November 2026): the asker's own copy of the snapped line, so a refresh on a cold isolate pays nothing again.
-    snap_held: z.string().regex(SNAP_HELD).max(60).optional().describe(
+    snap_held: z.string().regex(SNAP_HELD).max(90).optional().describe(
       "With snap: the last answer's snapped.held. The answer's route_snapped then has only what came after snapped.from: the asker adds it to the line it holds",
     ),
   }),
@@ -573,7 +573,9 @@ export const driverRoute = tool({
         }));
       }
       // A line the asker holds (snap_held): its finished legs are not sent or answered again, on any isolate.
-      const held = heldLine(snap_held, day, fixes);
+      // Google's only: a line of Google's is never carried onto another provider's map (rule 10), and OSRM's are in route_matched.
+      const google = provider === "google_roads";
+      const held = google ? heldLine(snap_held, day, fixes) : null;
       const usable = legs.filter((l) => l.points.length >= 2 && (!held || l.to > held.to));
       // Round 48 snap hotfix: the source counted with each call ("_playback" for a past day), and the driver's budget.
       const source = `${sourceArg ?? (actor.channel === "claude" ? "claude" : "web")}${day < colomboDate(now) ? "_playback" : ""}`;
@@ -582,6 +584,7 @@ export const driverRoute = tool({
           source,
           budget: { employeeId: who.id, cap: settings.roads_trip_daily_cap },
           held: held ?? undefined,
+          fresh: google && !!snap_held && !held,
         })
         : { status: "ok" as const, legs: [], sent: 0 };
       // The drawn line with every matched leg replaced by its road geometry; the rest raw.
@@ -602,18 +605,23 @@ export const driverRoute = tool({
         columns: ["time", "lat", "lng", "km/h", "at", "acc", "snapped"],
         points: timed.flatMap((p, k) => (held && p.at <= held.to ? [] : [[...linePoint(p), out[k].snapped ? 1 : 0]])),
       };
-      const heldTo = heldUpTo(result.legs, held?.to ?? null);
+      // A first view that failed still answers a token (nothing held, up to 0): its next tries wait too, on any isolate.
+      const failedAt = result.errored ? now.getTime() : result.sent ? 0 : held?.failedAt ?? 0;
+      const reached = heldUpTo(result.legs, held?.to ?? null);
+      const heldTo = reached ?? (failedAt ? 0 : null);
+      // The newest point this answer read: anything received later that lies inside the line is a late upload.
+      const readTo = fixes.reduce((n, f) => Math.max(n, f.receivedAt ?? 0), 0);
       snapped = {
         provider,
         // What the asker holds is on the roads whatever this answer's part did.
-        status: held && result.status === "failed" ? "partial" : result.status,
+        status: held && held.to > 0 && result.status === "failed" ? "partial" : result.status,
         legs: usable.length,
         matched: result.legs.filter((l) => l.source === "matched").length,
         source,
         from: held ? iso(held.to) : undefined,
-        held: heldTo === null
+        held: heldTo === null || !google
           ? undefined
-          : `v1.${day}.${heldTo}.${now.getTime()}.${result.sent ? now.getTime() : held?.snappedAt ?? now.getTime()}`,
+          : `v1.${day}.${heldTo}.${readTo}.${result.sent ? now.getTime() : held?.snappedAt ?? now.getTime()}.${failedAt}`,
       };
     }
 

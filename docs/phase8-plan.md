@@ -1589,8 +1589,8 @@ by it):
 | | before | after |
 |---|---:|---:|
 | Thilina 28 Oct, 117.6 km, one view | 45 | 6 |
-| the first 103.3 km of it, one view | 42 | 5 |
-| those 103.3 km, 3 viewers on 3 isolates | 126 | 15 |
+| the first 100 km of it, one view | 41 | 5 |
+| those 100 km, 3 viewers on 3 isolates | 123 | 15 |
 | 117.6 km, a past day refreshed after 6 h on a new isolate | +45 | +0 |
 | 117.6 km watched live all day, a new isolate every 4 min | 4,613 | 24 |
 | Kanishka's 2 Nov (2.2 km), one view | 2 | 1 |

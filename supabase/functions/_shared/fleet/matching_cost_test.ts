@@ -4,6 +4,7 @@ import { assert, assertEquals } from "jsr:@std/assert";
 import type { Db } from "./db.ts";
 import {
   HELD_FLUSH_MS,
+  type HeldLine,
   MATCH_CHUNK,
   type MatchInput,
   MemoryMatchStore,
@@ -64,7 +65,7 @@ const snap = (
   now: number,
   fetchFn: ReturnType<typeof fakeRoads>["fetchFn"],
   store = new MemoryMatchStore(),
-  held?: { to: number; snappedAt: number },
+  held?: HeldLine,
 ) => snapLegs(db, "e1", "2026-11-02", "google_roads", legs, new Date(now), fetchFn, caps, store, { source: "site_route", held });
 
 Deno.test("thinForRoads: consecutive points within 300 m on a straight road, about one every 300 m", () => {
@@ -224,6 +225,40 @@ Deno.test("a refresh with the line held: a short trip goes after 30 minutes even
   assertEquals(heldUpTo(failed.legs, heldTo), heldTo);
 });
 
+Deno.test("from the review: a finished leg waiting raw says so; a failure holds the next tries; a silent open leg pays nothing; a pause keeps its time", async () => {
+  const short = legOf(road(T0 + 3600000, 1));
+  const roads = fakeRoads();
+  const waiting = await snap([short], short.to + 60000, roads.fetchFn, new MemoryMatchStore(), { to: T0, snappedAt: short.to });
+  assertEquals(waiting.status, "partial", "the legend says some legs are raw");
+
+  // Over 50 points waiting, Google down: one failed call, then nothing for 10 minutes on any isolate.
+  const long = legOf(road(T0 + 3600000, 30));
+  const down = fakeRoads(true);
+  const failed = await snap([long], long.to, down.fetchFn, new MemoryMatchStore(), { to: T0, snappedAt: long.to });
+  assertEquals(down.state.calls, 1);
+  assertEquals(failed.errored, true);
+  await snap([long], long.to + 60000, down.fetchFn, new MemoryMatchStore(), { to: T0, snappedAt: long.to, failedAt: long.to });
+  assertEquals(down.state.calls, 1, "no retry a minute later");
+  await snap([long], long.to + 11 * 60000, down.fetchFn, new MemoryMatchStore(), { to: T0, snappedAt: long.to, failedAt: long.to });
+  assertEquals(down.state.calls, 2, "tried again after 10 minutes");
+
+  // A phone gone silent mid-drive: the open leg's last point is the line held; 30 minutes later nothing new, no call.
+  const silent = road(T0, 3);
+  const open: SnapLeg = { from: silent[0].at, to: silent[silent.length - 1].at + 20000, points: silent, open: true };
+  const quiet = fakeRoads();
+  const held = silent[silent.length - 1].at;
+  const answer = await snap([open], held + 3600000, quiet.fetchFn, new MemoryMatchStore(), { to: held, snappedAt: held });
+  assertEquals(quiet.state.calls, 0);
+  assertEquals(answer.legs[0].matchedTo, held);
+
+  // A stand of 90 s in the middle of a road: both its points stay, however close the 300 m marks are.
+  const before = road(T0, 0.4);
+  const stand = before[before.length - 1];
+  const after = road(stand.at + 90000, 0.4, stand.lat);
+  const kept = thinForRoads([...before, ...after]);
+  assert(kept.some((p) => p.at === stand.at) && kept.some((p) => p.at === stand.at + 90000), "both ends of the stand");
+});
+
 Deno.test("a failure stops the rest: Google down costs one call for a whole day, and every leg stays raw", async () => {
   const legs = [legOf(road(T0, 60)), legOf(road(T0 + 7200000, 60, 8))];
   const down = fakeRoads(true);
@@ -234,13 +269,13 @@ Deno.test("a failure stops the rest: Google down costs one call for a whole day,
 });
 
 Deno.test("heldLine: another day, or a point inside the line that arrived since, asks for the whole line", () => {
-  const token = `v1.2026-11-02.${T0}.${T0 + 1000}.${T0 + 500}`;
+  const token = `v1.2026-11-02.${T0}.${T0 + 1000}.${T0 + 500}.0`;
   assertEquals(heldLine(undefined, "2026-11-02", []), null);
   assertEquals(heldLine(token, "2026-11-03", []), null);
-  assertEquals(heldLine(token, "2026-11-02", [{ at: T0 - 5000, receivedAt: T0 - 4000 }]), { to: T0, snappedAt: T0 + 500 });
+  assertEquals(heldLine(token, "2026-11-02", [{ at: T0 - 5000, receivedAt: T0 - 4000 }]), { to: T0, snappedAt: T0 + 500, failedAt: 0 });
   assertEquals(
     heldLine(token, "2026-11-02", [{ at: T0 + 5000, receivedAt: T0 + 9000 }]),
-    { to: T0, snappedAt: T0 + 500 },
+    { to: T0, snappedAt: T0 + 500, failedAt: 0 },
     "after the line: the normal tail",
   );
   assertEquals(heldLine(token, "2026-11-02", [{ at: T0 - 5000, receivedAt: T0 + 2000 }]), null, "uploaded late, inside the line");

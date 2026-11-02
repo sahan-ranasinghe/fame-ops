@@ -241,8 +241,10 @@ def main():
     vehicles = call("list_vehicles", {})
     board = call("task_board", {})
     requests = call("list_requests", {"status": "all"})
-    driver = (drivers.get("drivers") or [{}])[0].get("username") or "nobody"
-    reg_no = (vehicles.get("vehicles") or [{}])[0].get("reg_no") or "X"
+    # The suite's Round 52 block leaves a driver and a van that sort first, with a new name each run (arch.<tag>, WP ARC-<tag>):
+    # the contract is read on the first of the others, the names it recorded.
+    driver = next((d.get("username") for d in drivers.get("drivers") or [] if not str(d.get("username")).startswith("arch.")), None) or "nobody"
+    reg_no = next((v.get("reg_no") for v in vehicles.get("vehicles") or [] if not str(v.get("reg_no")).startswith("WP ARC-")), None) or "X"
     has_tasks = lambda b: any(b.get(col) for col in ("in_progress", "assigned", "completed"))
     # Late in the evening the test suite puts its tasks on tomorrow: look at that day, and
     # leave today's (empty) board out rather than compare it with a recorded day that had tasks.
