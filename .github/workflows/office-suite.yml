@@ -24,6 +24,10 @@ on:
         required: false
   push:
     branches: [main]
+    # A push of only documents starts nothing (Sahan, 2 November 2026); one other file in it and main runs in full.
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
 
 permissions:
   contents: read

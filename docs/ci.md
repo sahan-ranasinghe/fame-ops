@@ -23,7 +23,8 @@ the repo (`contents: read`).
 
 ## Starting a run
 
-It runs by itself, in full, on every push to `main`. Any branch, by hand; the scope is always chosen (31 October 2026):
+It runs by itself, in full, on every push to `main`, unless the push changes only `docs/**` or `*.md` files in any folder
+(2 November 2026; one other file in the push and it runs in full). Any branch, by hand; the scope is always chosen (31 October 2026):
 
 | Scope | Runs | When |
 |---|---|---|

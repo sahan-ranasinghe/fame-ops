@@ -1147,7 +1147,7 @@ iOS; Play Store.
 - **Saving Actions minutes (Sahan, 31 October 2026; `docs/ci.md`).** The repo has 2,000 free minutes a month and October ran
   out on the 30th. (1) A fix that touches only tests: `-f scope=specs -f specs="e2e/x.spec.ts"` (or `-f grep="a title"`), the
   fast job plus those spec files; only docs: `-f scope=fast`. (2) `-f scope=full` runs at checkpoints and when Sahan asks; main
-  runs it by itself on every push. (3) Before running CI again after a failure, run the failed spec locally if it is quick
+  runs it by itself on every push, except a push of only `docs/**` or `*.md` files. (3) Before running CI again after a failure, run the failed spec locally if it is quick
   (`E2E_SPECS=… scripts/test-office-local.sh <env file>`); the target is one full CI per checkpoint. (4) Every checkpoint report
   carries the month's minutes: `python3 scripts/ci-minutes.py`, which warns at 1,500.
 - Every full office suite run starts with `npx supabase db reset` on the local stack (never --linked). Sahan has given a
