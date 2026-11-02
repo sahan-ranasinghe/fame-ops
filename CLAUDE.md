@@ -1140,9 +1140,16 @@ iOS; Play Store.
 - **CI decides checkpoints (Sahan, 21 October 2026; `docs/ci.md`).** The full office suite runs on GitHub
   (`.github/workflows/office-suite.yml`), not on the laptop. At a checkpoint: run `python3 scripts/push-scan.py <branches>`;
   with 0 (plus only the allowlisted entry) and Sahan's push go, push the branch, start the run (`gh workflow run
-  office-suite.yml --ref <branch>`), wait with `gh run watch <id> --exit-status`, and report pass or fail with the failed
-  tests' names. If the Wi-Fi drops, look again with `gh run view <id>`: the run goes on on GitHub. No local full suite
-  unless Sahan asks. The local fast checks still run while working, and a single failed test may be re-run locally.
+  office-suite.yml --ref <branch> -f scope=full`), wait with `gh run watch <id> --exit-status`, and report pass or fail with
+  the failed tests' names. If the Wi-Fi drops, look again with `gh run view <id>`: the run goes on on GitHub. No local full
+  suite unless Sahan asks. The local fast checks still run while working, and a single failed test may be re-run locally.
+  CI's jobs do not run pgTAP, Deno or the connector suite (found 31 October 2026): those stay on the laptop.
+- **Saving Actions minutes (Sahan, 31 October 2026; `docs/ci.md`).** The repo has 2,000 free minutes a month and October ran
+  out on the 30th. (1) A fix that touches only tests: `-f scope=specs -f specs="e2e/x.spec.ts"` (or `-f grep="a title"`), the
+  fast job plus those spec files; only docs: `-f scope=fast`. (2) `-f scope=full` runs at checkpoints and when Sahan asks; main
+  runs it by itself on every push, except a push of only `docs/**` or `*.md` files. (3) Before running CI again after a failure, run the failed spec locally if it is quick
+  (`E2E_SPECS=… scripts/test-office-local.sh <env file>`); the target is one full CI per checkpoint. (4) Every checkpoint report
+  carries the month's minutes: `python3 scripts/ci-minutes.py`, which warns at 1,500.
 - Every full office suite run starts with `npx supabase db reset` on the local stack (never --linked). Sahan has given a
   standing OK for this local reset.
 - When a test fails, fix it and re-run ONLY the failed tests (Playwright: `--last-failed` or that test; Vitest: that file),
