@@ -3378,7 +3378,7 @@ suite at `c5555d3`, the migrations unchanged since). Started 19:16, the gate run
    verify_jwt false. Without a key or session: office-api /me 401, /public/privacy 200, driver-api 401, fleet-jobs,
    notify-office and push-task 401 bad_server_key. `get_settings` through the live connector answers with
    `phone_map_wait_s` 30 and the `privacy_email` description; Google usage today 2 map loads, nothing refused.
-3. `update_settings privacy_email shnvshvjth@gmail.com` through the live connector (audited); /public/privacy answers it.
+3. `update_settings privacy_email example@example.com` through the live connector (audited); /public/privacy answers it.
 4. Web: `npm run build:web`, the key scan on its own (one JWT, role anon; no sb_ value; no service_role; no secret name),
    `wrangler pages deploy --branch main` (IPv4 first; 46 files, 73 s); https://fame-fleet.pages.dev serves
    `index-DnRWKtAD.js` with its own fonts (/fonts/fonts.css 200, the woff2 files 200): the sign-in page renders, the
